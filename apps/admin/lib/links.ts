@@ -1,0 +1,11 @@
+export const FOREIGN_KEY_HREF_BASE_BY_KEY: Record<string, string> = {
+  organization_id: "/module/organizations",
+  property_id: "/module/properties",
+  unit_id: "/module/units",
+  channel_id: "/module/channels",
+  listing_id: "/module/listings",
+  guest_id: "/module/guests",
+  reservation_id: "/module/reservations",
+  task_id: "/module/tasks",
+  template_id: "/module/messaging",
+};

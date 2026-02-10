@@ -1,0 +1,455 @@
+"use client";
+
+import { PlusSignIcon } from "@hugeicons/core-free-icons";
+import { useMemo, useState } from "react";
+
+import {
+  createReservationAction,
+  transitionReservationStatusAction,
+} from "@/app/(admin)/module/reservations/actions";
+import { Button } from "@/components/ui/button";
+import { DataTable, type DataTableRow } from "@/components/ui/data-table";
+import { Icon } from "@/components/ui/icon";
+import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
+import { Sheet } from "@/components/ui/sheet";
+import { useActiveLocale } from "@/lib/i18n/client";
+
+type UnitRow = {
+  id: string;
+  name?: string | null;
+  code?: string | null;
+  property_name?: string | null;
+};
+
+type ReservationRow = {
+  id: string;
+  status?: string | null;
+  check_in_date?: string | null;
+  check_out_date?: string | null;
+  total_amount?: number | string | null;
+  currency?: string | null;
+
+  unit_id?: string | null;
+  unit_name?: string | null;
+
+  property_id?: string | null;
+  property_name?: string | null;
+
+  guest_id?: string | null;
+  guest_name?: string | null;
+
+  channel_id?: string | null;
+  channel_name?: string | null;
+};
+
+const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+function isIsoDate(value: unknown): value is string {
+  return typeof value === "string" && ISO_DATE_RE.test(value);
+}
+
+function asString(value: unknown): string {
+  return typeof value === "string" ? value : value ? String(value) : "";
+}
+
+function asNumber(value: unknown): number | null {
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function overlapsRange(options: {
+  start: string;
+  end: string;
+  from?: string;
+  to?: string;
+}): boolean {
+  const { start, end, from, to } = options;
+  if (!(isIsoDate(start) && isIsoDate(end))) return true;
+  const windowFrom = isIsoDate(from) ? from : null;
+  const windowTo = isIsoDate(to) ? to : null;
+  if (!(windowFrom || windowTo)) return true;
+
+  const rangeStart = windowFrom ?? start;
+  const rangeEnd = windowTo ?? end;
+
+  // Inclusive-exclusive semantics: [start, end)
+  return !(end <= rangeStart || start >= rangeEnd);
+}
+
+function statusActions(status: string): { next: string; label: string }[] {
+  const normalized = status.trim().toLowerCase();
+  if (normalized === "pending") {
+    return [
+      { next: "confirmed", label: "Confirm" },
+      { next: "cancelled", label: "Cancel" },
+    ];
+  }
+  if (normalized === "confirmed") {
+    return [
+      { next: "checked_in", label: "Check-in" },
+      { next: "no_show", label: "No-show" },
+      { next: "cancelled", label: "Cancel" },
+    ];
+  }
+  if (normalized === "checked_in") {
+    return [{ next: "checked_out", label: "Check-out" }];
+  }
+  return [];
+}
+
+function localizedActionLabel(isEn: boolean, next: string): string {
+  if (isEn) {
+    if (next === "confirmed") return "Confirm";
+    if (next === "checked_in") return "Check-in";
+    if (next === "checked_out") return "Check-out";
+    if (next === "cancelled") return "Cancel";
+    if (next === "no_show") return "No-show";
+    return next;
+  }
+
+  if (next === "confirmed") return "Confirmar";
+  if (next === "checked_in") return "Check-in";
+  if (next === "checked_out") return "Check-out";
+  if (next === "cancelled") return "Cancelar";
+  if (next === "no_show") return "No-show";
+  return next;
+}
+
+function ReservationRowActions({ row }: { row: DataTableRow }) {
+  const locale = useActiveLocale();
+  const isEn = locale === "en-US";
+
+  const id = asString(row.id).trim();
+  const status = asString(row.status).trim();
+  if (!(id && status)) return null;
+
+  const actions = statusActions(status);
+  if (!actions.length) return null;
+
+  return (
+    <div className="flex flex-wrap justify-end gap-2">
+      {actions.map((action) => (
+        <form action={transitionReservationStatusAction} key={action.next}>
+          <input name="reservation_id" type="hidden" value={id} />
+          <input name="status" type="hidden" value={action.next} />
+          <Button size="sm" type="submit" variant="outline">
+            {localizedActionLabel(isEn, action.next)}
+          </Button>
+        </form>
+      ))}
+    </div>
+  );
+}
+
+export function ReservationsManager({
+  orgId,
+  reservations,
+  units,
+}: {
+  orgId: string;
+  reservations: Record<string, unknown>[];
+  units: Record<string, unknown>[];
+}) {
+  const locale = useActiveLocale();
+  const isEn = locale === "en-US";
+
+  const [open, setOpen] = useState(false);
+
+  const [query, setQuery] = useState("");
+  const [status, setStatus] = useState("all");
+  const [unitId, setUnitId] = useState("all");
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
+
+  const unitOptions = useMemo(() => {
+    return (units as UnitRow[])
+      .map((unit) => {
+        const id = asString(unit.id).trim();
+        if (!id) return null;
+        const name = asString(unit.name).trim();
+        const code = asString(unit.code).trim();
+        const property = asString(unit.property_name).trim();
+        const label = [property, code || name || id]
+          .filter(Boolean)
+          .join(" · ");
+        return { id, label: label || id };
+      })
+      .filter((item): item is { id: string; label: string } => Boolean(item))
+      .sort((a, b) => a.label.localeCompare(b.label));
+  }, [units]);
+
+  const filteredRows = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+    const normalizedStatus = status.trim().toLowerCase();
+
+    return (reservations as ReservationRow[])
+      .filter((row) => {
+        const rowStatus = asString(row.status).trim().toLowerCase();
+        if (normalizedStatus !== "all" && rowStatus !== normalizedStatus) {
+          return false;
+        }
+
+        const rowUnitId = asString(row.unit_id).trim();
+        if (unitId !== "all" && rowUnitId !== unitId) {
+          return false;
+        }
+
+        const start = asString(row.check_in_date).trim();
+        const end = asString(row.check_out_date).trim();
+        if (!overlapsRange({ start, end, from, to })) {
+          return false;
+        }
+
+        if (!needle) return true;
+
+        const haystack = [
+          row.id,
+          row.guest_name,
+          row.unit_name,
+          row.property_name,
+          row.channel_name,
+          row.status,
+        ]
+          .map((value) => asString(value).trim().toLowerCase())
+          .filter(Boolean)
+          .join(" | ");
+
+        return haystack.includes(needle);
+      })
+      .map((row) => {
+        const checkIn = isIsoDate(row.check_in_date) ? row.check_in_date : null;
+        const checkOut = isIsoDate(row.check_out_date)
+          ? row.check_out_date
+          : null;
+
+        return {
+          id: asString(row.id).trim(),
+          status: asString(row.status).trim(),
+          check_in_date: checkIn,
+          check_out_date: checkOut,
+
+          unit_id: asString(row.unit_id).trim() || null,
+          unit_name: asString(row.unit_name).trim() || null,
+
+          property_id: asString(row.property_id).trim() || null,
+          property_name: asString(row.property_name).trim() || null,
+
+          guest_id: asString(row.guest_id).trim() || null,
+          guest_name: asString(row.guest_name).trim() || null,
+
+          channel_id: asString(row.channel_id).trim() || null,
+          channel_name: asString(row.channel_name).trim() || null,
+
+          total_amount: asNumber(row.total_amount) ?? null,
+          currency: asString(row.currency).trim() || null,
+        } satisfies DataTableRow;
+      });
+  }, [from, query, reservations, status, to, unitId]);
+
+  const total = filteredRows.length;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+        <div className="grid w-full gap-2 md:grid-cols-4">
+          <label className="space-y-1">
+            <span className="block font-medium text-muted-foreground text-xs">
+              {isEn ? "Search" : "Buscar"}
+            </span>
+            <Input
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder={
+                isEn ? "Guest, unit, status..." : "Huésped, unidad, estado..."
+              }
+              value={query}
+            />
+          </label>
+
+          <label className="space-y-1">
+            <span className="block font-medium text-muted-foreground text-xs">
+              {isEn ? "Status" : "Estado"}
+            </span>
+            <Select
+              onChange={(event) => setStatus(event.target.value)}
+              value={status}
+            >
+              <option value="all">{isEn ? "All" : "Todos"}</option>
+              <option value="pending">pending</option>
+              <option value="confirmed">confirmed</option>
+              <option value="checked_in">checked_in</option>
+              <option value="checked_out">checked_out</option>
+              <option value="cancelled">cancelled</option>
+              <option value="no_show">no_show</option>
+            </Select>
+          </label>
+
+          <label className="space-y-1">
+            <span className="block font-medium text-muted-foreground text-xs">
+              {isEn ? "Unit" : "Unidad"}
+            </span>
+            <Select
+              onChange={(event) => setUnitId(event.target.value)}
+              value={unitId}
+            >
+              <option value="all">{isEn ? "All units" : "Todas"}</option>
+              {unitOptions.map((unit) => (
+                <option key={unit.id} value={unit.id}>
+                  {unit.label}
+                </option>
+              ))}
+            </Select>
+          </label>
+
+          <div className="grid grid-cols-2 gap-2">
+            <label className="space-y-1">
+              <span className="block font-medium text-muted-foreground text-xs">
+                {isEn ? "From" : "Desde"}
+              </span>
+              <Input
+                onChange={(event) => setFrom(event.target.value)}
+                type="date"
+                value={from}
+              />
+            </label>
+            <label className="space-y-1">
+              <span className="block font-medium text-muted-foreground text-xs">
+                {isEn ? "To" : "Hasta"}
+              </span>
+              <Input
+                onChange={(event) => setTo(event.target.value)}
+                type="date"
+                value={to}
+              />
+            </label>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="text-muted-foreground text-sm">
+            {total} {isEn ? "records" : "registros"}
+          </div>
+          <Button
+            onClick={() => setOpen(true)}
+            type="button"
+            variant="secondary"
+          >
+            <Icon icon={PlusSignIcon} size={16} />
+            {isEn ? "New reservation" : "Nueva reserva"}
+          </Button>
+        </div>
+      </div>
+
+      <DataTable
+        data={filteredRows}
+        renderRowActions={(row) => <ReservationRowActions row={row} />}
+        rowActionsHeader={isEn ? "Actions" : "Acciones"}
+        rowHrefBase="/module/reservations"
+        searchPlaceholder={isEn ? "Filter..." : "Filtrar..."}
+      />
+
+      <Sheet
+        description={
+          isEn
+            ? "Create a manual reservation and manage overlaps."
+            : "Crea una reserva manual y gestiona solapamientos."
+        }
+        onOpenChange={setOpen}
+        open={open}
+        title={isEn ? "New reservation" : "Nueva reserva"}
+      >
+        <form action={createReservationAction} className="space-y-4">
+          <input name="organization_id" type="hidden" value={orgId} />
+
+          <label className="block space-y-1">
+            <span className="block font-medium text-muted-foreground text-xs">
+              {isEn ? "Unit" : "Unidad"}
+            </span>
+            <Select defaultValue="" name="unit_id" required>
+              <option disabled value="">
+                {isEn ? "Select a unit" : "Selecciona una unidad"}
+              </option>
+              {unitOptions.map((unit) => (
+                <option key={unit.id} value={unit.id}>
+                  {unit.label}
+                </option>
+              ))}
+            </Select>
+          </label>
+
+          <div className="grid gap-3 md:grid-cols-2">
+            <label className="block space-y-1">
+              <span className="block font-medium text-muted-foreground text-xs">
+                {isEn ? "Check-in" : "Check-in"}
+              </span>
+              <Input name="check_in_date" required type="date" />
+            </label>
+            <label className="block space-y-1">
+              <span className="block font-medium text-muted-foreground text-xs">
+                {isEn ? "Check-out" : "Check-out"}
+              </span>
+              <Input name="check_out_date" required type="date" />
+            </label>
+          </div>
+
+          <div className="grid gap-3 md:grid-cols-3">
+            <label className="block space-y-1 md:col-span-2">
+              <span className="block font-medium text-muted-foreground text-xs">
+                {isEn ? "Total amount" : "Monto total"}
+              </span>
+              <Input
+                min={0}
+                name="total_amount"
+                required
+                step="0.01"
+                type="number"
+              />
+            </label>
+
+            <label className="block space-y-1">
+              <span className="block font-medium text-muted-foreground text-xs">
+                {isEn ? "Currency" : "Moneda"}
+              </span>
+              <Select defaultValue="PYG" name="currency">
+                <option value="PYG">PYG</option>
+                <option value="USD">USD</option>
+              </Select>
+            </label>
+          </div>
+
+          <label className="block space-y-1">
+            <span className="block font-medium text-muted-foreground text-xs">
+              {isEn ? "Initial status" : "Estado inicial"}
+            </span>
+            <Select defaultValue="pending" name="status">
+              <option value="pending">pending</option>
+              <option value="confirmed">confirmed</option>
+              <option value="checked_in">checked_in</option>
+            </Select>
+          </label>
+
+          <label className="block space-y-1">
+            <span className="block font-medium text-muted-foreground text-xs">
+              {isEn ? "Notes" : "Notas"}
+            </span>
+            <Input name="notes" placeholder={isEn ? "Optional" : "Opcional"} />
+          </label>
+
+          <div className="flex flex-wrap justify-end gap-2">
+            <Button
+              onClick={() => setOpen(false)}
+              type="button"
+              variant="outline"
+            >
+              {isEn ? "Cancel" : "Cancelar"}
+            </Button>
+            <Button type="submit" variant="secondary">
+              {isEn ? "Create" : "Crear"}
+            </Button>
+          </div>
+        </form>
+      </Sheet>
+    </div>
+  );
+}
