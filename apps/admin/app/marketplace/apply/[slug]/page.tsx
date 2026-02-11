@@ -35,6 +35,7 @@ export default async function MarketplaceApplyPage({
 }: MarketplaceApplyPageProps) {
   const locale = await getActiveLocale();
   const isEn = locale === "en-US";
+  const defaultOrgId = process.env.NEXT_PUBLIC_DEFAULT_ORG_ID?.trim();
   const { slug } = await params;
 
   let listing: Record<string, unknown>;
@@ -49,6 +50,10 @@ export default async function MarketplaceApplyPage({
   }
 
   const title = asText(listing.title);
+  const listingOrgId = asText(listing.organization_id);
+  if (defaultOrgId && listingOrgId && listingOrgId !== defaultOrgId) {
+    notFound();
+  }
   const city = asText(listing.city);
   const neighborhood = asText(listing.neighborhood);
   const currency = asText(listing.currency) || "PYG";

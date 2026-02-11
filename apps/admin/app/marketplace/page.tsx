@@ -32,6 +32,7 @@ export default async function MarketplacePage({
 }: MarketplacePageProps) {
   const locale = await getActiveLocale();
   const isEn = locale === "en-US";
+  const defaultOrgId = process.env.NEXT_PUBLIC_DEFAULT_ORG_ID?.trim();
 
   const query = await searchParams;
   const cityRaw = query.city;
@@ -47,6 +48,7 @@ export default async function MarketplacePage({
     const response = await fetchPublicMarketplaceListings({
       city,
       q,
+      orgId: defaultOrgId || undefined,
       limit: 120,
     });
     listings = response.data ?? [];

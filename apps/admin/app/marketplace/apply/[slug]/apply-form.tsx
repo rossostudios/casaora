@@ -28,9 +28,6 @@ type FormState = {
   message: string;
 };
 
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000/v1";
-
 export function MarketplaceApplyForm({
   listingSlug,
   locale,
@@ -53,7 +50,7 @@ export function MarketplaceApplyForm({
 
   const applyStartUrl = useMemo(
     () =>
-      `${API_BASE_URL}/public/marketplace/listings/${encodeURIComponent(
+      `/api/public/marketplace/listings/${encodeURIComponent(
         listingSlug
       )}/apply-start`,
     [listingSlug]
@@ -102,21 +99,34 @@ export function MarketplaceApplyForm({
     };
 
     try {
-      const response = await fetch(
-        `${API_BASE_URL}/public/marketplace/applications`,
-        {
-          method: "POST",
-          headers: {
-            Accept: "application/json",
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(payload),
-        }
-      );
+      const response = await fetch("/api/public/marketplace/applications", {
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
 
       if (!response.ok) {
         const details = await response.text().catch(() => "");
-        const suffix = details ? `: ${details.slice(0, 240)}` : "";
+        let detailMessage = details;
+        if (details) {
+          try {
+            const parsed = JSON.parse(details) as {
+              error?: unknown;
+              detail?: unknown;
+              message?: unknown;
+            };
+            const detail =
+              parsed.error ?? parsed.detail ?? parsed.message ?? details;
+            detailMessage =
+              typeof detail === "string" ? detail : JSON.stringify(detail);
+          } catch {
+            detailMessage = details;
+          }
+        }
+        const suffix = detailMessage ? `: ${detailMessage.slice(0, 240)}` : "";
         throw new Error(`HTTP ${response.status}${suffix}`);
       }
 
