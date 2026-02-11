@@ -4,6 +4,8 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.core.auth import require_user_id
+from app.core.config import settings
+from app.core.feature_flags import ensure_marketplace_public_enabled
 from app.core.tenancy import assert_org_member, assert_org_role
 from app.db.supabase import get_supabase_client
 from app.schemas.domain import (
@@ -155,6 +157,9 @@ def _attach_fee_lines(rows: list[dict]) -> list[dict]:
 
 
 def _assert_publishable(row: dict) -> None:
+    if not settings.transparent_pricing_required:
+        return
+
     row_id = str(row.get("id") or "")
     if not row_id:
         raise HTTPException(status_code=400, detail="Invalid marketplace listing id.")
@@ -376,6 +381,8 @@ def list_public_marketplace_listings(
     org_id: Optional[str] = Query(None),
     limit: int = Query(60, ge=1, le=200),
 ) -> dict:
+    ensure_marketplace_public_enabled()
+
     filters: dict[str, object] = {"is_published": True}
     if org_id:
         filters["organization_id"] = org_id
@@ -408,6 +415,8 @@ def list_public_marketplace_listings(
 
 @router.get("/public/marketplace/listings/{slug}")
 def get_public_marketplace_listing(slug: str) -> dict:
+    ensure_marketplace_public_enabled()
+
     rows = list_rows(
         "marketplace_listings",
         {"public_slug": slug, "is_published": True},
@@ -427,6 +436,8 @@ def get_public_marketplace_listing(slug: str) -> dict:
 
 @router.post("/public/marketplace/listings/{slug}/apply-start")
 def start_public_marketplace_application(slug: str) -> dict:
+    ensure_marketplace_public_enabled()
+
     rows = list_rows(
         "marketplace_listings",
         {"public_slug": slug, "is_published": True},
@@ -446,6 +457,8 @@ def start_public_marketplace_application(slug: str) -> dict:
 
 @router.post("/public/marketplace/applications", status_code=201)
 def submit_public_marketplace_application(payload: PublicMarketplaceApplicationInput) -> dict:
+    ensure_marketplace_public_enabled()
+
     listing: Optional[dict] = None
 
     if payload.marketplace_listing_id:

@@ -4,6 +4,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, Query
 
 from app.core.auth import require_user_id
+from app.core.feature_flags import ensure_lease_collections_enabled
 from app.core.tenancy import assert_org_member, assert_org_role
 from app.schemas.domain import CreateLeaseInput, UpdateLeaseInput
 from app.services.audit import write_audit_log
@@ -102,6 +103,7 @@ def list_leases(
     limit: int = Query(300, ge=1, le=1000),
     user_id: str = Depends(require_user_id),
 ) -> dict:
+    ensure_lease_collections_enabled()
     assert_org_member(user_id, org_id)
 
     filters = {"organization_id": org_id}
@@ -118,6 +120,7 @@ def list_leases(
 
 @router.post("/leases", status_code=201)
 def create_lease(payload: CreateLeaseInput, user_id: str = Depends(require_user_id)) -> dict:
+    ensure_lease_collections_enabled()
     assert_org_role(user_id, payload.organization_id, LEASE_EDIT_ROLES)
 
     lease_payload = payload.model_dump(exclude={"charges", "generate_first_collection", "first_collection_due_date"}, exclude_none=True)
@@ -171,6 +174,7 @@ def create_lease(payload: CreateLeaseInput, user_id: str = Depends(require_user_
 
 @router.get("/leases/{lease_id}")
 def get_lease(lease_id: str, user_id: str = Depends(require_user_id)) -> dict:
+    ensure_lease_collections_enabled()
     record = get_row("leases", lease_id)
     assert_org_member(user_id, record["organization_id"])
 
@@ -201,6 +205,7 @@ def update_lease(
     payload: UpdateLeaseInput,
     user_id: str = Depends(require_user_id),
 ) -> dict:
+    ensure_lease_collections_enabled()
     record = get_row("leases", lease_id)
     org_id = str(record.get("organization_id") or "")
     assert_org_role(user_id, org_id, LEASE_EDIT_ROLES)

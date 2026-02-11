@@ -4,6 +4,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.core.auth import require_user_id
+from app.core.feature_flags import ensure_applications_pipeline_enabled, ensure_lease_collections_enabled
 from app.core.tenancy import assert_org_member, assert_org_role
 from app.schemas.domain import ApplicationStatusInput, ConvertApplicationToLeaseInput
 from app.services.analytics import write_analytics_event
@@ -104,6 +105,7 @@ def list_applications(
     limit: int = Query(250, ge=1, le=1000),
     user_id: str = Depends(require_user_id),
 ) -> dict:
+    ensure_applications_pipeline_enabled()
     assert_org_member(user_id, org_id)
 
     filters = {"organization_id": org_id}
@@ -120,6 +122,7 @@ def list_applications(
 
 @router.get("/applications/{application_id}")
 def get_application(application_id: str, user_id: str = Depends(require_user_id)) -> dict:
+    ensure_applications_pipeline_enabled()
     record = get_row("application_submissions", application_id)
     org_id = str(record.get("organization_id") or "")
     assert_org_member(user_id, org_id)
@@ -143,6 +146,7 @@ def update_application_status(
     payload: ApplicationStatusInput,
     user_id: str = Depends(require_user_id),
 ) -> dict:
+    ensure_applications_pipeline_enabled()
     record = get_row("application_submissions", application_id)
     org_id = str(record.get("organization_id") or "")
     assert_org_role(user_id, org_id, APPLICATION_EDIT_ROLES)
@@ -219,6 +223,8 @@ def convert_application_to_lease(
     payload: ConvertApplicationToLeaseInput,
     user_id: str = Depends(require_user_id),
 ) -> dict:
+    ensure_applications_pipeline_enabled()
+    ensure_lease_collections_enabled()
     application = get_row("application_submissions", application_id)
     org_id = str(application.get("organization_id") or "")
     assert_org_role(user_id, org_id, APPLICATION_EDIT_ROLES)

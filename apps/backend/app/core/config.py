@@ -14,6 +14,10 @@ class Settings(BaseSettings):
     trusted_hosts: str = "localhost,127.0.0.1,*.vercel.app"
     docs_enabled: bool = True
     dev_auth_overrides_enabled: bool = True
+    marketplace_public_enabled: bool = True
+    transparent_pricing_required: bool = True
+    applications_pipeline_enabled: bool = True
+    lease_collections_enabled: bool = True
 
     supabase_url: Optional[str] = None
     supabase_service_role_key: Optional[str] = None
