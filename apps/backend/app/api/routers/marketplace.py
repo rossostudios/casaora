@@ -14,6 +14,7 @@ from app.schemas.domain import (
     UpdateMarketplaceListingInput,
 )
 from app.services.analytics import write_analytics_event
+from app.services.alerting import write_alert_event
 from app.services.audit import write_audit_log
 from app.services.pricing import (
     compute_pricing_totals,
@@ -491,21 +492,64 @@ def submit_public_marketplace_application(payload: PublicMarketplaceApplicationI
     application_payload.pop("org_id", None)
     application_payload.pop("listing_slug", None)
 
-    created = create_row("application_submissions", application_payload)
+    alert_payload = {
+        "stage": "application_submission",
+        "marketplace_listing_id": listing.get("id"),
+        "listing_slug": listing.get("public_slug"),
+        "source": application_payload.get("source"),
+    }
 
-    create_row(
-        "application_events",
-        {
-            "organization_id": org_id,
-            "application_id": created.get("id"),
-            "event_type": "apply_submit",
-            "event_payload": {
+    try:
+        created = create_row("application_submissions", application_payload)
+    except HTTPException as exc:
+        write_alert_event(
+            organization_id=org_id,
+            event_type="application_submit_failed",
+            payload={
+                **alert_payload,
+                "status_code": exc.status_code,
+            },
+            severity="error",
+            error_message=str(exc.detail),
+        )
+        raise
+    except Exception as exc:  # pragma: no cover - framework guard
+        write_alert_event(
+            organization_id=org_id,
+            event_type="application_submit_failed",
+            payload=alert_payload,
+            severity="error",
+            error_message=str(exc),
+        )
+        raise
+
+    try:
+        create_row(
+            "application_events",
+            {
+                "organization_id": org_id,
+                "application_id": created.get("id"),
+                "event_type": "apply_submit",
+                "event_payload": {
+                    "marketplace_listing_id": listing.get("id"),
+                    "listing_slug": listing.get("public_slug"),
+                    "source": created.get("source"),
+                },
+            },
+        )
+    except Exception as exc:
+        write_alert_event(
+            organization_id=org_id,
+            event_type="application_event_write_failed",
+            payload={
+                "stage": "application_event_write",
                 "marketplace_listing_id": listing.get("id"),
                 "listing_slug": listing.get("public_slug"),
-                "source": created.get("source"),
+                "application_id": created.get("id"),
             },
-        },
-    )
+            severity="warning",
+            error_message=str(exc),
+        )
 
     write_analytics_event(
         organization_id=org_id,

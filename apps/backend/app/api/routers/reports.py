@@ -222,6 +222,45 @@ def transparency_summary_report(
         2,
     )
 
+    alert_events = list_rows(
+        "integration_events",
+        {"organization_id": org_id, "provider": "alerting"},
+        limit=20000,
+        order_by="received_at",
+        ascending=False,
+    )
+
+    application_submit_failures = 0
+    application_event_write_failures = 0
+    for event in alert_events:
+        event_type = str(event.get("event_type") or "")
+        if event_type not in {"application_submit_failed", "application_event_write_failed"}:
+            continue
+
+        received_raw = event.get("received_at")
+        if not isinstance(received_raw, str):
+            continue
+
+        try:
+            received_date = _parse_datetime(received_raw).date()
+        except Exception:
+            continue
+
+        if received_date < period_start or received_date > period_end:
+            continue
+
+        if event_type == "application_submit_failed":
+            application_submit_failures += 1
+        else:
+            application_event_write_failures += 1
+
+    application_submit_attempts = applications_count + application_submit_failures
+    application_submit_failure_rate = (
+        round(application_submit_failures / application_submit_attempts, 4)
+        if application_submit_attempts
+        else 0.0
+    )
+
     return {
         "organization_id": org_id,
         "from": from_date,
@@ -237,4 +276,7 @@ def transparency_summary_report(
         "collections_paid": paid_collections,
         "collection_success_rate": collection_success_rate,
         "paid_collections_amount": paid_amount,
+        "application_submit_failures": application_submit_failures,
+        "application_event_write_failures": application_event_write_failures,
+        "application_submit_failure_rate": application_submit_failure_rate,
     }

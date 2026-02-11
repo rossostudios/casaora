@@ -99,6 +99,11 @@ export default async function TransparencySummaryModulePage() {
     report.median_first_response_hours
   );
   const paidCollectionsAmount = asNumber(report.paid_collections_amount);
+  const applicationSubmitFailures = asNumber(
+    report.application_submit_failures
+  );
+  const applicationSubmitFailureRate =
+    asNumber(report.application_submit_failure_rate) * 100;
 
   const detailRows = Object.entries(report).map(([key, value]) => ({
     metric: humanizeKey(key),
@@ -132,7 +137,7 @@ export default async function TransparencySummaryModulePage() {
         </CardHeader>
       </Card>
 
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
         <StatCard
           label={isEn ? "Transparent listings %" : "Anuncios transparentes %"}
           value={`${transparentListingsPct.toFixed(1)}%`}
@@ -158,6 +163,14 @@ export default async function TransparencySummaryModulePage() {
         <StatCard
           label={isEn ? "Paid collections amount" : "Monto cobrado pagado"}
           value={formatCurrency(paidCollectionsAmount, "PYG", locale)}
+        />
+        <StatCard
+          label={
+            isEn
+              ? "Application submit failures"
+              : "Fallas de envío de aplicación"
+          }
+          value={`${applicationSubmitFailures} (${applicationSubmitFailureRate.toFixed(1)}%)`}
         />
       </section>
 

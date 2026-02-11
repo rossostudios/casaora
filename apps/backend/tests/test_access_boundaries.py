@@ -254,6 +254,21 @@ class AccessBoundaryTest(unittest.TestCase):
                         "currency": "PYG",
                     }
                 ]
+            if table == "integration_events":
+                self.assertEqual(
+                    filters,
+                    {"organization_id": "org-1", "provider": "alerting"},
+                )
+                return [
+                    {
+                        "event_type": "application_submit_failed",
+                        "received_at": "2026-05-12T10:00:00+00:00",
+                    },
+                    {
+                        "event_type": "application_event_write_failed",
+                        "received_at": "2026-05-12T10:05:00+00:00",
+                    },
+                ]
             return []
 
         mock_list_rows.side_effect = list_rows_side_effect
@@ -272,6 +287,9 @@ class AccessBoundaryTest(unittest.TestCase):
         self.assertEqual(result["applications"], 1)
         self.assertEqual(result["qualified_applications"], 1)
         self.assertEqual(result["collections_paid"], 1)
+        self.assertEqual(result["application_submit_failures"], 1)
+        self.assertEqual(result["application_event_write_failures"], 1)
+        self.assertEqual(result["application_submit_failure_rate"], 0.5)
 
 
 if __name__ == "__main__":

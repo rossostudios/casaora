@@ -59,16 +59,24 @@ export default async function ApplicationsModulePage({
   let applications: Record<string, unknown>[] = [];
   let members: Record<string, unknown>[] = [];
   let messageTemplates: Record<string, unknown>[] = [];
+  let submissionAlerts: Record<string, unknown>[] = [];
   try {
-    const [applicationRows, memberRows, templateRows] = await Promise.all([
-      fetchList("/applications", orgId, 500),
-      fetchList(`/organizations/${orgId}/members`, orgId, 300),
-      fetchList("/message-templates", orgId, 300),
-    ]);
+    const [applicationRows, memberRows, templateRows, alertRows] =
+      await Promise.all([
+        fetchList("/applications", orgId, 500),
+        fetchList(`/organizations/${orgId}/members`, orgId, 300),
+        fetchList("/message-templates", orgId, 300),
+        fetchList("/integration-events", orgId, 200, {
+          provider: "alerting",
+          event_type: "application_submit_failed",
+          status: "failed",
+        }),
+      ]);
 
     applications = applicationRows as Record<string, unknown>[];
     members = memberRows as Record<string, unknown>[];
     messageTemplates = templateRows as Record<string, unknown>[];
+    submissionAlerts = alertRows as Record<string, unknown>[];
   } catch (err) {
     const message = errorMessage(err);
     if (isOrgMembershipError(message)) {
@@ -123,6 +131,20 @@ export default async function ApplicationsModulePage({
             <div className="rounded-md border border-emerald-500/40 bg-emerald-500/5 p-3 text-sm">
               <p className="font-medium text-emerald-700">
                 {isEn ? "Success" : "Éxito"}: {successLabel}
+              </p>
+            </div>
+          ) : null}
+          {submissionAlerts.length > 0 ? (
+            <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm">
+              <p className="font-medium text-amber-800">
+                {isEn
+                  ? `Submission alerts detected: ${submissionAlerts.length}`
+                  : `Alertas de envío detectadas: ${submissionAlerts.length}`}
+              </p>
+              <p className="mt-1 text-amber-900/80 text-xs">
+                {isEn
+                  ? "Review Integration Events for failed marketplace application submissions."
+                  : "Revisa Eventos de Integración para envíos fallidos de aplicaciones del marketplace."}
               </p>
             </div>
           ) : null}
