@@ -62,7 +62,7 @@ export default async function LeasesModulePage({ searchParams }: PageProps) {
     const [leaseRows, propertyRows, unitRows] = await Promise.all([
       fetchList("/leases", orgId, 500),
       fetchList("/properties", orgId, 500),
-      fetchList("/units", orgId, 1000),
+      fetchList("/units", orgId, 500),
     ]);
     leases = leaseRows as Record<string, unknown>[];
     properties = propertyRows as Record<string, unknown>[];

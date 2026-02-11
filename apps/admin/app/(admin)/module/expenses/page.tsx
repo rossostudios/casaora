@@ -82,7 +82,7 @@ export default async function ExpensesModulePage({ searchParams }: PageProps) {
     const [expenseRows, propertyRows, unitRows] = await Promise.all([
       fetchList("/expenses", orgId, 2000),
       fetchList("/properties", orgId, 500),
-      fetchList("/units", orgId, 2000),
+      fetchList("/units", orgId, 500),
     ]);
     expenses = expenseRows as Record<string, unknown>[];
     properties = propertyRows as Record<string, unknown>[];

@@ -67,7 +67,7 @@ export default async function MarketplaceListingsModulePage({
         fetchList("/marketplace/listings", orgId, 500),
         fetchList("/pricing/templates", orgId, 500),
         fetchList("/properties", orgId, 500),
-        fetchList("/units", orgId, 1000),
+        fetchList("/units", orgId, 500),
       ]);
 
     listings = listingRows as Record<string, unknown>[];

@@ -22,6 +22,17 @@ if (
 }
 
 type QueryValue = string | number | boolean | undefined | null;
+const LIST_LIMIT_CAPS: Record<string, number> = {
+  "/properties": 500,
+  "/units": 500,
+};
+
+function applyListLimitCap(path: string, limit: number): number {
+  const normalizedPath = path.split("?")[0] ?? path;
+  const cap = LIST_LIMIT_CAPS[normalizedPath];
+  if (cap === undefined) return limit;
+  return Math.min(limit, cap);
+}
 
 function buildUrl(path: string, query?: Record<string, QueryValue>): string {
   const url = new URL(`${API_BASE_URL}${path}`);
@@ -139,9 +150,10 @@ export async function fetchList(
   limit = 50,
   extraQuery?: Record<string, QueryValue>
 ): Promise<unknown[]> {
+  const boundedLimit = applyListLimitCap(path, limit);
   const data = await fetchJson<{ data?: unknown[] }>(path, {
     org_id: orgId,
-    limit,
+    limit: boundedLimit,
     ...(extraQuery ?? {}),
   });
   return data.data ?? [];
