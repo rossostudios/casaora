@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 
 from app.api.routers import (
+    ai_agent,
     applications,
     calendar,
     channels,
@@ -27,6 +28,7 @@ from app.api.routers import (
 api_router = APIRouter()
 api_router.include_router(health.router)
 api_router.include_router(identity.router)
+api_router.include_router(ai_agent.router)
 api_router.include_router(demo.router)
 api_router.include_router(organizations.router)
 api_router.include_router(properties.router)

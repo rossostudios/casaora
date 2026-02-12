@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  Add01Icon,
   AuditIcon,
   Building01Icon,
   Calendar02Icon,
@@ -10,9 +11,11 @@ import {
   File01Icon,
   GridViewIcon,
   Home01Icon,
+  InboxIcon,
   Invoice01Icon,
   Link01Icon,
   Message01Icon,
+  Search01Icon,
   Share06Icon,
   SparklesIcon,
   Task01Icon,
@@ -31,6 +34,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
+import { Drawer } from "@/components/ui/drawer";
 import { Icon } from "@/components/ui/icon";
 import type { Locale } from "@/lib/i18n";
 import { getModuleLabel, MODULE_BY_SLUG, MODULES } from "@/lib/modules";
@@ -71,6 +75,8 @@ type SectionKey =
   | "platform"
   | "other";
 
+type PrimaryTabKey = "home" | "chat" | "inbox";
+
 type RouteLinkDef = {
   href: string;
   icon: IconSvgElement;
@@ -82,7 +88,6 @@ type RouteLinkDef = {
 
 type SectionDef = {
   key: SectionKey;
-  icon: IconSvgElement;
   label: {
     "es-PY": string;
     "en-US": string;
@@ -93,7 +98,6 @@ type SectionDef = {
 
 type ResolvedLink = {
   href: string;
-  icon: IconSvgElement;
   label: string;
   iconElement: IconSvgElement;
 };
@@ -104,23 +108,71 @@ type ResolvedSection = {
   links: ResolvedLink[];
 };
 
+const PRIMARY_TABS: Array<{
+  key: PrimaryTabKey;
+  href: string;
+  icon: IconSvgElement;
+  label: { "es-PY": string; "en-US": string };
+}> = [
+  {
+    key: "home",
+    href: "/app",
+    icon: Home01Icon,
+    label: { "es-PY": "Inicio", "en-US": "Home" },
+  },
+  {
+    key: "chat",
+    href: "/app/agent",
+    icon: Message01Icon,
+    label: { "es-PY": "Chat", "en-US": "Chat" },
+  },
+  {
+    key: "inbox",
+    href: "/module/messaging",
+    icon: InboxIcon,
+    label: { "es-PY": "Inbox", "en-US": "Inbox" },
+  },
+];
+
+const CHAT_LINKS: RouteLinkDef[] = [
+  {
+    href: "/app/agent",
+    icon: SparklesIcon,
+    label: { "es-PY": "Agente de Operaciones", "en-US": "Operations Agent" },
+  },
+  {
+    href: "/module/tasks?mine=1",
+    icon: Task01Icon,
+    label: { "es-PY": "Mis tareas", "en-US": "My tasks" },
+  },
+];
+
+const INBOX_LINKS: RouteLinkDef[] = [
+  {
+    href: "/module/applications",
+    icon: UserGroupIcon,
+    label: { "es-PY": "Aplicaciones", "en-US": "Applications" },
+  },
+  {
+    href: "/module/collections",
+    icon: Invoice01Icon,
+    label: { "es-PY": "Cobranzas", "en-US": "Collections" },
+  },
+  {
+    href: "/module/tasks?mine=1",
+    icon: Task01Icon,
+    label: { "es-PY": "Cola personal", "en-US": "My queue" },
+  },
+];
+
 const SECTIONS: SectionDef[] = [
   {
     key: "workspace",
-    icon: GridViewIcon,
     label: {
       "es-PY": "Inicio",
       "en-US": "Home",
     },
     routeLinks: [
-      {
-        href: "/app",
-        icon: GridViewIcon,
-        label: {
-          "es-PY": "Panel",
-          "en-US": "Dashboard",
-        },
-      },
       {
         href: "/setup",
         icon: SparklesIcon,
@@ -134,30 +186,22 @@ const SECTIONS: SectionDef[] = [
   },
   {
     key: "leasing",
-    icon: Home01Icon,
     label: {
       "es-PY": "Leasing",
       "en-US": "Leasing",
     },
-    moduleSlugs: [
-      "marketplace-listings",
-      "applications",
-      "leases",
-      "collections",
-    ],
+    moduleSlugs: ["marketplace-listings", "leases"],
   },
   {
     key: "operations",
-    icon: Task01Icon,
     label: {
       "es-PY": "Operaciones",
       "en-US": "Operations",
     },
-    moduleSlugs: ["tasks", "reservations", "calendar", "guests", "messaging"],
+    moduleSlugs: ["tasks", "reservations", "calendar", "guests"],
   },
   {
     key: "portfolio",
-    icon: Building01Icon,
     label: {
       "es-PY": "Portafolio",
       "en-US": "Portfolio",
@@ -166,7 +210,6 @@ const SECTIONS: SectionDef[] = [
   },
   {
     key: "finance",
-    icon: Invoice01Icon,
     label: {
       "es-PY": "Finanzas",
       "en-US": "Finance",
@@ -181,7 +224,6 @@ const SECTIONS: SectionDef[] = [
   },
   {
     key: "platform",
-    icon: WebhookIcon,
     label: {
       "es-PY": "Plataforma",
       "en-US": "Platform",
@@ -191,10 +233,22 @@ const SECTIONS: SectionDef[] = [
 ];
 
 const COLLAPSED_SECTIONS_KEY = "pa-sidebar-collapsed-sections";
+const APPLE_DEVICE_REGEX = /Mac|iPhone|iPad/i;
+const HOME_TAB_HIDDEN_MODULE_SLUGS = new Set([
+  "applications",
+  "collections",
+  "messaging",
+]);
 
 function isRouteActive(pathname: string, href: string): boolean {
   if (href === "/app") return pathname === "/app";
   return pathname === href || pathname.startsWith(`${href}/`);
+}
+
+function resolvePrimaryTab(pathname: string): PrimaryTabKey {
+  if (pathname.startsWith("/app/agent")) return "chat";
+  if (pathname.startsWith("/module/messaging")) return "inbox";
+  return "home";
 }
 
 function resolveModuleLink(slug: string, locale: Locale): ResolvedLink | null {
@@ -203,7 +257,6 @@ function resolveModuleLink(slug: string, locale: Locale): ResolvedLink | null {
 
   return {
     href: `/module/${module.slug}`,
-    icon: MODULE_ICONS[module.slug] ?? GridViewIcon,
     iconElement: MODULE_ICONS[module.slug] ?? GridViewIcon,
     label: getModuleLabel(module, locale),
   };
@@ -213,7 +266,6 @@ function resolveSections(locale: Locale): ResolvedSection[] {
   const resolved = SECTIONS.map((section) => {
     const routeLinks = (section.routeLinks ?? []).map((link) => ({
       href: link.href,
-      icon: link.icon,
       iconElement: link.icon,
       label: link.label[locale],
     }));
@@ -232,6 +284,9 @@ function resolveSections(locale: Locale): ResolvedSection[] {
   const knownSlugs = new Set(
     SECTIONS.flatMap((section) => section.moduleSlugs)
   );
+  for (const hiddenSlug of HOME_TAB_HIDDEN_MODULE_SLUGS) {
+    knownSlugs.add(hiddenSlug);
+  }
   const extras = MODULES.filter((module) => !knownSlugs.has(module.slug));
 
   if (extras.length) {
@@ -240,7 +295,6 @@ function resolveSections(locale: Locale): ResolvedSection[] {
       label: locale === "en-US" ? "Other" : "Otros",
       links: extras.map((module) => ({
         href: `/module/${module.slug}`,
-        icon: MODULE_ICONS[module.slug] ?? SparklesIcon,
         iconElement: MODULE_ICONS[module.slug] ?? SparklesIcon,
         label: getModuleLabel(module, locale),
       })),
@@ -287,6 +341,75 @@ function useCollapsedSections(): [Set<SectionKey>, (key: SectionKey) => void] {
   return [collapsed, toggle];
 }
 
+function NavLinkRow({
+  active,
+  href,
+  icon,
+  label,
+}: {
+  active: boolean;
+  href: string;
+  icon: IconSvgElement;
+  label: string;
+}) {
+  return (
+    <Link
+      className={cn(
+        "group flex items-center gap-2 rounded-lg px-2 py-[5px] transition-all duration-200 ease-in-out",
+        active
+          ? "bg-background text-foreground shadow-[0_1px_2px_rgba(0,0,0,0.05)] ring-1 ring-border/40"
+          : "text-muted-foreground/80 hover:bg-muted/60 hover:text-foreground"
+      )}
+      href={href}
+    >
+      <Icon
+        className={cn(
+          "shrink-0 transition-colors",
+          active
+            ? "text-primary"
+            : "text-muted-foreground/60 group-hover:text-foreground/80"
+        )}
+        icon={icon}
+        size={16}
+      />
+      <span className="truncate font-medium text-[13px] leading-5">
+        {label}
+      </span>
+    </Link>
+  );
+}
+
+function ShortcutBlock({
+  label,
+  links,
+  locale,
+  pathname,
+}: {
+  label: { "es-PY": string; "en-US": string };
+  links: RouteLinkDef[];
+  locale: Locale;
+  pathname: string;
+}) {
+  return (
+    <section className="space-y-1.5">
+      <h3 className="px-2 font-medium text-[10px] text-muted-foreground/55 uppercase tracking-[0.08em]">
+        {label[locale]}
+      </h3>
+      <div className="space-y-0.5">
+        {links.map((link) => (
+          <NavLinkRow
+            active={isRouteActive(pathname, link.href)}
+            href={link.href}
+            icon={link.icon}
+            key={link.href}
+            label={link.label[locale]}
+          />
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function SidebarContent({
   locale,
   orgId,
@@ -295,134 +418,167 @@ function SidebarContent({
   orgId: string | null;
 }) {
   const pathname = usePathname();
+  const activeTab = resolvePrimaryTab(pathname);
   const sections = useMemo(() => resolveSections(locale), [locale]);
   const [collapsedSections, toggleSection] = useCollapsedSections();
+  const isEn = locale === "en-US";
+
+  const openSearch = useCallback(() => {
+    if (typeof window === "undefined") return;
+    const isMac = APPLE_DEVICE_REGEX.test(window.navigator.platform);
+    const event = new KeyboardEvent("keydown", {
+      bubbles: true,
+      cancelable: true,
+      key: "k",
+      metaKey: isMac,
+      ctrlKey: !isMac,
+    });
+    window.dispatchEvent(event);
+  }, []);
 
   return (
     <div className="flex h-full flex-col">
-      {/* Brand / Logo Area */}
       <div className="flex h-14 shrink-0 items-center px-4">
         <OrgSwitcher activeOrgId={orgId} locale={locale} />
       </div>
 
-      {/* Navigation */}
-      <div className="sidebar-scroll-mask flex-1 overflow-y-auto px-3 py-1.5">
-        <nav className="space-y-3">
-          {sections.map((section) => {
-            const isHome = section.key === "workspace";
-            const isCollapsed = !isHome && collapsedSections.has(section.key);
-
-            if (isHome) {
+      <div className="px-3 pb-2">
+        <div className="flex items-center gap-1 rounded-xl border border-border/60 bg-background/70 p-1">
+          <div className="flex min-w-0 flex-1 items-center gap-0.5">
+            {PRIMARY_TABS.map((tab) => {
+              const active = tab.key === activeTab;
               return (
-                <div className="space-y-0.5" key={section.key}>
-                  {section.links.map((link) => {
-                    const active = isRouteActive(pathname, link.href);
-                    return (
-                      <Link
-                        className={cn(
-                          "group flex items-center gap-2 rounded-lg px-2 py-[5px] transition-all duration-200 ease-in-out",
-                          active
-                            ? "bg-background text-foreground shadow-[0_1px_2px_rgba(0,0,0,0.05)] ring-1 ring-border/40"
-                            : "text-muted-foreground/80 hover:bg-muted/60 hover:text-foreground"
-                        )}
-                        href={link.href}
-                        key={link.href}
-                      >
-                        <Icon
-                          className={cn(
-                            "shrink-0 transition-colors",
-                            active
-                              ? "text-primary"
-                              : "text-muted-foreground/60 group-hover:text-foreground/80"
-                          )}
-                          icon={link.iconElement}
-                          size={16}
-                        />
-                        <span className="truncate font-medium text-[13px] leading-5">
-                          {link.label}
-                        </span>
-                      </Link>
-                    );
-                  })}
-                </div>
+                <Link
+                  className={cn(
+                    "inline-flex min-w-0 items-center gap-1.5 rounded-lg px-2 py-1.5 font-medium text-[12px] transition-colors",
+                    active
+                      ? "bg-muted text-foreground"
+                      : "text-muted-foreground/75 hover:text-foreground"
+                  )}
+                  href={tab.href}
+                  key={tab.key}
+                >
+                  <Icon icon={tab.icon} size={14} />
+                  <span className="truncate">{tab.label[locale]}</span>
+                </Link>
               );
-            }
+            })}
+          </div>
 
-            return (
-              <Collapsible
-                key={section.key}
-                onOpenChange={() => toggleSection(section.key)}
-                open={!isCollapsed}
-              >
-                <CollapsibleTrigger className="group flex w-full items-center gap-1 px-2 pt-1 pb-1">
-                  <svg
-                    aria-hidden="true"
-                    className={cn(
-                      "h-3 w-3 shrink-0 text-muted-foreground/40 transition-transform duration-150",
-                      isCollapsed ? "-rotate-90" : "rotate-0"
-                    )}
-                    fill="none"
-                    focusable="false"
-                    stroke="currentColor"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    viewBox="0 0 24 24"
-                  >
-                    <path d="m6 9 6 6 6-6" />
-                  </svg>
-                  <span className="font-medium text-[10px] text-muted-foreground/50 uppercase tracking-[0.08em]">
-                    {section.label}
-                  </span>
-                </CollapsibleTrigger>
-                <CollapsibleContent>
-                  <div className="mt-0.5 space-y-0.5">
-                    {section.links.map((link) => {
-                      const active = isRouteActive(pathname, link.href);
-                      return (
-                        <Link
-                          className={cn(
-                            "group flex items-center gap-2 rounded-lg px-2 py-[5px] transition-all duration-200 ease-in-out",
-                            active
-                              ? "bg-background text-foreground shadow-[0_1px_2px_rgba(0,0,0,0.05)] ring-1 ring-border/40"
-                              : "text-muted-foreground/80 hover:bg-muted/60 hover:text-foreground"
-                          )}
-                          href={link.href}
-                          key={link.href}
-                        >
-                          <Icon
-                            className={cn(
-                              "shrink-0 transition-colors",
-                              active
-                                ? "text-primary"
-                                : "text-muted-foreground/60 group-hover:text-foreground/80"
-                            )}
-                            icon={link.iconElement}
-                            size={16}
-                          />
-                          <span className="truncate font-medium text-[13px] leading-5">
-                            {link.label}
-                          </span>
-                        </Link>
-                      );
-                    })}
-                  </div>
-                </CollapsibleContent>
-              </Collapsible>
-            );
-          })}
-        </nav>
+          <button
+            aria-label={isEn ? "Search" : "Buscar"}
+            className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground/70 transition-colors hover:bg-muted hover:text-foreground"
+            onClick={openSearch}
+            type="button"
+          >
+            <Icon icon={Search01Icon} size={15} />
+          </button>
+        </div>
       </div>
 
-      {/* Footer */}
-      <div className="shrink-0 p-3 pt-0">
+      <div className="sidebar-scroll-mask flex-1 space-y-3 overflow-y-auto px-3 py-1.5">
+        {activeTab === "chat" ? (
+          <ShortcutBlock
+            label={{ "es-PY": "Agentes", "en-US": "Agents" }}
+            links={CHAT_LINKS}
+            locale={locale}
+            pathname={pathname}
+          />
+        ) : null}
+
+        {activeTab === "inbox" ? (
+          <ShortcutBlock
+            label={{ "es-PY": "Bandejas", "en-US": "Inbox" }}
+            links={INBOX_LINKS}
+            locale={locale}
+            pathname={pathname}
+          />
+        ) : null}
+
+        {activeTab === "home" ? (
+          <nav className="space-y-3">
+            {sections.map((section) => {
+              const isWorkspace = section.key === "workspace";
+              const isCollapsed =
+                !isWorkspace && collapsedSections.has(section.key);
+
+              if (isWorkspace) {
+                return (
+                  <div className="space-y-0.5" key={section.key}>
+                    {section.links.map((link) => (
+                      <NavLinkRow
+                        active={isRouteActive(pathname, link.href)}
+                        href={link.href}
+                        icon={link.iconElement}
+                        key={link.href}
+                        label={link.label}
+                      />
+                    ))}
+                  </div>
+                );
+              }
+
+              return (
+                <Collapsible
+                  key={section.key}
+                  onOpenChange={() => toggleSection(section.key)}
+                  open={!isCollapsed}
+                >
+                  <CollapsibleTrigger className="group flex w-full items-center gap-1 px-2 pt-1 pb-1">
+                    <svg
+                      aria-hidden="true"
+                      className={cn(
+                        "h-3 w-3 shrink-0 text-muted-foreground/40 transition-transform duration-150",
+                        isCollapsed ? "-rotate-90" : "rotate-0"
+                      )}
+                      fill="none"
+                      focusable="false"
+                      stroke="currentColor"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      viewBox="0 0 24 24"
+                    >
+                      <path d="m6 9 6 6 6-6" />
+                    </svg>
+                    <span className="font-medium text-[10px] text-muted-foreground/50 uppercase tracking-[0.08em]">
+                      {section.label}
+                    </span>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent>
+                    <div className="mt-0.5 space-y-0.5">
+                      {section.links.map((link) => (
+                        <NavLinkRow
+                          active={isRouteActive(pathname, link.href)}
+                          href={link.href}
+                          icon={link.iconElement}
+                          key={link.href}
+                          label={link.label}
+                        />
+                      ))}
+                    </div>
+                  </CollapsibleContent>
+                </Collapsible>
+              );
+            })}
+          </nav>
+        ) : null}
+      </div>
+
+      <div className="shrink-0 space-y-2 p-3 pt-0">
+        <Link
+          className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-full border border-border/60 bg-background/80 px-3 font-medium text-[13px] text-foreground transition-colors hover:bg-muted"
+          href="/app/agent?new=1"
+        >
+          <Icon icon={SparklesIcon} size={14} />
+          {isEn ? "New chat" : "Nuevo chat"}
+          <Icon icon={Add01Icon} size={14} />
+        </Link>
         <SidebarAccount collapsed={false} locale={locale} />
       </div>
     </div>
   );
 }
-
-import { Drawer } from "@/components/ui/drawer";
 
 export function SidebarNew({
   locale,
@@ -441,7 +597,7 @@ export function SidebarNew({
 
   if (isDesktop) {
     return (
-      <aside className="w-[240px] shrink-0 border-border/60 border-r bg-muted/15">
+      <aside className="h-full w-full min-w-0 shrink-0 border-border/60 border-r bg-muted/15">
         <SidebarContent locale={locale} orgId={orgId} />
       </aside>
     );
@@ -457,9 +613,7 @@ export function SidebarNew({
       side="left"
     >
       <div className="h-full bg-muted/15">
-        <div className="h-full bg-muted/15">
-          <SidebarContent locale={locale} orgId={orgId} />
-        </div>
+        <SidebarContent locale={locale} orgId={orgId} />
       </div>
     </Drawer>
   );

@@ -21,6 +21,11 @@ class Settings(BaseSettings):
     transparent_pricing_required: bool = True
     applications_pipeline_enabled: bool = True
     lease_collections_enabled: bool = True
+    ai_agent_enabled: bool = True
+    openai_api_key: Optional[str] = None
+    openai_model: str = "gpt-4o-mini"
+    ai_agent_max_tool_steps: int = 6
+    ai_agent_timeout_seconds: int = 45
 
     supabase_url: Optional[str] = None
     supabase_service_role_key: Optional[str] = None

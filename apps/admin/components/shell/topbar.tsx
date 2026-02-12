@@ -70,9 +70,7 @@ export function Topbar({
         </div>
 
         <div className="flex min-w-0 flex-wrap items-center gap-2 xl:justify-end">
-          <div className="min-w-[13rem] flex-1 xl:min-w-[19rem] xl:flex-none">
-            <CommandPalette />
-          </div>
+          <CommandPalette showTrigger={false} />
           <NotificationBell locale={locale} />
           <ThemeToggle locale={locale} />
           <LanguageSelector className="hidden h-9 w-[10rem] md:block" />

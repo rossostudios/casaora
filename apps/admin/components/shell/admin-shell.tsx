@@ -1,16 +1,15 @@
 "use client";
 
-import {
-  type ReactNode,
-  useCallback,
-  useEffect,
-  useMemo,
-  useState,
-} from "react";
+import { type ReactNode, useCallback, useEffect, useState } from "react";
 import type { ViewportMode } from "@/components/shell/sidebar";
 import { SidebarNew } from "@/components/shell/sidebar-new";
 import { SidebarV1 } from "@/components/shell/sidebar-v1";
 import { Topbar } from "@/components/shell/topbar";
+import {
+  ResizableHandle,
+  ResizablePanel,
+  ResizablePanelGroup,
+} from "@/components/ui/resizable";
 import type { Locale } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
@@ -132,28 +131,67 @@ function AdminShellV2({ orgId, locale, children }: AdminShellProps) {
     }
   }, [viewportMode]);
 
-  const shellColumns = useMemo(() => {
-    if (viewportMode === "desktop") {
-      return "grid-cols-[240px_minmax(0,1fr)]";
-    }
-    return "grid-cols-[minmax(0,1fr)]";
-  }, [viewportMode]);
-
   const showNavToggle = viewportMode !== "desktop";
   const isNavOpen = isMobileDrawerOpen;
+  const isDesktop = viewportMode === "desktop";
 
   const onNavToggle = () => {
     setIsMobileDrawerOpen((open) => !open);
   };
 
+  const shellSurfaceClass = BRAND_V1_ENABLED
+    ? "bg-[color-mix(in_oklch,var(--shell-surface)_78%,var(--background))]"
+    : "bg-[color-mix(in_oklch,var(--shell-surface)_76%,var(--background))]";
+
+  const contentColumn = (
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+      <Topbar
+        isNavOpen={isNavOpen}
+        locale={locale}
+        onNavToggle={onNavToggle}
+        showNavToggle={showNavToggle}
+      />
+      <main className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden p-3 sm:p-4 lg:p-5 xl:p-7">
+        <div className="mx-auto w-full max-w-screen-2xl">{children}</div>
+      </main>
+    </div>
+  );
+
+  if (isDesktop) {
+    return (
+      <div
+        className={cn(
+          "h-full min-h-0 w-full overflow-hidden",
+          shellSurfaceClass
+        )}
+        data-nav-open={false}
+        data-shell-mode={viewportMode}
+      >
+        <ResizablePanelGroup
+          className="h-full min-h-0 w-full"
+          orientation="horizontal"
+        >
+          <ResizablePanel defaultSize="20%" maxSize="40%" minSize="14%">
+            <SidebarNew
+              isMobileDrawerOpen={false}
+              locale={locale}
+              onMobileDrawerOpenChange={setIsMobileDrawerOpen}
+              orgId={orgId}
+              viewportMode={viewportMode}
+            />
+          </ResizablePanel>
+          <ResizableHandle withHandle />
+          <ResizablePanel minSize="50%">{contentColumn}</ResizablePanel>
+        </ResizablePanelGroup>
+      </div>
+    );
+  }
+
   return (
     <div
       className={cn(
-        "grid h-full min-h-0 w-full overflow-hidden transition-all duration-300 ease-in-out",
-        BRAND_V1_ENABLED
-          ? "bg-[color-mix(in_oklch,var(--shell-surface)_78%,var(--background))]"
-          : "bg-[color-mix(in_oklch,var(--shell-surface)_76%,var(--background))]",
-        shellColumns
+        "grid h-full min-h-0 w-full grid-cols-[minmax(0,1fr)] overflow-hidden transition-all duration-300 ease-in-out",
+        shellSurfaceClass
       )}
       data-nav-open={isNavOpen}
       data-shell-mode={viewportMode}
@@ -165,18 +203,7 @@ function AdminShellV2({ orgId, locale, children }: AdminShellProps) {
         orgId={orgId}
         viewportMode={viewportMode}
       />
-
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-        <Topbar
-          isNavOpen={isNavOpen}
-          locale={locale}
-          onNavToggle={onNavToggle}
-          showNavToggle={showNavToggle}
-        />
-        <main className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden p-3 sm:p-4 lg:p-5 xl:p-7">
-          <div className="mx-auto w-full max-w-screen-2xl">{children}</div>
-        </main>
-      </div>
+      {contentColumn}
     </div>
   );
 }

@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import Any, Optional
+from typing import Any, Literal, Optional
 
 
 class ListResponse(BaseModel):
@@ -499,3 +499,18 @@ class MarkCollectionPaidInput(BaseModel):
     payment_reference: Optional[str] = None
     paid_at: Optional[str] = None
     notes: Optional[str] = None
+
+
+class AgentConversationMessageInput(BaseModel):
+    role: Literal["user", "assistant"]
+    content: str = Field(min_length=1, max_length=4000)
+
+
+class AgentChatInput(BaseModel):
+    org_id: str
+    message: str = Field(min_length=1, max_length=4000)
+    conversation: list[AgentConversationMessageInput] = Field(
+        default_factory=list,
+        max_length=20,
+    )
+    allow_mutations: bool = False

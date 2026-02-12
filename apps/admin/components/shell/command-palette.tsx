@@ -48,7 +48,11 @@ function toActions(
   }));
 }
 
-export function CommandPalette() {
+export function CommandPalette({
+  showTrigger = true,
+}: {
+  showTrigger?: boolean;
+}) {
   const router = useRouter();
   const locale = useActiveLocale();
   const isEn = locale === "en-US";
@@ -144,25 +148,27 @@ export function CommandPalette() {
 
   return (
     <>
-      <Button
-        aria-label={
-          isEn ? "Search or jump to... (Cmd+K)" : "Buscar o ir a... (Cmd+K)"
-        }
-        className="flex h-10 w-full items-center justify-between gap-3 rounded-xl border-border/85 bg-background/90 px-3.5 font-normal text-muted-foreground shadow-[inset_0_1px_0_rgba(255,255,255,0.8)] hover:bg-background"
-        onClick={() => setOpen(true)}
-        type="button"
-        variant="outline"
-      >
-        <span className="flex items-center gap-2">
-          <Icon icon={Search01Icon} size={16} />
-          <span className="truncate">
-            {isEn ? "Search or jump to..." : "Buscar o ir a..."}
+      {showTrigger ? (
+        <Button
+          aria-label={
+            isEn ? "Search or jump to... (Cmd+K)" : "Buscar o ir a... (Cmd+K)"
+          }
+          className="flex h-10 w-full items-center justify-between gap-3 rounded-xl border-border/85 bg-background/90 px-3.5 font-normal text-muted-foreground shadow-[inset_0_1px_0_rgba(255,255,255,0.8)] hover:bg-background"
+          onClick={() => setOpen(true)}
+          type="button"
+          variant="outline"
+        >
+          <span className="flex items-center gap-2">
+            <Icon icon={Search01Icon} size={16} />
+            <span className="truncate">
+              {isEn ? "Search or jump to..." : "Buscar o ir a..."}
+            </span>
           </span>
-        </span>
-        <kbd className="pointer-events-none hidden h-5 select-none items-center gap-1 rounded border bg-muted px-1.5 font-medium font-mono text-[10px] text-muted-foreground opacity-100 md:flex">
-          <span className="text-xs">⌘</span>K
-        </kbd>
-      </Button>
+          <kbd className="pointer-events-none hidden h-5 select-none items-center gap-1 rounded border bg-muted px-1.5 font-medium font-mono text-[10px] text-muted-foreground opacity-100 md:flex">
+            <span className="text-xs">⌘</span>K
+          </kbd>
+        </Button>
+      ) : null}
 
       {open ? (
         <div className="fixed inset-0 z-50">
