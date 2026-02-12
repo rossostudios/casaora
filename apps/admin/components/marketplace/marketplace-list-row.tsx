@@ -6,12 +6,11 @@ import {
   Wallet02Icon,
 } from "@hugeicons/core-free-icons";
 import Image from "next/image";
-import Link from "next/link";
 
 import { Badge } from "@/components/ui/badge";
 import { Icon } from "@/components/ui/icon";
 import { formatCurrency } from "@/lib/format";
-
+import { IntentPrefetchLink } from "./intent-prefetch-link";
 import {
   asNumber,
   asOptionalNumber,
@@ -143,13 +142,13 @@ export function MarketplaceListRow({
           </p>
         </div>
 
-        <Link
+        <IntentPrefetchLink
           className="inline-flex h-9 items-center gap-1 rounded-2xl border border-border/80 bg-background px-3 font-medium text-sm transition-colors hover:bg-accent"
           href={`/marketplace/${encodeURIComponent(slug)}`}
         >
           {isEn ? "View" : "Ver"}
           <Icon icon={ArrowRight01Icon} size={14} />
-        </Link>
+        </IntentPrefetchLink>
       </div>
     </article>
   );

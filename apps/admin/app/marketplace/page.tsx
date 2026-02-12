@@ -18,6 +18,7 @@ import { PublicFooter } from "@/components/marketplace/public-footer";
 import { PublicHeader } from "@/components/marketplace/public-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Icon } from "@/components/ui/icon";
+import { Input } from "@/components/ui/input";
 import { fetchPublicMarketplaceListings } from "@/lib/api";
 import { getActiveLocale } from "@/lib/i18n/server";
 
@@ -212,8 +213,8 @@ export default async function MarketplacePage({
                   icon={Search01Icon}
                   size={17}
                 />
-                <input
-                  className="h-full w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground/80"
+                <Input
+                  className="h-full w-full border-0 bg-transparent px-0 py-0 text-sm shadow-none focus-visible:ring-0"
                   defaultValue={q}
                   name="q"
                   placeholder={
@@ -231,8 +232,8 @@ export default async function MarketplacePage({
                   icon={Location01Icon}
                   size={16}
                 />
-                <input
-                  className="h-full w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground/80"
+                <Input
+                  className="h-full w-full border-0 bg-transparent px-0 py-0 text-sm shadow-none focus-visible:ring-0"
                   defaultValue={city}
                   name="city"
                   placeholder={isEn ? "City" : "Ciudad"}
@@ -246,8 +247,8 @@ export default async function MarketplacePage({
                   icon={Home01Icon}
                   size={16}
                 />
-                <input
-                  className="h-full w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground/80"
+                <Input
+                  className="h-full w-full border-0 bg-transparent px-0 py-0 text-sm shadow-none focus-visible:ring-0"
                   defaultValue={neighborhood}
                   name="neighborhood"
                   placeholder={isEn ? "Neighborhood" : "Barrio"}
@@ -261,8 +262,8 @@ export default async function MarketplacePage({
                   icon={Wallet02Icon}
                   size={16}
                 />
-                <input
-                  className="h-full w-20 bg-transparent text-sm outline-none placeholder:text-muted-foreground/80"
+                <Input
+                  className="h-full w-20 border-0 bg-transparent px-0 py-0 text-sm shadow-none focus-visible:ring-0"
                   defaultValue={minMonthly ?? ""}
                   min={0}
                   name="min_monthly"
@@ -270,8 +271,8 @@ export default async function MarketplacePage({
                   type="number"
                 />
                 <span className="text-muted-foreground text-xs">-</span>
-                <input
-                  className="h-full w-20 bg-transparent text-sm outline-none placeholder:text-muted-foreground/80"
+                <Input
+                  className="h-full w-20 border-0 bg-transparent px-0 py-0 text-sm shadow-none focus-visible:ring-0"
                   defaultValue={maxMonthly ?? ""}
                   min={0}
                   name="max_monthly"
@@ -313,8 +314,8 @@ export default async function MarketplacePage({
                 <span className="text-muted-foreground text-xs">
                   {isEn ? "Beds" : "Hab"}
                 </span>
-                <input
-                  className="h-full w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground/80"
+                <Input
+                  className="h-full w-full border-0 bg-transparent px-0 py-0 text-sm shadow-none focus-visible:ring-0"
                   defaultValue={minBedrooms ?? ""}
                   min={0}
                   name="min_bedrooms"
@@ -327,8 +328,8 @@ export default async function MarketplacePage({
                 <span className="text-muted-foreground text-xs">
                   {isEn ? "Baths" : "Banos"}
                 </span>
-                <input
-                  className="h-full w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground/80"
+                <Input
+                  className="h-full w-full border-0 bg-transparent px-0 py-0 text-sm shadow-none focus-visible:ring-0"
                   defaultValue={minBathrooms ?? ""}
                   min={0}
                   name="min_bathrooms"

@@ -14,6 +14,7 @@ Supabase-first platform scaffold for short-term rental operations in Paraguay, w
 - `api/openapi.yaml`: Endpoint contract
 - `docs/PRD.md`: Product requirements
 - `docs/vercel-deploy.md`: Production/Vercel deployment checklist
+- `docs/codex-workflow.md`: Codex + MCP execution workflow
 
 ## 1) Supabase Setup
 
@@ -95,3 +96,17 @@ Admin app:
   - audit hooks on all writes
   - idempotency keys for external sync
   - background jobs for iCal and messaging dispatch
+
+## Codex Quality Gate
+
+Run this before merge/deploy:
+
+```bash
+./scripts/quality-gate.sh
+```
+
+Fast mode (skip admin build):
+
+```bash
+./scripts/quality-gate.sh fast
+```

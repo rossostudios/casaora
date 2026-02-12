@@ -1,12 +1,11 @@
 import Image from "next/image";
-import Link from "next/link";
 
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatCurrency } from "@/lib/format";
 import { cn } from "@/lib/utils";
-
+import { IntentPrefetchLink } from "./intent-prefetch-link";
 import {
   asNumber,
   asOptionalNumber,
@@ -119,7 +118,7 @@ export function MarketplaceListingCard({
           </p>
         </div>
 
-        <Link
+        <IntentPrefetchLink
           className={cn(
             buttonVariants({ variant: "outline", size: "sm" }),
             "w-full"
@@ -127,7 +126,7 @@ export function MarketplaceListingCard({
           href={`/marketplace/${encodeURIComponent(slug)}`}
         >
           {isEn ? "View listing" : "Ver anuncio"}
-        </Link>
+        </IntentPrefetchLink>
       </CardContent>
     </Card>
   );

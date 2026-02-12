@@ -4,19 +4,19 @@ import { PlusSignIcon } from "@hugeicons/core-free-icons";
 import type { ColumnDef } from "@tanstack/react-table";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useMemo, useOptimistic, useState } from "react";
 
 import {
   createLeaseAction,
   setLeaseStatusAction,
 } from "@/app/(admin)/module/leases/actions";
-import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { DataTable, type DataTableRow } from "@/components/ui/data-table";
 import { Icon } from "@/components/ui/icon";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Sheet } from "@/components/ui/sheet";
+import { StatusBadge } from "@/components/ui/status-badge";
 import { Textarea } from "@/components/ui/textarea";
 import { formatCurrency } from "@/lib/format";
 import { useActiveLocale } from "@/lib/i18n/client";
@@ -57,6 +57,12 @@ function statusLabel(value: string, isEn: boolean): string {
   return normalized || "desconocido";
 }
 
+type LeaseRow = DataTableRow & {
+  id: string;
+  lease_status: string;
+  lease_status_label: string;
+};
+
 export function LeasesManager({
   orgId,
   leases,
@@ -81,7 +87,7 @@ export function LeasesManager({
   const [open, setOpen] = useState(false);
   const today = useMemo(() => new Date().toISOString().slice(0, 10), []);
 
-  const rows = useMemo(() => {
+  const rows = useMemo<LeaseRow[]>(() => {
     return leases.map((row) => {
       const status = asString(row.lease_status).trim();
       return {
@@ -101,9 +107,26 @@ export function LeasesManager({
         monthly_recurring_total: asNumber(row.monthly_recurring_total),
         collection_count: asNumber(row.collection_count),
         collection_paid_count: asNumber(row.collection_paid_count),
-      } satisfies DataTableRow;
+      } satisfies LeaseRow;
     });
   }, [leases, isEn]);
+
+  const [optimisticRows, queueOptimisticRowUpdate] = useOptimistic(
+    rows,
+    (
+      currentRows,
+      action: { type: "set-status"; leaseId: string; nextStatus: string }
+    ) => {
+      return currentRows.map((row) => {
+        if (row.id !== action.leaseId) return row;
+        return {
+          ...row,
+          lease_status: action.nextStatus,
+          lease_status_label: statusLabel(action.nextStatus, isEn),
+        };
+      });
+    }
+  );
 
   const columns = useMemo<ColumnDef<DataTableRow>[]>(() => {
     return [
@@ -130,8 +153,11 @@ export function LeasesManager({
       {
         accessorKey: "lease_status_label",
         header: isEn ? "Status" : "Estado",
-        cell: ({ getValue }) => (
-          <Badge variant="outline">{asString(getValue())}</Badge>
+        cell: ({ row, getValue }) => (
+          <StatusBadge
+            label={asString(getValue())}
+            value={asString(row.original.lease_status)}
+          />
         ),
       },
       {
@@ -205,7 +231,7 @@ export function LeasesManager({
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-muted-foreground text-sm">
-          {rows.length} {isEn ? "leases" : "contratos"}
+          {optimisticRows.length} {isEn ? "leases" : "contratos"}
         </p>
         <Button onClick={() => setOpen(true)} type="button">
           <Icon icon={PlusSignIcon} size={16} />
@@ -215,7 +241,7 @@ export function LeasesManager({
 
       <DataTable
         columns={columns}
-        data={rows}
+        data={optimisticRows}
         renderRowActions={(row) => {
           const id = asString(row.id);
           const status = asString(row.lease_status);
@@ -230,7 +256,16 @@ export function LeasesManager({
               </Link>
 
               {canActivate(status) ? (
-                <form action={setLeaseStatusAction}>
+                <form
+                  action={setLeaseStatusAction}
+                  onSubmit={() =>
+                    queueOptimisticRowUpdate({
+                      type: "set-status",
+                      leaseId: id,
+                      nextStatus: "active",
+                    })
+                  }
+                >
                   <input name="lease_id" type="hidden" value={id} />
                   <input name="lease_status" type="hidden" value="active" />
                   <input name="next" type="hidden" value={nextPath} />
@@ -241,7 +276,16 @@ export function LeasesManager({
               ) : null}
 
               {canTerminate(status) ? (
-                <form action={setLeaseStatusAction}>
+                <form
+                  action={setLeaseStatusAction}
+                  onSubmit={() =>
+                    queueOptimisticRowUpdate({
+                      type: "set-status",
+                      leaseId: id,
+                      nextStatus: "terminated",
+                    })
+                  }
+                >
                   <input name="lease_id" type="hidden" value={id} />
                   <input name="lease_status" type="hidden" value="terminated" />
                   <input name="next" type="hidden" value={nextPath} />
@@ -252,7 +296,16 @@ export function LeasesManager({
               ) : null}
 
               {canComplete(status) ? (
-                <form action={setLeaseStatusAction}>
+                <form
+                  action={setLeaseStatusAction}
+                  onSubmit={() =>
+                    queueOptimisticRowUpdate({
+                      type: "set-status",
+                      leaseId: id,
+                      nextStatus: "completed",
+                    })
+                  }
+                >
                   <input name="lease_id" type="hidden" value={id} />
                   <input name="lease_status" type="hidden" value="completed" />
                   <input name="next" type="hidden" value={nextPath} />

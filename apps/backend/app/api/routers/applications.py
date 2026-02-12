@@ -17,6 +17,9 @@ router = APIRouter(tags=["Applications"])
 
 APPLICATION_EDIT_ROLES = {"owner_admin", "operator"}
 RESPONSE_SLA_MINUTES = 120
+RESPONSE_SLA_WARNING_MINUTES = 30
+QUALIFICATION_STRONG_THRESHOLD = 75
+QUALIFICATION_MODERATE_THRESHOLD = 50
 
 ALLOWED_STATUS_TRANSITIONS: dict[str, set[str]] = {
     "new": {"screening", "rejected", "lost"},
@@ -50,6 +53,71 @@ def _parse_iso_datetime(value: Optional[str]) -> Optional[datetime]:
         return None
 
 
+def _to_float(value: object) -> float:
+    try:
+        number = float(value)  # type: ignore[arg-type]
+    except Exception:
+        return 0.0
+    return number if number > 0 else 0.0
+
+
+def _qualification_from_row(row: dict, monthly_recurring_total: float) -> tuple[int, str, Optional[float]]:
+    score = 0.0
+
+    if str(row.get("phone_e164") or "").strip():
+        score += 8
+
+    if str(row.get("document_number") or "").strip():
+        score += 10
+
+    if str(row.get("email") or "").strip():
+        score += 6
+
+    if str(row.get("message") or "").strip():
+        score += 4
+
+    guarantee_choice = str(row.get("guarantee_choice") or "").strip().lower()
+    if guarantee_choice == "guarantor_product":
+        score += 16
+    elif guarantee_choice == "cash_deposit":
+        score += 10
+    else:
+        score += 6
+
+    monthly_income = _to_float(row.get("monthly_income"))
+    income_to_rent_ratio: Optional[float] = None
+    if monthly_income > 0 and monthly_recurring_total > 0:
+        income_to_rent_ratio = round(monthly_income / monthly_recurring_total, 2)
+        if income_to_rent_ratio >= 3:
+            score += 40
+        elif income_to_rent_ratio >= 2.5:
+            score += 34
+        elif income_to_rent_ratio >= 2:
+            score += 28
+        elif income_to_rent_ratio >= 1.5:
+            score += 20
+        else:
+            score += 10
+    elif monthly_income > 0:
+        score += 18
+
+    normalized_status = str(row.get("status") or "").strip().lower()
+    if normalized_status in {"qualified", "visit_scheduled", "offer_sent", "contract_signed"}:
+        score += 12
+    elif normalized_status in {"rejected", "lost"}:
+        score -= 8
+
+    bounded_score = max(0, min(100, int(round(score))))
+    if bounded_score >= QUALIFICATION_STRONG_THRESHOLD:
+        band = "strong"
+    elif bounded_score >= QUALIFICATION_MODERATE_THRESHOLD:
+        band = "moderate"
+    else:
+        band = "watch"
+
+    return bounded_score, band, income_to_rent_ratio
+
+
 def _enrich(rows: list[dict]) -> list[dict]:
     if not rows:
         return rows
@@ -60,7 +128,7 @@ def _enrich(rows: list[dict]) -> list[dict]:
         if row.get("marketplace_listing_id")
     ]
 
-    listing_title: dict[str, str] = {}
+    listing_context: dict[str, dict[str, object]] = {}
     if listing_ids:
         listings = list_rows(
             "marketplace_listings",
@@ -70,7 +138,12 @@ def _enrich(rows: list[dict]) -> list[dict]:
         for listing in listings:
             listing_id = listing.get("id")
             if isinstance(listing_id, str):
-                listing_title[listing_id] = str(listing.get("title") or "")
+                listing_context[listing_id] = {
+                    "title": str(listing.get("title") or ""),
+                    "monthly_recurring_total": _to_float(
+                        listing.get("monthly_recurring_total")
+                    ),
+                }
 
     assigned_user_ids = [
         str(row.get("assigned_user_id") or "")
@@ -97,8 +170,18 @@ def _enrich(rows: list[dict]) -> list[dict]:
 
     for row in rows:
         listing_id = row.get("marketplace_listing_id")
+        listing_info: dict[str, object] = {}
         if isinstance(listing_id, str):
-            row["marketplace_listing_title"] = listing_title.get(listing_id)
+            listing_info = listing_context.get(listing_id, {})
+            row["marketplace_listing_title"] = listing_info.get("title")
+
+        score, band, income_to_rent_ratio = _qualification_from_row(
+            row,
+            _to_float(listing_info.get("monthly_recurring_total")),
+        )
+        row["qualification_score"] = score
+        row["qualification_band"] = band
+        row["income_to_rent_ratio"] = income_to_rent_ratio
 
         assigned_user_id = row.get("assigned_user_id")
         if isinstance(assigned_user_id, str) and assigned_user_id:
@@ -117,9 +200,11 @@ def _enrich(rows: list[dict]) -> list[dict]:
             row["first_response_minutes"] = round(elapsed / 60, 2)
             if first_response_at <= sla_due_at:
                 row["response_sla_status"] = "met"
+                row["response_sla_alert_level"] = "none"
             else:
                 row["response_sla_status"] = "breached"
                 row["response_sla_breached_at"] = sla_due_at.isoformat()
+                row["response_sla_alert_level"] = "critical"
             continue
 
         remaining = (sla_due_at - now).total_seconds() / 60
@@ -127,9 +212,15 @@ def _enrich(rows: list[dict]) -> list[dict]:
             row["response_sla_status"] = "breached"
             row["response_sla_breached_at"] = sla_due_at.isoformat()
             row["response_sla_remaining_minutes"] = 0
+            row["response_sla_alert_level"] = "critical"
+        elif remaining <= RESPONSE_SLA_WARNING_MINUTES:
+            row["response_sla_status"] = "pending"
+            row["response_sla_remaining_minutes"] = round(remaining, 2)
+            row["response_sla_alert_level"] = "warning"
         else:
             row["response_sla_status"] = "pending"
             row["response_sla_remaining_minutes"] = round(remaining, 2)
+            row["response_sla_alert_level"] = "normal"
 
     return rows
 

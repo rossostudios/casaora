@@ -10,6 +10,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { DatePicker } from "@/components/ui/date-picker";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 
@@ -23,6 +24,7 @@ type FormState = {
   email: string;
   phone_e164: string;
   document_number: string;
+  preferred_move_in: string;
   monthly_income: string;
   guarantee_choice: "cash_deposit" | "guarantor_product";
   message: string;
@@ -39,6 +41,7 @@ export function MarketplaceApplyForm({
     email: "",
     phone_e164: "",
     document_number: "",
+    preferred_move_in: "",
     monthly_income: "",
     guarantee_choice: "cash_deposit",
     message: "",
@@ -95,6 +98,7 @@ export function MarketplaceApplyForm({
       source: "marketplace",
       metadata: {
         locale,
+        preferred_move_in: form.preferred_move_in.trim() || undefined,
       },
     };
 
@@ -138,6 +142,7 @@ export function MarketplaceApplyForm({
         email: "",
         phone_e164: "",
         document_number: "",
+        preferred_move_in: "",
         monthly_income: "",
         guarantee_choice: "cash_deposit",
         message: "",
@@ -227,6 +232,23 @@ export function MarketplaceApplyForm({
           </div>
 
           <div className="grid gap-4 md:grid-cols-2">
+            <label className="space-y-1 text-sm" htmlFor="preferred_move_in">
+              <span>
+                {isEn ? "Preferred move-in date" : "Fecha de ingreso preferida"}
+              </span>
+              <DatePicker
+                id="preferred_move_in"
+                locale={locale}
+                onValueChange={(next) =>
+                  setForm((prev) => ({
+                    ...prev,
+                    preferred_move_in: next,
+                  }))
+                }
+                value={form.preferred_move_in}
+              />
+            </label>
+
             <label className="space-y-1 text-sm" htmlFor="monthly_income">
               <span>{isEn ? "Monthly income" : "Ingreso mensual"}</span>
               <Input

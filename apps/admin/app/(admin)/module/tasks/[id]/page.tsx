@@ -17,6 +17,7 @@ import {
 import { CopyButton } from "@/components/ui/copy-button";
 import { Icon } from "@/components/ui/icon";
 import { Input } from "@/components/ui/input";
+import { StatusBadge, type StatusTone } from "@/components/ui/status-badge";
 import { getApiBaseUrl } from "@/lib/api";
 import { errorMessage, isOrgMembershipError } from "@/lib/errors";
 import { getActiveLocale } from "@/lib/i18n/server";
@@ -154,18 +155,13 @@ function localizedTaskActionLabel(
   return next ?? kind;
 }
 
-function statusBadgeClass(status: string): string {
+function statusBadgeClass(status: string): StatusTone {
   const normalized = status.trim().toLowerCase();
-  if (normalized === "done") {
-    return "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:border-emerald-400/30 dark:bg-emerald-400/10 dark:text-emerald-300";
-  }
-  if (normalized === "cancelled") {
-    return "border-rose-500/30 bg-rose-500/10 text-rose-700 dark:border-rose-400/30 dark:bg-rose-400/10 dark:text-rose-300";
-  }
-  if (normalized === "in_progress") {
-    return "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:border-amber-400/30 dark:bg-amber-400/10 dark:text-amber-300";
-  }
-  return "";
+  if (normalized === "done") return "success";
+  if (normalized === "cancelled") return "danger";
+  if (normalized === "in_progress") return "warning";
+  if (normalized === "todo") return "warning";
+  return "neutral";
 }
 
 function asDateTimeLabel(locale: string, value: string | null): string | null {
@@ -423,12 +419,11 @@ export default async function TaskDetailPage({
                 <Badge className="text-[11px]" variant="secondary">
                   {isEn ? "Tasks" : "Tareas"}
                 </Badge>
-                <Badge
-                  className={cn(statusBadgeClass(statusValue))}
-                  variant="outline"
-                >
-                  {statusLabel}
-                </Badge>
+                <StatusBadge
+                  label={statusLabel}
+                  tone={statusBadgeClass(statusValue)}
+                  value={statusValue}
+                />
               </div>
 
               <CardTitle className="text-2xl">{task.title}</CardTitle>

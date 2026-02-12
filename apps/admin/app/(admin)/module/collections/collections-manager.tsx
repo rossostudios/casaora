@@ -3,19 +3,19 @@
 import { PlusSignIcon } from "@hugeicons/core-free-icons";
 import type { ColumnDef } from "@tanstack/react-table";
 import { usePathname, useSearchParams } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useMemo, useOptimistic, useState } from "react";
 
 import {
   createCollectionAction,
   markCollectionPaidAction,
 } from "@/app/(admin)/module/collections/actions";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DataTable, type DataTableRow } from "@/components/ui/data-table";
 import { Icon } from "@/components/ui/icon";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Sheet } from "@/components/ui/sheet";
+import { StatusBadge } from "@/components/ui/status-badge";
 import { Textarea } from "@/components/ui/textarea";
 import { formatCurrency } from "@/lib/format";
 import { useActiveLocale } from "@/lib/i18n/client";
@@ -61,6 +61,14 @@ function overdueDays(dueDate: string, status: string): number {
   return Math.max(diff, 0);
 }
 
+type CollectionRow = DataTableRow & {
+  id: string;
+  status: string;
+  status_label: string;
+  paid_at: string | null;
+  overdue_days: number;
+};
+
 export function CollectionsManager({
   orgId,
   collections,
@@ -83,7 +91,7 @@ export function CollectionsManager({
   const [open, setOpen] = useState(false);
   const today = useMemo(() => new Date().toISOString().slice(0, 10), []);
 
-  const rows = useMemo(() => {
+  const rows = useMemo<CollectionRow[]>(() => {
     return collections.map((row) => {
       const due_date = asString(row.due_date).trim();
       const status = asString(row.status).trim();
@@ -101,9 +109,45 @@ export function CollectionsManager({
         payment_reference: asString(row.payment_reference).trim() || null,
         paid_at: asString(row.paid_at).trim() || null,
         lease_status: asString(row.lease_status).trim() || null,
-      } satisfies DataTableRow;
+      } satisfies CollectionRow;
     });
   }, [collections, isEn]);
+
+  const [optimisticRows, queueOptimisticRowUpdate] = useOptimistic(
+    rows,
+    (
+      currentRows,
+      action:
+        | {
+            type: "mark-paid";
+            collectionId: string;
+            paidAt: string;
+          }
+        | {
+            type: "set-status";
+            collectionId: string;
+            status: string;
+          }
+    ) => {
+      return currentRows.map((row) => {
+        if (row.id !== action.collectionId) return row;
+        if (action.type === "mark-paid") {
+          return {
+            ...row,
+            status: "paid",
+            status_label: statusLabel("paid", isEn),
+            paid_at: action.paidAt,
+            overdue_days: 0,
+          };
+        }
+        return {
+          ...row,
+          status: action.status,
+          status_label: statusLabel(action.status, isEn),
+        };
+      });
+    }
+  );
 
   const columns = useMemo<ColumnDef<DataTableRow>[]>(() => {
     return [
@@ -117,9 +161,12 @@ export function CollectionsManager({
             <div className="space-y-1">
               <p>{due || "-"}</p>
               {days > 0 ? (
-                <Badge className="text-[11px]" variant="outline">
-                  {isEn ? `${days}d overdue` : `${days}d atrasado`}
-                </Badge>
+                <StatusBadge
+                  className="text-[11px]"
+                  label={isEn ? `${days}d overdue` : `${days}d atrasado`}
+                  tone="danger"
+                  value="late"
+                />
               ) : null}
             </div>
           );
@@ -147,8 +194,7 @@ export function CollectionsManager({
         cell: ({ row, getValue }) => {
           const value = asString(getValue());
           const raw = asString(row.original.status).trim().toLowerCase();
-          const variant = raw === "paid" ? "secondary" : "outline";
-          return <Badge variant={variant}>{value}</Badge>;
+          return <StatusBadge label={value} value={raw} />;
         },
       },
       {
@@ -192,7 +238,7 @@ export function CollectionsManager({
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-muted-foreground text-sm">
-          {rows.length} {isEn ? "collections" : "cobros"}
+          {optimisticRows.length} {isEn ? "collections" : "cobros"}
         </p>
         <Button onClick={() => setOpen(true)} type="button">
           <Icon icon={PlusSignIcon} size={16} />
@@ -202,20 +248,27 @@ export function CollectionsManager({
 
       <DataTable
         columns={columns}
-        data={rows}
+        data={optimisticRows}
         renderRowActions={(row) => {
           const id = asString(row.id);
           const status = asString(row.status).trim().toLowerCase();
           if (status === "paid") {
             return (
-              <Badge className="text-[11px]" variant="secondary">
-                {isEn ? "Paid" : "Pagado"}
-              </Badge>
+              <StatusBadge label={isEn ? "Paid" : "Pagado"} value="paid" />
             );
           }
 
           return (
-            <form action={markCollectionPaidAction}>
+            <form
+              action={markCollectionPaidAction}
+              onSubmit={() =>
+                queueOptimisticRowUpdate({
+                  type: "mark-paid",
+                  collectionId: id,
+                  paidAt: new Date().toISOString(),
+                })
+              }
+            >
               <input name="collection_id" type="hidden" value={id} />
               <input
                 name="payment_method"

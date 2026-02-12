@@ -1,20 +1,29 @@
 "use client";
 
+import { ArrowDown01Icon } from "@hugeicons/core-free-icons";
 import type { ColumnDef } from "@tanstack/react-table";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import { useMemo } from "react";
+import { useMemo, useOptimistic, useState } from "react";
 
 import {
   assignApplicationAction,
   convertApplicationToLeaseAction,
   setApplicationStatusAction,
 } from "@/app/(admin)/module/applications/actions";
-import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+import { Combobox, type ComboboxOption } from "@/components/ui/combobox";
 import { DataTable, type DataTableRow } from "@/components/ui/data-table";
-import { Select } from "@/components/ui/select";
+import { DatePicker } from "@/components/ui/date-picker";
+import { Icon } from "@/components/ui/icon";
+import { Input } from "@/components/ui/input";
+import { StatusBadge, type StatusTone } from "@/components/ui/status-badge";
 import { formatCurrency } from "@/lib/format";
 import { useActiveLocale } from "@/lib/i18n/client";
 import { cn } from "@/lib/utils";
@@ -35,12 +44,12 @@ type ApplicationRow = DataTableRow & {
   assigned_user_id: string | null;
   assigned_user_name: string | null;
   response_sla_status: string;
+  response_sla_alert_level: string;
   response_sla_due_at: string | null;
-};
-
-type MemberOption = {
-  user_id: string;
-  label: string;
+  response_sla_remaining_minutes: number;
+  qualification_score: number;
+  qualification_band: string;
+  income_to_rent_ratio: number | null;
 };
 
 type MessageTemplateOption = {
@@ -174,6 +183,52 @@ function slaBadgeLabel(
   return isEn ? "Pending response" : "Pendiente de respuesta";
 }
 
+function formatDateTimeLabel(value: string, locale: "es-PY" | "en-US"): string {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.valueOf())) return "-";
+  return new Intl.DateTimeFormat(locale, {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(parsed);
+}
+
+function statusBadgeClass(status: string): StatusTone {
+  const normalized = status.trim().toLowerCase();
+  if (normalized === "contract_signed") return "success";
+  if (normalized === "qualified" || normalized === "offer_sent") return "info";
+  if (normalized === "visit_scheduled") return "info";
+  if (normalized === "screening" || normalized === "new") return "warning";
+  if (normalized === "rejected" || normalized === "lost") return "danger";
+  return "neutral";
+}
+
+function slaBadgeClass(
+  status: "pending" | "met" | "breached",
+  alertLevel: string
+): StatusTone {
+  const normalizedLevel = alertLevel.trim().toLowerCase();
+  if (status === "breached" || normalizedLevel === "critical") return "danger";
+  if (normalizedLevel === "warning") return "warning";
+  if (status === "met") return "success";
+  return "neutral";
+}
+
+function qualificationBandLabel(band: string, isEn: boolean): string {
+  const normalized = band.trim().toLowerCase();
+  if (normalized === "strong") return isEn ? "Strong" : "Fuerte";
+  if (normalized === "moderate") return isEn ? "Moderate" : "Moderado";
+  if (normalized === "watch") return isEn ? "Watch" : "Revisar";
+  return isEn ? "Unscored" : "Sin puntuar";
+}
+
+function qualificationBandClass(band: string): StatusTone {
+  const normalized = band.trim().toLowerCase();
+  if (normalized === "strong") return "success";
+  if (normalized === "moderate") return "info";
+  if (normalized === "watch") return "warning";
+  return "neutral";
+}
+
 function median(values: number[]): number {
   if (!values.length) return 0;
   const sorted = [...values].sort((left, right) => left - right);
@@ -300,6 +355,138 @@ function buildMessageLinks(
   return { emailHref, whatsappHref };
 }
 
+function ConvertToLeaseInlineForm({
+  applicationId,
+  nextPath,
+  defaultStartDate,
+  locale,
+  isEn,
+  onOptimisticConvert,
+}: {
+  applicationId: string;
+  nextPath: string;
+  defaultStartDate: string;
+  locale: "es-PY" | "en-US";
+  isEn: boolean;
+  onOptimisticConvert?: () => void;
+}) {
+  const [startsOn, setStartsOn] = useState(defaultStartDate);
+  const [platformFee, setPlatformFee] = useState("0");
+
+  return (
+    <form
+      action={convertApplicationToLeaseAction}
+      className="flex flex-wrap items-center gap-2"
+      onSubmit={onOptimisticConvert}
+    >
+      <input name="application_id" type="hidden" value={applicationId} />
+      <input name="next" type="hidden" value={nextPath} />
+
+      <DatePicker
+        className="h-8 min-w-[8.75rem] text-xs"
+        locale={locale}
+        name="starts_on"
+        onValueChange={setStartsOn}
+        value={startsOn}
+      />
+
+      <Input
+        className="h-8 w-[4.75rem] text-xs"
+        inputMode="decimal"
+        min={0}
+        name="platform_fee"
+        onChange={(event) => setPlatformFee(event.target.value)}
+        step="0.01"
+        type="number"
+        value={platformFee}
+      />
+
+      <Button disabled={!startsOn} size="sm" type="submit" variant="outline">
+        {isEn ? "Convert to lease" : "Convertir a contrato"}
+      </Button>
+    </form>
+  );
+}
+
+function AssignOwnerForm({
+  applicationId,
+  status,
+  assignedUserId,
+  assignedUserName,
+  memberOptions,
+  nextPath,
+  isEn,
+  onOptimisticAssign,
+}: {
+  applicationId: string;
+  status: string;
+  assignedUserId: string | null;
+  assignedUserName: string | null;
+  memberOptions: ComboboxOption[];
+  nextPath: string;
+  isEn: boolean;
+  onOptimisticAssign?: (assignment: {
+    assignedUserId: string | null;
+    assignedUserName: string | null;
+  }) => void;
+}) {
+  const [selectedUserId, setSelectedUserId] = useState(
+    assignedUserId ?? "__unassigned__"
+  );
+
+  const optionLabelByValue = useMemo(() => {
+    const index = new Map(
+      memberOptions.map((option) => [option.value, option.label] as const)
+    );
+    return index;
+  }, [memberOptions]);
+
+  return (
+    <form
+      action={assignApplicationAction}
+      className="space-y-2"
+      onSubmit={() => {
+        const nextAssignedUserId =
+          selectedUserId === "__unassigned__" ? null : selectedUserId;
+        const nextAssignedUserName =
+          selectedUserId === "__unassigned__"
+            ? null
+            : (optionLabelByValue.get(selectedUserId) ??
+              assignedUserName ??
+              null);
+        onOptimisticAssign?.({
+          assignedUserId: nextAssignedUserId,
+          assignedUserName: nextAssignedUserName,
+        });
+      }}
+    >
+      <input name="application_id" type="hidden" value={applicationId} />
+      <input name="status" type="hidden" value={status} />
+      <input name="next" type="hidden" value={nextPath} />
+      <input
+        name="note"
+        type="hidden"
+        value={isEn ? "Assignment updated" : "Asignación actualizada"}
+      />
+
+      <Combobox
+        className="h-8 text-xs"
+        emptyLabel={isEn ? "No members found" : "Sin miembros"}
+        name="assigned_user_id"
+        onValueChange={setSelectedUserId}
+        options={memberOptions}
+        placeholder={isEn ? "Select owner" : "Seleccionar responsable"}
+        searchPlaceholder={isEn ? "Search member..." : "Buscar miembro..."}
+        value={selectedUserId}
+      />
+
+      <Button className="w-full" size="sm" type="submit" variant="outline">
+        {isEn ? "Update owner" : "Actualizar responsable"}
+      </Button>
+    </form>
+  );
+}
+
 export function ApplicationsManager({
   applications,
   members,
@@ -321,8 +508,8 @@ export function ApplicationsManager({
 
   const today = useMemo(() => new Date().toISOString().slice(0, 10), []);
 
-  const memberOptions = useMemo<MemberOption[]>(() => {
-    const index = new Map<string, MemberOption>();
+  const memberOptions = useMemo<ComboboxOption[]>(() => {
+    const index = new Map<string, ComboboxOption>();
 
     for (const member of members) {
       const userId = asString(member.user_id).trim();
@@ -341,13 +528,23 @@ export function ApplicationsManager({
       const baseLabel = fullName || email || userId;
 
       const label = role ? `${baseLabel} · ${role}` : baseLabel;
-      index.set(userId, { user_id: userId, label });
+      index.set(userId, { value: userId, label });
     }
 
     return [...index.values()].sort((left, right) =>
       left.label.localeCompare(right.label)
     );
   }, [members]);
+
+  const assignmentOptions = useMemo<ComboboxOption[]>(() => {
+    return [
+      {
+        value: "__unassigned__",
+        label: isEn ? "Unassigned" : "Sin asignar",
+      },
+      ...memberOptions,
+    ];
+  }, [isEn, memberOptions]);
 
   const templateOptions = useMemo<MessageTemplateOption[]>(() => {
     return messageTemplates
@@ -386,21 +583,206 @@ export function ApplicationsManager({
         assigned_user_name:
           asString(application.assigned_user_name).trim() || null,
         response_sla_status: asString(application.response_sla_status).trim(),
+        response_sla_alert_level: asString(
+          application.response_sla_alert_level
+        ).trim(),
         response_sla_due_at:
           asString(application.response_sla_due_at).trim() || null,
+        response_sla_remaining_minutes: asNumber(
+          application.response_sla_remaining_minutes
+        ),
+        qualification_score: asNumber(application.qualification_score),
+        qualification_band: asString(application.qualification_band).trim(),
+        income_to_rent_ratio:
+          asNumber(application.income_to_rent_ratio) > 0
+            ? asNumber(application.income_to_rent_ratio)
+            : null,
       } satisfies ApplicationRow;
     });
   }, [applications, isEn]);
 
-  const metrics = useMemo(() => {
-    const total = rows.length;
-    const unassigned = rows.filter((row) => !row.assigned_user_id).length;
+  const [optimisticRows, queueOptimisticRowUpdate] = useOptimistic(
+    rows,
+    (
+      currentRows,
+      action:
+        | {
+            type: "set-status";
+            applicationId: string;
+            nextStatus: string;
+          }
+        | {
+            type: "assign";
+            applicationId: string;
+            assignedUserId: string | null;
+            assignedUserName: string | null;
+          }
+    ) => {
+      return currentRows.map((row) => {
+        if (row.id !== action.applicationId) return row;
+        if (action.type === "assign") {
+          return {
+            ...row,
+            assigned_user_id: action.assignedUserId,
+            assigned_user_name: action.assignedUserName,
+          };
+        }
+        return {
+          ...row,
+          status: action.nextStatus,
+          status_label: statusLabel(action.nextStatus, isEn),
+        };
+      });
+    }
+  );
 
-    const slaBreached = rows.filter(
-      (row) => normalizeSlaStatus(row) === "breached"
+  const [statusFilter, setStatusFilter] = useState("__all__");
+  const [assigneeFilter, setAssigneeFilter] = useState("__all__");
+  const [slaFilter, setSlaFilter] = useState("__all__");
+  const [qualificationFilter, setQualificationFilter] = useState("__all__");
+
+  const statusFilterOptions = useMemo<ComboboxOption[]>(() => {
+    const uniqueStatuses = [
+      ...new Set(optimisticRows.map((row) => row.status.trim())),
+    ]
+      .filter(Boolean)
+      .sort((left, right) => left.localeCompare(right));
+
+    return [
+      {
+        value: "__all__",
+        label: isEn ? "All statuses" : "Todos los estados",
+      },
+      ...uniqueStatuses.map((status) => ({
+        value: status,
+        label: statusLabel(status, isEn),
+      })),
+    ];
+  }, [isEn, optimisticRows]);
+
+  const assigneeFilterOptions = useMemo<ComboboxOption[]>(() => {
+    return [
+      {
+        value: "__all__",
+        label: isEn ? "All assignees" : "Todos los responsables",
+      },
+      ...assignmentOptions,
+    ];
+  }, [assignmentOptions, isEn]);
+
+  const slaFilterOptions = useMemo<ComboboxOption[]>(() => {
+    return [
+      {
+        value: "__all__",
+        label: isEn ? "All SLA levels" : "Todos los niveles SLA",
+      },
+      {
+        value: "normal",
+        label: isEn ? "Normal" : "Normal",
+      },
+      {
+        value: "warning",
+        label: isEn ? "Warning" : "Advertencia",
+      },
+      {
+        value: "critical",
+        label: isEn ? "Critical" : "Crítico",
+      },
+      {
+        value: "breached",
+        label: isEn ? "Breached" : "Vencido",
+      },
+    ];
+  }, [isEn]);
+
+  const qualificationFilterOptions = useMemo<ComboboxOption[]>(() => {
+    return [
+      {
+        value: "__all__",
+        label: isEn ? "All qualification bands" : "Todas las bandas",
+      },
+      {
+        value: "strong",
+        label: qualificationBandLabel("strong", isEn),
+      },
+      {
+        value: "moderate",
+        label: qualificationBandLabel("moderate", isEn),
+      },
+      {
+        value: "watch",
+        label: qualificationBandLabel("watch", isEn),
+      },
+    ];
+  }, [isEn]);
+
+  const filteredRows = useMemo(() => {
+    return optimisticRows.filter((row) => {
+      const normalizedStatus = row.status.trim().toLowerCase();
+      const normalizedBand = row.qualification_band.trim().toLowerCase();
+      const normalizedSlaLevel = row.response_sla_alert_level
+        .trim()
+        .toLowerCase();
+      const normalizedSlaStatus = normalizeSlaStatus(row);
+
+      if (statusFilter !== "__all__" && normalizedStatus !== statusFilter) {
+        return false;
+      }
+
+      if (assigneeFilter === "__unassigned__" && row.assigned_user_id) {
+        return false;
+      }
+      if (
+        assigneeFilter !== "__all__" &&
+        assigneeFilter !== "__unassigned__" &&
+        row.assigned_user_id !== assigneeFilter
+      ) {
+        return false;
+      }
+
+      if (slaFilter === "breached" && normalizedSlaStatus !== "breached") {
+        return false;
+      }
+      if (
+        slaFilter !== "__all__" &&
+        slaFilter !== "breached" &&
+        normalizedSlaLevel !== slaFilter
+      ) {
+        return false;
+      }
+
+      if (
+        qualificationFilter !== "__all__" &&
+        normalizedBand !== qualificationFilter
+      ) {
+        return false;
+      }
+
+      return true;
+    });
+  }, [
+    assigneeFilter,
+    optimisticRows,
+    qualificationFilter,
+    slaFilter,
+    statusFilter,
+  ]);
+
+  const metrics = useMemo(() => {
+    const total = filteredRows.length;
+    const unassigned = filteredRows.filter(
+      (row) => !row.assigned_user_id
     ).length;
 
-    const responseSamples = rows
+    const slaBreached = filteredRows.filter(
+      (row) => normalizeSlaStatus(row) === "breached"
+    ).length;
+    const slaAtRisk = filteredRows.filter((row) => {
+      const level = row.response_sla_alert_level.trim().toLowerCase();
+      return level === "warning" || level === "critical";
+    }).length;
+
+    const responseSamples = filteredRows
       .map((row) => row.first_response_minutes)
       .filter((value) => value > 0);
 
@@ -410,13 +792,14 @@ export function ApplicationsManager({
       total,
       unassigned,
       slaBreached,
+      slaAtRisk,
       medianFirstResponse,
     };
-  }, [rows]);
+  }, [filteredRows]);
 
   const boardRowsByLane = useMemo(() => {
     return BOARD_LANES.map((lane) => {
-      const laneRows = rows
+      const laneRows = filteredRows
         .filter((row) =>
           lane.statuses.includes(row.status.trim().toLowerCase())
         )
@@ -428,7 +811,7 @@ export function ApplicationsManager({
         rows: laneRows,
       };
     });
-  }, [rows]);
+  }, [filteredRows]);
 
   const columns = useMemo<ColumnDef<DataTableRow>[]>(() => {
     return [
@@ -454,13 +837,23 @@ export function ApplicationsManager({
         accessorKey: "status_label",
         header: isEn ? "Status" : "Estado",
         cell: ({ row, getValue }) => {
-          const status = normalizeSlaStatus(row.original as ApplicationRow);
+          const applicationRow = row.original as ApplicationRow;
+          const status = normalizeSlaStatus(applicationRow);
           return (
             <div className="space-y-1">
-              <Badge variant="outline">{asString(getValue())}</Badge>
-              <Badge variant={status === "breached" ? "outline" : "secondary"}>
-                {slaBadgeLabel(status, isEn)}
-              </Badge>
+              <StatusBadge
+                label={asString(getValue())}
+                tone={statusBadgeClass(applicationRow.status)}
+                value={applicationRow.status}
+              />
+              <StatusBadge
+                label={slaBadgeLabel(status, isEn)}
+                tone={slaBadgeClass(
+                  status,
+                  applicationRow.response_sla_alert_level
+                )}
+                value={status}
+              />
             </div>
           );
         },
@@ -470,7 +863,12 @@ export function ApplicationsManager({
         header: isEn ? "Assigned" : "Asignado",
         cell: ({ row }) => {
           const assignedName = asString(row.original.assigned_user_name).trim();
-          return assignedName || (isEn ? "Unassigned" : "Sin asignar");
+          const label = assignedName || (isEn ? "Unassigned" : "Sin asignar");
+          return (
+            <span className={cn(assignedName ? "" : "text-muted-foreground")}>
+              {label}
+            </span>
+          );
         },
       },
       {
@@ -487,23 +885,82 @@ export function ApplicationsManager({
         },
       },
       {
+        accessorKey: "qualification_score",
+        header: isEn ? "Qualification" : "Calificación",
+        cell: ({ row }) => {
+          const score = asNumber(row.original.qualification_score);
+          const band = asString(row.original.qualification_band);
+          const ratio = asNumber(row.original.income_to_rent_ratio);
+          return (
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <StatusBadge
+                  label={qualificationBandLabel(band, isEn)}
+                  tone={qualificationBandClass(band)}
+                  value={band}
+                />
+                <span className="font-medium text-xs">
+                  {score > 0 ? `${score}/100` : "-"}
+                </span>
+              </div>
+              <p className="text-muted-foreground text-xs">
+                {ratio > 0
+                  ? `${isEn ? "Income/rent" : "Ingreso/renta"}: ${ratio.toFixed(2)}x`
+                  : isEn
+                    ? "Income/rent: n/a"
+                    : "Ingreso/renta: n/d"}
+              </p>
+            </div>
+          );
+        },
+      },
+      {
         accessorKey: "first_response_minutes",
         header: isEn ? "First response (min)" : "Primera respuesta (min)",
         cell: ({ getValue }) => {
           const value = asNumber(getValue());
-          return value > 0 ? value.toFixed(1) : "-";
+          return value > 0 ? `${value.toFixed(1)}m` : "-";
         },
       },
       {
         accessorKey: "created_at",
         header: isEn ? "Created" : "Creado",
+        cell: ({ getValue }) =>
+          formatDateTimeLabel(asString(getValue()), locale),
+      },
+      {
+        accessorKey: "response_sla_due_at",
+        header: isEn ? "SLA due" : "SLA vence",
+        cell: ({ row }) => {
+          const dueAt = asString(row.original.response_sla_due_at).trim();
+          if (!dueAt) return "-";
+          return formatDateTimeLabel(dueAt, locale);
+        },
       },
     ];
   }, [isEn, locale]);
 
+  const slaAlertRows = useMemo(() => {
+    return filteredRows
+      .filter((row) => {
+        const level = row.response_sla_alert_level.trim().toLowerCase();
+        return level === "warning" || level === "critical";
+      })
+      .sort((left, right) => {
+        const leftLevel = left.response_sla_alert_level.trim().toLowerCase();
+        const rightLevel = right.response_sla_alert_level.trim().toLowerCase();
+        if (leftLevel === rightLevel) {
+          return right.created_at.localeCompare(left.created_at);
+        }
+        if (leftLevel === "critical") return -1;
+        if (rightLevel === "critical") return 1;
+        return 0;
+      });
+  }, [filteredRows]);
+
   return (
     <div className="space-y-5">
-      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-[13px] text-muted-foreground">
@@ -540,6 +997,17 @@ export function ApplicationsManager({
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-[13px] text-muted-foreground">
+              {isEn ? "SLA at risk" : "SLA en riesgo"}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="font-semibold text-2xl">{metrics.slaAtRisk}</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-[13px] text-muted-foreground">
               {isEn ? "Median first response" : "Mediana primera respuesta"}
             </CardTitle>
           </CardHeader>
@@ -552,6 +1020,160 @@ export function ApplicationsManager({
           </CardContent>
         </Card>
       </section>
+
+      <Collapsible defaultOpen>
+        <div className="rounded-2xl border border-border/80 bg-card/80 p-3">
+          <div className="flex items-center justify-between">
+            <h3 className="font-semibold text-sm">
+              {isEn ? "Pipeline filters" : "Filtros del pipeline"}
+            </h3>
+            <CollapsibleTrigger
+              className={(state) =>
+                cn(
+                  buttonVariants({ size: "sm", variant: "ghost" }),
+                  "h-8 rounded-xl px-2",
+                  state.open ? "text-foreground" : "text-muted-foreground"
+                )
+              }
+              type="button"
+            >
+              <Icon icon={ArrowDown01Icon} size={14} />
+            </CollapsibleTrigger>
+          </div>
+
+          <CollapsibleContent className="mt-3">
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+              <label className="space-y-1.5">
+                <span className="text-muted-foreground text-xs uppercase tracking-wide">
+                  {isEn ? "Status" : "Estado"}
+                </span>
+                <Combobox
+                  onValueChange={(next) => setStatusFilter(next.toLowerCase())}
+                  options={statusFilterOptions}
+                  searchPlaceholder={
+                    isEn ? "Filter status..." : "Filtrar estado..."
+                  }
+                  value={statusFilter}
+                />
+              </label>
+
+              <label className="space-y-1.5">
+                <span className="text-muted-foreground text-xs uppercase tracking-wide">
+                  {isEn ? "Assignee" : "Responsable"}
+                </span>
+                <Combobox
+                  onValueChange={setAssigneeFilter}
+                  options={assigneeFilterOptions}
+                  searchPlaceholder={
+                    isEn ? "Filter assignee..." : "Filtrar responsable..."
+                  }
+                  value={assigneeFilter}
+                />
+              </label>
+
+              <label className="space-y-1.5">
+                <span className="text-muted-foreground text-xs uppercase tracking-wide">
+                  {isEn ? "SLA level" : "Nivel SLA"}
+                </span>
+                <Combobox
+                  onValueChange={setSlaFilter}
+                  options={slaFilterOptions}
+                  searchPlaceholder={isEn ? "Filter SLA..." : "Filtrar SLA..."}
+                  value={slaFilter}
+                />
+              </label>
+
+              <label className="space-y-1.5">
+                <span className="text-muted-foreground text-xs uppercase tracking-wide">
+                  {isEn ? "Qualification" : "Calificación"}
+                </span>
+                <Combobox
+                  onValueChange={setQualificationFilter}
+                  options={qualificationFilterOptions}
+                  searchPlaceholder={
+                    isEn ? "Filter qualification..." : "Filtrar calificación..."
+                  }
+                  value={qualificationFilter}
+                />
+              </label>
+            </div>
+          </CollapsibleContent>
+        </div>
+      </Collapsible>
+
+      <Collapsible defaultOpen={slaAlertRows.length > 0}>
+        <div className="rounded-2xl border border-border/80 bg-card/80 p-3">
+          <div className="flex items-center justify-between gap-2">
+            <h3 className="font-semibold text-sm">
+              {isEn ? "SLA alert center" : "Centro de alertas SLA"}
+            </h3>
+            <CollapsibleTrigger
+              className={(state) =>
+                cn(
+                  buttonVariants({ size: "sm", variant: "ghost" }),
+                  "h-8 rounded-xl px-2",
+                  state.open ? "text-foreground" : "text-muted-foreground"
+                )
+              }
+              type="button"
+            >
+              <Icon icon={ArrowDown01Icon} size={14} />
+            </CollapsibleTrigger>
+          </div>
+
+          <CollapsibleContent className="mt-3">
+            {slaAlertRows.length === 0 ? (
+              <p className="rounded-xl border border-border/80 border-dashed px-3 py-2 text-muted-foreground text-xs">
+                {isEn
+                  ? "No warning/critical SLA alerts for the current filter set."
+                  : "No hay alertas SLA en advertencia/crítico para el filtro actual."}
+              </p>
+            ) : (
+              <div className="grid gap-2 xl:grid-cols-2">
+                {slaAlertRows.slice(0, 8).map((row) => {
+                  const slaStatus = normalizeSlaStatus(row);
+                  const assignedLabel =
+                    row.assigned_user_name ||
+                    (isEn ? "Unassigned" : "Sin asignar");
+                  return (
+                    <article
+                      className="rounded-xl border border-border/80 bg-background/70 p-3"
+                      key={row.id}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <p className="font-medium text-sm">{row.full_name}</p>
+                          <p className="text-muted-foreground text-xs">
+                            {row.marketplace_listing_title ||
+                              (isEn ? "No listing" : "Sin anuncio")}
+                          </p>
+                        </div>
+                        <StatusBadge
+                          label={slaBadgeLabel(slaStatus, isEn)}
+                          tone={slaBadgeClass(
+                            slaStatus,
+                            row.response_sla_alert_level
+                          )}
+                          value={slaStatus}
+                        />
+                      </div>
+                      <p className="mt-2 text-muted-foreground text-xs">
+                        {isEn ? "Assigned" : "Responsable"}: {assignedLabel}
+                      </p>
+                      <p className="text-muted-foreground text-xs">
+                        {isEn ? "Due" : "Vence"}:{" "}
+                        {row.response_sla_due_at
+                          ? formatDateTimeLabel(row.response_sla_due_at, locale)
+                          : "-"}
+                      </p>
+                    </article>
+                  );
+                })}
+              </div>
+            )}
+          </CollapsibleContent>
+        </div>
+      </Collapsible>
 
       <section className="space-y-3">
         <div className="flex items-center justify-between">
@@ -573,7 +1195,11 @@ export function ApplicationsManager({
             >
               <div className="flex items-center justify-between gap-2">
                 <p className="font-medium text-sm">{lane.label[locale]}</p>
-                <Badge variant="outline">{laneRows.length}</Badge>
+                <StatusBadge
+                  label={String(laneRows.length)}
+                  tone="neutral"
+                  value={lane.key}
+                />
               </div>
 
               <div className="max-h-[25rem] space-y-2 overflow-y-auto pr-1">
@@ -609,79 +1235,69 @@ export function ApplicationsManager({
                         </div>
 
                         <div className="flex flex-wrap gap-2">
-                          <Badge variant="outline">{row.status_label}</Badge>
-                          <Badge
-                            className={cn(
-                              slaStatus === "breached"
-                                ? "border-rose-500/40 bg-rose-500/10 text-rose-700"
-                                : ""
+                          <StatusBadge
+                            label={row.status_label}
+                            tone={statusBadgeClass(row.status)}
+                            value={row.status}
+                          />
+                          <StatusBadge
+                            label={slaLabel}
+                            tone={slaBadgeClass(
+                              slaStatus,
+                              row.response_sla_alert_level
                             )}
-                            variant={
-                              slaStatus === "breached" ? "outline" : "secondary"
-                            }
-                          >
-                            {slaLabel}
-                          </Badge>
+                            value={slaStatus}
+                          />
+                          <StatusBadge
+                            label={`${qualificationBandLabel(
+                              row.qualification_band,
+                              isEn
+                            )} ${
+                              row.qualification_score > 0
+                                ? `· ${row.qualification_score}`
+                                : ""
+                            }`}
+                            tone={qualificationBandClass(
+                              row.qualification_band
+                            )}
+                            value={row.qualification_band}
+                          />
                         </div>
 
                         <p className="text-muted-foreground text-xs">
                           {isEn ? "Owner" : "Responsable"}: {assignedLabel}
                         </p>
+                        <p className="text-muted-foreground text-xs">
+                          {isEn ? "Created" : "Creado"}:{" "}
+                          {formatDateTimeLabel(row.created_at, locale)}
+                        </p>
+                        <p className="text-muted-foreground text-xs">
+                          {isEn ? "SLA due" : "SLA vence"}:{" "}
+                          {row.response_sla_due_at
+                            ? formatDateTimeLabel(
+                                row.response_sla_due_at,
+                                locale
+                              )
+                            : "-"}
+                        </p>
 
-                        <form
-                          action={assignApplicationAction}
-                          className="space-y-2"
-                        >
-                          <input
-                            name="application_id"
-                            type="hidden"
-                            value={row.id}
-                          />
-                          <input
-                            name="status"
-                            type="hidden"
-                            value={row.status}
-                          />
-                          <input name="next" type="hidden" value={nextPath} />
-                          <input
-                            name="note"
-                            type="hidden"
-                            value={
-                              isEn
-                                ? "Assignment updated"
-                                : "Asignación actualizada"
-                            }
-                          />
-
-                          <Select
-                            className="h-8 text-xs"
-                            defaultValue={
-                              row.assigned_user_id ?? "__unassigned__"
-                            }
-                            name="assigned_user_id"
-                          >
-                            <option value="__unassigned__">
-                              {isEn ? "Unassigned" : "Sin asignar"}
-                            </option>
-                            {memberOptions.map((member) => (
-                              <option
-                                key={member.user_id}
-                                value={member.user_id}
-                              >
-                                {member.label}
-                              </option>
-                            ))}
-                          </Select>
-
-                          <Button
-                            className="w-full"
-                            size="sm"
-                            type="submit"
-                            variant="outline"
-                          >
-                            {isEn ? "Update owner" : "Actualizar responsable"}
-                          </Button>
-                        </form>
+                        <AssignOwnerForm
+                          applicationId={row.id}
+                          assignedUserId={row.assigned_user_id}
+                          assignedUserName={row.assigned_user_name}
+                          isEn={isEn}
+                          memberOptions={assignmentOptions}
+                          nextPath={nextPath}
+                          onOptimisticAssign={(assignment) =>
+                            queueOptimisticRowUpdate({
+                              type: "assign",
+                              applicationId: row.id,
+                              assignedUserId: assignment.assignedUserId,
+                              assignedUserName: assignment.assignedUserName,
+                            })
+                          }
+                          status={row.status}
+                        />
 
                         <div className="flex flex-wrap gap-2">
                           {whatsappHref ? (
@@ -727,7 +1343,7 @@ export function ApplicationsManager({
 
       <DataTable
         columns={columns}
-        data={rows}
+        data={filteredRows}
         renderRowActions={(rowData) => {
           const row = rowData as ApplicationRow;
           const id = row.id;
@@ -767,7 +1383,16 @@ export function ApplicationsManager({
               ) : null}
 
               {canMoveToScreening(status) ? (
-                <form action={setApplicationStatusAction}>
+                <form
+                  action={setApplicationStatusAction}
+                  onSubmit={() =>
+                    queueOptimisticRowUpdate({
+                      type: "set-status",
+                      applicationId: id,
+                      nextStatus: "screening",
+                    })
+                  }
+                >
                   <input name="application_id" type="hidden" value={id} />
                   <input name="status" type="hidden" value="screening" />
                   <input name="note" type="hidden" value="Manual screening" />
@@ -779,7 +1404,16 @@ export function ApplicationsManager({
               ) : null}
 
               {canMoveToQualified(status) ? (
-                <form action={setApplicationStatusAction}>
+                <form
+                  action={setApplicationStatusAction}
+                  onSubmit={() =>
+                    queueOptimisticRowUpdate({
+                      type: "set-status",
+                      applicationId: id,
+                      nextStatus: "qualified",
+                    })
+                  }
+                >
                   <input name="application_id" type="hidden" value={id} />
                   <input name="status" type="hidden" value="qualified" />
                   <input name="note" type="hidden" value="Qualified" />
@@ -791,19 +1425,33 @@ export function ApplicationsManager({
               ) : null}
 
               {canConvert(status) ? (
-                <form action={convertApplicationToLeaseAction}>
-                  <input name="application_id" type="hidden" value={id} />
-                  <input name="starts_on" type="hidden" value={today} />
-                  <input name="platform_fee" type="hidden" value="0" />
-                  <input name="next" type="hidden" value={nextPath} />
-                  <Button size="sm" type="submit" variant="outline">
-                    {isEn ? "Convert to lease" : "Convertir a contrato"}
-                  </Button>
-                </form>
+                <ConvertToLeaseInlineForm
+                  applicationId={id}
+                  defaultStartDate={today}
+                  isEn={isEn}
+                  locale={locale}
+                  nextPath={nextPath}
+                  onOptimisticConvert={() =>
+                    queueOptimisticRowUpdate({
+                      type: "set-status",
+                      applicationId: id,
+                      nextStatus: "contract_signed",
+                    })
+                  }
+                />
               ) : null}
 
               {!canConvert(status) && status !== "contract_signed" ? (
-                <form action={setApplicationStatusAction}>
+                <form
+                  action={setApplicationStatusAction}
+                  onSubmit={() =>
+                    queueOptimisticRowUpdate({
+                      type: "set-status",
+                      applicationId: id,
+                      nextStatus: "lost",
+                    })
+                  }
+                >
                   <input name="application_id" type="hidden" value={id} />
                   <input name="status" type="hidden" value="lost" />
                   <input name="note" type="hidden" value="Marked as lost" />

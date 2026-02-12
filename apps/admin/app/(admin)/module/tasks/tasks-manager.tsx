@@ -1,7 +1,13 @@
 "use client";
 
-import { PlusSignIcon } from "@hugeicons/core-free-icons";
+import {
+  Calendar02Icon,
+  Message01Icon,
+  PlusSignIcon,
+  Ticket01Icon,
+} from "@hugeicons/core-free-icons";
 import type { ColumnDef } from "@tanstack/react-table";
+import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useMemo, useState } from "react";
 
@@ -11,15 +17,15 @@ import {
   setTaskAssigneeAction,
   updateTaskStatusAction,
 } from "@/app/(admin)/module/tasks/actions";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DataTable, type DataTableRow } from "@/components/ui/data-table";
 import { Icon } from "@/components/ui/icon";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Sheet } from "@/components/ui/sheet";
+import { StatusBadge, type StatusTone } from "@/components/ui/status-badge";
+import { humanizeKey } from "@/lib/format";
 import { useActiveLocale } from "@/lib/i18n/client";
-import { cn } from "@/lib/utils";
 
 type UnitRow = {
   id: string;
@@ -36,6 +42,7 @@ type TaskRow = {
   priority?: string | null;
   due_at?: string | null;
   completed_at?: string | null;
+  description?: string | null;
 
   assigned_user_id?: string | null;
 
@@ -115,18 +122,54 @@ function localizedTaskActionLabel(
   return next ?? kind;
 }
 
-function statusBadgeClass(status: string): string {
-  const normalized = status.trim().toLowerCase();
-  if (normalized === "done") {
-    return "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:border-emerald-400/30 dark:bg-emerald-400/10 dark:text-emerald-300";
-  }
-  if (normalized === "cancelled") {
-    return "border-rose-500/30 bg-rose-500/10 text-rose-700 dark:border-rose-400/30 dark:bg-rose-400/10 dark:text-rose-300";
-  }
-  if (normalized === "in_progress") {
-    return "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:border-amber-400/30 dark:bg-amber-400/10 dark:text-amber-300";
-  }
-  return "";
+function localizedPriorityLabel(isEn: boolean, priority: string): string {
+  const normalized = priority.trim().toLowerCase();
+  if (isEn) return normalized || "normal";
+  if (normalized === "low") return "Baja";
+  if (normalized === "medium") return "Media";
+  if (normalized === "high") return "Alta";
+  if (normalized === "urgent") return "Urgente";
+  return normalized || "normal";
+}
+
+function priorityTone(priority: string): StatusTone {
+  const normalized = priority.trim().toLowerCase();
+  if (normalized === "urgent") return "danger";
+  if (normalized === "high") return "warning";
+  if (normalized === "low") return "info";
+  return "neutral";
+}
+
+function localizedTaskTypeLabel(isEn: boolean, value: string): string {
+  const normalized = value.trim().toLowerCase();
+  if (isEn) return humanizeKey(normalized);
+  if (normalized === "cleaning") return "Limpieza";
+  if (normalized === "maintenance") return "Mantenimiento";
+  if (normalized === "check_in") return "Check-in";
+  if (normalized === "check_out") return "Check-out";
+  if (normalized === "inspection") return "Inspección";
+  if (normalized === "custom") return "Personalizada";
+  return humanizeKey(normalized);
+}
+
+function formatDueLabel(
+  locale: "es-PY" | "en-US",
+  dueAt: string | null
+): string {
+  if (!dueAt) return "-";
+  const date = new Date(dueAt);
+  if (Number.isNaN(date.valueOf())) return dueAt;
+  return new Intl.DateTimeFormat(locale, { dateStyle: "medium" }).format(date);
+}
+
+const BOARD_LANES = [
+  { key: "todo", status: "todo" },
+  { key: "in_progress", status: "in_progress" },
+  { key: "done", status: "done" },
+];
+
+function TaskLaneLabel(status: string, isEn: boolean): string {
+  return localizedTaskStatusLabel(isEn, status);
 }
 
 function TaskRowActions({
@@ -313,6 +356,7 @@ export function TasksManager({
           priority: asString(task.priority).trim() || null,
           due_at: asString(task.due_at).trim() || null,
           completed_at: asString(task.completed_at).trim() || null,
+          description: asString(task.description).trim() || null,
           assigned_user_id: asString(task.assigned_user_id).trim() || null,
           unit_id: asString(task.unit_id).trim() || null,
           unit_name: asString(task.unit_name).trim() || null,
@@ -349,14 +393,20 @@ export function TasksManager({
                   {title || (isEn ? "Task" : "Tarea")}
                 </span>
                 {typeValue ? (
-                  <Badge className="text-[11px]" variant="secondary">
-                    {typeValue}
-                  </Badge>
+                  <StatusBadge
+                    className="text-[11px]"
+                    label={localizedTaskTypeLabel(isEn, typeValue)}
+                    tone="info"
+                    value={typeValue}
+                  />
                 ) : null}
                 {priorityValue ? (
-                  <Badge className="text-[11px]" variant="outline">
-                    {priorityValue}
-                  </Badge>
+                  <StatusBadge
+                    className="text-[11px]"
+                    label={localizedPriorityLabel(isEn, priorityValue)}
+                    tone={priorityTone(priorityValue)}
+                    value={priorityValue}
+                  />
                 ) : null}
               </div>
               {subtitle ? (
@@ -375,15 +425,7 @@ export function TasksManager({
           const raw = asString(row.original.status).trim();
           const label =
             asString(row.original.status_label).trim() || raw || "-";
-          if (!raw) return <span className="text-muted-foreground">-</span>;
-          return (
-            <Badge
-              className={cn("whitespace-nowrap", statusBadgeClass(raw))}
-              variant="outline"
-            >
-              {label}
-            </Badge>
-          );
+          return <StatusBadge label={label} value={raw} />;
         },
       },
       {
@@ -418,18 +460,18 @@ export function TasksManager({
 
           const tone =
             remainingRequired > 0
-              ? "border-amber-500/30 bg-amber-500/10 text-amber-800 dark:text-amber-200"
+              ? "warning"
               : completed >= total
-                ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-800 dark:text-emerald-200"
-                : "";
+                ? "success"
+                : "neutral";
 
           return (
-            <Badge className={cn("font-mono text-xs", tone)} variant="outline">
-              {completed}/{total}
-              {remainingRequired > 0
-                ? ` · ${remainingRequired} ${isEn ? "req" : "req"}`
-                : null}
-            </Badge>
+            <StatusBadge
+              className="font-mono text-xs"
+              label={`${completed}/${total}${remainingRequired > 0 ? ` · ${remainingRequired} ${isEn ? "req" : "req"}` : ""}`}
+              tone={tone}
+              value={remainingRequired > 0 ? "pending" : "done"}
+            />
           );
         },
       },
@@ -441,9 +483,12 @@ export function TasksManager({
           if (!value) return <span className="text-muted-foreground">-</span>;
           if (currentUserId && value === currentUserId) {
             return (
-              <Badge className="text-[11px]" variant="secondary">
-                {isEn ? "Me" : "Yo"}
-              </Badge>
+              <StatusBadge
+                className="text-[11px]"
+                label={isEn ? "Me" : "Yo"}
+                tone="info"
+                value="assigned"
+              />
             );
           }
           return (
@@ -466,6 +511,22 @@ export function TasksManager({
     }
     return base;
   }, [tasks]);
+
+  const boardLanes = useMemo(() => {
+    return BOARD_LANES.map((lane) => {
+      const laneRows = rows
+        .filter(
+          (row) => asString(row.status).trim().toLowerCase() === lane.status
+        )
+        .sort((left, right) =>
+          asString(right.due_at).localeCompare(asString(left.due_at))
+        );
+      return {
+        ...lane,
+        rows: laneRows,
+      };
+    });
+  }, [rows]);
 
   return (
     <div className="space-y-4">
@@ -551,24 +612,16 @@ export function TasksManager({
 
         <div className="flex flex-wrap items-center gap-2">
           <div className="flex flex-wrap gap-2">
-            <Badge className={cn(statusBadgeClass("todo"))} variant="outline">
-              todo {counts.todo}
-            </Badge>
-            <Badge
-              className={cn(statusBadgeClass("in_progress"))}
-              variant="outline"
-            >
-              in_progress {counts.in_progress}
-            </Badge>
-            <Badge className={cn(statusBadgeClass("done"))} variant="outline">
-              done {counts.done}
-            </Badge>
-            <Badge
-              className={cn(statusBadgeClass("cancelled"))}
-              variant="outline"
-            >
-              cancelled {counts.cancelled}
-            </Badge>
+            <StatusBadge label={`todo ${counts.todo}`} value="todo" />
+            <StatusBadge
+              label={`in_progress ${counts.in_progress}`}
+              value="in_progress"
+            />
+            <StatusBadge label={`done ${counts.done}`} value="done" />
+            <StatusBadge
+              label={`cancelled ${counts.cancelled}`}
+              value="cancelled"
+            />
           </div>
 
           <Button
@@ -581,6 +634,137 @@ export function TasksManager({
           </Button>
         </div>
       </div>
+
+      <section className="grid gap-3 xl:grid-cols-3">
+        {boardLanes.map((lane) => (
+          <article
+            className="rounded-3xl border border-border/80 bg-card/85 p-3"
+            key={lane.key}
+          >
+            <div className="mb-2 flex items-center justify-between">
+              <p className="font-semibold text-lg">
+                {TaskLaneLabel(lane.status, isEn)}
+              </p>
+              <StatusBadge
+                label={String(lane.rows.length)}
+                tone="neutral"
+                value={lane.status}
+              />
+            </div>
+
+            <div className="space-y-2">
+              {lane.rows.length === 0 ? (
+                <div className="rounded-2xl border border-border/80 border-dashed px-3 py-4 text-muted-foreground text-sm">
+                  {isEn
+                    ? "No tasks in this lane."
+                    : "Sin tareas en esta columna."}
+                </div>
+              ) : (
+                lane.rows.slice(0, 4).map((row) => {
+                  const taskId = asString(row.id).trim();
+                  const title = asString(row.title).trim();
+                  const typeValue = asString(row.type).trim();
+                  const priorityValue = asString(row.priority).trim();
+                  const statusValue = asString(row.status).trim();
+                  const statusLabel = asString(row.status_label).trim();
+                  const description = asString(row.description).trim();
+                  const checklistTotal = asNumber(row.checklist_total);
+                  const checklistCompleted = asNumber(row.checklist_completed);
+                  const dueLabel = formatDueLabel(
+                    locale,
+                    asString(row.due_at).trim() || null
+                  );
+                  const reservationId = asString(row.reservation_id).trim();
+                  const assignee = asString(row.assigned_user_id).trim();
+
+                  return (
+                    <div
+                      className="rounded-2xl border border-border/70 bg-background/80 p-3"
+                      key={taskId}
+                    >
+                      <div className="mb-2 flex flex-wrap items-center gap-1.5">
+                        {priorityValue ? (
+                          <StatusBadge
+                            className="text-[11px]"
+                            label={localizedPriorityLabel(isEn, priorityValue)}
+                            tone={priorityTone(priorityValue)}
+                            value={priorityValue}
+                          />
+                        ) : null}
+                        <StatusBadge
+                          className="text-[11px]"
+                          label={statusLabel}
+                          value={statusValue}
+                        />
+                        {typeValue ? (
+                          <StatusBadge
+                            className="text-[11px]"
+                            label={localizedTaskTypeLabel(isEn, typeValue)}
+                            tone="info"
+                            value={typeValue}
+                          />
+                        ) : null}
+                      </div>
+
+                      <p className="line-clamp-2 font-semibold text-xl leading-tight">
+                        {title || (isEn ? "Task" : "Tarea")}
+                      </p>
+
+                      {description ? (
+                        <p className="mt-1 line-clamp-2 text-muted-foreground text-sm">
+                          {description}
+                        </p>
+                      ) : null}
+
+                      <div className="mt-3 flex items-center justify-between border-border/70 border-t pt-2">
+                        <div className="flex items-center gap-2">
+                          <span className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-border/80 bg-muted/30 font-medium text-[11px] uppercase">
+                            {(assignee || "?").slice(0, 1)}
+                          </span>
+                          {reservationId ? (
+                            <span className="inline-flex items-center gap-1 text-muted-foreground text-xs">
+                              <Icon icon={Ticket01Icon} size={13} />
+                              {shortId(reservationId)}
+                            </span>
+                          ) : null}
+                        </div>
+
+                        <div className="flex items-center gap-3 text-muted-foreground text-xs">
+                          {checklistTotal > 0 ? (
+                            <span className="inline-flex items-center gap-1">
+                              <Icon icon={Message01Icon} size={13} />
+                              {checklistCompleted}/{checklistTotal}
+                            </span>
+                          ) : null}
+                          <span className="inline-flex items-center gap-1">
+                            <Icon icon={Calendar02Icon} size={13} />
+                            {dueLabel}
+                          </span>
+                          <Link
+                            className="font-medium text-foreground underline-offset-4 hover:underline"
+                            href={`/module/tasks/${encodeURIComponent(taskId)}`}
+                          >
+                            {isEn ? "Open" : "Abrir"}
+                          </Link>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+
+              <button
+                className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-2xl border border-border/70 text-sm transition-colors hover:bg-muted/40"
+                onClick={() => setOpen(true)}
+                type="button"
+              >
+                <Icon icon={PlusSignIcon} size={15} />
+                {isEn ? "Add Task" : "Agregar tarea"}
+              </button>
+            </div>
+          </article>
+        ))}
+      </section>
 
       <DataTable
         columns={columns}
