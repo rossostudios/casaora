@@ -380,12 +380,12 @@ export function ModuleTableCard({
                     })}
                     href="/setup"
                   >
-                    {isEn ? "Open setup" : "Abrir configuración"}
+                    {isEn ? "Open onboarding" : "Abrir onboarding"}
                   </Link>
                 }
                 description={
                   isEn
-                    ? "Manage base records stored in Supabase. Use the setup manager to add, edit, or seed data."
+                    ? "Manage base records stored in Supabase. Use onboarding manager to add, edit, or seed data."
                     : "Administra registros base guardados en Supabase. Usa el administrador para agregar, editar o cargar datos demo."
                 }
                 icon={InboxIcon}

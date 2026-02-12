@@ -16,6 +16,11 @@ import { cn } from "@/lib/utils";
 type AdminShellProps = {
   orgId: string | null;
   locale: Locale;
+  onboardingProgress: {
+    completedSteps: number;
+    totalSteps: number;
+    percent: number;
+  };
   children: ReactNode;
 };
 
@@ -103,7 +108,12 @@ function LegacyAdminShell({ locale, children }: AdminShellProps) {
   );
 }
 
-function AdminShellV2({ orgId, locale, children }: AdminShellProps) {
+function AdminShellV2({
+  orgId,
+  locale,
+  onboardingProgress,
+  children,
+}: AdminShellProps) {
   const [viewportMode, setViewportMode] = useState<ViewportMode>("desktop");
   const [isMobileDrawerOpen, setIsMobileDrawerOpen] = useState(false);
 
@@ -175,6 +185,7 @@ function AdminShellV2({ orgId, locale, children }: AdminShellProps) {
             <SidebarNew
               isMobileDrawerOpen={false}
               locale={locale}
+              onboardingProgress={onboardingProgress}
               onMobileDrawerOpenChange={setIsMobileDrawerOpen}
               orgId={orgId}
               viewportMode={viewportMode}
@@ -199,6 +210,7 @@ function AdminShellV2({ orgId, locale, children }: AdminShellProps) {
       <SidebarNew
         isMobileDrawerOpen={isMobileDrawerOpen}
         locale={locale}
+        onboardingProgress={onboardingProgress}
         onMobileDrawerOpenChange={setIsMobileDrawerOpen}
         orgId={orgId}
         viewportMode={viewportMode}
@@ -208,17 +220,30 @@ function AdminShellV2({ orgId, locale, children }: AdminShellProps) {
   );
 }
 
-export function AdminShell({ orgId, locale, children }: AdminShellProps) {
+export function AdminShell({
+  orgId,
+  locale,
+  onboardingProgress,
+  children,
+}: AdminShellProps) {
   if (!SHELL_V2_ENABLED) {
     return (
-      <LegacyAdminShell locale={locale} orgId={orgId}>
+      <LegacyAdminShell
+        locale={locale}
+        onboardingProgress={onboardingProgress}
+        orgId={orgId}
+      >
         {children}
       </LegacyAdminShell>
     );
   }
 
   return (
-    <AdminShellV2 locale={locale} orgId={orgId}>
+    <AdminShellV2
+      locale={locale}
+      onboardingProgress={onboardingProgress}
+      orgId={orgId}
+    >
       {children}
     </AdminShellV2>
   );

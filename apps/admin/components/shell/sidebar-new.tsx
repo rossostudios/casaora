@@ -1,11 +1,12 @@
 "use client";
 
 import {
-  Add01Icon,
+  AiVoiceGeneratorIcon,
   AuditIcon,
   Building01Icon,
   Calendar02Icon,
   CalendarCheckIn01Icon,
+  Cancel01Icon,
   ChartIcon,
   Door01Icon,
   File01Icon,
@@ -16,6 +17,7 @@ import {
   Link01Icon,
   Message01Icon,
   Search01Icon,
+  Settings03Icon,
   Share06Icon,
   SparklesIcon,
   Task01Icon,
@@ -26,7 +28,7 @@ import type { IconSvgElement } from "@hugeicons/react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
-
+import { NotificationBell } from "@/components/shell/notification-bell";
 import { OrgSwitcher } from "@/components/shell/org-switcher";
 import { SidebarAccount } from "@/components/shell/sidebar-account";
 import {
@@ -36,6 +38,7 @@ import {
 } from "@/components/ui/collapsible";
 import { Drawer } from "@/components/ui/drawer";
 import { Icon } from "@/components/ui/icon";
+import { Progress } from "@/components/ui/progress";
 import type { Locale } from "@/lib/i18n";
 import { getModuleLabel, MODULE_BY_SLUG, MODULES } from "@/lib/modules";
 import { cn } from "@/lib/utils";
@@ -108,6 +111,12 @@ type ResolvedSection = {
   links: ResolvedLink[];
 };
 
+type OnboardingProgress = {
+  completedSteps: number;
+  totalSteps: number;
+  percent: number;
+};
+
 const PRIMARY_TABS: Array<{
   key: PrimaryTabKey;
   href: string;
@@ -175,10 +184,10 @@ const SECTIONS: SectionDef[] = [
     routeLinks: [
       {
         href: "/setup",
-        icon: SparklesIcon,
+        icon: Settings03Icon,
         label: {
-          "es-PY": "Configuración",
-          "en-US": "Setup",
+          "es-PY": "Onboarding",
+          "en-US": "Onboarding",
         },
       },
     ],
@@ -214,13 +223,7 @@ const SECTIONS: SectionDef[] = [
       "es-PY": "Finanzas",
       "en-US": "Finance",
     },
-    moduleSlugs: [
-      "expenses",
-      "owner-statements",
-      "pricing",
-      "reports",
-      "transparency-summary",
-    ],
+    moduleSlugs: ["expenses", "pricing", "reports"],
   },
   {
     key: "platform",
@@ -238,6 +241,8 @@ const HOME_TAB_HIDDEN_MODULE_SLUGS = new Set([
   "applications",
   "collections",
   "messaging",
+  "owner-statements",
+  "transparency-summary",
 ]);
 
 function isRouteActive(pathname: string, href: string): boolean {
@@ -413,15 +418,24 @@ function ShortcutBlock({
 function SidebarContent({
   locale,
   orgId,
+  onboardingProgress,
 }: {
   locale: Locale;
   orgId: string | null;
+  onboardingProgress: OnboardingProgress;
 }) {
   const pathname = usePathname();
   const activeTab = resolvePrimaryTab(pathname);
   const sections = useMemo(() => resolveSections(locale), [locale]);
   const [collapsedSections, toggleSection] = useCollapsedSections();
+  const [onboardingHubClosed, setOnboardingHubClosed] = useState(false);
   const isEn = locale === "en-US";
+  const completionPercent = Math.round(
+    Math.max(0, Math.min(100, onboardingProgress.percent))
+  );
+  const onboardingCompleted = completionPercent >= 100;
+  const showOnboardingHub =
+    activeTab === "home" && !onboardingCompleted && !onboardingHubClosed;
 
   const openSearch = useCallback(() => {
     if (typeof window === "undefined") return;
@@ -465,14 +479,17 @@ function SidebarContent({
             })}
           </div>
 
-          <button
-            aria-label={isEn ? "Search" : "Buscar"}
-            className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground/70 transition-colors hover:bg-muted hover:text-foreground"
-            onClick={openSearch}
-            type="button"
-          >
-            <Icon icon={Search01Icon} size={15} />
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              aria-label={isEn ? "Search" : "Buscar"}
+              className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground/70 transition-colors hover:bg-muted hover:text-foreground"
+              onClick={openSearch}
+              type="button"
+            >
+              <Icon icon={Search01Icon} size={15} />
+            </button>
+            <NotificationBell locale={locale} />
+          </div>
         </div>
       </div>
 
@@ -504,16 +521,59 @@ function SidebarContent({
 
               if (isWorkspace) {
                 return (
-                  <div className="space-y-0.5" key={section.key}>
-                    {section.links.map((link) => (
-                      <NavLinkRow
-                        active={isRouteActive(pathname, link.href)}
-                        href={link.href}
-                        icon={link.iconElement}
-                        key={link.href}
-                        label={link.label}
-                      />
-                    ))}
+                  <div className="space-y-2" key={section.key}>
+                    <div className="space-y-0.5">
+                      {section.links.map((link) => (
+                        <NavLinkRow
+                          active={isRouteActive(pathname, link.href)}
+                          href={link.href}
+                          icon={link.iconElement}
+                          key={link.href}
+                          label={link.label}
+                        />
+                      ))}
+                    </div>
+                    {showOnboardingHub ? (
+                      <section className="rounded-xl border border-border/70 bg-background/80 p-3">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex min-w-0 items-center gap-2">
+                            <Icon
+                              className="text-muted-foreground/80"
+                              icon={Settings03Icon}
+                              size={15}
+                            />
+                            <Link
+                              className="truncate font-semibold text-[14px] text-foreground hover:underline"
+                              href="/setup"
+                            >
+                              {isEn ? "Onboarding hub" : "Hub de onboarding"}
+                            </Link>
+                          </div>
+                          <button
+                            aria-label={
+                              isEn
+                                ? "Close onboarding hub"
+                                : "Cerrar hub de onboarding"
+                            }
+                            className="inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground/70 transition-colors hover:bg-muted hover:text-foreground"
+                            onClick={() => setOnboardingHubClosed(true)}
+                            type="button"
+                          >
+                            <Icon icon={Cancel01Icon} size={14} />
+                          </button>
+                        </div>
+                        <Progress
+                          aria-valuetext={`${completionPercent}%`}
+                          className="mt-3 h-2.5 bg-muted/90"
+                          value={completionPercent}
+                        />
+                        <p className="mt-2 font-medium text-[13px] text-foreground/85">
+                          {isEn
+                            ? `${completionPercent}% Completed`
+                            : `${completionPercent}% completado`}
+                        </p>
+                      </section>
+                    ) : null}
                   </div>
                 );
               }
@@ -570,9 +630,8 @@ function SidebarContent({
           className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-full border border-border/60 bg-background/80 px-3 font-medium text-[13px] text-foreground transition-colors hover:bg-muted"
           href="/app/agent?new=1"
         >
-          <Icon icon={SparklesIcon} size={14} />
+          <Icon icon={AiVoiceGeneratorIcon} size={14} />
           {isEn ? "New chat" : "Nuevo chat"}
-          <Icon icon={Add01Icon} size={14} />
         </Link>
         <SidebarAccount collapsed={false} locale={locale} />
       </div>
@@ -583,12 +642,14 @@ function SidebarContent({
 export function SidebarNew({
   locale,
   orgId,
+  onboardingProgress,
   viewportMode,
   isMobileDrawerOpen,
   onMobileDrawerOpenChange,
 }: {
   locale: Locale;
   orgId: string | null;
+  onboardingProgress: OnboardingProgress;
   viewportMode: ViewportMode;
   isMobileDrawerOpen: boolean;
   onMobileDrawerOpenChange: (next: boolean) => void;
@@ -598,7 +659,11 @@ export function SidebarNew({
   if (isDesktop) {
     return (
       <aside className="h-full w-full min-w-0 shrink-0 border-border/60 border-r bg-muted/15">
-        <SidebarContent locale={locale} orgId={orgId} />
+        <SidebarContent
+          locale={locale}
+          onboardingProgress={onboardingProgress}
+          orgId={orgId}
+        />
       </aside>
     );
   }
@@ -613,7 +678,11 @@ export function SidebarNew({
       side="left"
     >
       <div className="h-full bg-muted/15">
-        <SidebarContent locale={locale} orgId={orgId} />
+        <SidebarContent
+          locale={locale}
+          onboardingProgress={onboardingProgress}
+          orgId={orgId}
+        />
       </div>
     </Drawer>
   );

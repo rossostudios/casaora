@@ -234,10 +234,18 @@ async function safeMe(): Promise<Record<string, unknown>> {
   }
 }
 
-export default async function DashboardPage() {
+type DashboardPageProps = {
+  searchParams: Promise<{ onboarding?: string }>;
+};
+
+export default async function DashboardPage({
+  searchParams,
+}: DashboardPageProps) {
+  const { onboarding } = await searchParams;
   const locale = await getActiveLocale();
   const isEn = locale === "en-US";
   const orgId = await getActiveOrgId();
+  const onboardingCompleted = onboarding === "completed";
 
   if (!orgId) {
     return (
@@ -257,16 +265,15 @@ export default async function DashboardPage() {
         <CardContent className="text-muted-foreground text-sm">
           {isEn ? (
             <>
-              Open <code className="rounded bg-muted px-1 py-0.5">Setup</code>{" "}
+              Open{" "}
+              <code className="rounded bg-muted px-1 py-0.5">Onboarding</code>{" "}
               to create your first organization, or use the organization
               switcher in the top bar.
             </>
           ) : (
             <>
               Abre{" "}
-              <code className="rounded bg-muted px-1 py-0.5">
-                Configuración
-              </code>{" "}
+              <code className="rounded bg-muted px-1 py-0.5">Onboarding</code>{" "}
               para crear tu primera organización, o usa el selector de
               organización en la barra superior.
             </>
@@ -281,6 +288,8 @@ export default async function DashboardPage() {
   let reservations: unknown[] = [];
   let tasks: unknown[] = [];
   let units: unknown[] = [];
+  let channels: unknown[] = [];
+  let listings: unknown[] = [];
   let applications: unknown[] = [];
   let collections: unknown[] = [];
   let marketplaceListings: unknown[] = [];
@@ -308,6 +317,8 @@ export default async function DashboardPage() {
         resas,
         taskRows,
         unitRows,
+        channelRows,
+        listingRows,
         appRows,
         collectionRows,
         marketplaceRows,
@@ -320,6 +331,8 @@ export default async function DashboardPage() {
         safeList("/reservations", orgId),
         safeList("/tasks", orgId),
         safeList("/units", orgId),
+        safeList("/channels", orgId),
+        safeList("/listings", orgId),
         safeList("/applications", orgId),
         safeList("/collections", orgId),
         safeList("/marketplace/listings", orgId),
@@ -333,6 +346,8 @@ export default async function DashboardPage() {
       reservations = resas;
       tasks = taskRows;
       units = unitRows;
+      channels = channelRows;
+      listings = listingRows;
       applications = appRows;
       collections = collectionRows;
       marketplaceListings = marketplaceRows;
@@ -666,6 +681,21 @@ export default async function DashboardPage() {
         </Alert>
       )}
 
+      {onboardingCompleted ? (
+        <Alert variant="success">
+          <AlertTitle>
+            {isEn
+              ? "Onboarding foundation completed"
+              : "Base de onboarding completada"}
+          </AlertTitle>
+          <AlertDescription>
+            {isEn
+              ? "Great start. Continue with channels, listings, and daily operations."
+              : "Excelente inicio. Continúa con canales, anuncios y la operación diaria."}
+          </AlertDescription>
+        </Alert>
+      ) : null}
+
       {opsAlertsCards.length > 0 ? (
         <section className="grid gap-3 md:grid-cols-2">
           {opsAlertsCards.map((item) => (
@@ -692,11 +722,15 @@ export default async function DashboardPage() {
 
       <GettingStarted
         applicationCount={applications.length}
+        channelCount={channels.length}
         collectionCount={collections.length}
+        listingCount={listings.length}
         locale={locale}
+        onboardingCompleted={onboardingCompleted}
         propertyCount={properties.length}
         reservationCount={reservations.length}
         role={activeRole}
+        taskCount={tasks.length}
         unitCount={units.length}
       />
 

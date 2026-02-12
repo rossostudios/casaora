@@ -100,7 +100,7 @@ export default async function ModulePage({
           <CardHeader className="space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <Badge variant="outline">
-                {isEn ? "Setup module" : "Módulo de configuración"}
+                {isEn ? "Onboarding module" : "Módulo de onboarding"}
               </Badge>
               <Link
                 className={cn(buttonVariants({ variant: "ghost", size: "sm" }))}
@@ -143,15 +143,12 @@ export default async function ModulePage({
           {isEn ? (
             <>
               Pick an organization from the top bar, or create one in{" "}
-              <code className="rounded bg-muted px-1 py-0.5">Setup</code>.
+              <code className="rounded bg-muted px-1 py-0.5">Onboarding</code>.
             </>
           ) : (
             <>
               Selecciona una organización desde la barra superior o crea una en{" "}
-              <code className="rounded bg-muted px-1 py-0.5">
-                Configuración
-              </code>
-              .
+              <code className="rounded bg-muted px-1 py-0.5">Onboarding</code>.
             </>
           )}
         </CardContent>

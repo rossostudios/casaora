@@ -108,8 +108,8 @@ export async function OrgAccessChanged({
           ) : (
             <div className="rounded-lg border bg-muted/10 p-4 text-muted-foreground text-sm">
               {isEn
-                ? "No organizations yet. Create your first one in Setup."
-                : "Todavía no hay organizaciones. Crea tu primera en Configuración."}
+                ? "No organizations yet. Create your first one in Onboarding."
+                : "Todavía no hay organizaciones. Crea tu primera en Onboarding."}
             </div>
           )}
 
@@ -120,7 +120,7 @@ export async function OrgAccessChanged({
               )}
               href="/setup"
             >
-              {isEn ? "Open setup" : "Abrir configuración"}
+              {isEn ? "Open onboarding" : "Abrir onboarding"}
             </Link>
             <Link
               className={cn(buttonVariants({ variant: "outline", size: "sm" }))}

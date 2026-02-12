@@ -790,15 +790,15 @@ export function DataTable({
                             )}
                             href="/setup"
                           >
-                            {isEn ? "Open setup" : "Abrir configuración"}
+                            {isEn ? "Open onboarding" : "Abrir onboarding"}
                           </Link>
                         ) : null
                       }
                       className="py-14"
                       description={
                         isEn
-                          ? "As you add data (setup, operations, or integrations), it will show up here."
-                          : "Cuando agregues datos (configuración, operaciones o integraciones), aparecerán aquí."
+                          ? "As you add data (onboarding, operations, or integrations), it will show up here."
+                          : "Cuando agregues datos (onboarding, operaciones o integraciones), aparecerán aquí."
                       }
                       icon={InboxIcon}
                       title={isEn ? "No records" : "Sin registros"}

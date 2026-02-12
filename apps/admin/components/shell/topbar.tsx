@@ -6,7 +6,6 @@ import { usePathname } from "next/navigation";
 import { LanguageSelector } from "@/components/preferences/language-selector";
 import { AppBreadcrumbs } from "@/components/shell/app-breadcrumbs";
 import { CommandPalette } from "@/components/shell/command-palette";
-import { NotificationBell } from "@/components/shell/notification-bell";
 import { ThemeToggle } from "@/components/theme/theme-toggle";
 import { buttonVariants } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
@@ -71,9 +70,8 @@ export function Topbar({
 
         <div className="flex min-w-0 flex-wrap items-center gap-2 xl:justify-end">
           <CommandPalette showTrigger={false} />
-          <NotificationBell locale={locale} />
           <ThemeToggle locale={locale} />
-          <LanguageSelector className="hidden h-9 w-[10rem] md:block" />
+          <LanguageSelector className="hidden h-8 w-[5.5rem] md:block" />
         </div>
       </div>
     </header>

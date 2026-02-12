@@ -734,6 +734,41 @@ export function SetupManager({
                   <label className="font-medium text-xs">RUC (opcional)</label>
                   <Input name="ruc" placeholder="80012345-6" />
                 </div>
+                <div className="grid gap-3 md:grid-cols-2">
+                  <div className="grid gap-1">
+                    <label className="font-medium text-xs">
+                      Moneda predeterminada
+                    </label>
+                    <select
+                      className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+                      defaultValue="PYG"
+                      name="default_currency"
+                    >
+                      <option value="PYG">PYG</option>
+                      <option value="USD">USD</option>
+                    </select>
+                  </div>
+                  <div className="grid gap-1">
+                    <label className="font-medium text-xs">Zona horaria</label>
+                    <Input defaultValue="America/Asuncion" name="timezone" />
+                  </div>
+                </div>
+                <div className="grid gap-1">
+                  <label className="font-medium text-xs">
+                    Tipo de organización
+                  </label>
+                  <select
+                    className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+                    defaultValue="management_company"
+                    name="profile_type"
+                    required
+                  >
+                    <option value="management_company">
+                      Empresa administradora
+                    </option>
+                    <option value="owner_operator">Propietario-operador</option>
+                  </select>
+                </div>
                 <Button type="submit">Crear organización</Button>
               </form>
             ) : null}
@@ -1038,6 +1073,24 @@ export function SetupManager({
                 <div className="grid gap-1">
                   <label className="font-medium text-xs">RUC</label>
                   <Input defaultValue={asString(record.ruc)} name="ruc" />
+                </div>
+                <div className="grid gap-1">
+                  <label className="font-medium text-xs">
+                    Tipo de organización
+                  </label>
+                  <select
+                    className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+                    defaultValue={
+                      asString(record.profile_type) || "management_company"
+                    }
+                    name="profile_type"
+                    required
+                  >
+                    <option value="management_company">
+                      Empresa administradora
+                    </option>
+                    <option value="owner_operator">Propietario-operador</option>
+                  </select>
                 </div>
                 <div className="grid gap-3 md:grid-cols-2">
                   <div className="grid gap-1">

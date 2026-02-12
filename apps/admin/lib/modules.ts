@@ -189,11 +189,13 @@ export const MODULES: ModuleDef[] = [
   },
   {
     slug: "reports",
-    label: "Informe resumen del propietario",
-    label_en: "Owner summary report",
+    label: "Reportes",
+    label_en: "Reports",
     endpoint: "/reports/owner-summary",
-    description: "Ocupación, ingresos, gastos y métricas de pago neto.",
-    description_en: "Occupancy, revenue, expenses, and net payout metrics.",
+    description:
+      "Vista consolidada de desempeño: ocupación, ingresos, cobros y métricas netas.",
+    description_en:
+      "Consolidated performance view: occupancy, revenue, collections, and net metrics.",
     kind: "report",
   },
 ];

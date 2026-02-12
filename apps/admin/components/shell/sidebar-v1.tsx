@@ -15,6 +15,7 @@ import {
   Menu01Icon,
   MenuCollapseIcon,
   Message01Icon,
+  Settings03Icon,
   Share06Icon,
   SparklesIcon,
   Task01Icon,
@@ -128,10 +129,10 @@ const SECTIONS: SectionDef[] = [
       },
       {
         href: "/setup",
-        icon: SparklesIcon,
+        icon: Settings03Icon,
         label: {
-          "es-PY": "Configuración",
-          "en-US": "Setup",
+          "es-PY": "Onboarding",
+          "en-US": "Onboarding",
         },
       },
     ],
@@ -189,16 +190,10 @@ const SECTIONS: SectionDef[] = [
       "en-US": "Finance",
     },
     description: {
-      "es-PY": "Costos, reportes y transparencia para propietarios.",
-      "en-US": "Costs, reporting, and owner transparency.",
+      "es-PY": "Costos, precios y reportes operativos.",
+      "en-US": "Costs, pricing, and operational reporting.",
     },
-    moduleSlugs: [
-      "expenses",
-      "owner-statements",
-      "pricing",
-      "reports",
-      "transparency-summary",
-    ],
+    moduleSlugs: ["expenses", "pricing", "reports"],
   },
   {
     key: "platform",
@@ -214,6 +209,11 @@ const SECTIONS: SectionDef[] = [
     moduleSlugs: ["organizations", "integration-events", "audit-logs"],
   },
 ];
+
+const HIDDEN_MODULE_SLUGS = new Set([
+  "owner-statements",
+  "transparency-summary",
+]);
 
 function isRouteActive(pathname: string, href: string): boolean {
   if (href === "/app") return pathname === "/app";
@@ -255,6 +255,9 @@ function resolveSections(locale: Locale): ResolvedSection[] {
   const knownSlugs = new Set(
     SECTIONS.flatMap((section) => section.moduleSlugs)
   );
+  for (const hiddenSlug of HIDDEN_MODULE_SLUGS) {
+    knownSlugs.add(hiddenSlug);
+  }
   const extras = MODULES.filter((module) => !knownSlugs.has(module.slug));
 
   if (extras.length) {

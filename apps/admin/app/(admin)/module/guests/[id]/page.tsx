@@ -183,15 +183,12 @@ export default async function GuestProfilePage({ params }: PageProps) {
           {isEn ? (
             <>
               Select an organization from the top bar, or create one in{" "}
-              <code className="rounded bg-muted px-1 py-0.5">Setup</code>.
+              <code className="rounded bg-muted px-1 py-0.5">Onboarding</code>.
             </>
           ) : (
             <>
               Selecciona una organización desde la barra superior o crea una en{" "}
-              <code className="rounded bg-muted px-1 py-0.5">
-                Configuración
-              </code>
-              .
+              <code className="rounded bg-muted px-1 py-0.5">Onboarding</code>.
             </>
           )}
         </CardContent>

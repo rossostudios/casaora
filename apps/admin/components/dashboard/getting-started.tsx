@@ -26,9 +26,13 @@ import { cn } from "@/lib/utils";
 type GettingStartedProps = {
   propertyCount: number;
   unitCount: number;
+  channelCount?: number;
+  listingCount?: number;
   reservationCount: number;
+  taskCount?: number;
   applicationCount?: number;
   collectionCount?: number;
+  onboardingCompleted?: boolean;
   role?: "owner_admin" | "operator" | "accountant" | "viewer";
   locale: string;
 };
@@ -47,9 +51,13 @@ const DISMISS_KEY = "pa-onboarding-dismissed";
 export function GettingStarted({
   propertyCount,
   unitCount,
+  channelCount = 0,
+  listingCount = 0,
   reservationCount,
+  taskCount = 0,
   applicationCount = 0,
   collectionCount = 0,
+  onboardingCompleted = false,
   role = "viewer",
   locale,
 }: GettingStartedProps) {
@@ -77,6 +85,39 @@ export function GettingStarted({
     done: true,
     icon: Home01Icon,
   };
+
+  const postOnboardingSteps: OnboardingStep[] = [
+    {
+      id: "channels",
+      label: isEn ? "Connect channels" : "Conectar canales",
+      description: isEn
+        ? "Link Airbnb, Booking.com, direct and more."
+        : "Conecta Airbnb, Booking.com, direct y más.",
+      done: channelCount > 0,
+      icon: HotelIcon,
+      href: "/module/channels",
+    },
+    {
+      id: "listings",
+      label: isEn ? "Create listings" : "Crear anuncios",
+      description: isEn
+        ? "Map units to channels and sync calendars."
+        : "Vincula unidades con canales y sincroniza calendarios.",
+      done: listingCount > 0,
+      icon: Home01Icon,
+      href: "/module/listings",
+    },
+    {
+      id: "ops-start",
+      label: isEn ? "Start reservations/tasks" : "Iniciar reservas/tareas",
+      description: isEn
+        ? "Begin day-to-day operations execution."
+        : "Inicia la ejecución operativa diaria.",
+      done: reservationCount > 0 || taskCount > 0,
+      icon: CalendarCheckIn01Icon,
+      href: "/module/reservations",
+    },
+  ];
 
   const operatorSteps: OnboardingStep[] = [
     {
@@ -177,8 +218,9 @@ export function GettingStarted({
     },
   ];
 
-  const steps =
-    role === "operator"
+  const steps = onboardingCompleted
+    ? [commonStep, ...postOnboardingSteps]
+    : role === "operator"
       ? [commonStep, ...operatorSteps]
       : role === "owner_admin"
         ? [commonStep, ...ownerSteps]

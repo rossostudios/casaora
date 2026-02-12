@@ -1,6 +1,8 @@
 from pydantic import BaseModel, Field
 from typing import Any, Literal, Optional
 
+OrganizationProfileType = Literal["owner_operator", "management_company"]
+
 
 class ListResponse(BaseModel):
     data: list[dict]
@@ -10,6 +12,7 @@ class CreateOrganizationInput(BaseModel):
     name: str
     legal_name: Optional[str] = None
     ruc: Optional[str] = None
+    profile_type: OrganizationProfileType = "management_company"
     default_currency: str = "PYG"
     timezone: str = "America/Asuncion"
 
@@ -18,6 +21,7 @@ class UpdateOrganizationInput(BaseModel):
     name: Optional[str] = None
     legal_name: Optional[str] = None
     ruc: Optional[str] = None
+    profile_type: Optional[OrganizationProfileType] = None
     default_currency: Optional[str] = None
     timezone: Optional[str] = None
 

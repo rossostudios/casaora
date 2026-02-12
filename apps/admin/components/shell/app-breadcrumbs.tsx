@@ -52,7 +52,7 @@ function buildCrumbs(pathname: string, locale: Locale): Crumb[] {
   ];
 
   if (parts[0] === "setup") {
-    crumbs.push({ label: isEn ? "Setup" : "Configuración", current: true });
+    crumbs.push({ label: "Onboarding", current: true });
     return crumbs;
   }
 

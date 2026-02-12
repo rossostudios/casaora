@@ -16,6 +16,11 @@ CREATE TYPE member_role AS ENUM (
   'viewer'
 );
 
+CREATE TYPE organization_profile_type AS ENUM (
+  'owner_operator',
+  'management_company'
+);
+
 CREATE TYPE property_status AS ENUM (
   'active',
   'inactive'
@@ -177,6 +182,7 @@ CREATE TABLE organizations (
   name text NOT NULL,
   legal_name text,
   ruc text,
+  profile_type organization_profile_type NOT NULL DEFAULT 'management_company',
   default_currency char(3) NOT NULL DEFAULT 'PYG' CHECK (default_currency IN ('PYG', 'USD')),
   timezone text NOT NULL DEFAULT 'America/Asuncion',
   country_code char(2) NOT NULL DEFAULT 'PY',

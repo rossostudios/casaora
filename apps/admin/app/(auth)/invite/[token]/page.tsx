@@ -197,7 +197,7 @@ export default async function InviteAcceptPage({
             className="text-muted-foreground text-sm underline-offset-4 hover:text-foreground hover:underline"
             href="/setup"
           >
-            {isEn ? "Go to setup" : "Ir a configuración"}
+            {isEn ? "Go to onboarding" : "Ir a onboarding"}
           </Link>
         </div>
       </CardContent>
