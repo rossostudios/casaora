@@ -52,7 +52,7 @@ export default async function AdminLayout({
   const onboardingProgress = await getOnboardingProgress(orgId);
 
   return (
-    <div className="pa-admin-shell-root h-[100dvh] overflow-hidden bg-background">
+    <div className="pa-admin-shell-root h-[100dvh] min-h-0 overflow-y-auto bg-background">
       <AdminShell
         locale={locale}
         onboardingProgress={onboardingProgress}

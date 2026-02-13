@@ -113,7 +113,7 @@ export function DatePicker({
       <BasePopover.Root onOpenChange={setOpen} open={open}>
         <BasePopover.Trigger
           className={cn(
-            "inline-flex h-9 w-full items-center justify-between gap-2 rounded-xl border border-input/90 bg-background/92 px-3 py-1 text-left text-sm shadow-[inset_0_1px_0_rgba(255,255,255,0.82)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)] disabled:cursor-not-allowed disabled:opacity-50",
+            "inline-flex h-9 w-full items-center justify-between gap-2 rounded-xl border border-input bg-background px-3 py-1 text-left text-sm shadow-none transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)] disabled:cursor-not-allowed disabled:opacity-50",
             resolvedValue ? "text-foreground" : "text-muted-foreground",
             className
           )}

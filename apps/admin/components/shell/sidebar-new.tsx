@@ -1006,7 +1006,7 @@ export function SidebarNew({
 
   if (isDesktop) {
     return (
-      <aside className="h-full w-full min-w-0 shrink-0 border-border/60 border-r bg-muted/15">
+      <aside className="h-full w-full min-w-0 shrink-0 border-border/60 border-r bg-sidebar text-sidebar-foreground">
         <SidebarContent
           locale={locale}
           onboardingProgress={onboardingProgress}
@@ -1025,7 +1025,7 @@ export function SidebarNew({
       open={isMobileDrawerOpen}
       side="left"
     >
-      <div className="h-full bg-muted/15">
+      <div className="h-full bg-sidebar text-sidebar-foreground">
         <SidebarContent
           locale={locale}
           onboardingProgress={onboardingProgress}

@@ -8,7 +8,6 @@ import {
   Task01Icon,
 } from "@hugeicons/core-free-icons";
 import Link from "next/link";
-import { GettingStarted } from "@/components/dashboard/getting-started";
 import { DashboardInsights } from "@/components/dashboard/insights";
 import { OrgAccessChanged } from "@/components/shell/org-access-changed";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -29,7 +28,6 @@ import {
   fetchMe,
   fetchOperationsSummary,
   fetchOwnerSummary,
-  getApiBaseUrl,
   type OperationsSummary,
 } from "@/lib/api";
 import { errorMessage, isOrgMembershipError } from "@/lib/errors";
@@ -37,6 +35,7 @@ import { formatCurrency } from "@/lib/format";
 import { getActiveLocale } from "@/lib/i18n/server";
 import { getModuleDescription, getModuleLabel, MODULES } from "@/lib/modules";
 import { getActiveOrgId } from "@/lib/org";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { cn } from "@/lib/utils";
 
 function numberOrZero(value: unknown): number {
@@ -81,7 +80,9 @@ type QuickAction = {
   href: string;
   labelEn: string;
   labelEs: string;
-  variant: "default" | "outline" | "secondary";
+  detailEn: string;
+  detailEs: string;
+  icon: typeof Home01Icon;
 };
 
 function normalizedRole(value: unknown): DashboardRole {
@@ -97,21 +98,27 @@ function roleQuickActions(role: DashboardRole): QuickAction[] {
     return [
       {
         href: "/module/tasks",
-        labelEn: "Create task",
-        labelEs: "Crear tarea",
-        variant: "default",
+        labelEn: "Plan today",
+        labelEs: "Planificar hoy",
+        detailEn: "Create and assign high-priority tasks.",
+        detailEs: "Crea y asigna tareas de prioridad alta.",
+        icon: Task01Icon,
       },
       {
         href: "/module/reservations",
-        labelEn: "Check today check-outs",
-        labelEs: "Ver check-outs de hoy",
-        variant: "outline",
+        labelEn: "Check arrivals",
+        labelEs: "Ver llegadas",
+        detailEn: "Review check-ins and check-outs for this week.",
+        detailEs: "Revisa check-ins y check-outs de la semana.",
+        icon: CalendarCheckIn01Icon,
       },
       {
         href: "/module/applications",
-        labelEn: "Open applications board",
-        labelEs: "Abrir tablero de aplicaciones",
-        variant: "outline",
+        labelEn: "Review applications",
+        labelEs: "Revisar aplicaciones",
+        detailEn: "Process new applicants and next actions.",
+        detailEs: "Procesa postulantes y siguientes acciones.",
+        icon: File01Icon,
       },
     ];
   }
@@ -120,21 +127,27 @@ function roleQuickActions(role: DashboardRole): QuickAction[] {
     return [
       {
         href: "/module/owner-statements",
-        labelEn: "Review statements",
-        labelEs: "Revisar estados",
-        variant: "default",
+        labelEn: "Owner payouts",
+        labelEs: "Pagos a propietarios",
+        detailEn: "Track statements and reconciliation deltas.",
+        detailEs: "Revisa estados y diferencias de conciliación.",
+        icon: Invoice01Icon,
       },
       {
         href: "/module/collections",
-        labelEn: "View collections",
-        labelEs: "Ver cobranzas",
-        variant: "outline",
+        labelEn: "Collections",
+        labelEs: "Cobranzas",
+        detailEn: "Monitor paid, pending, and overdue collections.",
+        detailEs: "Monitorea cobranzas pagadas, pendientes y vencidas.",
+        icon: ChartIcon,
       },
       {
         href: "/module/marketplace-listings",
-        labelEn: "Publish listing",
-        labelEs: "Publicar anuncio",
-        variant: "outline",
+        labelEn: "Marketplace quality",
+        labelEs: "Calidad de anuncios",
+        detailEn: "Publish complete listings with transparent pricing.",
+        detailEs: "Publica anuncios completos con precios transparentes.",
+        icon: Home01Icon,
       },
     ];
   }
@@ -143,21 +156,27 @@ function roleQuickActions(role: DashboardRole): QuickAction[] {
     return [
       {
         href: "/module/expenses",
-        labelEn: "Add expense",
-        labelEs: "Agregar gasto",
-        variant: "default",
+        labelEn: "Record expenses",
+        labelEs: "Registrar gastos",
+        detailEn: "Capture operating costs for this period.",
+        detailEs: "Registra costos operativos del periodo.",
+        icon: Invoice01Icon,
       },
       {
         href: "/module/owner-statements",
-        labelEn: "Reconcile statement",
-        labelEs: "Conciliar estado",
-        variant: "outline",
+        labelEn: "Reconcile statements",
+        labelEs: "Conciliar estados",
+        detailEn: "Validate lease/collection line-item consistency.",
+        detailEs: "Valida consistencia de line items y cobranzas.",
+        icon: File01Icon,
       },
       {
         href: "/module/reports",
-        labelEn: "Export summary",
-        labelEs: "Exportar resumen",
-        variant: "outline",
+        labelEn: "Reporting hub",
+        labelEs: "Centro de reportes",
+        detailEn: "Export financial and operations summaries.",
+        detailEs: "Exporta resúmenes financieros y operativos.",
+        icon: ChartIcon,
       },
     ];
   }
@@ -165,36 +184,99 @@ function roleQuickActions(role: DashboardRole): QuickAction[] {
   return [
     {
       href: "/module/reports",
-      labelEn: "Open reports",
-      labelEs: "Abrir reportes",
-      variant: "default",
+      labelEn: "Portfolio performance",
+      labelEs: "Rendimiento del portafolio",
+      detailEn: "Review revenue, occupancy, and net payout.",
+      detailEs: "Revisa ingresos, ocupación y pago neto.",
+      icon: ChartIcon,
     },
     {
       href: "/module/reservations",
-      labelEn: "View reservations",
-      labelEs: "Ver reservas",
-      variant: "outline",
+      labelEn: "Upcoming stays",
+      labelEs: "Próximas estadías",
+      detailEn: "Track upcoming check-ins and check-outs.",
+      detailEs: "Sigue check-ins y check-outs próximos.",
+      icon: CalendarCheckIn01Icon,
     },
     {
       href: "/module/tasks",
-      labelEn: "Open tasks",
-      labelEs: "Abrir tareas",
-      variant: "outline",
+      labelEn: "Operations risks",
+      labelEs: "Riesgos operativos",
+      detailEn: "See overdue tasks and SLA risk signals.",
+      detailEs: "Visualiza tareas vencidas y señales de riesgo SLA.",
+      icon: Task01Icon,
     },
   ];
 }
 
-function roleLabel(role: DashboardRole, isEn: boolean): string {
-  if (role === "owner_admin") {
-    return isEn ? "Owner admin" : "Administrador";
+function normalizePersonLabel(raw: string): string {
+  const cleaned = raw
+    .split("@")[0]
+    .replace(/[._-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!cleaned) return raw;
+  return cleaned.replace(/\b\p{L}/gu, (letter) => letter.toLocaleUpperCase());
+}
+
+function firstName(value: string): string {
+  const normalized = normalizePersonLabel(value);
+  if (!normalized) return "";
+  const [first] = normalized.split(" ");
+  return first || normalized;
+}
+
+function userDisplayName(
+  mePayload: Record<string, unknown>,
+  authUser: Record<string, unknown>
+): string {
+  const user =
+    mePayload.user && typeof mePayload.user === "object"
+      ? (mePayload.user as Record<string, unknown>)
+      : null;
+  const authMetadata =
+    authUser.user_metadata && typeof authUser.user_metadata === "object"
+      ? (authUser.user_metadata as Record<string, unknown>)
+      : null;
+  const candidates = [
+    user?.full_name,
+    user?.name,
+    user?.display_name,
+    mePayload.full_name,
+    mePayload.name,
+    mePayload.display_name,
+    authMetadata?.full_name,
+    authMetadata?.name,
+    authMetadata?.display_name,
+    authUser.full_name,
+    user?.email,
+    authUser.email,
+    mePayload.email,
+  ];
+  for (const candidate of candidates) {
+    if (typeof candidate !== "string" || !candidate.trim()) continue;
+    return firstName(candidate.trim());
   }
-  if (role === "operator") {
-    return isEn ? "Operator" : "Operador";
+  return "";
+}
+
+function roleGreeting(locale: string, isEn: boolean): string {
+  const hourText = new Intl.DateTimeFormat(locale, {
+    hour: "numeric",
+    hour12: false,
+  }).format(new Date());
+  const hour = Number.parseInt(hourText, 10);
+
+  if (Number.isNaN(hour)) {
+    return isEn ? "Welcome back" : "Bienvenido de nuevo";
   }
-  if (role === "accountant") {
-    return isEn ? "Accountant" : "Finanzas";
+  if (hour < 12) {
+    return isEn ? "Good morning" : "Buenos dias";
   }
-  return isEn ? "Viewer" : "Visualizador";
+  if (hour < 18) {
+    return isEn ? "Good afternoon" : "Buenas tardes";
+  }
+  return isEn ? "Good evening" : "Buenas noches";
 }
 
 async function safeList(path: string, orgId: string): Promise<unknown[]> {
@@ -234,6 +316,18 @@ async function safeMe(): Promise<Record<string, unknown>> {
   }
 }
 
+async function safeAuthUser(): Promise<Record<string, unknown>> {
+  try {
+    const supabase = await createSupabaseServerClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    return user ? (user as unknown as Record<string, unknown>) : {};
+  } catch {
+    return {};
+  }
+}
+
 type DashboardPageProps = {
   searchParams: Promise<{ onboarding?: string }>;
 };
@@ -245,6 +339,7 @@ export default async function DashboardPage({
   const locale = await getActiveLocale();
   const isEn = locale === "en-US";
   const orgId = await getActiveOrgId();
+  const authUser = await safeAuthUser();
   const onboardingCompleted = onboarding === "completed";
 
   if (!orgId) {
@@ -283,13 +378,9 @@ export default async function DashboardPage({
     );
   }
 
-  let orgAccessError: string | null = null;
   let properties: unknown[] = [];
   let reservations: unknown[] = [];
   let tasks: unknown[] = [];
-  let units: unknown[] = [];
-  let channels: unknown[] = [];
-  let listings: unknown[] = [];
   let applications: unknown[] = [];
   let collections: unknown[] = [];
   let marketplaceListings: unknown[] = [];
@@ -298,7 +389,6 @@ export default async function DashboardPage({
   let operationsSummary: OperationsSummary = {};
   let mePayload: Record<string, unknown> = {};
   let apiAvailable = true;
-
   try {
     await fetchList("/organizations", orgId, 1);
   } catch (err) {
@@ -307,7 +397,6 @@ export default async function DashboardPage({
       return <OrgAccessChanged orgId={orgId} />;
     }
     apiAvailable = false;
-    orgAccessError = message;
   }
 
   if (apiAvailable) {
@@ -316,9 +405,6 @@ export default async function DashboardPage({
         props,
         resas,
         taskRows,
-        unitRows,
-        channelRows,
-        listingRows,
         appRows,
         collectionRows,
         marketplaceRows,
@@ -330,9 +416,6 @@ export default async function DashboardPage({
         safeList("/properties", orgId),
         safeList("/reservations", orgId),
         safeList("/tasks", orgId),
-        safeList("/units", orgId),
-        safeList("/channels", orgId),
-        safeList("/listings", orgId),
         safeList("/applications", orgId),
         safeList("/collections", orgId),
         safeList("/marketplace/listings", orgId),
@@ -345,9 +428,6 @@ export default async function DashboardPage({
       properties = props;
       reservations = resas;
       tasks = taskRows;
-      units = unitRows;
-      channels = channelRows;
-      listings = listingRows;
       applications = appRows;
       collections = collectionRows;
       marketplaceListings = marketplaceRows;
@@ -363,10 +443,8 @@ export default async function DashboardPage({
       summary = summ;
       operationsSummary = opsSummary;
       mePayload = me;
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
+    } catch {
       apiAvailable = false;
-      orgAccessError = message;
     }
   }
 
@@ -378,7 +456,9 @@ export default async function DashboardPage({
     null;
   const activeRole = normalizedRole(activeMembership?.role);
   const quickActions = roleQuickActions(activeRole);
-  const activeRoleLabel = roleLabel(activeRole, isEn);
+  const greeting = roleGreeting(locale, isEn);
+  const displayName = userDisplayName(mePayload, authUser);
+  const greetingTitle = displayName ? `${greeting}, ${displayName}` : greeting;
 
   const reportNet = formatCurrency(
     numberOrZero(summary.net_payout),
@@ -608,78 +688,35 @@ export default async function DashboardPage({
       <header className="flex flex-col gap-4 rounded-3xl border border-border/80 bg-card/98 p-5 md:flex-row md:items-center md:justify-between">
         <div>
           <h1 className="font-semibold text-[2rem] tracking-[-0.02em]">
-            {isEn ? "Operations" : "Operaciones"}
+            {greetingTitle}
           </h1>
           <p className="text-muted-foreground/90 text-sm">
-            {isEn ? "Active workspace · " : "Espacio activo · "}
-            <span className="capitalize">
-              {new Intl.DateTimeFormat(locale, {
-                dateStyle: "medium",
-                timeStyle: "short",
-              }).format(new Date())}
-            </span>
-          </p>
-          <p className="mt-1 text-muted-foreground/80 text-xs uppercase tracking-[0.13em]">
-            {isEn ? "Role view" : "Vista por rol"}: {activeRoleLabel}
+            {isEn
+              ? "Here is your portfolio pulse and what needs attention next."
+              : "Aqui tienes el pulso de tu portafolio y lo que requiere atencion ahora."}
           </p>
         </div>
 
-        <div className="flex flex-wrap gap-2">
-          {quickActions.map((action, index) => (
+        <div className="grid w-full gap-2 sm:grid-cols-3 md:w-auto md:min-w-[40rem]">
+          {quickActions.map((action) => (
             <Link
               className={cn(
-                buttonVariants({ variant: action.variant, size: "sm" })
+                "rounded-2xl border border-border/75 bg-muted/55 px-3 py-2.5 text-left transition-colors hover:bg-muted/80 hover:text-foreground"
               )}
               href={action.href}
               key={action.href}
             >
-              {isEn ? action.labelEn : action.labelEs}
-              {index === 0 ? <Icon icon={ArrowRight01Icon} size={14} /> : null}
+              <div className="flex items-center gap-2 font-medium text-[13px]">
+                <Icon icon={action.icon} size={14} />
+                {isEn ? action.labelEn : action.labelEs}
+              </div>
+              <p className="mt-1.5 text-[11px] text-muted-foreground">
+                {isEn ? action.detailEn : action.detailEs}
+              </p>
             </Link>
           ))}
         </div>
       </header>
-
-      {/* ── Compact API alert ───────────────────────────────── */}
-      {apiAvailable ? null : (
-        <Alert aria-live="polite" variant="warning">
-          <AlertTitle>
-            {isEn
-              ? "Can't reach the backend — metrics may be stale."
-              : "No se puede conectar al backend — los datos podrían estar desactualizados."}
-          </AlertTitle>
-          <AlertDescription className="space-y-1.5">
-            <p>
-              {isEn ? "Expected at" : "Esperado en"}{" "}
-              <code className="rounded bg-muted px-1 py-0.5">
-                {getApiBaseUrl()}
-              </code>
-            </p>
-            {orgAccessError ? (
-              <p className="break-words text-xs opacity-80">{orgAccessError}</p>
-            ) : null}
-            <p className="text-xs opacity-80">
-              {isEn ? (
-                <>
-                  Run{" "}
-                  <code className="rounded bg-muted px-1 py-0.5">
-                    cd apps/backend && npm start
-                  </code>{" "}
-                  then refresh this page.
-                </>
-              ) : (
-                <>
-                  Ejecuta{" "}
-                  <code className="rounded bg-muted px-1 py-0.5">
-                    cd apps/backend && npm start
-                  </code>{" "}
-                  y luego actualiza esta página.
-                </>
-              )}
-            </p>
-          </AlertDescription>
-        </Alert>
-      )}
 
       {onboardingCompleted ? (
         <Alert variant="success">
@@ -705,34 +742,7 @@ export default async function DashboardPage({
             </Alert>
           ))}
         </section>
-      ) : (
-        <Alert variant="success">
-          <AlertTitle>
-            {isEn
-              ? "Operations alert center is clean"
-              : "Sin alertas operativas"}
-          </AlertTitle>
-          <AlertDescription>
-            {isEn
-              ? "No SLA breaches, overdue turnover tasks, or assignment gaps detected right now."
-              : "No se detectan incumplimientos SLA, vencimientos ni brechas de asignación en este momento."}
-          </AlertDescription>
-        </Alert>
-      )}
-
-      <GettingStarted
-        applicationCount={applications.length}
-        channelCount={channels.length}
-        collectionCount={collections.length}
-        listingCount={listings.length}
-        locale={locale}
-        onboardingCompleted={onboardingCompleted}
-        propertyCount={properties.length}
-        reservationCount={reservations.length}
-        role={activeRole}
-        taskCount={tasks.length}
-        unitCount={units.length}
-      />
+      ) : null}
 
       <section
         aria-label={isEn ? "Role control center" : "Centro de control por rol"}

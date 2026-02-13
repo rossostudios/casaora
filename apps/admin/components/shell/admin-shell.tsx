@@ -96,9 +96,9 @@ function LegacyAdminShell({ locale, children }: AdminShellProps) {
         locale={locale}
         onCollapsedChange={setAndPersist}
       />
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         <Topbar locale={locale} />
-        <main className="min-h-0 min-w-0 flex-1 overflow-auto p-3 sm:p-4 lg:p-5 xl:p-6">
+        <main className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden p-3 sm:p-4 lg:p-5 xl:p-6">
           <div className="mx-auto w-full max-w-screen-2xl">{children}</div>
         </main>
       </div>
@@ -152,7 +152,7 @@ function AdminShellV2({
     : "bg-background";
 
   const contentColumn = (
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col">
       <Topbar
         isNavOpen={isNavOpen}
         locale={locale}
@@ -168,10 +168,7 @@ function AdminShellV2({
   if (isDesktop) {
     return (
       <div
-        className={cn(
-          "h-full min-h-0 w-full overflow-hidden",
-          shellSurfaceClass
-        )}
+        className={cn("h-full min-h-0 w-full", shellSurfaceClass)}
         data-nav-open={false}
         data-shell-mode={viewportMode}
       >
@@ -179,7 +176,12 @@ function AdminShellV2({
           className="h-full min-h-0 w-full"
           orientation="horizontal"
         >
-          <ResizablePanel defaultSize="20%" maxSize="40%" minSize="14%">
+          <ResizablePanel
+            className="min-h-0 overflow-hidden"
+            defaultSize="20%"
+            maxSize="40%"
+            minSize="14%"
+          >
             <SidebarNew
               isMobileDrawerOpen={false}
               locale={locale}
@@ -190,7 +192,9 @@ function AdminShellV2({
             />
           </ResizablePanel>
           <ResizableHandle withHandle />
-          <ResizablePanel minSize="50%">{contentColumn}</ResizablePanel>
+          <ResizablePanel className="min-h-0 overflow-hidden" minSize="50%">
+            {contentColumn}
+          </ResizablePanel>
         </ResizablePanelGroup>
       </div>
     );
@@ -199,7 +203,7 @@ function AdminShellV2({
   return (
     <div
       className={cn(
-        "grid h-full min-h-0 w-full grid-cols-[minmax(0,1fr)] overflow-hidden transition-all duration-300 ease-in-out",
+        "grid h-full min-h-0 w-full grid-cols-[minmax(0,1fr)] transition-all duration-300 ease-in-out",
         shellSurfaceClass
       )}
       data-nav-open={isNavOpen}

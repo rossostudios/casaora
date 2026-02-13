@@ -1,8 +1,14 @@
 import { redirect } from "next/navigation";
 
+import {
+  updateAccountNameAction,
+  updateAccountPasswordAction,
+} from "@/app/(admin)/account/actions";
 import { SignOutButton } from "@/components/auth/sign-out-button";
 import { LanguageSelector } from "@/components/preferences/language-selector";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -11,10 +17,22 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { CopyButton } from "@/components/ui/copy-button";
+import { Input } from "@/components/ui/input";
 import { getActiveLocale } from "@/lib/i18n/server";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
-export default async function AccountPage() {
+function metadataString(source: unknown, key: string): string {
+  if (!source || typeof source !== "object") return "";
+  const value = (source as Record<string, unknown>)[key];
+  return typeof value === "string" ? value.trim() : "";
+}
+
+type AccountPageProps = {
+  searchParams: Promise<{ success?: string; error?: string }>;
+};
+
+export default async function AccountPage({ searchParams }: AccountPageProps) {
+  const params = await searchParams;
   const locale = await getActiveLocale();
   const isEn = locale === "en-US";
 
@@ -27,8 +45,50 @@ export default async function AccountPage() {
     redirect("/login");
   }
 
+  const currentName =
+    metadataString(user.user_metadata, "full_name") ||
+    metadataString(user.user_metadata, "name");
+
+  const successCode = typeof params.success === "string" ? params.success : "";
+  const errorMessage = typeof params.error === "string" ? params.error : "";
+
   return (
     <div className="space-y-6">
+      {errorMessage ? (
+        <Alert variant="destructive">
+          <AlertTitle>
+            {isEn ? "Update failed" : "Falló la actualización"}
+          </AlertTitle>
+          <AlertDescription>{errorMessage}</AlertDescription>
+        </Alert>
+      ) : null}
+
+      {successCode === "profile-updated" ? (
+        <Alert variant="success">
+          <AlertTitle>
+            {isEn ? "Profile updated" : "Perfil actualizado"}
+          </AlertTitle>
+          <AlertDescription>
+            {isEn
+              ? "Your name was updated successfully."
+              : "Tu nombre se actualizó correctamente."}
+          </AlertDescription>
+        </Alert>
+      ) : null}
+
+      {successCode === "password-updated" ? (
+        <Alert variant="success">
+          <AlertTitle>
+            {isEn ? "Password updated" : "Contraseña actualizada"}
+          </AlertTitle>
+          <AlertDescription>
+            {isEn
+              ? "Your password was changed successfully."
+              : "Tu contraseña se cambió correctamente."}
+          </AlertDescription>
+        </Alert>
+      ) : null}
+
       <Card>
         <CardHeader className="space-y-3">
           <div className="flex flex-wrap items-center gap-2">
@@ -62,6 +122,94 @@ export default async function AccountPage() {
           <div className="flex flex-wrap items-center justify-between gap-2">
             <SignOutButton variant="outline" />
           </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="space-y-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant="outline">{isEn ? "Profile" : "Perfil"}</Badge>
+          </div>
+          <CardTitle className="text-2xl">
+            {isEn ? "Public name" : "Nombre público"}
+          </CardTitle>
+          <CardDescription>
+            {isEn
+              ? "This name is used across the admin and communications."
+              : "Este nombre se usa en el admin y comunicaciones."}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form action={updateAccountNameAction} className="space-y-4">
+            <label className="block space-y-2" htmlFor="full_name">
+              <span className="font-medium text-sm">
+                {isEn ? "Full name" : "Nombre completo"}
+              </span>
+              <Input
+                defaultValue={currentName}
+                id="full_name"
+                name="full_name"
+                placeholder={isEn ? "Your name" : "Tu nombre"}
+                required
+              />
+            </label>
+            <Button type="submit">
+              {isEn ? "Save name" : "Guardar nombre"}
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="space-y-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant="outline">{isEn ? "Security" : "Seguridad"}</Badge>
+          </div>
+          <CardTitle className="text-2xl">
+            {isEn ? "Password" : "Contraseña"}
+          </CardTitle>
+          <CardDescription>
+            {isEn
+              ? "Use a strong password with at least 8 characters."
+              : "Usa una contraseña segura de al menos 8 caracteres."}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form action={updateAccountPasswordAction} className="space-y-4">
+            <label className="block space-y-2" htmlFor="password">
+              <span className="font-medium text-sm">
+                {isEn ? "New password" : "Nueva contraseña"}
+              </span>
+              <Input
+                id="password"
+                name="password"
+                placeholder={
+                  isEn ? "At least 8 characters" : "Mínimo 8 caracteres"
+                }
+                required
+                type="password"
+              />
+            </label>
+
+            <label className="block space-y-2" htmlFor="confirm_password">
+              <span className="font-medium text-sm">
+                {isEn ? "Confirm password" : "Confirmar contraseña"}
+              </span>
+              <Input
+                id="confirm_password"
+                name="confirm_password"
+                placeholder={
+                  isEn ? "Repeat your password" : "Repite tu contraseña"
+                }
+                required
+                type="password"
+              />
+            </label>
+
+            <Button type="submit">
+              {isEn ? "Update password" : "Actualizar contraseña"}
+            </Button>
+          </form>
         </CardContent>
       </Card>
 
