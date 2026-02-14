@@ -10,6 +10,7 @@ import {
 } from "@/lib/i18n";
 
 import { LOCALE_CHANGE_EVENT, LocaleContext } from "@/lib/i18n/locale-context";
+import { getDictionary } from "./dictionaries";
 
 function readActiveLocale(): Locale {
   if (typeof document !== "undefined") {
@@ -70,4 +71,9 @@ export function useActiveLocale(): Locale {
   }, [fromContext]);
 
   return fromContext ?? locale;
+}
+
+export function useDictionary() {
+  const locale = useActiveLocale();
+  return getDictionary(locale);
 }

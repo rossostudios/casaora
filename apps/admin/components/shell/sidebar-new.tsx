@@ -135,25 +135,25 @@ const PRIMARY_TABS: Array<{
   icon: IconSvgElement;
   label: { "es-PY": string; "en-US": string };
 }> = [
-  {
-    key: "home",
-    href: "/app",
-    icon: Home01Icon,
-    label: { "es-PY": "Inicio", "en-US": "Home" },
-  },
-  {
-    key: "chat",
-    href: "/app/agents",
-    icon: Message01Icon,
-    label: { "es-PY": "Chat", "en-US": "Chat" },
-  },
-  {
-    key: "inbox",
-    href: "/module/messaging",
-    icon: InboxIcon,
-    label: { "es-PY": "Inbox", "en-US": "Inbox" },
-  },
-];
+    {
+      key: "home",
+      href: "/app",
+      icon: Home01Icon,
+      label: { "es-PY": "Inicio", "en-US": "Home" },
+    },
+    {
+      key: "chat",
+      href: "/app/agents",
+      icon: Message01Icon,
+      label: { "es-PY": "Chat", "en-US": "Chat" },
+    },
+    {
+      key: "inbox",
+      href: "/module/messaging",
+      icon: InboxIcon,
+      label: { "es-PY": "Inbox", "en-US": "Inbox" },
+    },
+  ];
 
 const CHAT_LINKS: RouteLinkDef[] = [
   {
@@ -187,24 +187,6 @@ const INBOX_LINKS: RouteLinkDef[] = [
 ];
 
 const SECTIONS: SectionDef[] = [
-  {
-    key: "workspace",
-    label: {
-      "es-PY": "Inicio",
-      "en-US": "Home",
-    },
-    routeLinks: [
-      {
-        href: "/setup",
-        icon: Settings03Icon,
-        label: {
-          "es-PY": "Onboarding",
-          "en-US": "Onboarding",
-        },
-      },
-    ],
-    moduleSlugs: [],
-  },
   {
     key: "leasing",
     label: {
@@ -376,7 +358,7 @@ function NavLinkRow({
         "group flex items-center gap-2 rounded-lg px-2 py-[5px] transition-all duration-200 ease-in-out",
         active
           ? "bg-background text-foreground shadow-[0_1px_2px_rgba(0,0,0,0.05)] ring-1 ring-border/40"
-          : "text-muted-foreground/80 hover:bg-muted/60 hover:text-foreground"
+          : "text-sidebar-foreground hover:bg-muted/60 hover:text-foreground"
       )}
       href={href}
     >
@@ -385,12 +367,12 @@ function NavLinkRow({
           "shrink-0 transition-colors",
           active
             ? "text-primary"
-            : "text-muted-foreground/60 group-hover:text-foreground/80"
+            : "text-sidebar-foreground/60 group-hover:text-foreground/80"
         )}
         icon={icon}
         size={16}
       />
-      <span className="truncate font-medium text-[13px] leading-5">
+      <span className="truncate font-medium text-[14px] leading-5">
         {label}
       </span>
     </Link>
@@ -468,23 +450,19 @@ function SidebarContent({
   locale,
   orgId,
   onboardingProgress,
-}: {
-  locale: Locale;
-  orgId: string | null;
-  onboardingProgress: OnboardingProgress;
-}) {
+}: SidebarContentProps) {
   const pathname = usePathname();
   const activeTab = resolvePrimaryTab(pathname);
   const sections = useMemo(() => resolveSections(locale), [locale]);
   const [collapsedSections, toggleSection] = useCollapsedSections();
   const [onboardingHubClosed, setOnboardingHubClosed] = useState(false);
   const isEn = locale === "en-US";
+  const showOnboardingHub = activeTab === "home" && !onboardingHubClosed;
   const completionPercent = Math.round(
-    Math.max(0, Math.min(100, onboardingProgress.percent))
+    Math.max(0, Math.min(100, onboardingProgress?.percent ?? 0))
   );
   const onboardingCompleted = completionPercent >= 100;
-  const showOnboardingHub =
-    activeTab === "home" && !onboardingCompleted && !onboardingHubClosed;
+
   const [chatAgents, setChatAgents] = useState<ChatAgentItem[]>([]);
   const [recentChats, setRecentChats] = useState<ChatSummaryItem[]>([]);
   const [chatLoading, setChatLoading] = useState(false);
@@ -546,8 +524,8 @@ function SidebarContent({
       if (!agentsResponse.ok) {
         const message =
           agentsPayload &&
-          typeof agentsPayload === "object" &&
-          "error" in agentsPayload
+            typeof agentsPayload === "object" &&
+            "error" in agentsPayload
             ? String((agentsPayload as { error?: unknown }).error)
             : isEn
               ? "Could not load agents."
@@ -558,8 +536,8 @@ function SidebarContent({
       if (!chatsResponse.ok) {
         const message =
           chatsPayload &&
-          typeof chatsPayload === "object" &&
-          "error" in chatsPayload
+            typeof chatsPayload === "object" &&
+            "error" in chatsPayload
             ? String((chatsPayload as { error?: unknown }).error)
             : isEn
               ? "Could not load chats."
@@ -622,9 +600,9 @@ function SidebarContent({
         if (!response.ok) {
           throw new Error(
             payload.error ||
-              (isEn
-                ? "Chat update failed."
-                : "La actualización del chat falló.")
+            (isEn
+              ? "Chat update failed."
+              : "La actualización del chat falló.")
           );
         }
 
@@ -862,69 +840,54 @@ function SidebarContent({
 
         {activeTab === "home" ? (
           <nav className="space-y-3">
-            {sections.map((section) => {
-              const isWorkspace = section.key === "workspace";
-              const isCollapsed =
-                !isWorkspace && collapsedSections.has(section.key);
-
-              if (isWorkspace) {
-                return (
-                  <div className="space-y-2" key={section.key}>
-                    <div className="space-y-0.5">
-                      {section.links.map((link) => (
-                        <NavLinkRow
-                          active={isRouteActive(pathname, link.href)}
-                          href={link.href}
-                          icon={link.iconElement}
-                          key={link.href}
-                          label={link.label}
-                        />
-                      ))}
-                    </div>
-                    {showOnboardingHub ? (
-                      <section className="rounded-xl border border-border/70 bg-background/80 p-3">
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="flex min-w-0 items-center gap-2">
-                            <Icon
-                              className="text-muted-foreground/80"
-                              icon={Settings03Icon}
-                              size={15}
-                            />
-                            <Link
-                              className="truncate font-semibold text-[14px] text-foreground hover:underline"
-                              href="/setup"
-                            >
-                              {isEn ? "Onboarding hub" : "Hub de onboarding"}
-                            </Link>
-                          </div>
-                          <button
-                            aria-label={
-                              isEn
-                                ? "Close onboarding hub"
-                                : "Cerrar hub de onboarding"
-                            }
-                            className="inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground/70 transition-colors hover:bg-muted hover:text-foreground"
-                            onClick={() => setOnboardingHubClosed(true)}
-                            type="button"
-                          >
-                            <Icon icon={Cancel01Icon} size={14} />
-                          </button>
-                        </div>
-                        <Progress
-                          aria-valuetext={`${completionPercent}%`}
-                          className="mt-3 h-2.5 bg-muted/90"
-                          value={completionPercent}
-                        />
-                        <p className="mt-2 font-medium text-[13px] text-foreground/85">
-                          {isEn
-                            ? `${completionPercent}% Completed`
-                            : `${completionPercent}% completado`}
-                        </p>
-                      </section>
-                    ) : null}
+            {showOnboardingHub && !onboardingCompleted ? (
+              <Link
+                className="group block rounded-xl border border-border/70 bg-background/80 p-3 transition-colors hover:border-primary/30 hover:bg-primary/[0.03]"
+                href="/setup"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <Icon
+                      className="text-primary/70"
+                      icon={Settings03Icon}
+                      size={15}
+                    />
+                    <span className="truncate font-semibold text-[13px] text-foreground">
+                      {isEn ? "Setup" : "Configuración"}
+                    </span>
                   </div>
-                );
-              }
+                  <button
+                    aria-label={
+                      isEn
+                        ? "Dismiss setup widget"
+                        : "Cerrar widget de configuración"
+                    }
+                    className="inline-flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground/50 transition-colors hover:bg-muted hover:text-foreground"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setOnboardingHubClosed(true);
+                    }}
+                    type="button"
+                  >
+                    <Icon icon={Cancel01Icon} size={13} />
+                  </button>
+                </div>
+                <Progress
+                  aria-valuetext={`${completionPercent}%`}
+                  className="mt-2.5 h-2 bg-muted/90"
+                  value={completionPercent}
+                />
+                <p className="mt-1.5 font-medium text-[12px] text-muted-foreground">
+                  {isEn
+                    ? `${completionPercent}% complete`
+                    : `${completionPercent}% completado`}
+                </p>
+              </Link>
+            ) : null}
+
+            {sections.map((section) => {
+              const isCollapsed = collapsedSections.has(section.key);
 
               return (
                 <Collapsible
@@ -987,6 +950,14 @@ function SidebarContent({
   );
 }
 
+type SidebarContentProps = {
+  locale: Locale;
+  orgId: string | null;
+  onboardingProgress?: OnboardingProgress;
+};
+
+// ... existing code ...
+
 export function SidebarNew({
   locale,
   orgId,
@@ -997,7 +968,7 @@ export function SidebarNew({
 }: {
   locale: Locale;
   orgId: string | null;
-  onboardingProgress: OnboardingProgress;
+  onboardingProgress?: OnboardingProgress;
   viewportMode: ViewportMode;
   isMobileDrawerOpen: boolean;
   onMobileDrawerOpenChange: (next: boolean) => void;
@@ -1009,8 +980,8 @@ export function SidebarNew({
       <aside className="h-full w-full min-w-0 shrink-0 border-border/60 border-r bg-sidebar text-sidebar-foreground">
         <SidebarContent
           locale={locale}
-          onboardingProgress={onboardingProgress}
           orgId={orgId}
+          onboardingProgress={onboardingProgress}
         />
       </aside>
     );
@@ -1028,8 +999,8 @@ export function SidebarNew({
       <div className="h-full bg-sidebar text-sidebar-foreground">
         <SidebarContent
           locale={locale}
-          onboardingProgress={onboardingProgress}
           orgId={orgId}
+          onboardingProgress={onboardingProgress}
         />
       </div>
     </Drawer>

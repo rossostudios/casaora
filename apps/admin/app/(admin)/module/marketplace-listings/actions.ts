@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
+import { redirect, unstable_rethrow } from "next/navigation";
 
 import { patchJson, postJson } from "@/lib/api";
 
@@ -161,6 +161,7 @@ export async function createMarketplaceListingAction(formData: FormData) {
     revalidatePath("/marketplace");
     redirect(withParams(next, { success: "marketplace-listing-created" }));
   } catch (err) {
+    unstable_rethrow(err);
     const message = err instanceof Error ? err.message : String(err);
     redirect(withParams(next, { error: message.slice(0, 240) }));
   }
@@ -188,6 +189,7 @@ export async function publishMarketplaceListingAction(formData: FormData) {
     revalidatePath("/marketplace");
     redirect(withParams(next, { success: "marketplace-listing-published" }));
   } catch (err) {
+    unstable_rethrow(err);
     const message = err instanceof Error ? err.message : String(err);
     redirect(withParams(next, { error: message.slice(0, 240) }));
   }
@@ -215,6 +217,7 @@ export async function unpublishMarketplaceListingAction(formData: FormData) {
     revalidatePath("/marketplace");
     redirect(withParams(next, { success: "marketplace-listing-unpublished" }));
   } catch (err) {
+    unstable_rethrow(err);
     const message = err instanceof Error ? err.message : String(err);
     redirect(withParams(next, { error: message.slice(0, 240) }));
   }

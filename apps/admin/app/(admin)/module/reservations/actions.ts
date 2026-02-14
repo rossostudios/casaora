@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
+import { redirect, unstable_rethrow } from "next/navigation";
 
 import { postJson } from "@/lib/api";
 
@@ -70,6 +70,7 @@ export async function createReservationAction(formData: FormData) {
     revalidatePath("/module/reservations");
     redirect(reservationsUrl({ success: "reservation-created" }));
   } catch (err) {
+    unstable_rethrow(err);
     const message = err instanceof Error ? err.message : String(err);
     redirect(reservationsUrl({ error: message.slice(0, 240) }));
   }
@@ -99,6 +100,7 @@ export async function transitionReservationStatusAction(formData: FormData) {
     revalidatePath("/module/reservations");
     redirect(reservationsUrl({ success: "reservation-updated" }));
   } catch (err) {
+    unstable_rethrow(err);
     const message = err instanceof Error ? err.message : String(err);
     redirect(reservationsUrl({ error: message.slice(0, 240) }));
   }

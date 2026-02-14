@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
+import { redirect, unstable_rethrow } from "next/navigation";
 
 import { deleteJson, patchJson, postJson } from "@/lib/api";
 
@@ -75,6 +75,7 @@ export async function createGuestAction(formData: FormData) {
     revalidatePath("/module/guests");
     redirect(withParams(next, { success: "huesped-creado" }));
   } catch (err) {
+    unstable_rethrow(err);
     const message = err instanceof Error ? err.message : String(err);
     redirect(withParams(next, { error: message }));
   }
@@ -118,6 +119,7 @@ export async function updateGuestAction(formData: FormData) {
     revalidatePath(`/module/guests/${id}`);
     redirect(withParams(next, { success: "huesped-actualizado" }));
   } catch (err) {
+    unstable_rethrow(err);
     const message = err instanceof Error ? err.message : String(err);
     redirect(withParams(next, { error: message }));
   }
@@ -139,6 +141,7 @@ export async function deleteGuestAction(formData: FormData) {
     revalidatePath("/module/guests");
     redirect(withParams(next, { success: "huesped-eliminado" }));
   } catch (err) {
+    unstable_rethrow(err);
     const message = err instanceof Error ? err.message : String(err);
     redirect(withParams(next, { error: message }));
   }

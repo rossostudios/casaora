@@ -15,6 +15,23 @@ export function formatCurrency(
   }).format(number);
 }
 
+export function formatCompactCurrency(
+  value: number,
+  currency = "PYG",
+  locale = "es-PY"
+): string {
+  if (Number.isNaN(value)) {
+    return "-";
+  }
+
+  return new Intl.NumberFormat(locale, {
+    style: "currency",
+    currency,
+    notation: "compact",
+    maximumFractionDigits: 1,
+  }).format(value);
+}
+
 export function humanizeKey(key: string): string {
   return key
     .replaceAll("_", " ")

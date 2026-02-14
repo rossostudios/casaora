@@ -102,6 +102,7 @@ export const config = {
     "/settings/:path*",
     "/module/:path*",
     "/account/:path*",
+    "/documentation/:path*",
     "/invite/:path*",
   ],
 };

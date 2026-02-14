@@ -1,15 +1,16 @@
-import { dirname } from "node:path";
+import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+const workspaceRoot = resolve(__dirname, "../..");
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
   turbopack: {
-    root: __dirname,
+    root: workspaceRoot,
   },
-  outputFileTracingRoot: __dirname,
+  outputFileTracingRoot: workspaceRoot,
   async headers() {
     return [
       {

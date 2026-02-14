@@ -5,9 +5,15 @@ import {
   LOCALE_COOKIE_NAME,
   normalizeLocale,
 } from "@/lib/i18n";
+import { getDictionary } from "./dictionaries";
 
 export async function getActiveLocale(): Promise<Locale> {
   const store = await cookies();
   const raw = store.get(LOCALE_COOKIE_NAME)?.value;
   return normalizeLocale(raw) ?? DEFAULT_LOCALE;
+}
+
+export async function getActiveDictionary() {
+  const locale = await getActiveLocale();
+  return getDictionary(locale);
 }

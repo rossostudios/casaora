@@ -15,7 +15,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { CopyButton } from "@/components/ui/copy-button";
-import { DataTable, type DataTableRow } from "@/components/ui/data-table";
+import { DataTable, type DataTableRow, type EmptyStateConfig } from "@/components/ui/data-table";
 import { EmptyState } from "@/components/ui/empty-state";
 import { HoverLink } from "@/components/ui/hover-link";
 import { Icon } from "@/components/ui/icon";
@@ -257,6 +257,93 @@ function RelationshipRail({
   );
 }
 
+function getModuleEmptyState(slug: string, isEn: boolean): EmptyStateConfig | undefined {
+  const configs: Record<string, EmptyStateConfig> = {
+    reservations: {
+      title: isEn ? "No reservations yet" : "Sin reservas aún",
+      description: isEn
+        ? "Create one manually or connect an OTA channel to import automatically."
+        : "Crea una manualmente o conecta un canal OTA para importar automáticamente.",
+      actionLabel: isEn ? "Create reservation" : "Crear reserva",
+      actionHref: "/module/reservations",
+      secondaryActions: [{ label: isEn ? "Connect a channel" : "Conectar canal", href: "/module/channels" }],
+    },
+    tasks: {
+      title: isEn ? "No tasks yet" : "Sin tareas aún",
+      description: isEn
+        ? "Tasks auto-create from reservations, or create them manually."
+        : "Las tareas se crean automáticamente de reservas, o créalas manualmente.",
+      actionLabel: isEn ? "Create a task" : "Crear una tarea",
+      actionHref: "/module/tasks",
+    },
+    channels: {
+      title: isEn ? "No channels connected" : "Sin canales conectados",
+      description: isEn
+        ? "Connect Airbnb, Booking.com, or VRBO to sync calendars via iCal."
+        : "Conecta Airbnb, Booking.com o VRBO para sincronizar calendarios vía iCal.",
+      actionLabel: isEn ? "Connect your first channel" : "Conecta tu primer canal",
+      actionHref: "/setup?tab=channels",
+    },
+    expenses: {
+      title: isEn ? "No expenses recorded" : "Sin gastos registrados",
+      description: isEn
+        ? "Track cleaning, maintenance, and operating costs here."
+        : "Registra costos de limpieza, mantenimiento y operación aquí.",
+      actionLabel: isEn ? "Record an expense" : "Registrar un gasto",
+      actionHref: "/module/expenses",
+    },
+    applications: {
+      title: isEn ? "No applications yet" : "Sin aplicaciones aún",
+      description: isEn
+        ? "Publish a marketplace listing to start receiving applications."
+        : "Publica un anuncio en el marketplace para empezar a recibir aplicaciones.",
+      actionLabel: isEn ? "Create a marketplace listing" : "Crear un anuncio",
+      actionHref: "/module/marketplace-listings",
+    },
+    leases: {
+      title: isEn ? "No leases yet" : "Sin contratos aún",
+      description: isEn
+        ? "Create a lease after approving a tenant application."
+        : "Crea un contrato después de aprobar una aplicación de inquilino.",
+      actionLabel: isEn ? "Review applications" : "Revisar aplicaciones",
+      actionHref: "/module/applications",
+    },
+    collections: {
+      title: isEn ? "No collections yet" : "Sin cobranzas aún",
+      description: isEn
+        ? "Collections are generated from active leases."
+        : "Las cobranzas se generan a partir de contratos activos.",
+      actionLabel: isEn ? "Create a lease" : "Crear un contrato",
+      actionHref: "/module/leases",
+    },
+    pricing: {
+      title: isEn ? "No pricing templates" : "Sin plantillas de precios",
+      description: isEn
+        ? "Create pricing templates to define rates for your units."
+        : "Crea plantillas de precios para definir tarifas de tus unidades.",
+      actionLabel: isEn ? "Create a template" : "Crear una plantilla",
+      actionHref: "/module/pricing",
+    },
+    "marketplace-listings": {
+      title: isEn ? "No marketplace listings" : "Sin anuncios en marketplace",
+      description: isEn
+        ? "Publish listings with transparent pricing to attract tenants."
+        : "Publica anuncios con precios transparentes para atraer inquilinos.",
+      actionLabel: isEn ? "Create a listing" : "Crear un anuncio",
+      actionHref: "/module/marketplace-listings",
+    },
+    guests: {
+      title: isEn ? "No guests yet" : "Sin huéspedes aún",
+      description: isEn
+        ? "Guests are created automatically when you add reservations."
+        : "Los huéspedes se crean automáticamente al agregar reservas.",
+      actionLabel: isEn ? "Create a reservation" : "Crear una reserva",
+      actionHref: "/module/reservations",
+    },
+  };
+  return configs[slug];
+}
+
 export function ModuleTableCard({
   moduleSlug,
   moduleLabel,
@@ -275,6 +362,7 @@ export function ModuleTableCard({
   const [record, setRecord] = useState<DataTableRow | null>(null);
 
   const rowHrefBase = `/module/${moduleSlug}`;
+  const moduleEmptyState = getModuleEmptyState(moduleSlug, isEn);
 
   const onRowClick = (next: DataTableRow) => {
     setRecord(next);
@@ -365,6 +453,7 @@ export function ModuleTableCard({
           {rows.length > 0 ? (
             <DataTable
               data={rows as unknown as Record<string, unknown>[]}
+              emptyStateConfig={moduleEmptyState}
               locale={locale}
               onRowClick={onRowClick}
               rowHrefBase={rowHrefBase}
@@ -373,6 +462,27 @@ export function ModuleTableCard({
             <div className="flex min-h-[400px] flex-col items-center justify-center p-8">
               <EmptyState
                 action={
+                  moduleEmptyState ? (
+                    <>
+                      {moduleEmptyState.actionLabel && moduleEmptyState.actionHref ? (
+                        <Link
+                          className={buttonVariants({ variant: "default", size: "sm" })}
+                          href={moduleEmptyState.actionHref}
+                        >
+                          {moduleEmptyState.actionLabel}
+                        </Link>
+                      ) : null}
+                      {moduleEmptyState.secondaryActions?.map((sa) => (
+                        <Link
+                          className={buttonVariants({ variant: "outline", size: "sm" })}
+                          href={sa.href}
+                          key={sa.href}
+                        >
+                          {sa.label}
+                        </Link>
+                      ))}
+                    </>
+                  ) : (
                   <Link
                     className={buttonVariants({
                       variant: "outline",
@@ -382,15 +492,18 @@ export function ModuleTableCard({
                   >
                     {isEn ? "Open onboarding" : "Abrir onboarding"}
                   </Link>
+                  )
                 }
                 description={
+                  moduleEmptyState?.description ?? (
                   isEn
                     ? "Manage base records stored in Supabase. Use onboarding manager to add, edit, or seed data."
                     : "Administra registros base guardados en Supabase. Usa el administrador para agregar, editar o cargar datos demo."
+                  )
                 }
-                icon={InboxIcon}
+                icon={moduleEmptyState?.icon ?? InboxIcon}
                 title={
-                  isEn ? "No records found" : "No se encontraron registros"
+                  moduleEmptyState?.title ?? (isEn ? "No records found" : "No se encontraron registros")
                 }
               />
             </div>

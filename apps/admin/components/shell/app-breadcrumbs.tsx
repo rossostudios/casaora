@@ -66,6 +66,14 @@ function buildCrumbs(pathname: string, locale: Locale): Crumb[] {
     return crumbs;
   }
 
+  if (parts[0] === "documentation") {
+    crumbs.push({
+      label: isEn ? "Documentation" : "Documentación",
+      current: true,
+    });
+    return crumbs;
+  }
+
   if (parts[0] === "module") {
     const slug = parts[1] ?? "";
     const id = parts[2] ?? null;

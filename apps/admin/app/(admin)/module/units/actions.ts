@@ -1,8 +1,13 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
+import { redirect, unstable_rethrow } from "next/navigation";
 import { postJson } from "@/lib/api";
+
+const UNITS_API_ERROR_RE =
+  /API request failed \((\d+)\) for \/units(?::\s*(.+))?/i;
+const UNITS_DUPLICATE_SUGGESTION_RE =
+  /(?:try|intenta)\s*['"`]?([^'"`]+)['"`]?/i;
 
 function toStringValue(value: FormDataEntryValue | null): string {
   return typeof value === "string" ? value.trim() : "";
@@ -25,6 +30,30 @@ function unitsUrl(params?: { success?: string; error?: string }): string {
   if (params?.error) qs.set("error", params.error);
   const suffix = qs.toString();
   return suffix ? `/module/units?${suffix}` : "/module/units";
+}
+
+function friendlyUnitCreateError(message: string): string {
+  const normalized = message.toLowerCase();
+  const apiMatch = message.match(UNITS_API_ERROR_RE);
+  const detail =
+    (typeof apiMatch?.[2] === "string" ? apiMatch[2].trim() : "") || message;
+  const suggestionMatch = detail.match(UNITS_DUPLICATE_SUGGESTION_RE);
+  const suggestion = suggestionMatch?.[1]?.trim() ?? "";
+
+  const looksLikeDuplicate =
+    normalized.includes("already exists for this property") ||
+    normalized.includes("duplicate key value violates unique constraint") ||
+    normalized.includes("violates unique constraint") ||
+    normalized.includes("units_property_id_code_key") ||
+    normalized.includes("23505");
+
+  if (looksLikeDuplicate) {
+    return suggestion
+      ? `unit-code-duplicate:${suggestion}`
+      : "unit-code-duplicate";
+  }
+
+  return "unit-create-failed";
 }
 
 export async function createUnitFromUnitsModuleAction(formData: FormData) {
@@ -65,7 +94,10 @@ export async function createUnitFromUnitsModuleAction(formData: FormData) {
     revalidatePath("/setup");
     redirect(unitsUrl({ success: "unit-created" }));
   } catch (err) {
+    unstable_rethrow(err);
     const message = err instanceof Error ? err.message : String(err);
-    redirect(unitsUrl({ error: message.slice(0, 240) }));
+    redirect(
+      unitsUrl({ error: friendlyUnitCreateError(message).slice(0, 240) })
+    );
   }
 }

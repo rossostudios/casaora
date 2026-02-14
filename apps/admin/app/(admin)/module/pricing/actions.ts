@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
+import { redirect, unstable_rethrow } from "next/navigation";
 
 import { patchJson, postJson } from "@/lib/api";
 
@@ -140,6 +140,7 @@ export async function createPricingTemplateAction(formData: FormData) {
     revalidatePath("/module/pricing");
     redirect(withParams(next, { success: "pricing-template-created" }));
   } catch (err) {
+    unstable_rethrow(err);
     const message = err instanceof Error ? err.message : String(err);
     redirect(withParams(next, { error: message.slice(0, 240) }));
   }
@@ -160,6 +161,7 @@ export async function setPricingTemplateDefaultAction(formData: FormData) {
     revalidatePath("/module/pricing");
     redirect(withParams(next, { success: "pricing-template-default-updated" }));
   } catch (err) {
+    unstable_rethrow(err);
     const message = err instanceof Error ? err.message : String(err);
     redirect(withParams(next, { error: message.slice(0, 240) }));
   }
@@ -185,6 +187,7 @@ export async function togglePricingTemplateActiveAction(formData: FormData) {
     revalidatePath("/module/pricing");
     redirect(withParams(next, { success: "pricing-template-updated" }));
   } catch (err) {
+    unstable_rethrow(err);
     const message = err instanceof Error ? err.message : String(err);
     redirect(withParams(next, { error: message.slice(0, 240) }));
   }

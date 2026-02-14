@@ -29,4 +29,24 @@ echo "==> Backend checks"
   ./.venv/bin/python -m unittest discover -s tests -p "test_*.py"
 )
 
+if [[ -d "${ROOT_DIR}/apps/backend-rs" ]]; then
+  echo "==> Rust backend checks"
+  (
+    cd "${ROOT_DIR}/apps/backend-rs"
+    cargo fmt --all --check
+    cargo clippy --all-targets --all-features -- -D warnings
+    cargo test --all-targets --all-features
+  )
+fi
+
+if [[ "${RUN_PARITY:-0}" == "1" ]]; then
+  echo "==> FastAPI vs Rust parity checks"
+  (
+    cd "${ROOT_DIR}"
+    python3 scripts/parity/run_parity.py \
+      --fastapi-base-url "${PARITY_FASTAPI_URL:-http://localhost:8000}" \
+      --rust-base-url "${PARITY_RUST_URL:-http://localhost:8100}"
+  )
+fi
+
 echo "==> Quality gate passed"

@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
+import { redirect, unstable_rethrow } from "next/navigation";
 
 import { postJson } from "@/lib/api";
 
@@ -96,6 +96,7 @@ export async function createCollectionAction(formData: FormData) {
     revalidatePath("/app");
     redirect(withParams(next, { success: "collection-created" }));
   } catch (err) {
+    unstable_rethrow(err);
     const message = err instanceof Error ? err.message : String(err);
     redirect(withParams(next, { error: message.slice(0, 240) }));
   }
@@ -133,6 +134,7 @@ export async function markCollectionPaidAction(formData: FormData) {
     revalidatePath("/app");
     redirect(withParams(next, { success: "collection-marked-paid" }));
   } catch (err) {
+    unstable_rethrow(err);
     const message = err instanceof Error ? err.message : String(err);
     redirect(withParams(next, { error: message.slice(0, 240) }));
   }

@@ -2,6 +2,7 @@
 
 import {
   ArrowDown01Icon,
+  File01Icon,
   Logout01Icon,
   Settings03Icon,
   UserCircle02Icon,
@@ -171,6 +172,21 @@ export function SidebarAccount({
                 size={16}
               />
               {isEn ? "Profile" : "Perfil"}
+            </Link>
+            <Link
+              className={cn(
+                buttonVariants({ variant: "ghost", size: "sm" }),
+                "h-9 w-full justify-start gap-2.5 rounded-xl px-2.5 font-normal text-foreground/88 hover:bg-muted/70 hover:text-foreground"
+              )}
+              href="/documentation"
+              onClick={() => setOpen(false)}
+            >
+              <Icon
+                className="text-muted-foreground"
+                icon={File01Icon}
+                size={16}
+              />
+              {isEn ? "Documentation" : "Documentación"}
             </Link>
             <Link
               className={cn(

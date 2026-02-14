@@ -1,0 +1,3 @@
+[deploy]
+startCommand = "cargo run --release"
+healthcheckPath = "/v1/health"

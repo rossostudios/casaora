@@ -21,6 +21,9 @@ type PageProps = {
   searchParams: Promise<{ success?: string; error?: string }>;
 };
 
+const DUPLICATE_UNIT_ERROR_RE =
+  /duplicate key value violates unique constraint|units_property_id_code_key|23505/i;
+
 function safeDecode(value: string): string {
   try {
     return decodeURIComponent(value);
@@ -35,6 +38,37 @@ function successLabel(isEn: boolean, raw: string): string {
   return safeDecode(raw).replaceAll("-", " ");
 }
 
+function errorLabel(isEn: boolean, raw: string): string {
+  const decoded = safeDecode(raw).trim();
+  if (!decoded) return "";
+
+  const [key, meta] = decoded.split(":", 2);
+  if (key === "unit-code-duplicate") {
+    if (meta) {
+      return isEn
+        ? `This unit code already exists for this property. Try "${meta}".`
+        : `Este código de unidad ya existe para esta propiedad. Prueba "${meta}".`;
+    }
+    return isEn
+      ? "This unit code already exists for this property."
+      : "Este código de unidad ya existe para esta propiedad.";
+  }
+
+  if (key === "unit-create-failed") {
+    return isEn
+      ? "Could not create the unit. Review the form and try again."
+      : "No se pudo crear la unidad. Revisa el formulario e inténtalo de nuevo.";
+  }
+
+  if (DUPLICATE_UNIT_ERROR_RE.test(decoded)) {
+    return isEn
+      ? "This unit code already exists for this property."
+      : "Este código de unidad ya existe para esta propiedad.";
+  }
+
+  return decoded;
+}
+
 export default async function UnitsModulePage({ searchParams }: PageProps) {
   const locale = await getActiveLocale();
   const isEn = locale === "en-US";
@@ -42,7 +76,7 @@ export default async function UnitsModulePage({ searchParams }: PageProps) {
   const { success, error } = await searchParams;
 
   const successMessage = success ? successLabel(isEn, success) : "";
-  const errorLabel = error ? safeDecode(error) : "";
+  const errorAlertMessage = error ? errorLabel(isEn, error) : "";
 
   if (!orgId) {
     return (
@@ -160,14 +194,14 @@ export default async function UnitsModulePage({ searchParams }: PageProps) {
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
-          {errorLabel ? (
+          {errorAlertMessage ? (
             <Alert variant="destructive">
               <AlertTitle>
                 {isEn
                   ? "Could not complete request"
                   : "No se pudo completar la solicitud"}
               </AlertTitle>
-              <AlertDescription>{errorLabel}</AlertDescription>
+              <AlertDescription>{errorAlertMessage}</AlertDescription>
             </Alert>
           ) : null}
           {successMessage ? (

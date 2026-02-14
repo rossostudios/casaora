@@ -8,6 +8,8 @@ import {
   Task01Icon,
 } from "@hugeicons/core-free-icons";
 import Link from "next/link";
+import { isRentalMode, type RentalMode } from "@/app/(admin)/setup/setup-components";
+import { GettingStartedChecklist } from "@/components/dashboard/getting-started-checklist";
 import { DashboardInsights } from "@/components/dashboard/insights";
 import { OrgAccessChanged } from "@/components/shell/org-access-changed";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -34,6 +36,7 @@ import { errorMessage, isOrgMembershipError } from "@/lib/errors";
 import { formatCurrency } from "@/lib/format";
 import { getActiveLocale } from "@/lib/i18n/server";
 import { getModuleDescription, getModuleLabel, MODULES } from "@/lib/modules";
+import { getChecklistItems } from "@/lib/onboarding-checklist";
 import { getActiveOrgId } from "@/lib/org";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { cn } from "@/lib/utils";
@@ -384,10 +387,16 @@ export default async function DashboardPage({
   let applications: unknown[] = [];
   let collections: unknown[] = [];
   let marketplaceListings: unknown[] = [];
+  let channels: unknown[] = [];
+  let listings: unknown[] = [];
+  let pricing: unknown[] = [];
+  let expenses: unknown[] = [];
+  let leases: unknown[] = [];
   let opsAlerts: unknown[] = [];
   let summary: Record<string, unknown> = {};
   let operationsSummary: OperationsSummary = {};
   let mePayload: Record<string, unknown> = {};
+  let orgRentalMode: RentalMode = "both";
   let apiAvailable = true;
   try {
     await fetchList("/organizations", orgId, 1);
@@ -408,10 +417,16 @@ export default async function DashboardPage({
         appRows,
         collectionRows,
         marketplaceRows,
+        channelRows,
+        listingRows,
+        pricingRows,
+        expenseRows,
+        leaseRows,
         alertRows,
         summ,
         opsSummary,
         me,
+        orgRows,
       ] = await Promise.all([
         safeList("/properties", orgId),
         safeList("/reservations", orgId),
@@ -419,10 +434,16 @@ export default async function DashboardPage({
         safeList("/applications", orgId),
         safeList("/collections", orgId),
         safeList("/marketplace/listings", orgId),
+        safeList("/channels", orgId),
+        safeList("/listings", orgId),
+        safeList("/pricing-templates", orgId),
+        safeList("/expenses", orgId),
+        safeList("/leases", orgId),
         safeList("/integration-events", orgId),
         safeReport("/reports/summary", orgId),
         safeOperationsSummary(orgId),
         safeMe(),
+        safeList("/organizations", orgId),
       ]);
 
       properties = props;
@@ -431,6 +452,11 @@ export default async function DashboardPage({
       applications = appRows;
       collections = collectionRows;
       marketplaceListings = marketplaceRows;
+      channels = channelRows;
+      listings = listingRows;
+      pricing = pricingRows;
+      expenses = expenseRows;
+      leases = leaseRows;
       opsAlerts = (alertRows as Record<string, unknown>[]).filter(
         (row) =>
           String(row.provider ?? "")
@@ -443,6 +469,15 @@ export default async function DashboardPage({
       summary = summ;
       operationsSummary = opsSummary;
       mePayload = me;
+
+      // Extract rental_mode from org record
+      const orgRecord = (orgRows as Record<string, unknown>[]).find(
+        (row) => row.id === orgId
+      );
+      const rawRentalMode = orgRecord?.rental_mode;
+      if (isRentalMode(rawRentalMode)) {
+        orgRentalMode = rawRentalMode;
+      }
     } catch {
       apiAvailable = false;
     }
@@ -682,6 +717,19 @@ export default async function DashboardPage({
               },
             ];
 
+  const checklistItems = getChecklistItems(orgRentalMode, {
+    channels: channels.length,
+    listings: listings.length,
+    reservations: reservations.length,
+    tasks: tasks.length,
+    expenses: expenses.length,
+    pricing: pricing.length,
+    marketplaceListings: marketplaceListings.length,
+    applications: applications.length,
+    leases: leases.length,
+    collections: collections.length,
+  });
+
   return (
     <div className="space-y-5">
       {/* ── Page header ─────────────────────────────────────── */}
@@ -731,6 +779,10 @@ export default async function DashboardPage({
               : "Excelente inicio. Continúa con canales, anuncios y la operación diaria."}
           </AlertDescription>
         </Alert>
+      ) : null}
+
+      {apiAvailable ? (
+        <GettingStartedChecklist items={checklistItems} locale={locale} />
       ) : null}
 
       {opsAlertsCards.length > 0 ? (

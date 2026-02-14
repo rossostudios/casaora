@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
+import { redirect, unstable_rethrow } from "next/navigation";
 
 import { deleteJson, patchJson, postJson } from "@/lib/api";
 
@@ -123,6 +123,7 @@ export async function createExpenseAction(formData: FormData) {
     revalidatePath("/module/expenses");
     redirect(withParams(next, { success: "expense-created" }));
   } catch (err) {
+    unstable_rethrow(err);
     const message = err instanceof Error ? err.message : String(err);
     redirect(withParams(next, { error: message.slice(0, 240) }));
   }
@@ -182,6 +183,7 @@ export async function updateExpenseAction(formData: FormData) {
     revalidatePath("/module/expenses");
     redirect(withParams(next, { success: "expense-updated" }));
   } catch (err) {
+    unstable_rethrow(err);
     const message = err instanceof Error ? err.message : String(err);
     redirect(withParams(next, { error: message.slice(0, 240) }));
   }
@@ -203,6 +205,7 @@ export async function deleteExpenseAction(formData: FormData) {
     revalidatePath("/module/expenses");
     redirect(withParams(next, { success: "expense-deleted" }));
   } catch (err) {
+    unstable_rethrow(err);
     const message = err instanceof Error ? err.message : String(err);
     redirect(withParams(next, { error: message.slice(0, 240) }));
   }

@@ -48,18 +48,30 @@ import { cn } from "@/lib/utils";
 
 export type DataTableRow = Record<string, unknown>;
 
-type DataTableProps = {
-  data: DataTableRow[];
-  columns?: ColumnDef<DataTableRow>[];
+export type EmptyStateConfig = {
+  title: string;
+  description: string;
+  icon?: typeof InboxIcon;
+  actionLabel?: string;
+  actionHref?: string;
+  secondaryActions?: Array<{ label: string; href: string }>;
+};
+
+type DataTableProps<TRow extends DataTableRow = DataTableRow> = {
+  data: TRow[];
+  columns?: ColumnDef<TRow>[];
   defaultPageSize?: number;
   locale?: Locale;
   searchPlaceholder?: string;
-  renderRowActions?: (row: DataTableRow) => ReactNode;
+  hideSearch?: boolean;
+  renderRowActions?: (row: TRow) => ReactNode;
   rowActionsHeader?: string;
   rowHrefBase?: string;
   foreignKeyHrefBaseByKey?: Record<string, string>;
-  onRowClick?: (row: DataTableRow) => void;
+  onRowClick?: (row: TRow) => void;
+  emptyStateConfig?: EmptyStateConfig;
 };
+
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -485,18 +497,20 @@ function inferColumns(options: {
   });
 }
 
-export function DataTable({
+export function DataTable<TRow extends DataTableRow = DataTableRow>({
   data,
   columns: columnsProp,
   defaultPageSize = 20,
   locale: localeProp,
   searchPlaceholder: searchPlaceholderProp,
+  hideSearch = false,
   renderRowActions,
   rowActionsHeader,
   rowHrefBase,
   foreignKeyHrefBaseByKey,
   onRowClick,
-}: DataTableProps) {
+  emptyStateConfig,
+}: DataTableProps<TRow>) {
   const activeLocale = useActiveLocale();
   const locale = localeProp ?? activeLocale;
   const isEn = locale === "en-US";
@@ -520,7 +534,7 @@ export function DataTable({
   }, [columnsProp, data, foreignKeyMap, locale, rowHrefBase]);
   const columns = useMemo(() => {
     const baseColumns =
-      columnsProp ?? inferredColumns ?? ([] as ColumnDef<DataTableRow>[]);
+      columnsProp ?? ((inferredColumns ?? []) as ColumnDef<TRow>[]);
 
     if (!renderRowActions) return baseColumns;
 
@@ -537,7 +551,7 @@ export function DataTable({
             {renderRowActions(row.original)}
           </div>
         ),
-      } satisfies ColumnDef<DataTableRow>,
+      } satisfies ColumnDef<TRow>,
     ];
   }, [columnsProp, inferredColumns, renderRowActions, rowActionsHeader]);
 
@@ -583,7 +597,7 @@ export function DataTable({
     setColumnVisibility(defaultVisibility);
   }, [defaultVisibility]);
 
-  const table = useReactTable({
+  const table = useReactTable<TRow>({
     data,
     columns,
     state: {
@@ -592,7 +606,7 @@ export function DataTable({
       columnVisibility,
       pagination,
     },
-    globalFilterFn,
+    globalFilterFn: globalFilterFn as FilterFn<TRow>,
     onSortingChange: setSorting,
     onGlobalFilterChange: setGlobalFilter,
     onColumnVisibilityChange: setColumnVisibility,
@@ -635,16 +649,20 @@ export function DataTable({
     <div className="min-w-0 space-y-3">
       <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
         <div className="flex min-w-0 flex-1 items-center gap-2">
-          <Input
-            onChange={(event) => setGlobalFilter(event.target.value)}
-            placeholder={searchPlaceholder}
-            value={globalFilter}
-          />
-          {active ? (
-            <Button onClick={reset} size="sm" variant="outline">
-              {isEn ? "Reset" : "Reiniciar"}
-            </Button>
-          ) : null}
+          {!hideSearch && (
+            <>
+              <Input
+                onChange={(event) => setGlobalFilter(event.target.value)}
+                placeholder={searchPlaceholder}
+                value={globalFilter}
+              />
+              {active ? (
+                <Button onClick={reset} size="sm" variant="outline">
+                  {isEn ? "Reset" : "Reiniciar"}
+                </Button>
+              ) : null}
+            </>
+          )}
         </div>
 
         <details className="relative">
@@ -772,15 +790,45 @@ export function DataTable({
                   {data.length === 0 ? (
                     <EmptyState
                       action={
-                        rowHrefBase &&
-                        [
-                          "organizations",
-                          "properties",
-                          "units",
-                          "channels",
-                        ].includes(
-                          String(rowHrefBase.split("/").filter(Boolean).pop())
-                        ) ? (
+                        emptyStateConfig ? (
+                          <>
+                            {emptyStateConfig.actionLabel && emptyStateConfig.actionHref ? (
+                              <Link
+                                className={cn(
+                                  buttonVariants({
+                                    variant: "default",
+                                    size: "sm",
+                                  })
+                                )}
+                                href={emptyStateConfig.actionHref}
+                              >
+                                {emptyStateConfig.actionLabel}
+                              </Link>
+                            ) : null}
+                            {emptyStateConfig.secondaryActions?.map((sa) => (
+                              <Link
+                                className={cn(
+                                  buttonVariants({
+                                    variant: "outline",
+                                    size: "sm",
+                                  })
+                                )}
+                                href={sa.href}
+                                key={sa.href}
+                              >
+                                {sa.label}
+                              </Link>
+                            ))}
+                          </>
+                        ) : rowHrefBase &&
+                          [
+                            "organizations",
+                            "properties",
+                            "units",
+                            "channels",
+                          ].includes(
+                            String(rowHrefBase.split("/").filter(Boolean).pop())
+                          ) ? (
                           <Link
                             className={cn(
                               buttonVariants({
@@ -796,12 +844,14 @@ export function DataTable({
                       }
                       className="py-14"
                       description={
+                        emptyStateConfig?.description ?? (
                         isEn
                           ? "As you add data (onboarding, operations, or integrations), it will show up here."
                           : "Cuando agregues datos (onboarding, operaciones o integraciones), aparecerán aquí."
+                        )
                       }
-                      icon={InboxIcon}
-                      title={isEn ? "No records" : "Sin registros"}
+                      icon={emptyStateConfig?.icon ?? InboxIcon}
+                      title={emptyStateConfig?.title ?? (isEn ? "No records" : "Sin registros")}
                     />
                   ) : (
                     <EmptyState

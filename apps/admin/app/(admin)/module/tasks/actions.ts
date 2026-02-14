@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
+import { redirect, unstable_rethrow } from "next/navigation";
 
 import { deleteJson, patchJson, postJson } from "@/lib/api";
 
@@ -94,6 +94,7 @@ export async function createTaskAction(formData: FormData) {
     revalidatePath("/module/tasks");
     redirect(tasksUrl({ success: "task-created" }));
   } catch (err) {
+    unstable_rethrow(err);
     const message = err instanceof Error ? err.message : String(err);
     redirect(tasksUrl({ error: message.slice(0, 240) }));
   }
@@ -121,6 +122,7 @@ export async function updateTaskStatusAction(formData: FormData) {
     revalidatePath(`/module/tasks/${encodeURIComponent(task_id)}`);
     redirect(withParams(next, { success: "task-updated" }));
   } catch (err) {
+    unstable_rethrow(err);
     const message = err instanceof Error ? err.message : String(err);
     redirect(withParams(next, { error: message.slice(0, 240) }));
   }
@@ -146,6 +148,7 @@ export async function completeTaskAction(formData: FormData) {
     revalidatePath(`/module/tasks/${encodeURIComponent(task_id)}`);
     redirect(withParams(next, { success: "task-completed" }));
   } catch (err) {
+    unstable_rethrow(err);
     const message = err instanceof Error ? err.message : String(err);
     redirect(withParams(next, { error: message.slice(0, 240) }));
   }
@@ -171,6 +174,7 @@ export async function setTaskAssigneeAction(formData: FormData) {
     revalidatePath(`/module/tasks/${encodeURIComponent(task_id)}`);
     redirect(next);
   } catch (err) {
+    unstable_rethrow(err);
     const message = err instanceof Error ? err.message : String(err);
     redirect(withParams(next, { error: message.slice(0, 240) }));
   }
@@ -200,6 +204,7 @@ export async function createTaskItemAction(formData: FormData) {
     revalidatePath(`/module/tasks/${encodeURIComponent(task_id)}`);
     redirect(next);
   } catch (err) {
+    unstable_rethrow(err);
     const message = err instanceof Error ? err.message : String(err);
     redirect(withParams(next, { error: message.slice(0, 240) }));
   }
@@ -235,6 +240,7 @@ export async function updateTaskItemAction(formData: FormData) {
     revalidatePath(`/module/tasks/${encodeURIComponent(task_id)}`);
     redirect(next);
   } catch (err) {
+    unstable_rethrow(err);
     const message = err instanceof Error ? err.message : String(err);
     redirect(withParams(next, { error: message.slice(0, 240) }));
   }
@@ -263,6 +269,7 @@ export async function deleteTaskItemAction(formData: FormData) {
     revalidatePath(`/module/tasks/${encodeURIComponent(task_id)}`);
     redirect(next);
   } catch (err) {
+    unstable_rethrow(err);
     const message = err instanceof Error ? err.message : String(err);
     redirect(withParams(next, { error: message.slice(0, 240) }));
   }

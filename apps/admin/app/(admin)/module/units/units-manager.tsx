@@ -1,10 +1,12 @@
 "use client";
 
-import { Add01Icon } from "@hugeicons/core-free-icons";
-import { useMemo, useState } from "react";
+import { Add01Icon, Upload01Icon } from "@hugeicons/core-free-icons";
+import { useEffect, useMemo, useState } from "react";
 import { createUnitFromUnitsModuleAction } from "@/app/(admin)/module/units/actions";
+import { CsvImportSheet } from "@/components/import/csv-import-sheet";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 import { DataTable, type DataTableRow } from "@/components/ui/data-table";
 import { Form } from "@/components/ui/form";
 import { Icon } from "@/components/ui/icon";
@@ -42,6 +44,52 @@ function asNumber(value: unknown): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+const UNIT_CODE_SUFFIX_RE = /^(.*?)(\d+)$/;
+
+function normalizeCode(value: string): string {
+  return value.trim().toLowerCase();
+}
+
+function suggestNextUnitCode(
+  code: string,
+  existingCodes: Iterable<string>
+): string {
+  const normalizedExisting = new Set(
+    Array.from(existingCodes)
+      .map((item) => normalizeCode(item))
+      .filter(Boolean)
+  );
+  const base = code.trim();
+  if (!base) return "A1";
+  if (!normalizedExisting.has(normalizeCode(base))) return base;
+
+  const suffixMatch = UNIT_CODE_SUFFIX_RE.exec(base);
+  if (suffixMatch) {
+    const [, prefix, digits] = suffixMatch;
+    const width = digits.length;
+    const start = Number.parseInt(digits, 10);
+    for (
+      let nextValue = start + 1;
+      nextValue < start + 10_000;
+      nextValue += 1
+    ) {
+      const candidate = `${prefix}${String(nextValue).padStart(width, "0")}`;
+      if (!normalizedExisting.has(normalizeCode(candidate))) {
+        return candidate;
+      }
+    }
+  }
+
+  for (let suffix = 2; suffix < 10_000; suffix += 1) {
+    const candidate = `${base}-${suffix}`;
+    if (!normalizedExisting.has(normalizeCode(candidate))) {
+      return candidate;
+    }
+  }
+
+  return `${base}-${normalizedExisting.size + 1}`;
+}
+
 export function UnitsManager({
   orgId,
   units,
@@ -54,7 +102,10 @@ export function UnitsManager({
   const locale = useActiveLocale();
   const isEn = locale === "en-US";
   const [open, setOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [propertyFilter, setPropertyFilter] = useState("all");
+  const [createPropertyId, setCreatePropertyId] = useState("");
+  const [draftCode, setDraftCode] = useState("");
 
   const propertyOptions = useMemo(() => {
     return (properties as PropertyRow[])
@@ -92,6 +143,63 @@ export function UnitsManager({
       ) as DataTableRow[];
   }, [units, propertyFilter]);
 
+  const unitCodesByProperty = useMemo(() => {
+    const map = new Map<string, Set<string>>();
+    for (const row of units as UnitRow[]) {
+      const propertyId = asString(row.property_id).trim();
+      const code = asString(row.code).trim();
+      if (!(propertyId && code)) continue;
+      if (!map.has(propertyId)) {
+        map.set(propertyId, new Set<string>());
+      }
+      map.get(propertyId)?.add(code);
+    }
+    return map;
+  }, [units]);
+
+  const duplicateDraftCode = useMemo(() => {
+    if (!(createPropertyId && draftCode.trim())) return null;
+    const existingCodes = unitCodesByProperty.get(createPropertyId);
+    if (!existingCodes || existingCodes.size === 0) return null;
+
+    const normalizedDraft = normalizeCode(draftCode);
+    const hasDuplicate = Array.from(existingCodes).some(
+      (code) => normalizeCode(code) === normalizedDraft
+    );
+    if (!hasDuplicate) return null;
+
+    return {
+      suggestion: suggestNextUnitCode(draftCode, existingCodes),
+    };
+  }, [createPropertyId, draftCode, unitCodesByProperty]);
+  const selectedPropertyLabel = useMemo(() => {
+    if (!createPropertyId) return null;
+    return propertyOptions.find((property) => property.id === createPropertyId)
+      ?.label;
+  }, [createPropertyId, propertyOptions]);
+  const existingUnitsInSelectedProperty = useMemo(() => {
+    if (!createPropertyId) return 0;
+    return (units as UnitRow[]).filter(
+      (row) => asString(row.property_id).trim() === createPropertyId
+    ).length;
+  }, [createPropertyId, units]);
+
+  useEffect(() => {
+    if (!open) {
+      setCreatePropertyId("");
+      setDraftCode("");
+    }
+  }, [open]);
+
+  useEffect(() => {
+    if (
+      createPropertyId &&
+      !propertyOptions.some((row) => row.id === createPropertyId)
+    ) {
+      setCreatePropertyId("");
+    }
+  }, [createPropertyId, propertyOptions]);
+
   return (
     <div className="space-y-4">
       {propertyOptions.length === 0 ? (
@@ -127,15 +235,26 @@ export function UnitsManager({
           </span>
         </div>
 
-        <Button
-          disabled={propertyOptions.length === 0}
-          onClick={() => setOpen(true)}
-          type="button"
-          variant="secondary"
-        >
-          <Icon icon={Add01Icon} size={16} />
-          {isEn ? "New unit" : "Nueva unidad"}
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            disabled={propertyOptions.length === 0}
+            onClick={() => setImportOpen(true)}
+            type="button"
+            variant="outline"
+          >
+            <Icon icon={Upload01Icon} size={16} />
+            {isEn ? "Import CSV" : "Importar CSV"}
+          </Button>
+          <Button
+            disabled={propertyOptions.length === 0}
+            onClick={() => setOpen(true)}
+            type="button"
+            variant="secondary"
+          >
+            <Icon icon={Add01Icon} size={16} />
+            {isEn ? "New unit" : "Nueva unidad"}
+          </Button>
+        </div>
       </div>
 
       <DataTable
@@ -154,75 +273,192 @@ export function UnitsManager({
         open={open}
         title={isEn ? "New unit" : "Nueva unidad"}
       >
-        <Form action={createUnitFromUnitsModuleAction} className="space-y-4">
+        <Form
+          action={createUnitFromUnitsModuleAction}
+          className="space-y-5"
+          onSubmit={(event) => {
+            if (duplicateDraftCode) {
+              event.preventDefault();
+            }
+          }}
+        >
           <input name="organization_id" type="hidden" value={orgId} />
 
-          <label className="grid gap-1">
-            <span className="font-medium text-muted-foreground text-xs">
-              {isEn ? "Property" : "Propiedad"}
-            </span>
-            <Select defaultValue="" name="property_id" required>
-              <option disabled value="">
-                {isEn ? "Select a property" : "Selecciona una propiedad"}
-              </option>
-              {propertyOptions.map((property) => (
-                <option key={property.id} value={property.id}>
-                  {property.label}
-                </option>
-              ))}
-            </Select>
-          </label>
-
-          <div className="grid gap-3 md:grid-cols-2">
-            <label className="grid gap-1">
-              <span className="font-medium text-muted-foreground text-xs">
-                {isEn ? "Code" : "Código"}
-              </span>
-              <Input name="code" placeholder="A1" required />
-            </label>
-            <label className="grid gap-1">
-              <span className="font-medium text-muted-foreground text-xs">
-                {isEn ? "Name" : "Nombre"}
-              </span>
-              <Input name="name" placeholder="Apto 1A" required />
-            </label>
+          <div className="grid gap-2 rounded-2xl border border-border/70 bg-muted/20 p-3 sm:grid-cols-3">
+            <div className="rounded-xl border border-border/70 bg-background/75 p-2.5">
+              <p className="text-muted-foreground text-xs">
+                {isEn ? "Property" : "Propiedad"}
+              </p>
+              <p className="truncate font-medium text-sm">
+                {selectedPropertyLabel ??
+                  (isEn ? "Select a property" : "Selecciona una propiedad")}
+              </p>
+            </div>
+            <div className="rounded-xl border border-border/70 bg-background/75 p-2.5">
+              <p className="text-muted-foreground text-xs">
+                {isEn ? "Existing units" : "Unidades existentes"}
+              </p>
+              <p className="font-medium text-sm tabular-nums">
+                {existingUnitsInSelectedProperty}
+              </p>
+            </div>
+            <div className="rounded-xl border border-border/70 bg-background/75 p-2.5">
+              <p className="text-muted-foreground text-xs">
+                {isEn ? "Suggested code" : "Código sugerido"}
+              </p>
+              <p className="font-medium text-sm">
+                {duplicateDraftCode?.suggestion ?? "A1"}
+              </p>
+            </div>
           </div>
 
-          <div className="grid gap-3 md:grid-cols-4">
-            <label className="grid gap-1">
-              <span className="font-medium text-muted-foreground text-xs">
-                {isEn ? "Guests" : "Huéspedes"}
-              </span>
-              <Input defaultValue={2} min={1} name="max_guests" type="number" />
-            </label>
-            <label className="grid gap-1">
-              <span className="font-medium text-muted-foreground text-xs">
-                {isEn ? "Bedrooms" : "Dormitorios"}
-              </span>
-              <Input defaultValue={1} min={0} name="bedrooms" type="number" />
-            </label>
-            <label className="grid gap-1">
-              <span className="font-medium text-muted-foreground text-xs">
-                {isEn ? "Bathrooms" : "Baños"}
-              </span>
-              <Input
-                defaultValue={1}
-                min={0}
-                name="bathrooms"
-                step="0.5"
-                type="number"
-              />
-            </label>
-            <label className="grid gap-1">
-              <span className="font-medium text-muted-foreground text-xs">
-                {isEn ? "Currency" : "Moneda"}
-              </span>
-              <Select defaultValue="PYG" name="currency">
-                <option value="PYG">PYG</option>
-                <option value="USD">USD</option>
-              </Select>
-            </label>
-          </div>
+          <Card className="rounded-2xl border-border/70 bg-muted/20">
+            <CardContent className="space-y-3 p-4">
+              <div className="space-y-0.5">
+                <p className="font-medium text-sm">
+                  {isEn ? "Identity" : "Identidad"}
+                </p>
+                <p className="text-muted-foreground text-xs">
+                  {isEn
+                    ? "Choose where this unit lives and how it will appear in operations."
+                    : "Define dónde vive esta unidad y cómo aparecerá en operaciones."}
+                </p>
+              </div>
+
+              <label className="grid gap-1">
+                <span className="font-medium text-muted-foreground text-xs">
+                  {isEn ? "Property" : "Propiedad"}
+                </span>
+                <Select
+                  name="property_id"
+                  onChange={(event) => setCreatePropertyId(event.target.value)}
+                  required
+                  value={createPropertyId}
+                >
+                  <option disabled value="">
+                    {isEn ? "Select a property" : "Selecciona una propiedad"}
+                  </option>
+                  {propertyOptions.map((property) => (
+                    <option key={property.id} value={property.id}>
+                      {property.label}
+                    </option>
+                  ))}
+                </Select>
+              </label>
+
+              <div className="grid gap-3 md:grid-cols-2">
+                <label className="grid gap-1">
+                  <span className="font-medium text-muted-foreground text-xs">
+                    {isEn ? "Code" : "Código"}
+                  </span>
+                  <Input
+                    name="code"
+                    onChange={(event) => setDraftCode(event.target.value)}
+                    placeholder="A1"
+                    required
+                    value={draftCode}
+                  />
+                </label>
+                <label className="grid gap-1">
+                  <span className="font-medium text-muted-foreground text-xs">
+                    {isEn ? "Name" : "Nombre"}
+                  </span>
+                  <Input name="name" placeholder="Apto 1A" required />
+                </label>
+              </div>
+            </CardContent>
+          </Card>
+
+          {duplicateDraftCode ? (
+            <Alert variant="warning">
+              <AlertTitle>
+                {isEn
+                  ? "This code is already used in this property"
+                  : "Este código ya está en uso en esta propiedad"}
+              </AlertTitle>
+              <AlertDescription className="space-y-2">
+                <p>
+                  {isEn
+                    ? "Choose another code before creating the unit."
+                    : "Elige otro código antes de crear la unidad."}
+                </p>
+                {duplicateDraftCode.suggestion &&
+                normalizeCode(duplicateDraftCode.suggestion) !==
+                  normalizeCode(draftCode) ? (
+                  <Button
+                    onClick={() => setDraftCode(duplicateDraftCode.suggestion)}
+                    size="sm"
+                    type="button"
+                    variant="outline"
+                  >
+                    {isEn
+                      ? `Use ${duplicateDraftCode.suggestion}`
+                      : `Usar ${duplicateDraftCode.suggestion}`}
+                  </Button>
+                ) : null}
+              </AlertDescription>
+            </Alert>
+          ) : null}
+
+          <Card className="rounded-2xl border-border/70 bg-muted/20">
+            <CardContent className="space-y-3 p-4">
+              <div className="space-y-0.5">
+                <p className="font-medium text-sm">
+                  {isEn ? "Capacity profile" : "Perfil de capacidad"}
+                </p>
+                <p className="text-muted-foreground text-xs">
+                  {isEn
+                    ? "These defaults are used by leasing and occupancy workflows."
+                    : "Estos valores se usan por defecto en leasing y ocupación."}
+                </p>
+              </div>
+              <div className="grid gap-3 md:grid-cols-4">
+                <label className="grid gap-1">
+                  <span className="font-medium text-muted-foreground text-xs">
+                    {isEn ? "Guests" : "Huéspedes"}
+                  </span>
+                  <Input
+                    defaultValue={2}
+                    min={1}
+                    name="max_guests"
+                    type="number"
+                  />
+                </label>
+                <label className="grid gap-1">
+                  <span className="font-medium text-muted-foreground text-xs">
+                    {isEn ? "Bedrooms" : "Dormitorios"}
+                  </span>
+                  <Input
+                    defaultValue={1}
+                    min={0}
+                    name="bedrooms"
+                    type="number"
+                  />
+                </label>
+                <label className="grid gap-1">
+                  <span className="font-medium text-muted-foreground text-xs">
+                    {isEn ? "Bathrooms" : "Baños"}
+                  </span>
+                  <Input
+                    defaultValue={1}
+                    min={0}
+                    name="bathrooms"
+                    step="0.5"
+                    type="number"
+                  />
+                </label>
+                <label className="grid gap-1">
+                  <span className="font-medium text-muted-foreground text-xs">
+                    {isEn ? "Currency" : "Moneda"}
+                  </span>
+                  <Select defaultValue="PYG" name="currency">
+                    <option value="PYG">PYG</option>
+                    <option value="USD">USD</option>
+                  </Select>
+                </label>
+              </div>
+            </CardContent>
+          </Card>
 
           <div className="flex justify-end gap-2">
             <Button
@@ -232,12 +468,31 @@ export function UnitsManager({
             >
               {isEn ? "Cancel" : "Cancelar"}
             </Button>
-            <Button type="submit" variant="secondary">
-              {isEn ? "Create" : "Crear"}
+            <Button
+              disabled={Boolean(duplicateDraftCode)}
+              type="submit"
+              variant="secondary"
+            >
+              {duplicateDraftCode
+                ? isEn
+                  ? "Resolve duplicate"
+                  : "Corrige el duplicado"
+                : isEn
+                  ? "Create"
+                  : "Crear"}
             </Button>
           </div>
         </Form>
       </Sheet>
+
+      <CsvImportSheet
+        isEn={isEn}
+        mode="units"
+        onOpenChange={setImportOpen}
+        open={importOpen}
+        orgId={orgId}
+        properties={propertyOptions.map((p) => ({ id: p.id, name: p.label }))}
+      />
     </div>
   );
 }

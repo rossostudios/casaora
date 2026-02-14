@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
+import { redirect, unstable_rethrow } from "next/navigation";
 import { postJson } from "@/lib/api";
 
 function toStringValue(value: FormDataEntryValue | null): string {
@@ -41,11 +41,13 @@ export async function createPropertyFromPropertiesModuleAction(
       address_line1,
       city,
     });
-    revalidatePath("/module/properties");
-    revalidatePath("/setup");
-    redirect(propertiesUrl({ success: "property-created" }));
   } catch (err) {
+    unstable_rethrow(err);
     const message = err instanceof Error ? err.message : String(err);
     redirect(propertiesUrl({ error: message.slice(0, 240) }));
   }
+
+  revalidatePath("/module/properties");
+  revalidatePath("/setup");
+  redirect(propertiesUrl({ success: "property-created" }));
 }

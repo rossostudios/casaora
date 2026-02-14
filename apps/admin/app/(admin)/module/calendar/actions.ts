@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
+import { redirect, unstable_rethrow } from "next/navigation";
 
 import { deleteJson, postJson } from "@/lib/api";
 
@@ -47,6 +47,7 @@ export async function createCalendarBlockAction(formData: FormData) {
     revalidatePath("/module/calendar");
     redirect(calendarUrl({ success: "block-created" }));
   } catch (err) {
+    unstable_rethrow(err);
     const message = err instanceof Error ? err.message : String(err);
     redirect(calendarUrl({ error: message.slice(0, 240) }));
   }
@@ -65,6 +66,7 @@ export async function deleteCalendarBlockAction(formData: FormData) {
     revalidatePath("/module/calendar");
     redirect(calendarUrl({ success: "block-deleted" }));
   } catch (err) {
+    unstable_rethrow(err);
     const message = err instanceof Error ? err.message : String(err);
     redirect(calendarUrl({ error: message.slice(0, 240) }));
   }

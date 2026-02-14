@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
+import { redirect, unstable_rethrow } from "next/navigation";
 
 import { postJson } from "@/lib/api";
 
@@ -81,6 +81,7 @@ export async function setApplicationStatusAction(formData: FormData) {
     revalidatePath("/module/applications");
     redirect(withParams(next, { success: "application-updated" }));
   } catch (err) {
+    unstable_rethrow(err);
     const message = err instanceof Error ? err.message : String(err);
     redirect(withParams(next, { error: message.slice(0, 240) }));
   }
@@ -120,6 +121,7 @@ export async function assignApplicationAction(formData: FormData) {
     revalidatePath("/module/applications");
     redirect(withParams(next, { success: "application-assignment-updated" }));
   } catch (err) {
+    unstable_rethrow(err);
     const message = err instanceof Error ? err.message : String(err);
     redirect(withParams(next, { error: message.slice(0, 240) }));
   }
@@ -158,6 +160,7 @@ export async function convertApplicationToLeaseAction(formData: FormData) {
     revalidatePath("/module/collections");
     redirect(withParams(next, { success: "application-converted-to-lease" }));
   } catch (err) {
+    unstable_rethrow(err);
     const message = err instanceof Error ? err.message : String(err);
     redirect(withParams(next, { error: message.slice(0, 240) }));
   }

@@ -1,2 +1,0 @@
-"""Puerta Abierta API package."""
-

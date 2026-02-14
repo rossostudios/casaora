@@ -7,7 +7,12 @@ import { cn } from "@/lib/utils";
 
 type ProgressProps = ComponentProps<typeof ProgressPrimitive.Root>;
 
-export function Progress({ className, value, ...props }: ProgressProps) {
+export function Progress({
+  className,
+  value,
+  indicatorClassName,
+  ...props
+}: ProgressProps & { indicatorClassName?: string }) {
   return (
     <ProgressPrimitive.Root
       className={cn(
@@ -18,7 +23,12 @@ export function Progress({ className, value, ...props }: ProgressProps) {
       {...props}
     >
       <ProgressPrimitive.Track className="h-full w-full">
-        <ProgressPrimitive.Indicator className="h-full rounded-full bg-foreground transition-[width] duration-200 ease-out" />
+        <ProgressPrimitive.Indicator
+          className={cn(
+            "h-full rounded-full bg-foreground transition-[width] duration-200 ease-out",
+            indicatorClassName
+          )}
+        />
       </ProgressPrimitive.Track>
     </ProgressPrimitive.Root>
   );

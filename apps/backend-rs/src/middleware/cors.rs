@@ -1,0 +1,39 @@
+use axum::http::header::{ACCEPT, AUTHORIZATION, CONTENT_TYPE};
+use tower_http::cors::{Any, CorsLayer};
+
+use crate::config::AppConfig;
+
+pub fn build_cors_layer(config: &AppConfig) -> CorsLayer {
+    let mut layer = CorsLayer::new()
+        .allow_methods([
+            axum::http::Method::GET,
+            axum::http::Method::POST,
+            axum::http::Method::PUT,
+            axum::http::Method::PATCH,
+            axum::http::Method::DELETE,
+            axum::http::Method::OPTIONS,
+        ])
+        .allow_headers([
+            ACCEPT,
+            AUTHORIZATION,
+            CONTENT_TYPE,
+            axum::http::header::HeaderName::from_static("x-user-id"),
+        ]);
+
+    if config
+        .cors_origins
+        .iter()
+        .any(|origin| origin.trim() == "*")
+    {
+        layer = layer.allow_origin(Any).allow_credentials(false);
+    } else {
+        let origins = config
+            .cors_origins
+            .iter()
+            .filter_map(|origin| origin.parse().ok())
+            .collect::<Vec<_>>();
+        layer = layer.allow_origin(origins).allow_credentials(true);
+    }
+
+    layer
+}

@@ -1,0 +1,285 @@
+import { ChartIcon, Task01Icon } from "@hugeicons/core-free-icons";
+import Link from "next/link";
+import { buttonVariants } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Icon } from "@/components/ui/icon";
+import { Progress } from "@/components/ui/progress";
+import { StatusBadge } from "@/components/ui/status-badge";
+import { formatCurrency, humanizeKey } from "@/lib/format";
+import { cn } from "@/lib/utils";
+import type { PropertyOverview as PropertyOverviewData } from "../types";
+import { isUuid } from "./property-overview-utils";
+
+type PropertyOverviewFinancialProps = {
+  overview: PropertyOverviewData;
+  recordId: string;
+  locale: "en-US" | "es-PY";
+  isEn: boolean;
+};
+
+export function PropertyOverviewFinancial({
+  overview,
+  recordId,
+  locale,
+  isEn,
+}: PropertyOverviewFinancialProps) {
+  const hasIncome = overview.monthIncomePyg > 0;
+  const expenseRatio = hasIncome
+    ? Math.max(
+        0,
+        Math.min(
+          100,
+          Math.round((overview.monthExpensePyg / overview.monthIncomePyg) * 100)
+        )
+      )
+    : 0;
+  const occupancyValue = Math.max(
+    0,
+    Math.min(overview.occupancyRate ?? 0, 100)
+  );
+  const netIncomePositive = overview.monthNetIncomePyg >= 0;
+  const latestStatementId = overview.latestStatement
+    ? String(overview.latestStatement.id ?? "")
+    : "";
+
+  return (
+    <section className="space-y-4">
+      <Card className="border-border/80 bg-card/98">
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between gap-3">
+            <CardTitle className="flex items-center gap-2 text-xl">
+              <Icon icon={ChartIcon} size={18} />
+              {isEn ? "Financial pulse" : "Pulso financiero"}
+            </CardTitle>
+            <Link
+              className={cn(
+                buttonVariants({ size: "sm", variant: "outline" }),
+                "h-8 px-2"
+              )}
+              href={`/module/reports?property_id=${encodeURIComponent(recordId)}`}
+            >
+              {isEn ? "Report" : "Reporte"}
+            </Link>
+          </div>
+          <CardDescription>
+            {isEn
+              ? `Snapshot for ${overview.monthLabel}`
+              : `Resumen de ${overview.monthLabel}`}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="rounded-2xl border border-border/70 bg-background/70 p-3">
+            <p className="text-muted-foreground text-xs">
+              {isEn ? "Net income" : "Ingreso neto"}
+            </p>
+            <p className="font-semibold text-3xl tabular-nums tracking-tight">
+              {formatCurrency(overview.monthNetIncomePyg, "PYG", locale)}
+            </p>
+            <p
+              className={cn(
+                "text-xs",
+                netIncomePositive
+                  ? "text-[var(--status-success-fg)]"
+                  : "text-[var(--status-danger-fg)]"
+              )}
+            >
+              {netIncomePositive
+                ? isEn
+                  ? "Positive month-to-date margin."
+                  : "Margen mensual positivo."
+                : isEn
+                  ? "Expenses exceed collected income."
+                  : "Los gastos superan el ingreso cobrado."}
+            </p>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="rounded-xl border border-border/70 bg-muted/20 p-3">
+              <p className="text-muted-foreground text-xs">
+                {isEn ? "Income" : "Ingreso"}
+              </p>
+              <p className="font-semibold text-lg tabular-nums">
+                {formatCurrency(overview.monthIncomePyg, "PYG", locale)}
+              </p>
+            </div>
+            <div className="rounded-xl border border-border/70 bg-muted/20 p-3">
+              <p className="text-muted-foreground text-xs">
+                {isEn ? "Expenses" : "Gastos"}
+              </p>
+              <p className="font-semibold text-lg tabular-nums">
+                {formatCurrency(overview.monthExpensePyg, "PYG", locale)}
+              </p>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <div>
+              <div className="mb-1 flex items-center justify-between text-xs">
+                <p className="text-muted-foreground">
+                  {isEn ? "Occupancy" : "Ocupación"}
+                </p>
+                <p className="font-medium tabular-nums">{occupancyValue}%</p>
+              </div>
+              <Progress value={occupancyValue} />
+            </div>
+            <div>
+              <div className="mb-1 flex items-center justify-between text-xs">
+                <p className="text-muted-foreground">
+                  {isEn ? "Expense ratio" : "Ratio de gasto"}
+                </p>
+                <p className="font-medium tabular-nums">
+                  {hasIncome ? `${expenseRatio}%` : "-"}
+                </p>
+              </div>
+              <Progress value={expenseRatio} />
+            </div>
+          </div>
+
+          {overview.expenseCategoryBreakdown.length ? (
+            <div className="space-y-2 rounded-xl border border-border/70 bg-muted/20 p-3">
+              <p className="font-medium text-sm">
+                {isEn ? "Expense breakdown" : "Desglose de gastos"}
+              </p>
+              {overview.expenseCategoryBreakdown.map((row) => {
+                const categoryShare =
+                  overview.monthExpensePyg > 0
+                    ? Math.round((row.amount / overview.monthExpensePyg) * 100)
+                    : 0;
+                return (
+                  <div className="space-y-1" key={row.category}>
+                    <div className="flex items-center justify-between gap-2 text-xs">
+                      <p className="truncate">{humanizeKey(row.category)}</p>
+                      <p className="font-medium tabular-nums">
+                        {formatCurrency(row.amount, "PYG", locale)}
+                      </p>
+                    </div>
+                    <div className="h-1.5 overflow-hidden rounded-full bg-muted">
+                      <div
+                        className="h-full rounded-full bg-foreground/75"
+                        style={{
+                          width: `${Math.max(6, Math.min(categoryShare, 100))}%`,
+                        }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : null}
+
+          {overview.latestStatement ? (
+            <div className="rounded-xl border border-border/70 bg-muted/20 p-3">
+              <div className="mb-1 flex items-center justify-between gap-2">
+                <p className="font-medium text-sm">
+                  {isEn
+                    ? "Latest owner statement"
+                    : "Último estado del propietario"}
+                </p>
+                <StatusBadge
+                  value={String(overview.latestStatement.status ?? "unknown")}
+                />
+              </div>
+              <p className="text-muted-foreground text-xs">
+                {formatCurrency(
+                  Number(overview.latestStatement.net_payout ?? 0),
+                  String(overview.latestStatement.currency ?? "PYG"),
+                  locale
+                )}
+              </p>
+              {latestStatementId && isUuid(latestStatementId) ? (
+                <Link
+                  className="mt-2 inline-flex text-primary text-xs hover:underline"
+                  href={`/module/owner-statements/${latestStatementId}`}
+                >
+                  {isEn ? "Open statement" : "Abrir estado"}
+                </Link>
+              ) : null}
+            </div>
+          ) : null}
+        </CardContent>
+      </Card>
+
+      <Card className="border-border/80 bg-card/98">
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-xl">
+            <Icon icon={Task01Icon} size={18} />
+            {isEn ? "Urgent attention" : "Atención urgente"}
+          </CardTitle>
+          <CardDescription>
+            {isEn
+              ? "Items that can impact occupancy, cash flow, or lease continuity."
+              : "Elementos que afectan ocupación, flujo de caja o continuidad del contrato."}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {overview.attentionItems.length ? (
+            overview.attentionItems.map((item) => {
+              const toneClass =
+                item.tone === "danger"
+                  ? "status-tone-danger"
+                  : item.tone === "warning"
+                    ? "status-tone-warning"
+                    : "status-tone-info";
+              return (
+                <article
+                  className="rounded-2xl border border-border/70 bg-background/72 p-3"
+                  key={item.id}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 space-y-1">
+                      <p className="font-medium text-sm">{item.title}</p>
+                      <p className="text-muted-foreground text-xs">
+                        {item.detail}
+                      </p>
+                    </div>
+                    <span
+                      className={cn(
+                        "inline-flex shrink-0 rounded-full border px-2 py-0.5 text-[11px]",
+                        toneClass
+                      )}
+                    >
+                      {item.tone === "danger"
+                        ? isEn
+                          ? "High"
+                          : "Alta"
+                        : item.tone === "warning"
+                          ? isEn
+                            ? "Medium"
+                            : "Media"
+                          : isEn
+                            ? "Info"
+                            : "Info"}
+                    </span>
+                  </div>
+                  <Link
+                    className={cn(
+                      buttonVariants({ size: "sm", variant: "outline" }),
+                      "mt-2 h-7 px-2 text-xs"
+                    )}
+                    href={item.href}
+                  >
+                    {item.ctaLabel}
+                  </Link>
+                </article>
+              );
+            })
+          ) : (
+            <div className="rounded-2xl border border-border/75 border-dashed bg-muted/20 p-4">
+              <p className="font-medium text-sm">
+                {isEn
+                  ? "No urgent blockers right now."
+                  : "No hay bloqueos urgentes por ahora."}
+              </p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </section>
+  );
+}

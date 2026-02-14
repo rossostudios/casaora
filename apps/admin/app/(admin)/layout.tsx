@@ -52,14 +52,16 @@ export default async function AdminLayout({
   const onboardingProgress = await getOnboardingProgress(orgId);
 
   return (
-    <div className="pa-admin-shell-root h-[100dvh] min-h-0 overflow-y-auto bg-background">
-      <AdminShell
-        locale={locale}
-        onboardingProgress={onboardingProgress}
-        orgId={orgId}
-      >
-        {children}
-      </AdminShell>
+    <div className="pa-admin-shell-root flex h-screen min-h-screen flex-col overflow-hidden bg-background">
+      <div className="flex min-h-0 flex-1 overflow-hidden">
+        <AdminShell
+          locale={locale}
+          onboardingProgress={onboardingProgress}
+          orgId={orgId}
+        >
+          {children}
+        </AdminShell>
+      </div>
       <OrgBootstrap activeOrgId={orgId} />
     </div>
   );

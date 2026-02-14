@@ -21,6 +21,8 @@ export type SheetProps = {
 };
 
 const ANIMATION_MS = 180;
+const SCROLL_LOCK_COUNT_ATTR = "data-pa-scroll-lock-count";
+const SCROLL_LOCK_PREV_OVERFLOW_ATTR = "data-pa-scroll-lock-prev-overflow";
 
 export function Sheet({
   open,
@@ -71,10 +73,43 @@ export function Sheet({
   useEffect(() => {
     if (!mounted) return;
 
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    const body = document.body;
+    const activeLocks = Number.parseInt(
+      body.getAttribute(SCROLL_LOCK_COUNT_ATTR) ?? "0",
+      10
+    );
+
+    if (activeLocks <= 0) {
+      body.setAttribute(
+        SCROLL_LOCK_PREV_OVERFLOW_ATTR,
+        body.style.overflow || ""
+      );
+      body.style.overflow = "hidden";
+    }
+    body.setAttribute(SCROLL_LOCK_COUNT_ATTR, String(activeLocks + 1));
+
     return () => {
-      document.body.style.overflow = previousOverflow;
+      const currentLocks = Number.parseInt(
+        body.getAttribute(SCROLL_LOCK_COUNT_ATTR) ?? "1",
+        10
+      );
+      const nextLocks = Math.max(currentLocks - 1, 0);
+
+      if (nextLocks === 0) {
+        const previousOverflow = body.getAttribute(
+          SCROLL_LOCK_PREV_OVERFLOW_ATTR
+        );
+        if (previousOverflow) {
+          body.style.overflow = previousOverflow;
+        } else {
+          body.style.removeProperty("overflow");
+        }
+        body.removeAttribute(SCROLL_LOCK_COUNT_ATTR);
+        body.removeAttribute(SCROLL_LOCK_PREV_OVERFLOW_ATTR);
+      } else {
+        body.setAttribute(SCROLL_LOCK_COUNT_ATTR, String(nextLocks));
+      }
+
       previouslyFocusedRef.current?.focus?.();
       previouslyFocusedRef.current = null;
     };

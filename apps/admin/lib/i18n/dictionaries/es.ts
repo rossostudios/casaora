@@ -1,0 +1,31 @@
+export const es = {
+    common: {
+        success: "Éxito",
+        error: "Error",
+        cancel: "Cancelar",
+        create: "Crear",
+        save: "Guardar",
+        delete: "Eliminar",
+        confirm: "Confirmar",
+        loading: "Cargando...",
+        missingOrg: "Falta contexto de organización",
+        selectOrg: "Selecciona una organización para continuar.",
+        portfolio: "Portafolio",
+        records: "registros",
+        filter: "Filtrar...",
+    },
+    properties: {
+        title: "Propiedades",
+        description: "Gestiona edificios y viviendas antes de asignar unidades.",
+        newProperty: "Nueva propiedad",
+        name: "Nombre",
+        code: "Código",
+        city: "Ciudad",
+        address: "Dirección",
+        created: "Propiedad creada",
+        apiFail: "Fallo de conexión a la API",
+        couldNotLoad: "No se pudieron cargar propiedades desde el backend.",
+    }
+};
+
+export type Dictionary = typeof es;
