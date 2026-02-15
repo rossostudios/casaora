@@ -1,5 +1,5 @@
 use axum::{
-    routing::{any, get},
+    routing::get,
     Router,
 };
 
@@ -9,7 +9,6 @@ pub mod agent_chats;
 pub mod ai_agent;
 pub mod applications;
 pub mod calendar;
-pub mod channels;
 pub mod collections;
 pub mod demo;
 pub mod documents;
@@ -29,13 +28,12 @@ pub mod payments;
 pub mod platform;
 pub mod pricing;
 pub mod properties;
-pub mod proxy;
 pub mod public_ical;
-pub mod tenant;
 pub mod reports;
 pub mod reservations;
 pub mod subscriptions;
 pub mod tasks;
+pub mod tenant;
 pub mod workflows;
 
 pub fn v1_router() -> Router<AppState> {
@@ -46,7 +44,6 @@ pub fn v1_router() -> Router<AppState> {
         .merge(ai_agent::router())
         .merge(organizations::router())
         .merge(properties::router())
-        .merge(channels::router())
         .merge(guests::router())
         .merge(reservations::router())
         .merge(calendar::router())
@@ -71,5 +68,4 @@ pub fn v1_router() -> Router<AppState> {
         .merge(subscriptions::router())
         .merge(platform::router())
         .merge(demo::router())
-        .fallback(any(proxy::proxy_unmigrated))
 }

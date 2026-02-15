@@ -2,7 +2,7 @@
 
 This repository runs a dual-app stack:
 - `apps/admin`: Next.js 16 admin + public marketplace
-- `apps/backend`: FastAPI + Supabase table-service routers
+- `apps/backend-rs`: Rust/Axum backend with Supabase table-service routers
 
 ## Operating Rules
 
@@ -17,7 +17,7 @@ This repository runs a dual-app stack:
 
 - Product/roadmap: `docs/PRD.md`
 - SQL schema + migrations: `db/schema.sql`, `db/migrations/*.sql`
-- Backend routers: `apps/backend/app/api/routers/*.py`
+- Backend routers: `apps/backend-rs/src/routes/*.rs`
 - Frontend admin/public modules: `apps/admin/app/**/*`
 - Shared UI primitives: `apps/admin/components/ui/*`
 

@@ -207,7 +207,10 @@ async fn replace_template_lines(
         .bind(template_id)
         .execute(pool)
         .await
-        .map_err(|error| AppError::Dependency(format!("Supabase request failed: {error}")))?;
+        .map_err(|error| {
+            tracing::error!(error = %error, "Database query failed");
+            AppError::Dependency("External service request failed.".to_string())
+        })?;
 
     let normalized = normalize_fee_lines(lines);
     let mut created_lines = Vec::new();
@@ -343,7 +346,10 @@ async fn set_default_template(
     .bind(template_id)
     .execute(pool)
     .await
-    .map_err(|error| AppError::Dependency(format!("Supabase request failed: {error}")))?;
+    .map_err(|error| {
+            tracing::error!(error = %error, "Database query failed");
+            AppError::Dependency("External service request failed.".to_string())
+        })?;
     Ok(())
 }
 

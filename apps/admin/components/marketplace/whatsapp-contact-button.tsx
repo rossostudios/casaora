@@ -22,7 +22,7 @@ export function WhatsAppContactButton({
     }
 
     fetch(
-      `/api/public/marketplace/listings/${encodeURIComponent(
+      `/api/public/listings/${encodeURIComponent(
         listingSlug
       )}/contact-whatsapp`,
       {

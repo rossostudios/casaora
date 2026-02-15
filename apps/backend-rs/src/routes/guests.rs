@@ -11,8 +11,8 @@ use crate::{
     error::{AppError, AppResult},
     repository::table_service::{create_row, delete_row, get_row, list_rows, update_row},
     schemas::{
-        clamp_limit, remove_nulls, serialize_to_map, CreateGuestInput, GuestPath, GuestsQuery,
-        UpdateGuestInput,
+        clamp_limit, remove_nulls, serialize_to_map, validate_input, CreateGuestInput, GuestPath,
+        GuestsQuery, UpdateGuestInput,
     },
     services::audit::write_audit_log,
     state::AppState,
@@ -65,6 +65,7 @@ async fn create_guest(
     headers: HeaderMap,
     Json(payload): Json<CreateGuestInput>,
 ) -> AppResult<impl IntoResponse> {
+    validate_input(&payload)?;
     let user_id = require_user_id(&state, &headers).await?;
     assert_org_role(
         &state,

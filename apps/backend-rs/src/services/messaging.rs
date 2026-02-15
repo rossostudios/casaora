@@ -21,8 +21,16 @@ pub async fn process_queued_messages(
     let mut filters = Map::new();
     filters.insert("status".to_string(), Value::String("queued".to_string()));
 
-    let messages = match list_rows(pool, "message_logs", Some(&filters), 100, 0, "created_at", true)
-        .await
+    let messages = match list_rows(
+        pool,
+        "message_logs",
+        Some(&filters),
+        100,
+        0,
+        "created_at",
+        true,
+    )
+    .await
     {
         Ok(rows) => rows,
         Err(e) => {
@@ -44,9 +52,7 @@ pub async fn process_queued_messages(
         let body = resolve_message_body(pool, &msg).await;
 
         let result = match channel.as_str() {
-            "whatsapp" => {
-                send_whatsapp(http_client, config, &recipient, &body, &msg).await
-            }
+            "whatsapp" => send_whatsapp(http_client, config, &recipient, &body, &msg).await,
             "email" => send_email(http_client, config, &recipient, &body, &msg).await,
             _ => {
                 warn!("Unknown channel '{channel}' for message {id}");
@@ -144,9 +150,7 @@ async fn send_whatsapp(
         .filter(|s| !s.is_empty())
         .ok_or_else(|| "WHATSAPP_ACCESS_TOKEN not configured".to_string())?;
 
-    let url = format!(
-        "https://graph.facebook.com/v21.0/{phone_id}/messages"
-    );
+    let url = format!("https://graph.facebook.com/v21.0/{phone_id}/messages");
 
     let payload = json!({
         "messaging_product": "whatsapp",
@@ -163,7 +167,10 @@ async fn send_whatsapp(
         .json(&payload)
         .send()
         .await
-        .map_err(|e| format!("WhatsApp API request failed: {e}"))?;
+        .map_err(|e| {
+            tracing::error!(error = %e, "WhatsApp API request failed");
+            "WhatsApp API request failed.".to_string()
+        })?;
 
     let status = response.status();
     let resp_body: Value = response
@@ -222,7 +229,10 @@ async fn send_email(
         .json(&payload)
         .send()
         .await
-        .map_err(|e| format!("Resend API request failed: {e}"))?;
+        .map_err(|e| {
+            tracing::error!(error = %e, "Resend API request failed");
+            "Resend API request failed.".to_string()
+        })?;
 
     let status = response.status();
     let resp_body: Value = response

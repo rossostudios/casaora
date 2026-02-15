@@ -1,8 +1,61 @@
 -- Migration: Q2 2026 marketplace + transparent leasing ops
 -- Date: 2026-02-11
--- Safe to run multiple times.
+-- Safe to run multiple times (idempotent).
+-- Includes Phase 1 (listings → channel_listings) and Phase 2 (marketplace_listings → listings).
 
--- ---------- Enums ----------
+BEGIN;
+
+-- ============================================================
+-- Phase 1: Rename `listings` → `channel_listings`
+-- ============================================================
+
+ALTER TABLE IF EXISTS listings RENAME TO channel_listings;
+
+DO $$
+BEGIN
+  -- Indexes (conditional – these may not exist if already renamed)
+  IF EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'idx_listings_channel_external') THEN
+    ALTER INDEX idx_listings_channel_external RENAME TO idx_channel_listings_channel_external;
+  END IF;
+  IF EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'idx_listings_org_id') THEN
+    ALTER INDEX idx_listings_org_id RENAME TO idx_channel_listings_org_id;
+  END IF;
+  IF EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'idx_listings_unit_id') THEN
+    ALTER INDEX idx_listings_unit_id RENAME TO idx_channel_listings_unit_id;
+  END IF;
+  IF EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'idx_listings_org_public_slug') THEN
+    ALTER INDEX idx_listings_org_public_slug RENAME TO idx_channel_listings_org_public_slug;
+  END IF;
+END $$;
+
+-- Trigger
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'trg_listings_updated_at') THEN
+    ALTER TRIGGER trg_listings_updated_at ON channel_listings RENAME TO trg_channel_listings_updated_at;
+  END IF;
+END $$;
+
+-- RLS policy
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'listings_org_member_all' AND tablename = 'channel_listings') THEN
+    ALTER POLICY listings_org_member_all ON channel_listings RENAME TO channel_listings_org_member_all;
+  END IF;
+END $$;
+
+-- FK columns
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'reservations' AND column_name = 'listing_id') THEN
+    ALTER TABLE reservations RENAME COLUMN listing_id TO channel_listing_id;
+  END IF;
+END $$;
+
+-- ============================================================
+-- Enums (idempotent)
+-- ============================================================
+
 DO $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'fee_line_type') THEN
@@ -52,13 +105,16 @@ BEGIN
   END IF;
 END $$;
 
--- ---------- Existing table extensions ----------
-ALTER TABLE listings
+-- ============================================================
+-- Existing table extensions
+-- ============================================================
+
+ALTER TABLE channel_listings
   ADD COLUMN IF NOT EXISTS marketplace_publishable boolean NOT NULL DEFAULT false,
   ADD COLUMN IF NOT EXISTS public_slug text;
 
-CREATE UNIQUE INDEX IF NOT EXISTS idx_listings_org_public_slug
-  ON listings(organization_id, public_slug)
+CREATE UNIQUE INDEX IF NOT EXISTS idx_channel_listings_org_public_slug
+  ON channel_listings(organization_id, public_slug)
   WHERE public_slug IS NOT NULL;
 
 ALTER TABLE tasks
@@ -70,7 +126,10 @@ ALTER TABLE owner_statements
   ADD COLUMN IF NOT EXISTS service_fees numeric(12, 2) NOT NULL DEFAULT 0,
   ADD COLUMN IF NOT EXISTS collection_fees numeric(12, 2) NOT NULL DEFAULT 0;
 
--- ---------- New tables ----------
+-- ============================================================
+-- New tables
+-- ============================================================
+
 CREATE TABLE IF NOT EXISTS pricing_templates (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   organization_id uuid NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
@@ -109,7 +168,7 @@ CREATE INDEX IF NOT EXISTS idx_pricing_template_lines_org_id
 CREATE TABLE IF NOT EXISTS marketplace_listings (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   organization_id uuid NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
-  listing_id uuid REFERENCES listings(id) ON DELETE SET NULL,
+  channel_listing_id uuid REFERENCES channel_listings(id) ON DELETE SET NULL,
   property_id uuid REFERENCES properties(id) ON DELETE SET NULL,
   unit_id uuid REFERENCES units(id) ON DELETE SET NULL,
   pricing_template_id uuid REFERENCES pricing_templates(id) ON DELETE SET NULL,
@@ -269,7 +328,10 @@ CREATE INDEX IF NOT EXISTS idx_collection_records_org_status_due
 CREATE INDEX IF NOT EXISTS idx_collection_records_lease
   ON collection_records(lease_id, due_date);
 
--- ---------- Update triggers ----------
+-- ============================================================
+-- Update triggers (idempotent)
+-- ============================================================
+
 DO $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'trg_pricing_templates_updated_at') THEN
@@ -321,7 +383,10 @@ BEGIN
   END IF;
 END $$;
 
--- ---------- RLS ----------
+-- ============================================================
+-- RLS
+-- ============================================================
+
 ALTER TABLE pricing_templates ENABLE ROW LEVEL SECURITY;
 ALTER TABLE pricing_template_lines ENABLE ROW LEVEL SECURITY;
 ALTER TABLE marketplace_listings ENABLE ROW LEVEL SECURITY;
@@ -424,3 +489,68 @@ BEGIN
       WITH CHECK (is_org_member(organization_id));
   END IF;
 END $$;
+
+-- ============================================================
+-- Phase 2: Promote `marketplace_listings` → `listings`
+-- ============================================================
+
+ALTER TABLE marketplace_listings RENAME TO listings;
+
+ALTER INDEX idx_marketplace_listings_org_published RENAME TO idx_listings_org_published;
+ALTER INDEX idx_marketplace_listings_org_slug RENAME TO idx_listings_org_slug;
+
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'trg_marketplace_listings_updated_at') THEN
+    ALTER TRIGGER trg_marketplace_listings_updated_at ON listings RENAME TO trg_listings_updated_at;
+  END IF;
+END $$;
+
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'marketplace_listings_org_member_all' AND tablename = 'listings') THEN
+    ALTER POLICY marketplace_listings_org_member_all ON listings RENAME TO listings_org_member_all;
+  END IF;
+END $$;
+
+ALTER TABLE marketplace_listing_fee_lines RENAME TO listing_fee_lines;
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'listing_fee_lines' AND column_name = 'marketplace_listing_id') THEN
+    ALTER TABLE listing_fee_lines RENAME COLUMN marketplace_listing_id TO listing_id;
+  END IF;
+END $$;
+
+ALTER INDEX idx_marketplace_listing_fee_lines_org RENAME TO idx_listing_fee_lines_org;
+
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'trg_marketplace_listing_fee_lines_updated_at') THEN
+    ALTER TRIGGER trg_marketplace_listing_fee_lines_updated_at ON listing_fee_lines RENAME TO trg_listing_fee_lines_updated_at;
+  END IF;
+END $$;
+
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_policies WHERE policyname = 'marketplace_listing_fee_lines_org_member_all' AND tablename = 'listing_fee_lines') THEN
+    ALTER POLICY marketplace_listing_fee_lines_org_member_all ON listing_fee_lines RENAME TO listing_fee_lines_org_member_all;
+  END IF;
+END $$;
+
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'application_submissions' AND column_name = 'marketplace_listing_id') THEN
+    ALTER TABLE application_submissions RENAME COLUMN marketplace_listing_id TO listing_id;
+  END IF;
+END $$;
+
+-- FK column in listings: rename channel_listing_id → integration_id
+-- (Only if marketplace_listings had channel_listing_id; after Phase 1 rename it's named that)
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'listings' AND column_name = 'channel_listing_id') THEN
+    ALTER TABLE listings RENAME COLUMN channel_listing_id TO integration_id;
+  END IF;
+END $$;
+
+COMMIT;

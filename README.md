@@ -1,16 +1,14 @@
 # Puerta Abierta
 
 Supabase-first platform scaffold for short-term rental operations in Paraguay, with:
-- `FastAPI` backend (`apps/backend`)
-- `Axum + SQLx` migration backend (`apps/backend-rs`)
+- `Axum + SQLx` Rust backend (`apps/backend-rs`)
 - `Next.js` admin frontend (`apps/admin`)
 - PostgreSQL schema and RLS policies (`db/schema.sql`)
 - PRD and API contract (`docs/PRD.md`, `api/openapi.yaml`)
 
 ## Project Structure
 
-- `apps/backend`: FastAPI API server with PRD module routers
-- `apps/backend-rs`: Rust backend migration service (Axum + SQLx)
+- `apps/backend-rs`: Rust/Axum API server with all `/v1` routers
 - `apps/admin`: Next.js admin console wired to API modules
 - `db/schema.sql`: Multi-tenant Postgres schema compatible with Supabase and Neon
 - `api/openapi.yaml`: Endpoint contract
@@ -29,10 +27,10 @@ Supabase-first platform scaffold for short-term rental operations in Paraguay, w
    - `SUPABASE_URL`
    - `SUPABASE_SERVICE_ROLE_KEY`
 
-## 2) Backend Setup (FastAPI)
+## 2) Backend Setup (Rust/Axum)
 
 ```bash
-cd /Users/christopher/Desktop/puerta-abierta/apps/backend
+cd /Users/christopher/Desktop/puerta-abierta/apps/backend-rs
 cp .env.example .env
 ```
 
@@ -42,30 +40,13 @@ Update `.env` with your Supabase values and optional defaults:
 - `DEFAULT_ORG_ID`
 - `DEFAULT_USER_ID`
 
-Install and run:
+Build and run:
 
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
-```
-
-Docs:
-- Swagger UI: `http://localhost:8000/docs`
-- OpenAPI JSON: `http://localhost:8000/openapi.json`
-
-## 2b) Backend Setup (Rust Migration Service)
-
-```bash
-cd /Users/christopher/Desktop/puerta-abierta/apps/backend-rs
-cp .env.example .env
 cargo run
 ```
 
-Notes:
-- Default port is `8100` to support dual-run with FastAPI.
-- Set `PROXY_UNMIGRATED_TO=http://localhost:8000` to pass unmigrated `/v1/*` routes through FastAPI during migration.
+The backend listens on port `8000` by default. Health check: `GET http://localhost:8000/v1/health`.
 
 ## 3) Frontend Setup (Next.js Admin)
 
@@ -75,7 +56,7 @@ cp .env.example .env.local
 ```
 
 Set:
-- `NEXT_PUBLIC_API_BASE_URL=http://localhost:8000/v1`
+- `NEXT_PUBLIC_API_BASE_URL=http://localhost:8000/v1` (points to the Rust backend)
 - `NEXT_PUBLIC_DEFAULT_ORG_ID=<org_uuid>`
 
 Install and run:
@@ -92,7 +73,7 @@ Admin app:
 
 - Organizations + members
 - Properties + units
-- Channels + listings
+- Integrations (channels, listings)
 - Guests
 - Reservations + status transitions
 - Calendar blocks + availability

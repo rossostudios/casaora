@@ -38,20 +38,12 @@ export const MODULES: ModuleDef[] = [
     description_en: "Configure rentable units, capacity, and base defaults.",
   },
   {
-    slug: "channels",
-    label: "Canales",
-    label_en: "Channels",
-    endpoint: "/channels",
-    description: "Conecta OTAs y canales de venta directa.",
-    description_en: "Connect OTAs and direct-sales channels.",
-  },
-  {
-    slug: "listings",
-    label: "Anuncios",
-    label_en: "Listings",
-    endpoint: "/listings",
-    description: "Vincula cada unidad con un anuncio por canal e iCal.",
-    description_en: "Link each unit to a listing per channel and iCal.",
+    slug: "integrations",
+    label: "Integraciones",
+    label_en: "Integrations",
+    endpoint: "/integrations",
+    description: "Conecta unidades a OTAs y canales de venta directa con sync iCal.",
+    description_en: "Connect units to OTAs and direct-sales channels with iCal sync.",
   },
   {
     slug: "guests",
@@ -112,10 +104,10 @@ export const MODULES: ModuleDef[] = [
       "Model transparent move-in breakdown templates with mandatory fee lines.",
   },
   {
-    slug: "marketplace-listings",
+    slug: "listings",
     label: "Anuncios del marketplace",
-    label_en: "Marketplace listings",
-    endpoint: "/marketplace/listings",
+    label_en: "Listings",
+    endpoint: "/listings",
     description:
       "Publica anuncios de renta de largo plazo con validación de transparencia.",
     description_en:

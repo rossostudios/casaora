@@ -8,7 +8,7 @@ import { PublicHeader } from "@/components/marketplace/public-header";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { fetchPublicMarketplaceListing } from "@/lib/api";
+import { fetchPublicListing } from "@/lib/api";
 import { toMarketplaceListingViewModel } from "@/lib/features/marketplace/view-model";
 import { getActiveLocale } from "@/lib/i18n/server";
 import { cn } from "@/lib/utils";
@@ -42,7 +42,7 @@ export default async function MarketplaceApplyPage({
 
   let rawListing: Record<string, unknown>;
   try {
-    rawListing = await fetchPublicMarketplaceListing(slug);
+    rawListing = await fetchPublicListing(slug);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     if (message.includes("(404)")) {

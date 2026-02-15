@@ -138,8 +138,7 @@ function sortKeys(keys: string[]): string[] {
     "organization_id",
     "property_id",
     "unit_id",
-    "channel_id",
-    "listing_id",
+    "integration_id",
     "guest_id",
     "reservation_id",
     "template_id",
@@ -490,7 +489,7 @@ async function loadPropertyRelationSnapshot(params: {
     fetchScopedRows({
       accessToken,
       baseUrl,
-      path: "/marketplace/listings",
+      path: "/listings",
       query: { org_id: orgId, limit: 400 },
     }),
     fetchScopedRows({
@@ -526,7 +525,7 @@ async function loadPropertyRelationSnapshot(params: {
       .filter((rowId): rowId is string => Boolean(rowId))
   );
   const applications = (applicationRows ?? []).filter((row) =>
-    listingIds.has(asString(row.marketplace_listing_id))
+    listingIds.has(asString(row.listing_id))
   );
 
   const leaseIds = new Set(
@@ -673,10 +672,8 @@ export default async function ModuleRecordPage({ params }: RecordPageProps) {
           </p>
           <p>
             {isEn
-              ? "Make sure FastAPI is running (from"
-              : "Asegúrate de que FastAPI esté ejecutándose (desde"}{" "}
-            <code className="rounded bg-muted px-1 py-0.5">apps/backend</code>)
-            {isEn ? " on port 8000." : " en el puerto 8000."}
+              ? "Make sure the backend is running (`cd apps/backend-rs && cargo run`)"
+              : "Asegúrate de que el backend esté ejecutándose (`cd apps/backend-rs && cargo run`)"}
           </p>
         </CardContent>
       </Card>
@@ -787,12 +784,8 @@ export default async function ModuleRecordPage({ params }: RecordPageProps) {
       });
       links.push({ href: "/module/units", label: isEn ? "Units" : "Unidades" });
       links.push({
-        href: "/module/channels",
-        label: isEn ? "Channels" : "Canales",
-      });
-      links.push({
-        href: "/module/listings",
-        label: isEn ? "Listings" : "Anuncios",
+        href: "/module/integrations",
+        label: isEn ? "Integrations" : "Integraciones",
       });
       links.push({
         href: "/module/reservations",
@@ -846,8 +839,8 @@ export default async function ModuleRecordPage({ params }: RecordPageProps) {
 
     if (moduleDef.slug === "units") {
       links.push({
-        href: `/module/listings?${q("unit_id", recordId)}`,
-        label: isEn ? "Listings for this unit" : "Anuncios de esta unidad",
+        href: `/module/integrations?${q("unit_id", recordId)}`,
+        label: isEn ? "Integrations for this unit" : "Integraciones de esta unidad",
       });
       links.push({
         href: `/module/reservations?${q("unit_id", recordId)}`,
@@ -874,24 +867,10 @@ export default async function ModuleRecordPage({ params }: RecordPageProps) {
       return links;
     }
 
-    if (moduleDef.slug === "channels") {
+    if (moduleDef.slug === "integrations") {
       links.push({
-        href: `/module/listings?${q("channel_id", recordId)}`,
-        label: isEn ? "Listings in this channel" : "Anuncios en este canal",
-      });
-      links.push({
-        href: `/module/reservations?${q("channel_id", recordId)}`,
-        label: isEn ? "Reservations in this channel" : "Reservas de este canal",
-      });
-      return links;
-    }
-
-    if (moduleDef.slug === "listings") {
-      links.push({
-        href: `/module/reservations?${q("listing_id", recordId)}`,
-        label: isEn
-          ? "Reservations for this listing"
-          : "Reservas de este anuncio",
+        href: `/module/reservations?${q("integration_id", recordId)}`,
+        label: isEn ? "Reservations for this integration" : "Reservas de esta integración",
       });
       return links;
     }
@@ -1551,7 +1530,7 @@ export default async function ModuleRecordPage({ params }: RecordPageProps) {
               label: isEn ? "Listings" : "Anuncios",
               value: propertyOverview.publishedListingCount,
               description: isEn ? "Live in marketplace" : "Publicados",
-              href: `/module/marketplace-listings?property_id=${encodeURIComponent(recordId)}`,
+              href: `/module/listings?property_id=${encodeURIComponent(recordId)}`,
             },
             {
               id: "applications",

@@ -125,55 +125,35 @@ export async function wizardCreateUnit(payload: {
   }
 }
 
-export async function wizardCreateChannel(payload: {
-  organization_id: string;
-  kind: string;
-  name: string;
-}): Promise<ActionResult<{ id: string; name: string }>> {
-  if (!payload.organization_id) return { ok: false, error: "Falta contexto de organización." };
-  const kind = payload.kind.trim();
-  if (!kind) return { ok: false, error: "El tipo de canal es obligatorio." };
-  const name = payload.name.trim();
-  if (!name) return { ok: false, error: "El nombre del canal es obligatorio." };
-
-  try {
-    const created = (await postJson("/channels", {
-      organization_id: payload.organization_id,
-      kind,
-      name,
-    })) as { id?: string; name?: string } | null;
-
-    revalidatePath("/setup");
-    return { ok: true, data: { id: created?.id ?? "", name: created?.name ?? name } };
-  } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : String(err) };
-  }
-}
-
-export async function wizardCreateListing(payload: {
+export async function wizardCreateIntegration(payload: {
   organization_id: string;
   unit_id: string;
-  channel_id: string;
+  kind: string;
+  channel_name: string;
   public_name: string;
   ical_import_url?: string;
-}): Promise<ActionResult<{ id: string }>> {
+}): Promise<ActionResult<{ id: string; name: string }>> {
   if (!payload.organization_id) return { ok: false, error: "Falta contexto de organización." };
   if (!payload.unit_id) return { ok: false, error: "El ID de la unidad es obligatorio." };
-  if (!payload.channel_id) return { ok: false, error: "El ID del canal es obligatorio." };
+  const kind = payload.kind.trim();
+  if (!kind) return { ok: false, error: "El tipo de integración es obligatorio." };
+  const channel_name = payload.channel_name.trim();
+  if (!channel_name) return { ok: false, error: "El nombre del canal es obligatorio." };
   const public_name = payload.public_name.trim();
   if (!public_name) return { ok: false, error: "El nombre público es obligatorio." };
 
   try {
-    const created = (await postJson("/listings", {
+    const created = (await postJson("/integrations", {
       organization_id: payload.organization_id,
       unit_id: payload.unit_id,
-      channel_id: payload.channel_id,
+      kind,
+      channel_name,
       public_name,
       ical_import_url: payload.ical_import_url?.trim() || undefined,
-    })) as { id?: string } | null;
+    })) as { id?: string; name?: string } | null;
 
     revalidatePath("/setup");
-    return { ok: true, data: { id: created?.id ?? "" } };
+    return { ok: true, data: { id: created?.id ?? "", name: created?.name ?? public_name } };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err) };
   }
@@ -444,47 +424,12 @@ export async function createUnitAction(formData: FormData) {
   }
 }
 
-export async function createChannelAction(formData: FormData) {
-  const tab = toStringValue(formData.get("tab")) || undefined;
-  const organization_id = toStringValue(formData.get("organization_id"));
-  const kind = toStringValue(formData.get("kind"));
-  const name = toStringValue(formData.get("name"));
-
-  if (!organization_id) {
-    redirect(setupUrl({ tab, error: "Falta contexto de organización." }));
-  }
-  if (!kind) {
-    redirect(
-      setupUrl({
-        tab,
-        error: "El tipo de canal es obligatorio (p. ej., airbnb).",
-      })
-    );
-  }
-  if (!name) {
-    redirect(setupUrl({ tab, error: "El nombre del canal es obligatorio." }));
-  }
-
-  try {
-    await postJson("/channels", {
-      organization_id,
-      kind,
-      name,
-    });
-    revalidatePath("/setup");
-    redirect(setupUrl({ tab, success: "canal-creado" }));
-  } catch (err) {
-    unstable_rethrow(err);
-    const message = err instanceof Error ? err.message : String(err);
-    redirect(setupUrl({ tab, error: message }));
-  }
-}
-
-export async function createListingAction(formData: FormData) {
+export async function createIntegrationAction(formData: FormData) {
   const tab = toStringValue(formData.get("tab")) || undefined;
   const organization_id = toStringValue(formData.get("organization_id"));
   const unit_id = toStringValue(formData.get("unit_id"));
-  const channel_id = toStringValue(formData.get("channel_id"));
+  const kind = toStringValue(formData.get("kind"));
+  const channel_name = toStringValue(formData.get("channel_name"));
   const public_name = toStringValue(formData.get("public_name"));
   const external_listing_id =
     toStringValue(formData.get("external_listing_id")) || undefined;
@@ -498,15 +443,15 @@ export async function createListingAction(formData: FormData) {
     redirect(
       setupUrl({
         tab,
-        error: "El ID de la unidad es obligatorio para un anuncio.",
+        error: "El ID de la unidad es obligatorio para una integración.",
       })
     );
   }
-  if (!channel_id) {
+  if (!kind) {
     redirect(
       setupUrl({
         tab,
-        error: "El ID del canal es obligatorio para un anuncio.",
+        error: "El tipo de integración es obligatorio (p. ej., airbnb).",
       })
     );
   }
@@ -515,16 +460,17 @@ export async function createListingAction(formData: FormData) {
   }
 
   try {
-    await postJson("/listings", {
+    await postJson("/integrations", {
       organization_id,
       unit_id,
-      channel_id,
+      kind,
+      channel_name: channel_name || kind,
       public_name,
       external_listing_id,
       ical_import_url,
     });
     revalidatePath("/setup");
-    redirect(setupUrl({ tab, success: "anuncio-creado" }));
+    redirect(setupUrl({ tab, success: "integracion-creada" }));
   } catch (err) {
     unstable_rethrow(err);
     const message = err instanceof Error ? err.message : String(err);
@@ -684,30 +630,38 @@ export async function updateUnitAction(formData: FormData) {
   }
 }
 
-export async function updateListingAction(formData: FormData) {
+export async function updateIntegrationAction(formData: FormData) {
   const tab = toStringValue(formData.get("tab")) || undefined;
   const id = toStringValue(formData.get("id"));
+  const kind = toStringValue(formData.get("kind"));
+  const channel_name = toStringValue(formData.get("channel_name"));
   const public_name = toStringValue(formData.get("public_name"));
   const external_listing_id = toStringValue(
     formData.get("external_listing_id")
   );
   const ical_import_url = toStringValue(formData.get("ical_import_url"));
+  const external_account_ref = toStringValue(
+    formData.get("external_account_ref")
+  );
   const is_active = toStringValue(formData.get("is_active"));
 
   if (!id)
-    redirect(setupUrl({ tab, error: "El ID del anuncio es obligatorio." }));
+    redirect(setupUrl({ tab, error: "El ID de la integración es obligatorio." }));
   if (!public_name)
     redirect(setupUrl({ tab, error: "El nombre público es obligatorio." }));
 
   try {
-    await patchJson(`/listings/${id}`, {
+    await patchJson(`/integrations/${id}`, {
+      kind: kind || undefined,
+      channel_name: channel_name || undefined,
       public_name,
       external_listing_id: external_listing_id || undefined,
       ical_import_url: ical_import_url || undefined,
+      external_account_ref: external_account_ref || undefined,
       is_active: is_active ? is_active === "true" : undefined,
     });
     revalidatePath("/setup");
-    redirect(setupUrl({ tab, success: "anuncio-actualizado" }));
+    redirect(setupUrl({ tab, success: "integracion-actualizada" }));
   } catch (err) {
     unstable_rethrow(err);
     const message = err instanceof Error ? err.message : String(err);
@@ -715,14 +669,14 @@ export async function updateListingAction(formData: FormData) {
   }
 }
 
-export async function syncListingIcalAction(formData: FormData) {
+export async function syncIntegrationIcalAction(formData: FormData) {
   const tab = toStringValue(formData.get("tab")) || undefined;
   const id = toStringValue(formData.get("id"));
   if (!id)
-    redirect(setupUrl({ tab, error: "El ID del anuncio es obligatorio." }));
+    redirect(setupUrl({ tab, error: "El ID de la integración es obligatorio." }));
 
   try {
-    await postJson(`/listings/${id}/sync-ical`, {});
+    await postJson(`/integrations/${id}/sync-ical`, {});
     revalidatePath("/setup");
     redirect(setupUrl({ tab, success: "sincronizacion-ical-solicitada" }));
   } catch (err) {
@@ -749,66 +703,16 @@ export async function deleteUnitAction(formData: FormData) {
   }
 }
 
-export async function updateChannelAction(formData: FormData) {
-  const tab = toStringValue(formData.get("tab")) || undefined;
-  const id = toStringValue(formData.get("id"));
-  const kind = toStringValue(formData.get("kind"));
-  const name = toStringValue(formData.get("name"));
-  const external_account_ref = toStringValue(
-    formData.get("external_account_ref")
-  );
-  const is_active = toStringValue(formData.get("is_active"));
-
-  if (!id)
-    redirect(setupUrl({ tab, error: "El ID del canal es obligatorio." }));
-  if (!kind)
-    redirect(setupUrl({ tab, error: "El tipo de canal es obligatorio." }));
-  if (!name)
-    redirect(setupUrl({ tab, error: "El nombre del canal es obligatorio." }));
-
-  try {
-    await patchJson(`/channels/${id}`, {
-      kind,
-      name,
-      external_account_ref,
-      is_active: is_active ? is_active === "true" : undefined,
-    });
-    revalidatePath("/setup");
-    redirect(setupUrl({ tab, success: "canal-actualizado" }));
-  } catch (err) {
-    unstable_rethrow(err);
-    const message = err instanceof Error ? err.message : String(err);
-    redirect(setupUrl({ tab, error: message }));
-  }
-}
-
-export async function deleteListingAction(formData: FormData) {
+export async function deleteIntegrationAction(formData: FormData) {
   const tab = toStringValue(formData.get("tab")) || undefined;
   const id = toStringValue(formData.get("id"));
   if (!id)
-    redirect(setupUrl({ tab, error: "El ID del anuncio es obligatorio." }));
+    redirect(setupUrl({ tab, error: "El ID de la integración es obligatorio." }));
 
   try {
-    await deleteJson(`/listings/${id}`);
+    await deleteJson(`/integrations/${id}`);
     revalidatePath("/setup");
-    redirect(setupUrl({ tab, success: "anuncio-eliminado" }));
-  } catch (err) {
-    unstable_rethrow(err);
-    const message = err instanceof Error ? err.message : String(err);
-    redirect(setupUrl({ tab, error: message }));
-  }
-}
-
-export async function deleteChannelAction(formData: FormData) {
-  const tab = toStringValue(formData.get("tab")) || undefined;
-  const id = toStringValue(formData.get("id"));
-  if (!id)
-    redirect(setupUrl({ tab, error: "El ID del canal es obligatorio." }));
-
-  try {
-    await deleteJson(`/channels/${id}`);
-    revalidatePath("/setup");
-    redirect(setupUrl({ tab, success: "canal-eliminado" }));
+    redirect(setupUrl({ tab, success: "integracion-eliminada" }));
   } catch (err) {
     unstable_rethrow(err);
     const message = err instanceof Error ? err.message : String(err);

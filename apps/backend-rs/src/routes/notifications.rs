@@ -167,11 +167,7 @@ async fn process_notifications(
         .get("x-api-key")
         .and_then(|v| v.to_str().ok())
         .unwrap_or_default();
-    let expected_key = state
-        .config
-        .internal_api_key
-        .as_deref()
-        .unwrap_or_default();
+    let expected_key = state.config.internal_api_key.as_deref().unwrap_or_default();
     if !expected_key.is_empty() && api_key != expected_key {
         return Err(AppError::Unauthorized(
             "Invalid or missing API key.".to_string(),
@@ -223,10 +219,7 @@ async fn process_notifications(
 
         let target_str = target.to_string();
         let mut filters = Map::new();
-        filters.insert(
-            "organization_id".to_string(),
-            Value::String(org_id.clone()),
-        );
+        filters.insert("organization_id".to_string(), Value::String(org_id.clone()));
         filters.insert(
             "status".to_string(),
             Value::Array(
@@ -277,10 +270,7 @@ async fn process_notifications(
 
             // Queue the message
             let mut msg = Map::new();
-            msg.insert(
-                "organization_id".to_string(),
-                Value::String(org_id.clone()),
-            );
+            msg.insert("organization_id".to_string(), Value::String(org_id.clone()));
             msg.insert("channel".to_string(), Value::String(channel.clone()));
             msg.insert("recipient".to_string(), Value::String(recipient));
             msg.insert("status".to_string(), Value::String("queued".to_string()));
@@ -291,10 +281,7 @@ async fn process_notifications(
 
             // Build payload with template variables
             let mut payload_map = Map::new();
-            payload_map.insert(
-                "trigger_event".to_string(),
-                Value::String(trigger.clone()),
-            );
+            payload_map.insert("trigger_event".to_string(), Value::String(trigger.clone()));
             payload_map.insert(
                 "tenant_name".to_string(),
                 Value::String(value_str(&lease, "tenant_full_name")),
@@ -311,10 +298,7 @@ async fn process_notifications(
                 "currency".to_string(),
                 Value::String(value_str(collection, "currency")),
             );
-            payload_map.insert(
-                "due_date".to_string(),
-                Value::String(due_date.clone()),
-            );
+            payload_map.insert("due_date".to_string(), Value::String(due_date.clone()));
             payload_map.insert(
                 "collection_id".to_string(),
                 Value::String(value_str(collection, "id")),

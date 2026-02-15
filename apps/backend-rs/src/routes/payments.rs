@@ -59,14 +59,17 @@ async fn create_payment_link(
     let amount = collection
         .as_object()
         .and_then(|obj| obj.get("amount"))
-        .and_then(|v| v.as_f64().or_else(|| v.as_str().and_then(|s| s.parse::<f64>().ok())))
+        .and_then(|v| {
+            v.as_f64()
+                .or_else(|| v.as_str().and_then(|s| s.parse::<f64>().ok()))
+        })
         .unwrap_or(0.0);
     let currency = value_str(&collection, "currency");
 
     // Fetch org bank details as defaults
     let org = get_row(pool, "organizations", &org_id, "id").await?;
-    let bank_name = non_empty_opt(payload.bank_name.as_deref())
-        .or_else(|| value_str_opt(&org, "bank_name"));
+    let bank_name =
+        non_empty_opt(payload.bank_name.as_deref()).or_else(|| value_str_opt(&org, "bank_name"));
     let account_number = non_empty_opt(payload.account_number.as_deref())
         .or_else(|| value_str_opt(&org, "bank_account_number"));
     let account_holder = non_empty_opt(payload.account_holder.as_deref())
@@ -123,7 +126,11 @@ async fn create_payment_link(
     if let Some(v) = tenant_phone {
         record.insert("tenant_phone_e164".to_string(), Value::String(v));
     }
-    if let Some(notes) = payload.notes.as_deref().and_then(|s| non_empty_opt(Some(s))) {
+    if let Some(notes) = payload
+        .notes
+        .as_deref()
+        .and_then(|s| non_empty_opt(Some(s)))
+    {
         record.insert("notes".to_string(), Value::String(notes));
     }
     record.insert(
@@ -195,13 +202,7 @@ async fn get_payment_instruction(
     let user_id = require_user_id(&state, &headers).await?;
     let pool = db_pool(&state)?;
 
-    let record = get_row(
-        pool,
-        "payment_instructions",
-        &path.instruction_id,
-        "id",
-    )
-    .await?;
+    let record = get_row(pool, "payment_instructions", &path.instruction_id, "id").await?;
     let org_id = value_str(&record, "organization_id");
     assert_org_member(&state, &user_id, &org_id).await?;
 
@@ -250,9 +251,7 @@ async fn get_public_payment_info(
                     "id",
                 )
                 .await;
-                return Err(AppError::Gone(
-                    "This payment link has expired.".to_string(),
-                ));
+                return Err(AppError::Gone("This payment link has expired.".to_string()));
             }
         }
     }

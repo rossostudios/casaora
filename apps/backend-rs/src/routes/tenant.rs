@@ -21,16 +21,12 @@ pub fn router() -> axum::Router<AppState> {
             "/public/tenant/request-access",
             axum::routing::post(request_access),
         )
-        .route(
-            "/public/tenant/verify",
-            axum::routing::post(verify_token),
-        )
+        .route("/public/tenant/verify", axum::routing::post(verify_token))
         .route("/tenant/me", axum::routing::get(tenant_me))
         .route("/tenant/payments", axum::routing::get(tenant_payments))
         .route(
             "/tenant/maintenance-requests",
-            axum::routing::get(tenant_list_maintenance)
-                .post(tenant_create_maintenance),
+            axum::routing::get(tenant_list_maintenance).post(tenant_create_maintenance),
         )
 }
 
@@ -84,9 +80,8 @@ async fn request_access(
         status == "active" || status == "draft"
     });
 
-    let lease = active_lease.ok_or_else(|| {
-        AppError::NotFound("No active lease found for this email.".to_string())
-    })?;
+    let lease = active_lease
+        .ok_or_else(|| AppError::NotFound("No active lease found for this email.".to_string()))?;
 
     let lease_id = val_str(lease, "id");
 
@@ -162,14 +157,9 @@ async fn verify_token(
 
     let token_hash = hex::encode(sha1::Sha1::digest(raw_token.as_bytes()));
 
-    let token_record = get_row(
-        pool,
-        "tenant_access_tokens",
-        &token_hash,
-        "token_hash",
-    )
-    .await
-    .map_err(|_| AppError::Unauthorized("Invalid or expired token.".to_string()))?;
+    let token_record = get_row(pool, "tenant_access_tokens", &token_hash, "token_hash")
+        .await
+        .map_err(|_| AppError::Unauthorized("Invalid or expired token.".to_string()))?;
 
     // Check expiry
     if let Some(expires_at) = token_record
@@ -207,10 +197,7 @@ async fn verify_token(
 }
 
 /// Get tenant dashboard data — lease summary, property info.
-async fn tenant_me(
-    State(state): State<AppState>,
-    headers: HeaderMap,
-) -> AppResult<Json<Value>> {
+async fn tenant_me(State(state): State<AppState>, headers: HeaderMap) -> AppResult<Json<Value>> {
     let (pool, lease_id) = require_tenant(&state, &headers).await?;
 
     let lease = get_row(pool, "leases", &lease_id, "id").await?;
@@ -233,7 +220,16 @@ async fn tenant_me(
     // Get upcoming collections
     let mut filters = Map::new();
     filters.insert("lease_id".to_string(), Value::String(lease_id.clone()));
-    let collections = list_rows(pool, "collection_records", Some(&filters), 12, 0, "due_date", true).await?;
+    let collections = list_rows(
+        pool,
+        "collection_records",
+        Some(&filters),
+        12,
+        0,
+        "due_date",
+        true,
+    )
+    .await?;
 
     let next_payment = collections.iter().find(|c| {
         let status = val_str(c, "status");
@@ -285,24 +281,29 @@ async fn tenant_payments(
                 Value::String(collection_id),
             );
             pi_filters.insert("status".to_string(), Value::String("active".to_string()));
-            list_rows(pool, "payment_instructions", Some(&pi_filters), 1, 0, "created_at", false)
-                .await
-                .ok()
-                .and_then(|rows| rows.into_iter().next())
-                .and_then(|pi| {
-                    pi.as_object()
-                        .and_then(|o| o.get("reference_code"))
-                        .and_then(Value::as_str)
-                        .map(|rc| rc.to_string())
-                })
+            list_rows(
+                pool,
+                "payment_instructions",
+                Some(&pi_filters),
+                1,
+                0,
+                "created_at",
+                false,
+            )
+            .await
+            .ok()
+            .and_then(|rows| rows.into_iter().next())
+            .and_then(|pi| {
+                pi.as_object()
+                    .and_then(|o| o.get("reference_code"))
+                    .and_then(Value::as_str)
+                    .map(|rc| rc.to_string())
+            })
         } else {
             None
         };
 
-        let mut row_obj = row
-            .as_object()
-            .cloned()
-            .unwrap_or_default();
+        let mut row_obj = row.as_object().cloned().unwrap_or_default();
         if let Some(ref_code) = payment_link {
             row_obj.insert(
                 "payment_link_reference".to_string(),
@@ -356,7 +357,10 @@ async fn tenant_create_maintenance(
     record.insert("organization_id".to_string(), Value::String(org_id.clone()));
     record.insert("lease_id".to_string(), Value::String(lease_id));
     if !property_id.is_empty() {
-        record.insert("property_id".to_string(), Value::String(property_id.clone()));
+        record.insert(
+            "property_id".to_string(),
+            Value::String(property_id.clone()),
+        );
     }
     if !unit_id.is_empty() {
         record.insert("unit_id".to_string(), Value::String(unit_id.clone()));
@@ -404,27 +408,15 @@ async fn tenant_create_maintenance(
     if !unit_id.is_empty() {
         task.insert("unit_id".to_string(), Value::String(unit_id));
     }
-    task.insert(
-        "type".to_string(),
-        Value::String("maintenance".to_string()),
-    );
+    task.insert("type".to_string(), Value::String("maintenance".to_string()));
     task.insert("status".to_string(), Value::String("todo".to_string()));
     task.insert(
         "priority".to_string(),
-        Value::String(
-            val_str(&created, "urgency")
-                .replace("emergency", "urgent")
-                .replace("low", "low")
-                .replace("medium", "medium")
-                .replace("high", "high"),
-        ),
+        Value::String(val_str(&created, "urgency").replace("emergency", "urgent")),
     );
     task.insert(
         "title".to_string(),
-        Value::String(format!(
-            "Maintenance: {}",
-            val_str(&created, "title")
-        )),
+        Value::String(format!("Maintenance: {}", val_str(&created, "title"))),
     );
     task.insert(
         "description".to_string(),
@@ -455,9 +447,7 @@ async fn require_tenant<'a>(
         .and_then(|v| v.to_str().ok())
         .map(str::trim)
         .filter(|s| !s.is_empty())
-        .ok_or_else(|| {
-            AppError::Unauthorized("Missing x-tenant-token header.".to_string())
-        })?;
+        .ok_or_else(|| AppError::Unauthorized("Missing x-tenant-token header.".to_string()))?;
 
     let token_hash = hex::encode(sha1::Sha1::digest(raw_token.as_bytes()));
 
@@ -473,9 +463,7 @@ async fn require_tenant<'a>(
     {
         if let Ok(expiry) = chrono::DateTime::parse_from_rfc3339(expires_at) {
             if Utc::now() > expiry {
-                return Err(AppError::Unauthorized(
-                    "Token has expired.".to_string(),
-                ));
+                return Err(AppError::Unauthorized("Token has expired.".to_string()));
             }
         }
     }
@@ -508,10 +496,6 @@ fn val_str(row: &Value, key: &str) -> String {
 
 mod hex {
     pub fn encode(bytes: impl AsRef<[u8]>) -> String {
-        bytes
-            .as_ref()
-            .iter()
-            .map(|b| format!("{b:02x}"))
-            .collect()
+        bytes.as_ref().iter().map(|b| format!("{b:02x}")).collect()
     }
 }

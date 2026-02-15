@@ -21,7 +21,10 @@ const BILLING_ROLES: &[&str] = &["owner_admin"];
 pub fn router() -> axum::Router<AppState> {
     axum::Router::new()
         .route("/subscription-plans", axum::routing::get(list_plans))
-        .route("/billing/current", axum::routing::get(get_current_subscription))
+        .route(
+            "/billing/current",
+            axum::routing::get(get_current_subscription),
+        )
         .route("/billing/subscribe", axum::routing::post(subscribe))
         .route("/billing/cancel", axum::routing::post(cancel_subscription))
         .route(
@@ -77,15 +80,22 @@ async fn list_plans(
 }
 
 /// Public plan listing (no auth).
-async fn list_public_plans(
-    State(state): State<AppState>,
-) -> AppResult<Json<Value>> {
+async fn list_public_plans(State(state): State<AppState>) -> AppResult<Json<Value>> {
     let pool = db_pool(&state)?;
 
     let mut filters = Map::new();
     filters.insert("is_active".to_string(), Value::Bool(true));
 
-    let rows = list_rows(pool, "subscription_plans", Some(&filters), 20, 0, "sort_order", true).await?;
+    let rows = list_rows(
+        pool,
+        "subscription_plans",
+        Some(&filters),
+        20,
+        0,
+        "sort_order",
+        true,
+    )
+    .await?;
 
     // Return only public-safe fields
     let public: Vec<Value> = rows
@@ -118,26 +128,57 @@ async fn get_current_subscription(
     let pool = db_pool(&state)?;
 
     let mut filters = Map::new();
-    filters.insert("organization_id".to_string(), Value::String(query.org_id.clone()));
+    filters.insert(
+        "organization_id".to_string(),
+        Value::String(query.org_id.clone()),
+    );
 
-    let rows = list_rows(pool, "org_subscriptions", Some(&filters), 1, 0, "created_at", false).await?;
+    let rows = list_rows(
+        pool,
+        "org_subscriptions",
+        Some(&filters),
+        1,
+        0,
+        "created_at",
+        false,
+    )
+    .await?;
 
     if let Some(sub) = rows.into_iter().next() {
         // Enrich with plan details
         let plan_id = val_str(&sub, "plan_id");
         let plan = if !plan_id.is_empty() {
-            get_row(pool, "subscription_plans", &plan_id, "id").await.ok()
+            get_row(pool, "subscription_plans", &plan_id, "id")
+                .await
+                .ok()
         } else {
             None
         };
 
         // Count current usage
         let mut org_filter = Map::new();
-        org_filter.insert("organization_id".to_string(), Value::String(query.org_id.clone()));
+        org_filter.insert(
+            "organization_id".to_string(),
+            Value::String(query.org_id.clone()),
+        );
 
-        let properties = list_rows(pool, "properties", Some(&org_filter), 1000, 0, "id", true).await.unwrap_or_default();
-        let units = list_rows(pool, "units", Some(&org_filter), 10000, 0, "id", true).await.unwrap_or_default();
-        let members = list_rows(pool, "organization_members", Some(&org_filter), 1000, 0, "id", true).await.unwrap_or_default();
+        let properties = list_rows(pool, "properties", Some(&org_filter), 1000, 0, "id", true)
+            .await
+            .unwrap_or_default();
+        let units = list_rows(pool, "units", Some(&org_filter), 10000, 0, "id", true)
+            .await
+            .unwrap_or_default();
+        let members = list_rows(
+            pool,
+            "organization_members",
+            Some(&org_filter),
+            1000,
+            0,
+            "id",
+            true,
+        )
+        .await
+        .unwrap_or_default();
 
         Ok(Json(json!({
             "subscription": sub,
@@ -178,13 +219,25 @@ async fn subscribe(
         "organization_id".to_string(),
         Value::String(payload.organization_id.clone()),
     );
-    let existing = list_rows(pool, "org_subscriptions", Some(&org_filter), 1, 0, "created_at", false).await?;
+    let existing = list_rows(
+        pool,
+        "org_subscriptions",
+        Some(&org_filter),
+        1,
+        0,
+        "created_at",
+        false,
+    )
+    .await?;
 
     if let Some(existing_sub) = existing.into_iter().next() {
         // Update existing subscription
         let sub_id = val_str(&existing_sub, "id");
         let mut patch = Map::new();
-        patch.insert("plan_id".to_string(), Value::String(payload.plan_id.clone()));
+        patch.insert(
+            "plan_id".to_string(),
+            Value::String(payload.plan_id.clone()),
+        );
         patch.insert("status".to_string(), Value::String("active".to_string()));
 
         let updated = update_row(pool, "org_subscriptions", &sub_id, &patch, "id").await?;
@@ -201,10 +254,13 @@ async fn subscribe(
         )
         .await;
 
-        return Ok((axum::http::StatusCode::OK, Json(json!({
-            "subscription": updated,
-            "plan": plan,
-        }))));
+        return Ok((
+            axum::http::StatusCode::OK,
+            Json(json!({
+                "subscription": updated,
+                "plan": plan,
+            })),
+        ));
     }
 
     // Create new subscription
@@ -215,13 +271,25 @@ async fn subscribe(
     let status = if is_free { "active" } else { "trialing" };
 
     let mut record = Map::new();
-    record.insert("organization_id".to_string(), Value::String(payload.organization_id.clone()));
-    record.insert("plan_id".to_string(), Value::String(payload.plan_id.clone()));
+    record.insert(
+        "organization_id".to_string(),
+        Value::String(payload.organization_id.clone()),
+    );
+    record.insert(
+        "plan_id".to_string(),
+        Value::String(payload.plan_id.clone()),
+    );
     record.insert("status".to_string(), Value::String(status.to_string()));
     if !is_free {
-        record.insert("trial_ends_at".to_string(), Value::String(trial_ends.to_rfc3339()));
+        record.insert(
+            "trial_ends_at".to_string(),
+            Value::String(trial_ends.to_rfc3339()),
+        );
     }
-    record.insert("current_period_start".to_string(), Value::String(chrono::Utc::now().to_rfc3339()));
+    record.insert(
+        "current_period_start".to_string(),
+        Value::String(chrono::Utc::now().to_rfc3339()),
+    );
 
     let created = create_row(pool, "org_subscriptions", &record).await?;
     let entity_id = val_str(&created, "id");
@@ -238,10 +306,13 @@ async fn subscribe(
     )
     .await;
 
-    Ok((axum::http::StatusCode::CREATED, Json(json!({
-        "subscription": created,
-        "plan": plan,
-    }))))
+    Ok((
+        axum::http::StatusCode::CREATED,
+        Json(json!({
+            "subscription": created,
+            "plan": plan,
+        })),
+    ))
 }
 
 /// Cancel subscription.
@@ -255,8 +326,20 @@ async fn cancel_subscription(
     let pool = db_pool(&state)?;
 
     let mut org_filter = Map::new();
-    org_filter.insert("organization_id".to_string(), Value::String(payload.org_id.clone()));
-    let existing = list_rows(pool, "org_subscriptions", Some(&org_filter), 1, 0, "created_at", false).await?;
+    org_filter.insert(
+        "organization_id".to_string(),
+        Value::String(payload.org_id.clone()),
+    );
+    let existing = list_rows(
+        pool,
+        "org_subscriptions",
+        Some(&org_filter),
+        1,
+        0,
+        "created_at",
+        false,
+    )
+    .await?;
 
     let sub = existing
         .into_iter()
@@ -266,7 +349,10 @@ async fn cancel_subscription(
     let sub_id = val_str(&sub, "id");
     let mut patch = Map::new();
     patch.insert("status".to_string(), Value::String("cancelled".to_string()));
-    patch.insert("cancelled_at".to_string(), Value::String(chrono::Utc::now().to_rfc3339()));
+    patch.insert(
+        "cancelled_at".to_string(),
+        Value::String(chrono::Utc::now().to_rfc3339()),
+    );
 
     let updated = update_row(pool, "org_subscriptions", &sub_id, &patch, "id").await?;
 

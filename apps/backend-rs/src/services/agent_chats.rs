@@ -704,9 +704,7 @@ fn db_pool(state: &AppState) -> AppResult<&sqlx::PgPool> {
     })
 }
 
-fn supabase_error(state: &AppState, error: &sqlx::Error) -> AppError {
-    if state.config.is_production() {
-        return AppError::Dependency("Supabase request failed.".to_string());
-    }
-    AppError::Dependency(format!("Supabase request failed: {error}"))
+fn supabase_error(_state: &AppState, error: &sqlx::Error) -> AppError {
+    tracing::error!(error = %error, "Database query failed");
+    AppError::Dependency("External service request failed.".to_string())
 }

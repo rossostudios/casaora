@@ -12,9 +12,9 @@ use crate::{
     error::{AppError, AppResult},
     repository::table_service::{create_row, get_row, list_rows, update_row},
     schemas::{
-        clamp_limit_in_range, CreateMarketplaceListingInput, MarketplaceListingPath,
-        MarketplaceListingsQuery, PublicMarketplaceApplicationInput,
-        PublicMarketplaceListingsQuery, PublicMarketplaceSlugPath, UpdateMarketplaceListingInput,
+        clamp_limit_in_range, validate_input, CreateListingInput, ListingPath, ListingsQuery,
+        PublicListingApplicationInput, PublicListingsQuery, PublicListingSlugPath,
+        UpdateListingInput,
     },
     services::{
         alerting::write_alert_event,
@@ -33,42 +33,42 @@ const MAX_AMENITIES: usize = 24;
 pub fn router() -> axum::Router<AppState> {
     axum::Router::new()
         .route(
-            "/marketplace/listings",
-            axum::routing::get(list_marketplace_listings).post(create_marketplace_listing),
+            "/listings",
+            axum::routing::get(list_listings).post(create_listing),
         )
         .route(
-            "/marketplace/listings/{marketplace_listing_id}",
-            axum::routing::get(get_marketplace_listing).patch(update_marketplace_listing),
+            "/listings/{listing_id}",
+            axum::routing::get(get_listing).patch(update_listing),
         )
         .route(
-            "/marketplace/listings/{marketplace_listing_id}/publish",
-            axum::routing::post(publish_marketplace_listing),
+            "/listings/{listing_id}/publish",
+            axum::routing::post(publish_listing),
         )
         .route(
-            "/public/marketplace/listings",
-            axum::routing::get(list_public_marketplace_listings),
+            "/public/listings",
+            axum::routing::get(list_public_listings),
         )
         .route(
-            "/public/marketplace/listings/{slug}",
-            axum::routing::get(get_public_marketplace_listing),
+            "/public/listings/{slug}",
+            axum::routing::get(get_public_listing),
         )
         .route(
-            "/public/marketplace/listings/{slug}/apply-start",
-            axum::routing::post(start_public_marketplace_application),
+            "/public/listings/{slug}/apply-start",
+            axum::routing::post(start_public_listing_application),
         )
         .route(
-            "/public/marketplace/listings/{slug}/contact-whatsapp",
-            axum::routing::post(track_public_marketplace_whatsapp_contact),
+            "/public/listings/{slug}/contact-whatsapp",
+            axum::routing::post(track_public_listing_whatsapp_contact),
         )
         .route(
-            "/public/marketplace/applications",
-            axum::routing::post(submit_public_marketplace_application),
+            "/public/listings/applications",
+            axum::routing::post(submit_public_listing_application),
         )
 }
 
-async fn list_marketplace_listings(
+async fn list_listings(
     State(state): State<AppState>,
-    Query(query): Query<MarketplaceListingsQuery>,
+    Query(query): Query<ListingsQuery>,
     headers: HeaderMap,
 ) -> AppResult<Json<Value>> {
     let user_id = require_user_id(&state, &headers).await?;
@@ -83,13 +83,13 @@ async fn list_marketplace_listings(
     if let Some(is_published) = query.is_published {
         filters.insert("is_published".to_string(), Value::Bool(is_published));
     }
-    if let Some(listing_id) = non_empty_opt(query.listing_id.as_deref()) {
-        filters.insert("listing_id".to_string(), Value::String(listing_id));
+    if let Some(integration_id) = non_empty_opt(query.integration_id.as_deref()) {
+        filters.insert("integration_id".to_string(), Value::String(integration_id));
     }
 
     let rows = list_rows(
         pool,
-        "marketplace_listings",
+        "listings",
         Some(&filters),
         clamp_limit_in_range(query.limit, 1, 1000),
         0,
@@ -102,10 +102,10 @@ async fn list_marketplace_listings(
     Ok(Json(json!({ "data": attached })))
 }
 
-async fn create_marketplace_listing(
+async fn create_listing(
     State(state): State<AppState>,
     headers: HeaderMap,
-    Json(payload): Json<CreateMarketplaceListingInput>,
+    Json(payload): Json<CreateListingInput>,
 ) -> AppResult<impl IntoResponse> {
     let user_id = require_user_id(&state, &headers).await?;
     assert_org_role(
@@ -125,16 +125,16 @@ async fn create_marketplace_listing(
         Value::String(user_id.clone()),
     );
 
-    if let Some(listing_id) = listing_payload
-        .get("listing_id")
+    if let Some(integration_id) = listing_payload
+        .get("integration_id")
         .and_then(Value::as_str)
         .map(str::trim)
         .filter(|value| !value.is_empty())
     {
-        let listing = get_row(pool, "listings", listing_id, "id").await?;
-        if value_str(&listing, "organization_id") != payload.organization_id {
+        let integration = get_row(pool, "integrations", integration_id, "id").await?;
+        if value_str(&integration, "organization_id") != payload.organization_id {
             return Err(AppError::BadRequest(
-                "listing_id does not belong to this organization.".to_string(),
+                "integration_id does not belong to this organization.".to_string(),
             ));
         }
     }
@@ -205,10 +205,17 @@ async fn create_marketplace_listing(
                 "property_id does not belong to this organization.".to_string(),
             ));
         }
+        for field in ["city", "neighborhood"] {
+            if missing_or_blank_map(&listing_payload, field) {
+                if let Some(val) = property.get(field).filter(|v| !v.is_null()) {
+                    listing_payload.insert(field.to_string(), val.clone());
+                }
+            }
+        }
     }
 
-    let created = create_row(pool, "marketplace_listings", &listing_payload).await?;
-    let marketplace_listing_id = value_str(&created, "id");
+    let created = create_row(pool, "listings", &listing_payload).await?;
+    let listing_id = value_str(&created, "id");
 
     let mut source_lines = payload
         .fee_lines
@@ -223,7 +230,7 @@ async fn create_marketplace_listing(
     let created_lines = replace_fee_lines(
         pool,
         &payload.organization_id,
-        &marketplace_listing_id,
+        &listing_id,
         &source_lines,
     )
     .await?;
@@ -235,8 +242,8 @@ async fn create_marketplace_listing(
         Some(&payload.organization_id),
         Some(&user_id),
         "create",
-        "marketplace_listings",
-        Some(&marketplace_listing_id),
+        "listings",
+        Some(&listing_id),
         None,
         Some(Value::Object(audit_after)),
     )
@@ -247,9 +254,9 @@ async fn create_marketplace_listing(
     Ok((axum::http::StatusCode::CREATED, Json(item)))
 }
 
-async fn get_marketplace_listing(
+async fn get_listing(
     State(state): State<AppState>,
-    Path(path): Path<MarketplaceListingPath>,
+    Path(path): Path<ListingPath>,
     headers: HeaderMap,
 ) -> AppResult<Json<Value>> {
     let user_id = require_user_id(&state, &headers).await?;
@@ -257,8 +264,8 @@ async fn get_marketplace_listing(
 
     let record = get_row(
         pool,
-        "marketplace_listings",
-        &path.marketplace_listing_id,
+        "listings",
+        &path.listing_id,
         "id",
     )
     .await?;
@@ -271,19 +278,19 @@ async fn get_marketplace_listing(
     ))
 }
 
-async fn update_marketplace_listing(
+async fn update_listing(
     State(state): State<AppState>,
-    Path(path): Path<MarketplaceListingPath>,
+    Path(path): Path<ListingPath>,
     headers: HeaderMap,
-    Json(payload): Json<UpdateMarketplaceListingInput>,
+    Json(payload): Json<UpdateListingInput>,
 ) -> AppResult<Json<Value>> {
     let user_id = require_user_id(&state, &headers).await?;
     let pool = db_pool(&state)?;
 
     let record = get_row(
         pool,
-        "marketplace_listings",
-        &path.marketplace_listing_id,
+        "listings",
+        &path.listing_id,
         "id",
     )
     .await?;
@@ -294,16 +301,16 @@ async fn update_marketplace_listing(
     patch.remove("fee_lines");
     patch = sanitize_listing_payload(patch, false)?;
 
-    if let Some(listing_id) = patch
-        .get("listing_id")
+    if let Some(integration_id) = patch
+        .get("integration_id")
         .and_then(Value::as_str)
         .map(str::trim)
         .filter(|value| !value.is_empty())
     {
-        let listing = get_row(pool, "listings", listing_id, "id").await?;
-        if value_str(&listing, "organization_id") != org_id {
+        let integration = get_row(pool, "integrations", integration_id, "id").await?;
+        if value_str(&integration, "organization_id") != org_id {
             return Err(AppError::BadRequest(
-                "listing_id does not belong to this organization.".to_string(),
+                "integration_id does not belong to this organization.".to_string(),
             ));
         }
     }
@@ -366,14 +373,21 @@ async fn update_marketplace_listing(
                 "property_id does not belong to this organization.".to_string(),
             ));
         }
+        for field in ["city", "neighborhood"] {
+            if !patch.contains_key(field) {
+                if let Some(val) = property.get(field).filter(|v| !v.is_null()) {
+                    patch.insert(field.to_string(), val.clone());
+                }
+            }
+        }
     }
 
     let mut updated = record.clone();
     if !patch.is_empty() {
         updated = update_row(
             pool,
-            "marketplace_listings",
-            &path.marketplace_listing_id,
+            "listings",
+            &path.listing_id,
             &patch,
             "id",
         )
@@ -385,7 +399,7 @@ async fn update_marketplace_listing(
             .iter()
             .filter_map(|line| serde_json::to_value(line).ok())
             .collect::<Vec<_>>();
-        let _ = replace_fee_lines(pool, &org_id, &path.marketplace_listing_id, &lines).await?;
+        let _ = replace_fee_lines(pool, &org_id, &path.listing_id, &lines).await?;
     }
 
     if payload.is_published == Some(true) {
@@ -397,8 +411,8 @@ async fn update_marketplace_listing(
         Some(&org_id),
         Some(&user_id),
         "update",
-        "marketplace_listings",
-        Some(&path.marketplace_listing_id),
+        "listings",
+        Some(&path.listing_id),
         Some(record),
         Some(updated.clone()),
     )
@@ -414,9 +428,9 @@ async fn update_marketplace_listing(
     ))
 }
 
-async fn publish_marketplace_listing(
+async fn publish_listing(
     State(state): State<AppState>,
-    Path(path): Path<MarketplaceListingPath>,
+    Path(path): Path<ListingPath>,
     headers: HeaderMap,
 ) -> AppResult<Json<Value>> {
     let user_id = require_user_id(&state, &headers).await?;
@@ -424,8 +438,8 @@ async fn publish_marketplace_listing(
 
     let record = get_row(
         pool,
-        "marketplace_listings",
-        &path.marketplace_listing_id,
+        "listings",
+        &path.listing_id,
         "id",
     )
     .await?;
@@ -440,8 +454,8 @@ async fn publish_marketplace_listing(
     ]);
     let updated = update_row(
         pool,
-        "marketplace_listings",
-        &path.marketplace_listing_id,
+        "listings",
+        &path.listing_id,
         &patch,
         "id",
     )
@@ -454,8 +468,8 @@ async fn publish_marketplace_listing(
         Some(&org_id),
         Some(&user_id),
         "status_transition",
-        "marketplace_listings",
-        Some(&path.marketplace_listing_id),
+        "listings",
+        Some(&path.listing_id),
         Some(record),
         Some(updated.clone()),
     )
@@ -467,9 +481,9 @@ async fn publish_marketplace_listing(
     ))
 }
 
-async fn list_public_marketplace_listings(
+async fn list_public_listings(
     State(state): State<AppState>,
-    Query(query): Query<PublicMarketplaceListingsQuery>,
+    Query(query): Query<PublicListingsQuery>,
 ) -> AppResult<Json<Value>> {
     ensure_marketplace_public_enabled(&state)?;
     let pool = db_pool(&state)?;
@@ -482,7 +496,7 @@ async fn list_public_marketplace_listings(
 
     let mut rows = list_rows(
         pool,
-        "marketplace_listings",
+        "listings",
         Some(&filters),
         clamp_limit_in_range(query.limit, 1, 200),
         0,
@@ -565,16 +579,16 @@ async fn list_public_marketplace_listings(
     Ok(Json(json!({ "data": shaped })))
 }
 
-async fn get_public_marketplace_listing(
+async fn get_public_listing(
     State(state): State<AppState>,
-    Path(path): Path<PublicMarketplaceSlugPath>,
+    Path(path): Path<PublicListingSlugPath>,
 ) -> AppResult<Json<Value>> {
     ensure_marketplace_public_enabled(&state)?;
     let pool = db_pool(&state)?;
 
     let rows = list_rows(
         pool,
-        "marketplace_listings",
+        "listings",
         Some(&json_map(&[
             ("public_slug", Value::String(path.slug.clone())),
             ("is_published", Value::Bool(true)),
@@ -587,7 +601,7 @@ async fn get_public_marketplace_listing(
     .await?;
     if rows.is_empty() {
         return Err(AppError::NotFound(
-            "Public marketplace listing not found.".to_string(),
+            "Public listing not found.".to_string(),
         ));
     }
 
@@ -603,7 +617,7 @@ async fn get_public_marketplace_listing(
         "view",
         Some(json!({
             "listing_slug": path.slug,
-            "marketplace_listing_id": shaped.get("id").cloned().unwrap_or(Value::Null),
+            "listing_id": shaped.get("id").cloned().unwrap_or(Value::Null),
         })),
     )
     .await;
@@ -611,16 +625,16 @@ async fn get_public_marketplace_listing(
     Ok(Json(shaped))
 }
 
-async fn start_public_marketplace_application(
+async fn start_public_listing_application(
     State(state): State<AppState>,
-    Path(path): Path<PublicMarketplaceSlugPath>,
+    Path(path): Path<PublicListingSlugPath>,
 ) -> AppResult<Json<Value>> {
     ensure_marketplace_public_enabled(&state)?;
     let pool = db_pool(&state)?;
 
     let rows = list_rows(
         pool,
-        "marketplace_listings",
+        "listings",
         Some(&json_map(&[
             ("public_slug", Value::String(path.slug.clone())),
             ("is_published", Value::Bool(true)),
@@ -633,7 +647,7 @@ async fn start_public_marketplace_application(
     .await?;
     if rows.is_empty() {
         return Err(AppError::NotFound(
-            "Public marketplace listing not found.".to_string(),
+            "Public listing not found.".to_string(),
         ));
     }
     let listing = rows
@@ -647,7 +661,7 @@ async fn start_public_marketplace_application(
         "apply_start",
         Some(json!({
             "listing_slug": path.slug,
-            "marketplace_listing_id": listing.get("id").cloned().unwrap_or(Value::Null),
+            "listing_id": listing.get("id").cloned().unwrap_or(Value::Null),
         })),
     )
     .await;
@@ -655,16 +669,16 @@ async fn start_public_marketplace_application(
     Ok(Json(json!({ "ok": true })))
 }
 
-async fn track_public_marketplace_whatsapp_contact(
+async fn track_public_listing_whatsapp_contact(
     State(state): State<AppState>,
-    Path(path): Path<PublicMarketplaceSlugPath>,
+    Path(path): Path<PublicListingSlugPath>,
 ) -> AppResult<Json<Value>> {
     ensure_marketplace_public_enabled(&state)?;
     let pool = db_pool(&state)?;
 
     let rows = list_rows(
         pool,
-        "marketplace_listings",
+        "listings",
         Some(&json_map(&[
             ("public_slug", Value::String(path.slug.clone())),
             ("is_published", Value::Bool(true)),
@@ -677,7 +691,7 @@ async fn track_public_marketplace_whatsapp_contact(
     .await?;
     if rows.is_empty() {
         return Err(AppError::NotFound(
-            "Public marketplace listing not found.".to_string(),
+            "Public listing not found.".to_string(),
         ));
     }
     let listing = rows
@@ -691,7 +705,7 @@ async fn track_public_marketplace_whatsapp_contact(
         "contact_whatsapp",
         Some(json!({
             "listing_slug": path.slug,
-            "marketplace_listing_id": listing.get("id").cloned().unwrap_or(Value::Null),
+            "listing_id": listing.get("id").cloned().unwrap_or(Value::Null),
         })),
     )
     .await;
@@ -702,21 +716,22 @@ async fn track_public_marketplace_whatsapp_contact(
     })))
 }
 
-async fn submit_public_marketplace_application(
+async fn submit_public_listing_application(
     State(state): State<AppState>,
-    Json(payload): Json<PublicMarketplaceApplicationInput>,
+    Json(payload): Json<PublicListingApplicationInput>,
 ) -> AppResult<impl IntoResponse> {
+    validate_input(&payload)?;
     ensure_marketplace_public_enabled(&state)?;
     let pool = db_pool(&state)?;
 
-    let listing = if let Some(marketplace_listing_id) =
-        non_empty_opt(payload.marketplace_listing_id.as_deref())
+    let listing = if let Some(listing_id) =
+        non_empty_opt(payload.listing_id.as_deref())
     {
-        Some(get_row(pool, "marketplace_listings", &marketplace_listing_id, "id").await?)
+        Some(get_row(pool, "listings", &listing_id, "id").await?)
     } else if let Some(slug) = non_empty_opt(payload.listing_slug.as_deref()) {
         let rows = list_rows(
             pool,
-            "marketplace_listings",
+            "listings",
             Some(&json_map(&[("public_slug", Value::String(slug))])),
             1,
             0,
@@ -731,7 +746,7 @@ async fn submit_public_marketplace_application(
 
     let Some(listing) = listing else {
         return Err(AppError::BadRequest(
-            "marketplace_listing_id or listing_slug is required.".to_string(),
+            "listing_id or listing_slug is required.".to_string(),
         ));
     };
     if !bool_value(listing.get("is_published")) {
@@ -750,7 +765,7 @@ async fn submit_public_marketplace_application(
     let mut application_payload = remove_nulls(serialize_payload(&payload));
     application_payload.insert("organization_id".to_string(), Value::String(org_id.clone()));
     application_payload.insert(
-        "marketplace_listing_id".to_string(),
+        "listing_id".to_string(),
         listing.get("id").cloned().unwrap_or(Value::Null),
     );
     if !application_payload.contains_key("listing_slug") {
@@ -771,7 +786,7 @@ async fn submit_public_marketplace_application(
 
     let alert_payload = json!({
         "stage": "application_submission",
-        "marketplace_listing_id": listing.get("id").cloned().unwrap_or(Value::Null),
+        "listing_id": listing.get("id").cloned().unwrap_or(Value::Null),
         "listing_slug": listing.get("public_slug").cloned().unwrap_or(Value::Null),
         "source": application_payload.get("source").cloned().unwrap_or(Value::Null),
     });
@@ -807,7 +822,7 @@ async fn submit_public_marketplace_application(
         (
             "event_payload",
             json!({
-                "marketplace_listing_id": listing.get("id").cloned().unwrap_or(Value::Null),
+                "listing_id": listing.get("id").cloned().unwrap_or(Value::Null),
                 "listing_slug": listing.get("public_slug").cloned().unwrap_or(Value::Null),
                 "source": created.get("source").cloned().unwrap_or(Value::Null),
             }),
@@ -820,7 +835,7 @@ async fn submit_public_marketplace_application(
             "application_event_write_failed",
             Some(json!({
                 "stage": "application_event_write",
-                "marketplace_listing_id": listing.get("id").cloned().unwrap_or(Value::Null),
+                "listing_id": listing.get("id").cloned().unwrap_or(Value::Null),
                 "listing_slug": listing.get("public_slug").cloned().unwrap_or(Value::Null),
                 "application_id": created.get("id").cloned().unwrap_or(Value::Null),
             })),
@@ -835,7 +850,7 @@ async fn submit_public_marketplace_application(
         Some(&org_id),
         "apply_submit",
         Some(json!({
-            "marketplace_listing_id": listing.get("id").cloned().unwrap_or(Value::Null),
+            "listing_id": listing.get("id").cloned().unwrap_or(Value::Null),
             "listing_slug": listing.get("public_slug").cloned().unwrap_or(Value::Null),
             "application_id": created.get("id").cloned().unwrap_or(Value::Null),
         })),
@@ -847,8 +862,8 @@ async fn submit_public_marketplace_application(
         Json(json!({
             "id": created.get("id").cloned().unwrap_or(Value::Null),
             "status": created.get("status").cloned().unwrap_or(Value::Null),
-            "marketplace_listing_id": created
-                .get("marketplace_listing_id")
+            "listing_id": created
+                .get("listing_id")
                 .cloned()
                 .unwrap_or(Value::Null),
         })),
@@ -858,14 +873,17 @@ async fn submit_public_marketplace_application(
 async fn replace_fee_lines(
     pool: &sqlx::PgPool,
     org_id: &str,
-    marketplace_listing_id: &str,
+    listing_id: &str,
     lines: &[Value],
 ) -> AppResult<Vec<Value>> {
-    sqlx::query("DELETE FROM marketplace_listing_fee_lines WHERE marketplace_listing_id = $1")
-        .bind(marketplace_listing_id)
+    sqlx::query("DELETE FROM listing_fee_lines WHERE listing_id = $1")
+        .bind(listing_id)
         .execute(pool)
         .await
-        .map_err(|error| AppError::Dependency(format!("Supabase request failed: {error}")))?;
+        .map_err(|error| {
+            tracing::error!(error = %error, "Database query failed");
+            AppError::Dependency("External service request failed.".to_string())
+        })?;
 
     let normalized = normalize_fee_lines(lines);
     let mut created_lines = Vec::new();
@@ -876,8 +894,8 @@ async fn replace_fee_lines(
         let payload = json_map(&[
             ("organization_id", Value::String(org_id.to_string())),
             (
-                "marketplace_listing_id",
-                Value::String(marketplace_listing_id.to_string()),
+                "listing_id",
+                Value::String(listing_id.to_string()),
             ),
             (
                 "fee_type",
@@ -899,7 +917,7 @@ async fn replace_fee_lines(
             ),
             ("sort_order", json!((index + 1) as i32)),
         ]);
-        let created = create_row(pool, "marketplace_listing_fee_lines", &payload).await?;
+        let created = create_row(pool, "listing_fee_lines", &payload).await?;
         created_lines.push(created);
     }
     Ok(created_lines)
@@ -944,8 +962,8 @@ async fn template_lines(
 }
 
 async fn sync_linked_listing(pool: &sqlx::PgPool, row: &Value, is_publish_state: bool) {
-    let listing_id = value_str(row, "listing_id");
-    if listing_id.is_empty() {
+    let integration_id = value_str(row, "integration_id");
+    if integration_id.is_empty() {
         return;
     }
 
@@ -956,7 +974,7 @@ async fn sync_linked_listing(pool: &sqlx::PgPool, row: &Value, is_publish_state:
             row.get("public_slug").cloned().unwrap_or(Value::Null),
         ),
     ]);
-    let _ = update_row(pool, "listings", &listing_id, &patch, "id").await;
+    let _ = update_row(pool, "integrations", &integration_id, &patch, "id").await;
 }
 
 async fn attach_fee_lines(pool: &sqlx::PgPool, rows: Vec<Value>) -> AppResult<Vec<Value>> {
@@ -979,9 +997,9 @@ async fn attach_fee_lines(pool: &sqlx::PgPool, rows: Vec<Value>) -> AppResult<Ve
 
     let fee_lines = list_rows(
         pool,
-        "marketplace_listing_fee_lines",
+        "listing_fee_lines",
         Some(&json_map(&[(
-            "marketplace_listing_id",
+            "listing_id",
             Value::Array(row_ids.iter().cloned().map(Value::String).collect()),
         )])),
         std::cmp::max(200, (row_ids.len() as i64) * 20),
@@ -994,7 +1012,7 @@ async fn attach_fee_lines(pool: &sqlx::PgPool, rows: Vec<Value>) -> AppResult<Ve
     let mut grouped: std::collections::HashMap<String, Vec<Value>> =
         std::collections::HashMap::new();
     for line in fee_lines {
-        let key = value_str(&line, "marketplace_listing_id");
+        let key = value_str(&line, "listing_id");
         if key.is_empty() {
             continue;
         }
@@ -1138,7 +1156,7 @@ async fn assert_publishable(state: &AppState, pool: &sqlx::PgPool, row: &Value) 
     let row_id = value_str(row, "id");
     if row_id.is_empty() {
         return Err(AppError::BadRequest(
-            "Invalid marketplace listing id.".to_string(),
+            "Invalid listing id.".to_string(),
         ));
     }
 
@@ -1152,9 +1170,9 @@ async fn assert_publishable(state: &AppState, pool: &sqlx::PgPool, row: &Value) 
 
     let lines = list_rows(
         pool,
-        "marketplace_listing_fee_lines",
+        "listing_fee_lines",
         Some(&json_map(&[(
-            "marketplace_listing_id",
+            "listing_id",
             Value::String(row_id),
         )])),
         300,
@@ -1180,7 +1198,7 @@ async fn assert_publishable(state: &AppState, pool: &sqlx::PgPool, row: &Value) 
 fn ensure_publish_prereqs(row: &Value) -> AppResult<()> {
     if missing_or_blank(row, "available_from") {
         return Err(AppError::BadRequest(
-            "available_from is required before publishing marketplace listings.".to_string(),
+            "available_from is required before publishing listings.".to_string(),
         ));
     }
 
@@ -1189,14 +1207,14 @@ fn ensure_publish_prereqs(row: &Value) -> AppResult<()> {
         .and_then(integer_strict_value);
     if minimum_lease_months.is_none_or(|value| value <= 0) {
         return Err(AppError::BadRequest(
-            "minimum_lease_months is required before publishing marketplace listings.".to_string(),
+            "minimum_lease_months is required before publishing listings.".to_string(),
         ));
     }
 
     let amenities = normalize_amenities(row.get("amenities"), false)?;
     if amenities.len() < 3 {
         return Err(AppError::BadRequest(
-            "At least 3 amenities are required before publishing marketplace listings.".to_string(),
+            "At least 3 amenities are required before publishing listings.".to_string(),
         ));
     }
 
@@ -1288,7 +1306,7 @@ fn sanitize_listing_payload(
             .is_some_and(|value| !value.is_empty());
         if !has_cover {
             return Err(AppError::BadRequest(
-                "cover_image_url is required before publishing marketplace listings.".to_string(),
+                "cover_image_url is required before publishing listings.".to_string(),
             ));
         }
     }

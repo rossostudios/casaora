@@ -72,7 +72,7 @@ async fn list_applications(
     }
     if let Some(listing_id) = non_empty_opt(query.listing_id.as_deref()) {
         filters.insert(
-            "marketplace_listing_id".to_string(),
+            "listing_id".to_string(),
             Value::String(listing_id),
         );
     }
@@ -282,12 +282,12 @@ async fn convert_application_to_lease(
     let mut listing: Option<Value> = None;
     if let Some(listing_id) = application
         .as_object()
-        .and_then(|obj| obj.get("marketplace_listing_id"))
+        .and_then(|obj| obj.get("listing_id"))
         .and_then(Value::as_str)
         .map(str::trim)
         .filter(|value| !value.is_empty())
     {
-        listing = Some(get_row(pool, "marketplace_listings", listing_id, "id").await?);
+        listing = Some(get_row(pool, "listings", listing_id, "id").await?);
     }
 
     let mut defaults = crate::services::pricing::LeaseFinancials::default();
@@ -528,14 +528,14 @@ async fn convert_application_to_lease(
 
 async fn listing_fee_lines(
     pool: &sqlx::PgPool,
-    marketplace_listing_id: &str,
+    listing_id: &str,
 ) -> AppResult<Vec<Value>> {
     list_rows(
         pool,
-        "marketplace_listing_fee_lines",
+        "listing_fee_lines",
         Some(&json_map(&[(
-            "marketplace_listing_id",
-            Value::String(marketplace_listing_id.to_string()),
+            "listing_id",
+            Value::String(listing_id.to_string()),
         )])),
         300,
         0,
@@ -553,7 +553,7 @@ async fn enrich_applications(pool: &sqlx::PgPool, rows: Vec<Value>) -> AppResult
     let listing_ids = rows
         .iter()
         .filter_map(Value::as_object)
-        .filter_map(|row| row.get("marketplace_listing_id"))
+        .filter_map(|row| row.get("listing_id"))
         .filter_map(Value::as_str)
         .map(str::trim)
         .filter(|value| !value.is_empty())
@@ -565,7 +565,7 @@ async fn enrich_applications(pool: &sqlx::PgPool, rows: Vec<Value>) -> AppResult
     if !listing_ids.is_empty() {
         let listings = list_rows(
             pool,
-            "marketplace_listings",
+            "listings",
             Some(&json_map(&[(
                 "id",
                 Value::Array(listing_ids.iter().cloned().map(Value::String).collect()),
@@ -660,7 +660,7 @@ async fn enrich_applications(pool: &sqlx::PgPool, rows: Vec<Value>) -> AppResult
     for mut row in rows {
         if let Some(obj) = row.as_object_mut() {
             let listing_id = obj
-                .get("marketplace_listing_id")
+                .get("listing_id")
                 .and_then(Value::as_str)
                 .map(str::trim)
                 .filter(|value| !value.is_empty());
@@ -669,7 +669,7 @@ async fn enrich_applications(pool: &sqlx::PgPool, rows: Vec<Value>) -> AppResult
                 .and_then(|(title, _)| title.clone())
                 .map(Value::String)
                 .unwrap_or(Value::Null);
-            obj.insert("marketplace_listing_title".to_string(), listing_title);
+            obj.insert("listing_title".to_string(), listing_title);
 
             let monthly_total = listing_info.map(|(_, monthly)| *monthly).unwrap_or(0.0);
             let (score, band, income_ratio) = qualification_from_row(obj, monthly_total);

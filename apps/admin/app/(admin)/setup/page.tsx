@@ -37,26 +37,40 @@ export default async function SetupPage({ searchParams }: SetupPageProps) {
 
   if (!orgId) {
     let organizations: Row[] = [];
+    let loadError: string | null = null;
     try {
       organizations = (await fetchOrganizations(25)) as Row[];
-    } catch {
-      organizations = [];
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.error("Failed to load organizations:", message);
+      loadError = isEn
+        ? "Could not load your organizations. Please check that the backend is running and try again."
+        : "No se pudieron cargar tus organizaciones. Verifica que el backend esté corriendo e intenta de nuevo.";
     }
 
     return (
-      <SetupWizard
-        key="no-org"
-        initialOrgId={null}
-        initialOrganization={null}
-        initialOrganizations={organizations}
-        initialProperties={[]}
-        initialUnits={[]}
-        channels={[]}
-        listings={[]}
-        locale={locale}
-        apiBaseUrl={getApiBaseUrl()}
-        initialTab={tab}
-      />
+      <>
+        {loadError && (
+          <Alert variant="destructive" className="mb-4">
+            <AlertTitle>
+              {isEn ? "Connection error" : "Error de conexión"}
+            </AlertTitle>
+            <AlertDescription>{loadError}</AlertDescription>
+          </Alert>
+        )}
+        <SetupWizard
+          key="no-org"
+          initialOrgId={null}
+          initialOrganization={null}
+          initialOrganizations={organizations}
+          initialProperties={[]}
+          initialUnits={[]}
+          integrations={[]}
+          locale={locale}
+          apiBaseUrl={getApiBaseUrl()}
+          initialTab={tab}
+        />
+      </>
     );
   }
 
@@ -67,23 +81,20 @@ export default async function SetupPage({ searchParams }: SetupPageProps) {
   let organizations: Row[] = [];
   let properties: Row[] = [];
   let units: Row[] = [];
-  let channels: Row[] = [];
-  let listings: Row[] = [];
+  let integrations: Row[] = [];
 
   try {
-    const [orgs, props, unitRows, chanRows, listingRows] = await Promise.all([
+    const [orgs, props, unitRows, integrationRows] = await Promise.all([
       fetchOrganizations(25),
       fetchList("/properties", orgId, 25),
       fetchList("/units", orgId, 25),
-      fetchList("/channels", orgId, 25),
-      fetchList("/listings", orgId, 25),
+      fetchList("/integrations", orgId, 50),
     ]);
 
     organizations = orgs as Row[];
     properties = props as Row[];
     units = unitRows as Row[];
-    channels = chanRows as Row[];
-    listings = listingRows as Row[];
+    integrations = integrationRows as Row[];
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
 
@@ -219,8 +230,7 @@ export default async function SetupPage({ searchParams }: SetupPageProps) {
       initialOrganizations={organizations}
       initialProperties={properties}
       initialUnits={units}
-      channels={channels}
-      listings={listings}
+      integrations={integrations}
       locale={locale}
       apiBaseUrl={getApiBaseUrl()}
       initialTab={tab}

@@ -26,8 +26,7 @@ import { cn } from "@/lib/utils";
 type GettingStartedProps = {
   propertyCount: number;
   unitCount: number;
-  channelCount?: number;
-  listingCount?: number;
+  integrationCount?: number;
   reservationCount: number;
   taskCount?: number;
   applicationCount?: number;
@@ -51,8 +50,7 @@ const DISMISS_KEY = "pa-onboarding-dismissed";
 export function GettingStarted({
   propertyCount,
   unitCount,
-  channelCount = 0,
-  listingCount = 0,
+  integrationCount = 0,
   reservationCount,
   taskCount = 0,
   applicationCount = 0,
@@ -88,24 +86,14 @@ export function GettingStarted({
 
   const postOnboardingSteps: OnboardingStep[] = [
     {
-      id: "channels",
-      label: isEn ? "Connect channels" : "Conectar canales",
+      id: "integrations",
+      label: isEn ? "Connect integrations" : "Conectar integraciones",
       description: isEn
-        ? "Link Airbnb, Booking.com, direct and more."
-        : "Conecta Airbnb, Booking.com, direct y más.",
-      done: channelCount > 0,
+        ? "Link Airbnb, Booking.com, direct and more via iCal."
+        : "Conecta Airbnb, Booking.com, direct y más vía iCal.",
+      done: integrationCount > 0,
       icon: HotelIcon,
-      href: "/module/channels",
-    },
-    {
-      id: "listings",
-      label: isEn ? "Create listings" : "Crear anuncios",
-      description: isEn
-        ? "Map units to channels and sync calendars."
-        : "Vincula unidades con canales y sincroniza calendarios.",
-      done: listingCount > 0,
-      icon: Home01Icon,
-      href: "/module/listings",
+      href: "/module/integrations",
     },
     {
       id: "ops-start",
@@ -161,7 +149,7 @@ export function GettingStarted({
         : "Completa transparencia y publica tu primer anuncio.",
       done: propertyCount > 0,
       icon: Home01Icon,
-      href: "/module/marketplace-listings",
+      href: "/module/listings",
     },
     {
       id: "applications",

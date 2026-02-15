@@ -168,8 +168,7 @@ async fn update_maintenance_request(
         return Ok(Json(existing));
     }
 
-    let updated =
-        update_row(pool, "maintenance_requests", &path.request_id, &patch, "id").await?;
+    let updated = update_row(pool, "maintenance_requests", &path.request_id, &patch, "id").await?;
 
     // Also update the linked task status if it exists
     let task_id = val_str(&updated, "task_id");
@@ -183,10 +182,7 @@ async fn update_maintenance_request(
             };
             if !task_status.is_empty() {
                 let mut task_patch = Map::new();
-                task_patch.insert(
-                    "status".to_string(),
-                    Value::String(task_status.to_string()),
-                );
+                task_patch.insert("status".to_string(), Value::String(task_status.to_string()));
                 if task_status == "done" {
                     task_patch.insert(
                         "completed_at".to_string(),
@@ -227,8 +223,16 @@ async fn public_create_maintenance_request(
         // Look up property by code
         let mut filters = Map::new();
         filters.insert("code".to_string(), Value::String(property_code));
-        let properties =
-            list_rows(pool, "properties", Some(&filters), 1, 0, "created_at", false).await?;
+        let properties = list_rows(
+            pool,
+            "properties",
+            Some(&filters),
+            1,
+            0,
+            "created_at",
+            false,
+        )
+        .await?;
         let property = properties
             .first()
             .ok_or_else(|| AppError::NotFound("Property not found.".to_string()))?;

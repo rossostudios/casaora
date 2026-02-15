@@ -12,7 +12,7 @@ import { errorMessage, isOrgMembershipError } from "@/lib/errors";
 import { getActiveLocale } from "@/lib/i18n/server";
 import { getActiveOrgId } from "@/lib/org";
 
-import { MarketplaceListingsManager } from "./marketplace-listings-manager";
+import { ListingsManager } from "./listings-manager";
 
 type PageProps = {
   searchParams: Promise<{ success?: string; error?: string }>;
@@ -26,7 +26,7 @@ function safeDecode(value: string): string {
   }
 }
 
-export default async function MarketplaceListingsModulePage({
+export default async function ListingsModulePage({
   searchParams,
 }: PageProps) {
   const locale = await getActiveLocale();
@@ -65,7 +65,7 @@ export default async function MarketplaceListingsModulePage({
   try {
     const [listingRows, pricingRows, propertyRows, unitRows] =
       await Promise.all([
-        fetchList("/marketplace/listings", orgId, 500),
+        fetchList("/listings", orgId, 500),
         fetchList("/pricing/templates", orgId, 500),
         fetchList("/properties", orgId, 500),
         fetchList("/units", orgId, 500),
@@ -138,7 +138,7 @@ export default async function MarketplaceListingsModulePage({
             </Alert>
           ) : null}
 
-          <MarketplaceListingsManager
+          <ListingsManager
             listings={listings}
             orgId={orgId}
             pricingTemplates={pricingTemplates}

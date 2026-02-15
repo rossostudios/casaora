@@ -14,16 +14,15 @@ const ALLOWED_TABLES: &[&str] = &[
     "application_submissions",
     "audit_logs",
     "calendar_blocks",
-    "channels",
     "collection_records",
     "expenses",
     "guests",
     "integration_events",
     "lease_charges",
     "leases",
+    "integrations",
+    "listing_fee_lines",
     "listings",
-    "marketplace_listing_fee_lines",
-    "marketplace_listings",
     "maintenance_requests",
     "message_logs",
     "message_templates",
@@ -103,7 +102,7 @@ pub async fn list_rows(
     }
     query
         .push(" LIMIT ")
-        .push_bind(limit.max(1))
+        .push_bind(limit.clamp(1, 1000))
         .push(" OFFSET ")
         .push_bind(offset.max(0));
 
@@ -341,6 +340,8 @@ pub(crate) fn is_uuid_formatted(value: &Value) -> bool {
 
 fn map_db_error(error: sqlx::Error) -> AppError {
     let message = error.to_string();
+    tracing::error!(db_error = %message, "Database query failed");
+
     if message.contains("23505")
         || message
             .to_ascii_lowercase()
@@ -348,7 +349,7 @@ fn map_db_error(error: sqlx::Error) -> AppError {
     {
         return AppError::Conflict("Duplicate value violates a unique constraint.".to_string());
     }
-    AppError::Dependency(format!("Supabase request failed: {message}"))
+    AppError::Dependency("Database operation failed.".to_string())
 }
 
 #[cfg(test)]
@@ -385,9 +386,7 @@ mod tests {
         assert!(is_uuid_formatted(&Value::String(
             "550E8400-E29B-41D4-A716-446655440000".to_string()
         )));
-        assert!(!is_uuid_formatted(&Value::String(
-            "not-a-uuid".to_string()
-        )));
+        assert!(!is_uuid_formatted(&Value::String("not-a-uuid".to_string())));
         assert!(!is_uuid_formatted(&Value::String(String::new())));
         assert!(!is_uuid_formatted(&Value::Bool(true)));
         assert!(!is_uuid_formatted(&Value::Null));

@@ -83,11 +83,9 @@ export default async function ModulePage({
             </p>
             <p className="break-words">{message}</p>
             <p>
-              {isEn ? "Make sure" : "Asegúrate de que"}{" "}
-              <span className="font-medium">FastAPI</span>{" "}
-              {isEn ? "is running (from" : "esté ejecutándose (desde"}{" "}
-              <code className="rounded bg-muted px-1 py-0.5">apps/backend</code>
-              ) {isEn ? "on port 8000." : " en el puerto 8000."}
+              {isEn
+                ? "Make sure the backend is running (`cd apps/backend-rs && cargo run`)"
+                : "Asegúrate de que el backend esté ejecutándose (`cd apps/backend-rs && cargo run`)"}
             </p>
           </CardContent>
         </Card>
@@ -183,11 +181,9 @@ export default async function ModulePage({
             </p>
             <p className="break-words">{message}</p>
             <p>
-              {isEn ? "Make sure" : "Asegúrate de que"}{" "}
-              <span className="font-medium">FastAPI</span>{" "}
-              {isEn ? "is running (from" : "esté ejecutándose (desde"}{" "}
-              <code className="rounded bg-muted px-1 py-0.5">apps/backend</code>
-              ) {isEn ? "on port 8000." : " en el puerto 8000."}
+              {isEn
+                ? "Make sure the backend is running (`cd apps/backend-rs && cargo run`)"
+                : "Asegúrate de que el backend esté ejecutándose (`cd apps/backend-rs && cargo run`)"}
             </p>
           </CardContent>
         </Card>
@@ -296,11 +292,9 @@ export default async function ModulePage({
           </p>
           <p className="break-words">{message}</p>
           <p>
-            {isEn ? "Make sure" : "Asegúrate de que"}{" "}
-            <span className="font-medium">FastAPI</span>{" "}
-            {isEn ? "is running (from" : "esté ejecutándose (desde"}{" "}
-            <code className="rounded bg-muted px-1 py-0.5">apps/backend</code>)
-            ) {isEn ? "on port 8000." : " en el puerto 8000."}
+            {isEn
+              ? "Make sure the backend is running (`cd apps/backend-rs && cargo run`)"
+              : "Asegúrate de que el backend esté ejecutándose (`cd apps/backend-rs && cargo run`)"}
           </p>
         </CardContent>
       </Card>

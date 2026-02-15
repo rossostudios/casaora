@@ -8,7 +8,7 @@ import { PublicFooter } from "@/components/marketplace/public-footer";
 import { PublicHeader } from "@/components/marketplace/public-header";
 import { TrustBadges } from "@/components/marketplace/trust-badges";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { fetchPublicMarketplaceListing } from "@/lib/api";
+import { fetchPublicListing } from "@/lib/api";
 import { toMarketplaceListingViewModel } from "@/lib/features/marketplace/view-model";
 import { getActiveLocale } from "@/lib/i18n/server";
 import { ListingAmenities } from "./components/listing-amenities";
@@ -28,7 +28,7 @@ type MarketplaceListingPageProps = {
 
 async function resolveListing(slug: string): Promise<Record<string, unknown>> {
   try {
-    return await fetchPublicMarketplaceListing(slug);
+    return await fetchPublicListing(slug);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     if (message.includes("(404)")) {

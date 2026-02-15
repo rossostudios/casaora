@@ -54,5 +54,14 @@ pub async fn write_audit_log(
         payload.insert("after_state".to_string(), after);
     }
 
-    let _ = crate::repository::table_service::create_row(pool, "audit_logs", &payload).await;
+    if let Err(error) =
+        crate::repository::table_service::create_row(pool, "audit_logs", &payload).await
+    {
+        tracing::error!(
+            action = action,
+            entity_name = entity_name,
+            error = %error,
+            "Failed to write audit log"
+        );
+    }
 }

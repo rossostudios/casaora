@@ -342,25 +342,13 @@ CREATE TABLE units (
 CREATE INDEX idx_units_org_id ON units(organization_id);
 CREATE INDEX idx_units_property_id ON units(property_id);
 
-CREATE TABLE channels (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  organization_id uuid NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
-  kind channel_kind NOT NULL,
-  name text NOT NULL,
-  external_account_ref text,
-  is_active boolean NOT NULL DEFAULT true,
-  created_at timestamptz NOT NULL DEFAULT now(),
-  updated_at timestamptz NOT NULL DEFAULT now()
-);
-
-CREATE INDEX idx_channels_org_id ON channels(organization_id);
-CREATE INDEX idx_channels_kind ON channels(organization_id, kind);
-
-CREATE TABLE listings (
+CREATE TABLE integrations (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   organization_id uuid NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
   unit_id uuid NOT NULL REFERENCES units(id) ON DELETE CASCADE,
-  channel_id uuid NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
+  kind channel_kind NOT NULL,
+  channel_name text NOT NULL,
+  external_account_ref text,
   external_listing_id text,
   public_name text NOT NULL,
   marketplace_publishable boolean NOT NULL DEFAULT false,
@@ -370,17 +358,17 @@ CREATE TABLE listings (
   is_active boolean NOT NULL DEFAULT true,
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now(),
-  UNIQUE (unit_id, channel_id)
+  UNIQUE (unit_id, kind, organization_id)
 );
 
-CREATE UNIQUE INDEX idx_listings_channel_external
-  ON listings(channel_id, external_listing_id)
+CREATE UNIQUE INDEX idx_integrations_kind_external
+  ON integrations(kind, external_listing_id)
   WHERE external_listing_id IS NOT NULL;
 
-CREATE INDEX idx_listings_org_id ON listings(organization_id);
-CREATE INDEX idx_listings_unit_id ON listings(unit_id);
-CREATE UNIQUE INDEX idx_listings_org_public_slug
-  ON listings(organization_id, public_slug)
+CREATE INDEX idx_integrations_org_id ON integrations(organization_id);
+CREATE INDEX idx_integrations_unit_id ON integrations(unit_id);
+CREATE UNIQUE INDEX idx_integrations_org_public_slug
+  ON integrations(organization_id, public_slug)
   WHERE public_slug IS NOT NULL;
 
 -- ---------- Guests and reservations ----------
@@ -407,8 +395,7 @@ CREATE TABLE reservations (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   organization_id uuid NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
   unit_id uuid NOT NULL REFERENCES units(id) ON DELETE CASCADE,
-  listing_id uuid REFERENCES listings(id) ON DELETE SET NULL,
-  channel_id uuid REFERENCES channels(id) ON DELETE SET NULL,
+  integration_id uuid REFERENCES integrations(id) ON DELETE SET NULL,
   guest_id uuid REFERENCES guests(id) ON DELETE SET NULL,
   external_reservation_id text,
   status reservation_status NOT NULL DEFAULT 'pending',
@@ -447,9 +434,9 @@ CREATE INDEX idx_reservations_status_dates ON reservations(organization_id, stat
 CREATE INDEX idx_reservations_guest_id ON reservations(guest_id);
 CREATE INDEX idx_reservations_period_gist ON reservations USING gist (unit_id, period);
 
-CREATE UNIQUE INDEX idx_reservations_channel_external
-  ON reservations(channel_id, external_reservation_id)
-  WHERE external_reservation_id IS NOT NULL AND channel_id IS NOT NULL;
+CREATE UNIQUE INDEX idx_reservations_integration_external
+  ON reservations(integration_id, external_reservation_id)
+  WHERE external_reservation_id IS NOT NULL AND integration_id IS NOT NULL;
 
 ALTER TABLE reservations
   ADD CONSTRAINT reservations_no_overlap
@@ -616,10 +603,10 @@ CREATE TABLE pricing_template_lines (
 CREATE INDEX idx_pricing_template_lines_org_id
   ON pricing_template_lines(organization_id, pricing_template_id);
 
-CREATE TABLE marketplace_listings (
+CREATE TABLE listings (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   organization_id uuid NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
-  listing_id uuid REFERENCES listings(id) ON DELETE SET NULL,
+  integration_id uuid REFERENCES integrations(id) ON DELETE SET NULL,
   property_id uuid REFERENCES properties(id) ON DELETE SET NULL,
   unit_id uuid REFERENCES units(id) ON DELETE SET NULL,
   pricing_template_id uuid REFERENCES pricing_templates(id) ON DELETE SET NULL,
@@ -652,15 +639,15 @@ CREATE TABLE marketplace_listings (
   updated_at timestamptz NOT NULL DEFAULT now()
 );
 
-CREATE INDEX idx_marketplace_listings_org_published
-  ON marketplace_listings(organization_id, is_published, created_at DESC);
-CREATE INDEX idx_marketplace_listings_org_slug
-  ON marketplace_listings(organization_id, public_slug);
+CREATE INDEX idx_listings_org_published
+  ON listings(organization_id, is_published, created_at DESC);
+CREATE INDEX idx_listings_org_slug
+  ON listings(organization_id, public_slug);
 
-CREATE TABLE marketplace_listing_fee_lines (
+CREATE TABLE listing_fee_lines (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   organization_id uuid NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
-  marketplace_listing_id uuid NOT NULL REFERENCES marketplace_listings(id) ON DELETE CASCADE,
+  listing_id uuid NOT NULL REFERENCES listings(id) ON DELETE CASCADE,
   fee_type fee_line_type NOT NULL,
   label text NOT NULL,
   amount numeric(12, 2) NOT NULL DEFAULT 0 CHECK (amount >= 0),
@@ -669,16 +656,16 @@ CREATE TABLE marketplace_listing_fee_lines (
   sort_order integer NOT NULL DEFAULT 1 CHECK (sort_order > 0),
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now(),
-  UNIQUE (marketplace_listing_id, sort_order)
+  UNIQUE (listing_id, sort_order)
 );
 
-CREATE INDEX idx_marketplace_listing_fee_lines_org
-  ON marketplace_listing_fee_lines(organization_id, marketplace_listing_id);
+CREATE INDEX idx_listing_fee_lines_org
+  ON listing_fee_lines(organization_id, listing_id);
 
 CREATE TABLE application_submissions (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   organization_id uuid NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
-  marketplace_listing_id uuid REFERENCES marketplace_listings(id) ON DELETE SET NULL,
+  listing_id uuid REFERENCES listings(id) ON DELETE SET NULL,
   status application_status NOT NULL DEFAULT 'new',
   full_name text NOT NULL,
   email citext NOT NULL,
@@ -700,7 +687,7 @@ CREATE TABLE application_submissions (
 CREATE INDEX idx_application_submissions_org_status
   ON application_submissions(organization_id, status, created_at DESC);
 CREATE INDEX idx_application_submissions_listing
-  ON application_submissions(marketplace_listing_id);
+  ON application_submissions(listing_id);
 
 CREATE TABLE application_events (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -1178,12 +1165,8 @@ CREATE TRIGGER trg_units_updated_at
   BEFORE UPDATE ON units
   FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
-CREATE TRIGGER trg_channels_updated_at
-  BEFORE UPDATE ON channels
-  FOR EACH ROW EXECUTE FUNCTION set_updated_at();
-
-CREATE TRIGGER trg_listings_updated_at
-  BEFORE UPDATE ON listings
+CREATE TRIGGER trg_integrations_updated_at
+  BEFORE UPDATE ON integrations
   FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
 CREATE TRIGGER trg_guests_updated_at
@@ -1222,12 +1205,12 @@ CREATE TRIGGER trg_pricing_template_lines_updated_at
   BEFORE UPDATE ON pricing_template_lines
   FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
-CREATE TRIGGER trg_marketplace_listings_updated_at
-  BEFORE UPDATE ON marketplace_listings
+CREATE TRIGGER trg_listings_updated_at
+  BEFORE UPDATE ON listings
   FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
-CREATE TRIGGER trg_marketplace_listing_fee_lines_updated_at
-  BEFORE UPDATE ON marketplace_listing_fee_lines
+CREATE TRIGGER trg_listing_fee_lines_updated_at
+  BEFORE UPDATE ON listing_fee_lines
   FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
 CREATE TRIGGER trg_application_submissions_updated_at
@@ -1345,8 +1328,7 @@ CREATE POLICY organization_invites_owner_admin_all
 -- Uniform member policies for organization-scoped tables.
 ALTER TABLE properties ENABLE ROW LEVEL SECURITY;
 ALTER TABLE units ENABLE ROW LEVEL SECURITY;
-ALTER TABLE channels ENABLE ROW LEVEL SECURITY;
-ALTER TABLE listings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE integrations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE guests ENABLE ROW LEVEL SECURITY;
 ALTER TABLE reservations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE calendar_blocks ENABLE ROW LEVEL SECURITY;
@@ -1355,8 +1337,8 @@ ALTER TABLE expenses ENABLE ROW LEVEL SECURITY;
 ALTER TABLE owner_statements ENABLE ROW LEVEL SECURITY;
 ALTER TABLE pricing_templates ENABLE ROW LEVEL SECURITY;
 ALTER TABLE pricing_template_lines ENABLE ROW LEVEL SECURITY;
-ALTER TABLE marketplace_listings ENABLE ROW LEVEL SECURITY;
-ALTER TABLE marketplace_listing_fee_lines ENABLE ROW LEVEL SECURITY;
+ALTER TABLE listings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE listing_fee_lines ENABLE ROW LEVEL SECURITY;
 ALTER TABLE application_submissions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE application_events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE leases ENABLE ROW LEVEL SECURITY;
@@ -1381,13 +1363,8 @@ CREATE POLICY units_org_member_all
   USING (is_org_member(organization_id))
   WITH CHECK (is_org_member(organization_id));
 
-CREATE POLICY channels_org_member_all
-  ON channels FOR ALL
-  USING (is_org_member(organization_id))
-  WITH CHECK (is_org_member(organization_id));
-
-CREATE POLICY listings_org_member_all
-  ON listings FOR ALL
+CREATE POLICY integrations_org_member_all
+  ON integrations FOR ALL
   USING (is_org_member(organization_id))
   WITH CHECK (is_org_member(organization_id));
 
@@ -1431,13 +1408,13 @@ CREATE POLICY pricing_template_lines_org_member_all
   USING (is_org_member(organization_id))
   WITH CHECK (is_org_member(organization_id));
 
-CREATE POLICY marketplace_listings_org_member_all
-  ON marketplace_listings FOR ALL
+CREATE POLICY listings_org_member_all
+  ON listings FOR ALL
   USING (is_org_member(organization_id))
   WITH CHECK (is_org_member(organization_id));
 
-CREATE POLICY marketplace_listing_fee_lines_org_member_all
-  ON marketplace_listing_fee_lines FOR ALL
+CREATE POLICY listing_fee_lines_org_member_all
+  ON listing_fee_lines FOR ALL
   USING (is_org_member(organization_id))
   WITH CHECK (is_org_member(organization_id));
 

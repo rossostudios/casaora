@@ -13,10 +13,10 @@ use crate::{
     error::{AppError, AppResult},
     repository::table_service::{create_row, delete_row, get_row, list_rows, update_row},
     schemas::{
-        clamp_limit, remove_nulls, serialize_to_map, AcceptOrganizationInviteInput,
-        CreateOrganizationInput, CreateOrganizationInviteInput, CreateOrganizationMemberInput,
-        ListOrganizationsQuery, OrgInvitePath, OrgMemberPath, OrgPath, UpdateOrganizationInput,
-        UpdateOrganizationMemberInput,
+        clamp_limit, remove_nulls, serialize_to_map, validate_input,
+        AcceptOrganizationInviteInput, CreateOrganizationInput, CreateOrganizationInviteInput,
+        CreateOrganizationMemberInput, ListOrganizationsQuery, OrgInvitePath, OrgMemberPath,
+        OrgPath, UpdateOrganizationInput, UpdateOrganizationMemberInput,
     },
     services::audit::write_audit_log,
     state::AppState,
@@ -86,6 +86,7 @@ async fn create_organization(
     headers: HeaderMap,
     Json(payload): Json<CreateOrganizationInput>,
 ) -> AppResult<impl IntoResponse> {
+    validate_input(&payload)?;
     let user = require_supabase_user(&state, &headers).await?;
     let _app_user = ensure_app_user(&state, &user).await?;
     let pool = db_pool(&state)?;
@@ -223,6 +224,7 @@ async fn create_invite(
     headers: HeaderMap,
     Json(payload): Json<CreateOrganizationInviteInput>,
 ) -> AppResult<impl IntoResponse> {
+    validate_input(&payload)?;
     let user = require_supabase_user(&state, &headers).await?;
     let _app_user = ensure_app_user(&state, &user).await?;
     assert_org_role(&state, &user.id, &path.org_id, &["owner_admin"]).await?;
@@ -247,7 +249,10 @@ async fn create_invite(
     .bind(&email)
     .fetch_optional(pool)
     .await
-    .map_err(|error| AppError::Dependency(format!("Supabase request failed: {error}")))?;
+    .map_err(|error| {
+            tracing::error!(error = %error, "Database query failed");
+            AppError::Dependency("External service request failed.".to_string())
+        })?;
     if pending.is_some() {
         return Err(AppError::Conflict(
             "An invite is already pending for this email.".to_string(),
@@ -351,7 +356,10 @@ async fn accept_invite(
     .bind(token)
     .fetch_optional(pool)
     .await
-    .map_err(|error| AppError::Dependency(format!("Supabase request failed: {error}")))?;
+    .map_err(|error| {
+            tracing::error!(error = %error, "Database query failed");
+            AppError::Dependency("External service request failed.".to_string())
+        })?;
     let Some(invite) =
         invite_row.and_then(|row| row.try_get::<Option<Value>, _>("row").ok().flatten())
     else {
@@ -469,7 +477,10 @@ async fn list_members(
     .bind(&path.org_id)
     .fetch_all(pool)
     .await
-    .map_err(|error| AppError::Dependency(format!("Supabase request failed: {error}")))?;
+    .map_err(|error| {
+            tracing::error!(error = %error, "Database query failed");
+            AppError::Dependency("External service request failed.".to_string())
+        })?;
 
     let data = rows
         .into_iter()
@@ -576,7 +587,10 @@ async fn update_member(
         .build()
         .fetch_optional(pool)
         .await
-        .map_err(|error| AppError::Dependency(format!("Supabase request failed: {error}")))?;
+        .map_err(|error| {
+            tracing::error!(error = %error, "Database query failed");
+            AppError::Dependency("External service request failed.".to_string())
+        })?;
 
     let updated = updated_row
         .and_then(|row| row.try_get::<Option<Value>, _>("row").ok().flatten())
@@ -647,7 +661,10 @@ async fn delete_member(
         .bind(&path.member_user_id)
         .execute(pool)
         .await
-        .map_err(|error| AppError::Dependency(format!("Supabase request failed: {error}")))?;
+        .map_err(|error| {
+            tracing::error!(error = %error, "Database query failed");
+            AppError::Dependency("External service request failed.".to_string())
+        })?;
 
     write_audit_log(
         state.db_pool.as_ref(),

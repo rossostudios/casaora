@@ -602,7 +602,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/listings": {
+    "/integrations": {
         parameters: {
             query?: never;
             header?: never;
@@ -646,7 +646,7 @@ export interface paths {
             };
             requestBody: {
                 content: {
-                    "application/json": components["schemas"]["CreateListingInput"];
+                    "application/json": components["schemas"]["CreateIntegrationInput"];
                 };
             };
             responses: {
@@ -667,7 +667,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/listings/{listing_id}/sync-ical": {
+    "/integrations/{integration_id}/sync-ical": {
         parameters: {
             query?: never;
             header?: never;
@@ -682,7 +682,7 @@ export interface paths {
                 query?: never;
                 header?: never;
                 path: {
-                    listing_id: components["parameters"]["ListingIdPath"];
+                    integration_id: components["parameters"]["ListingIdPath"];
                 };
                 cookie?: never;
             };
@@ -1834,12 +1834,14 @@ export interface components {
             id: components["schemas"]["UUID"];
             organization_id: components["schemas"]["UUID"];
             unit_id: components["schemas"]["UUID"];
-            channel_id: components["schemas"]["UUID"];
             external_listing_id?: string | null;
             public_name: string;
             /** Format: uri */
             ical_import_url?: string | null;
             is_active: boolean;
+            channel_kind?: string;
+            channel_name?: string;
+            external_account_ref?: string | null;
         };
         Guest: {
             id: components["schemas"]["UUID"];
@@ -1853,8 +1855,7 @@ export interface components {
             id: components["schemas"]["UUID"];
             organization_id: components["schemas"]["UUID"];
             unit_id: components["schemas"]["UUID"];
-            listing_id?: components["schemas"]["UUID"];
-            channel_id?: components["schemas"]["UUID"];
+            integration_id?: components["schemas"]["UUID"];
             guest_id?: components["schemas"]["UUID"];
             external_reservation_id?: string | null;
             status: components["schemas"]["ReservationStatus"];
@@ -2020,14 +2021,16 @@ export interface components {
             kind: components["schemas"]["ChannelKind"];
             name: string;
         };
-        CreateListingInput: {
+        CreateIntegrationInput: {
             organization_id: components["schemas"]["UUID"];
             unit_id: components["schemas"]["UUID"];
-            channel_id: components["schemas"]["UUID"];
+            channel_kind: string;
+            channel_name: string;
             external_listing_id?: string;
             public_name: string;
             /** Format: uri */
             ical_import_url?: string;
+            external_account_ref?: string;
         };
         CreateGuestInput: {
             organization_id: components["schemas"]["UUID"];
@@ -2046,8 +2049,7 @@ export interface components {
         CreateReservationInput: {
             organization_id: components["schemas"]["UUID"];
             unit_id: components["schemas"]["UUID"];
-            listing_id?: components["schemas"]["UUID"];
-            channel_id?: components["schemas"]["UUID"];
+            integration_id?: components["schemas"]["UUID"];
             guest_id?: components["schemas"]["UUID"];
             external_reservation_id?: string;
             /** @default manual */

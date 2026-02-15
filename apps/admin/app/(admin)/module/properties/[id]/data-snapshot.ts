@@ -89,7 +89,7 @@ export async function loadPropertyRelationSnapshot(params: {
     fetchScopedRows({
       accessToken,
       baseUrl,
-      path: "/marketplace/listings",
+      path: "/listings",
       query: { org_id: orgId, limit: 400 },
     }),
     fetchScopedRows({
@@ -125,7 +125,7 @@ export async function loadPropertyRelationSnapshot(params: {
       .filter((rowId): rowId is string => Boolean(rowId))
   );
   const applications = (applicationRows ?? []).filter((row) =>
-    listingIds.has(asString(row.marketplace_listing_id))
+    listingIds.has(asString(row.listing_id))
   );
 
   const leaseIds = new Set(

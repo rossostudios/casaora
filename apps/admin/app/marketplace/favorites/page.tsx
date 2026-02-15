@@ -44,7 +44,7 @@ export default function FavoritesPage() {
 
     async function fetchListings() {
       try {
-        const res = await fetch("/api/marketplace/listings?limit=120");
+        const res = await fetch("/api/public/listings?limit=120");
         if (!res.ok) throw new Error("Failed to fetch");
         const data = await res.json();
         setAllListings(data.listings ?? []);

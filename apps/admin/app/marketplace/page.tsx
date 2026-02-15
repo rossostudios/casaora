@@ -3,7 +3,7 @@ import { Suspense } from "react";
 
 import { PublicFooter } from "@/components/marketplace/public-footer";
 import { PublicHeader } from "@/components/marketplace/public-header";
-import { fetchPublicMarketplaceListings } from "@/lib/api";
+import { fetchPublicListings } from "@/lib/api";
 import {
   countMarketplaceActiveFilters,
   marketplaceSortLabel,
@@ -50,7 +50,7 @@ export default async function MarketplacePage({
   let apiError: string | null = null;
 
   try {
-    const response = await fetchPublicMarketplaceListings(
+    const response = await fetchPublicListings(
       toMarketplaceListParams(filters, defaultOrgId || undefined)
     );
     const records = sortMarketplaceListings(

@@ -1,5 +1,5 @@
 import { MarketplaceListingCard } from "@/components/marketplace/listing-card";
-import { fetchPublicMarketplaceListings } from "@/lib/api";
+import { fetchPublicListings } from "@/lib/api";
 import {
   toMarketplaceListingViewModel,
   type MarketplaceListingViewModel,
@@ -26,7 +26,7 @@ export async function SimilarListings({
   let similar: MarketplaceListingViewModel[] = [];
 
   try {
-    const response = await fetchPublicMarketplaceListings({
+    const response = await fetchPublicListings({
       city: city || undefined,
       propertyType: propertyType || undefined,
       orgId,

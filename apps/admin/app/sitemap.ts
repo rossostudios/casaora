@@ -1,6 +1,6 @@
 import type { MetadataRoute } from "next";
 
-import { fetchPublicMarketplaceListings } from "@/lib/api";
+import { fetchPublicListings } from "@/lib/api";
 
 const TRAILING_SLASHES_REGEX = /\/+$/;
 
@@ -16,7 +16,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   ];
 
   try {
-    const response = await fetchPublicMarketplaceListings({
+    const response = await fetchPublicListings({
       orgId: defaultOrgId || undefined,
       limit: 200,
     });

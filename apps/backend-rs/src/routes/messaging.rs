@@ -199,11 +199,7 @@ async fn process_messages(
         .get("x-api-key")
         .and_then(|v| v.to_str().ok())
         .unwrap_or_default();
-    let expected_key = state
-        .config
-        .internal_api_key
-        .as_deref()
-        .unwrap_or_default();
+    let expected_key = state.config.internal_api_key.as_deref().unwrap_or_default();
     if !expected_key.is_empty() && api_key != expected_key {
         return Err(AppError::Unauthorized(
             "Invalid or missing API key.".to_string(),
@@ -221,13 +217,21 @@ async fn whatsapp_webhook_verify(
     Query(params): Query<std::collections::HashMap<String, String>>,
 ) -> AppResult<impl IntoResponse> {
     let mode = params.get("hub.mode").map(String::as_str).unwrap_or("");
-    let token = params.get("hub.verify_token").map(String::as_str).unwrap_or("");
-    let challenge = params.get("hub.challenge").map(String::as_str).unwrap_or("");
+    let token = params
+        .get("hub.verify_token")
+        .map(String::as_str)
+        .unwrap_or("");
+    let challenge = params
+        .get("hub.challenge")
+        .map(String::as_str)
+        .unwrap_or("");
 
     if mode == "subscribe" && !token.is_empty() {
         Ok(challenge.to_string())
     } else {
-        Err(AppError::Forbidden("Invalid verification request.".to_string()))
+        Err(AppError::Forbidden(
+            "Invalid verification request.".to_string(),
+        ))
     }
 }
 

@@ -40,9 +40,10 @@ struct PlatformOrgPath {
 
 /// Verify the caller is a platform admin.
 async fn require_platform_admin(state: &AppState, user_id: &str) -> AppResult<()> {
-    let pool = state.db_pool.as_ref().ok_or_else(|| {
-        AppError::Dependency("Database not configured.".to_string())
-    })?;
+    let pool = state
+        .db_pool
+        .as_ref()
+        .ok_or_else(|| AppError::Dependency("Database not configured.".to_string()))?;
 
     match get_row(pool, "platform_admins", user_id, "user_id").await {
         Ok(_) => Ok(()),
@@ -83,14 +84,30 @@ async fn list_all_orgs(
             let mut sub_filter = Map::new();
             sub_filter.insert("organization_id".to_string(), Value::String(org_id.clone()));
 
-            let subs = list_rows(pool, "org_subscriptions", Some(&sub_filter), 1, 0, "created_at", false)
-                .await
-                .unwrap_or_default();
+            let subs = list_rows(
+                pool,
+                "org_subscriptions",
+                Some(&sub_filter),
+                1,
+                0,
+                "created_at",
+                false,
+            )
+            .await
+            .unwrap_or_default();
             let sub = subs.into_iter().next();
 
-            let members = list_rows(pool, "organization_members", Some(&sub_filter), 1000, 0, "id", true)
-                .await
-                .unwrap_or_default();
+            let members = list_rows(
+                pool,
+                "organization_members",
+                Some(&sub_filter),
+                1000,
+                0,
+                "id",
+                true,
+            )
+            .await
+            .unwrap_or_default();
 
             let properties = list_rows(pool, "properties", Some(&sub_filter), 1000, 0, "id", true)
                 .await
@@ -150,9 +167,15 @@ async fn platform_stats(
     require_platform_admin(&state, &user_id).await?;
     let pool = db_pool(&state)?;
 
-    let all_orgs = list_rows(pool, "organizations", None, 10000, 0, "id", true).await.unwrap_or_default();
-    let all_subs = list_rows(pool, "org_subscriptions", None, 10000, 0, "id", true).await.unwrap_or_default();
-    let all_users = list_rows(pool, "app_users", None, 100000, 0, "id", true).await.unwrap_or_default();
+    let all_orgs = list_rows(pool, "organizations", None, 10000, 0, "id", true)
+        .await
+        .unwrap_or_default();
+    let all_subs = list_rows(pool, "org_subscriptions", None, 10000, 0, "id", true)
+        .await
+        .unwrap_or_default();
+    let all_users = list_rows(pool, "app_users", None, 100000, 0, "id", true)
+        .await
+        .unwrap_or_default();
 
     let active_subs = all_subs
         .iter()

@@ -86,7 +86,10 @@ async fn list_workflow_rules(
     let pool = db_pool(&state)?;
 
     let mut filters = Map::new();
-    filters.insert("organization_id".to_string(), Value::String(query.org_id.clone()));
+    filters.insert(
+        "organization_id".to_string(),
+        Value::String(query.org_id.clone()),
+    );
     if let Some(active) = query.is_active {
         filters.insert("is_active".to_string(), Value::Bool(active));
     }
@@ -129,14 +132,29 @@ async fn create_workflow_rule(
     Json(payload): Json<CreateWorkflowRuleInput>,
 ) -> AppResult<impl IntoResponse> {
     let user_id = require_user_id(&state, &headers).await?;
-    assert_org_role(&state, &user_id, &payload.organization_id, WORKFLOW_EDIT_ROLES).await?;
+    assert_org_role(
+        &state,
+        &user_id,
+        &payload.organization_id,
+        WORKFLOW_EDIT_ROLES,
+    )
+    .await?;
     let pool = db_pool(&state)?;
 
     let mut record = Map::new();
-    record.insert("organization_id".to_string(), Value::String(payload.organization_id.clone()));
+    record.insert(
+        "organization_id".to_string(),
+        Value::String(payload.organization_id.clone()),
+    );
     record.insert("name".to_string(), Value::String(payload.name));
-    record.insert("trigger_event".to_string(), Value::String(payload.trigger_event));
-    record.insert("action_type".to_string(), Value::String(payload.action_type));
+    record.insert(
+        "trigger_event".to_string(),
+        Value::String(payload.trigger_event),
+    );
+    record.insert(
+        "action_type".to_string(),
+        Value::String(payload.action_type),
+    );
     record.insert("action_config".to_string(), payload.action_config);
     record.insert("delay_minutes".to_string(), json!(payload.delay_minutes));
     record.insert("is_active".to_string(), Value::Bool(payload.is_active));

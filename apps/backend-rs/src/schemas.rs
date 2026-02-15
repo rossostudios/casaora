@@ -1,4 +1,14 @@
 use serde::Deserialize;
+use validator::Validate;
+
+use crate::error::AppError;
+
+#[allow(dead_code)]
+pub fn validate_input<T: Validate>(input: &T) -> Result<(), AppError> {
+    input
+        .validate()
+        .map_err(|errors| AppError::UnprocessableEntity(format!("Validation failed: {errors}")))
+}
 
 fn default_management_company() -> String {
     "management_company".to_string()
@@ -40,8 +50,9 @@ fn default_es_lang() -> String {
     "es".to_string()
 }
 
-#[derive(Debug, Clone, Deserialize, serde::Serialize)]
+#[derive(Debug, Clone, Deserialize, serde::Serialize, Validate)]
 pub struct CreateOrganizationInput {
+    #[validate(length(min = 1, max = 255))]
     pub name: String,
     pub legal_name: Option<String>,
     pub ruc: Option<String>,
@@ -63,8 +74,9 @@ pub struct UpdateOrganizationInput {
     pub timezone: Option<String>,
 }
 
-#[derive(Debug, Clone, Deserialize, serde::Serialize)]
+#[derive(Debug, Clone, Deserialize, serde::Serialize, Validate)]
 pub struct CreateOrganizationInviteInput {
+    #[validate(email)]
     pub email: String,
     #[serde(default = "default_operator_role")]
     pub role: String,
@@ -140,26 +152,12 @@ pub struct UpdateUnitInput {
 }
 
 #[derive(Debug, Clone, Deserialize, serde::Serialize)]
-pub struct CreateChannelInput {
-    pub organization_id: String,
-    pub kind: String,
-    pub name: String,
-    pub external_account_ref: Option<String>,
-}
-
-#[derive(Debug, Clone, Deserialize, serde::Serialize)]
-pub struct UpdateChannelInput {
-    pub kind: Option<String>,
-    pub name: Option<String>,
-    pub external_account_ref: Option<String>,
-    pub is_active: Option<bool>,
-}
-
-#[derive(Debug, Clone, Deserialize, serde::Serialize)]
-pub struct CreateListingInput {
+pub struct CreateIntegrationInput {
     pub organization_id: String,
     pub unit_id: String,
-    pub channel_id: String,
+    pub kind: String,
+    pub channel_name: String,
+    pub external_account_ref: Option<String>,
     pub external_listing_id: Option<String>,
     pub public_name: String,
     #[serde(default = "default_false")]
@@ -169,7 +167,10 @@ pub struct CreateListingInput {
 }
 
 #[derive(Debug, Clone, Deserialize, serde::Serialize)]
-pub struct UpdateListingInput {
+pub struct UpdateIntegrationInput {
+    pub kind: Option<String>,
+    pub channel_name: Option<String>,
+    pub external_account_ref: Option<String>,
     pub external_listing_id: Option<String>,
     pub public_name: Option<String>,
     pub marketplace_publishable: Option<bool>,
@@ -178,10 +179,12 @@ pub struct UpdateListingInput {
     pub is_active: Option<bool>,
 }
 
-#[derive(Debug, Clone, Deserialize, serde::Serialize)]
+#[derive(Debug, Clone, Deserialize, serde::Serialize, Validate)]
 pub struct CreateGuestInput {
     pub organization_id: String,
+    #[validate(length(min = 1, max = 255))]
     pub full_name: String,
+    #[validate(email)]
     pub email: Option<String>,
     pub phone_e164: Option<String>,
     pub document_type: Option<String>,
@@ -228,23 +231,16 @@ pub struct UnitsQuery {
 }
 
 #[derive(Debug, Clone, Deserialize, serde::Serialize)]
-pub struct ListingsQuery {
+pub struct IntegrationsQuery {
     pub org_id: String,
     pub unit_id: Option<String>,
-    pub channel_id: Option<String>,
+    pub kind: Option<String>,
     #[serde(default = "default_limit_100")]
     pub limit: i64,
 }
 
 #[derive(Debug, Clone, Deserialize, serde::Serialize)]
 pub struct GuestsQuery {
-    pub org_id: String,
-    #[serde(default = "default_limit_100")]
-    pub limit: i64,
-}
-
-#[derive(Debug, Clone, Deserialize, serde::Serialize)]
-pub struct ChannelsQuery {
     pub org_id: String,
     #[serde(default = "default_limit_100")]
     pub limit: i64,
@@ -302,13 +298,8 @@ pub struct UnitPath {
 }
 
 #[derive(Debug, Clone, Deserialize, serde::Serialize)]
-pub struct ChannelPath {
-    pub channel_id: String,
-}
-
-#[derive(Debug, Clone, Deserialize, serde::Serialize)]
-pub struct ListingPath {
-    pub listing_id: String,
+pub struct IntegrationPath {
+    pub integration_id: String,
 }
 
 #[derive(Debug, Clone, Deserialize, serde::Serialize)]
@@ -381,8 +372,7 @@ fn default_limit_60() -> i64 {
 pub struct CreateReservationInput {
     pub organization_id: String,
     pub unit_id: String,
-    pub listing_id: Option<String>,
-    pub channel_id: Option<String>,
+    pub integration_id: Option<String>,
     pub guest_id: Option<String>,
     pub external_reservation_id: Option<String>,
     #[serde(default = "default_booking_source_manual")]
@@ -641,9 +631,8 @@ pub struct MarkCollectionPaidInput {
 pub struct ReservationsQuery {
     pub org_id: String,
     pub unit_id: Option<String>,
-    pub listing_id: Option<String>,
+    pub integration_id: Option<String>,
     pub guest_id: Option<String>,
-    pub channel_id: Option<String>,
     pub status: Option<String>,
     #[serde(default = "default_limit_200")]
     pub limit: i64,
@@ -975,17 +964,17 @@ pub struct ReportsPeriodQuery {
 }
 
 #[derive(Debug, Clone, Deserialize, serde::Serialize)]
-pub struct MarketplaceListingsQuery {
+pub struct ListingsQuery {
     pub org_id: String,
     pub is_published: Option<bool>,
-    pub listing_id: Option<String>,
+    pub integration_id: Option<String>,
     #[serde(default = "default_limit_200")]
     pub limit: i64,
 }
 
 #[derive(Debug, Clone, Deserialize, serde::Serialize)]
-pub struct MarketplaceListingPath {
-    pub marketplace_listing_id: String,
+pub struct ListingPath {
+    pub listing_id: String,
 }
 
 fn default_marketplace_source() -> String {
@@ -1008,9 +997,9 @@ fn default_zero() -> f64 {
 }
 
 #[derive(Debug, Clone, Deserialize, serde::Serialize)]
-pub struct CreateMarketplaceListingInput {
+pub struct CreateListingInput {
     pub organization_id: String,
-    pub listing_id: Option<String>,
+    pub integration_id: Option<String>,
     pub property_id: Option<String>,
     pub unit_id: Option<String>,
     pub pricing_template_id: Option<String>,
@@ -1048,8 +1037,8 @@ pub struct CreateMarketplaceListingInput {
 }
 
 #[derive(Debug, Clone, Deserialize, serde::Serialize)]
-pub struct UpdateMarketplaceListingInput {
-    pub listing_id: Option<String>,
+pub struct UpdateListingInput {
+    pub integration_id: Option<String>,
     pub property_id: Option<String>,
     pub unit_id: Option<String>,
     pub pricing_template_id: Option<String>,
@@ -1080,7 +1069,7 @@ pub struct UpdateMarketplaceListingInput {
 }
 
 #[derive(Debug, Clone, Deserialize, serde::Serialize)]
-pub struct PublicMarketplaceListingsQuery {
+pub struct PublicListingsQuery {
     pub city: Option<String>,
     pub neighborhood: Option<String>,
     pub q: Option<String>,
@@ -1100,16 +1089,18 @@ pub struct PublicMarketplaceListingsQuery {
 }
 
 #[derive(Debug, Clone, Deserialize, serde::Serialize)]
-pub struct PublicMarketplaceSlugPath {
+pub struct PublicListingSlugPath {
     pub slug: String,
 }
 
-#[derive(Debug, Clone, Deserialize, serde::Serialize)]
-pub struct PublicMarketplaceApplicationInput {
+#[derive(Debug, Clone, Deserialize, serde::Serialize, Validate)]
+pub struct PublicListingApplicationInput {
     pub org_id: Option<String>,
-    pub marketplace_listing_id: Option<String>,
+    pub listing_id: Option<String>,
     pub listing_slug: Option<String>,
+    #[validate(length(min = 1, max = 255))]
     pub full_name: String,
+    #[validate(email)]
     pub email: String,
     pub phone_e164: Option<String>,
     pub document_number: Option<String>,

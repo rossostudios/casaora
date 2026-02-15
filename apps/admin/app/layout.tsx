@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 
+import { ApiErrorToaster } from "@/components/shell/api-error-toaster";
 import { Toaster } from "@/components/ui/sonner";
 import { LocaleProvider } from "@/lib/i18n/locale-context";
 import { getActiveLocale } from "@/lib/i18n/server";
@@ -68,6 +69,7 @@ export default async function RootLayout({
         <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
         <LocaleProvider initialLocale={locale}>{children}</LocaleProvider>
         <Toaster />
+        <ApiErrorToaster />
       </body>
     </html>
   );

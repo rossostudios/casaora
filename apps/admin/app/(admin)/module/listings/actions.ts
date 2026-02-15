@@ -73,10 +73,10 @@ function withParams(
 }
 
 function listingsUrl(params?: { success?: string; error?: string }): string {
-  return withParams("/module/marketplace-listings", params ?? {});
+  return withParams("/module/listings", params ?? {});
 }
 
-export async function createMarketplaceListingAction(formData: FormData) {
+export async function createListingAction(formData: FormData) {
   const organization_id = toStringValue(formData.get("organization_id"));
   if (!organization_id) {
     redirect(listingsUrl({ error: "Missing organization context." }));
@@ -156,10 +156,10 @@ export async function createMarketplaceListingAction(formData: FormData) {
   if (unit_id) payload.unit_id = unit_id;
 
   try {
-    await postJson("/marketplace/listings", payload);
-    revalidatePath("/module/marketplace-listings");
+    await postJson("/listings", payload);
+    revalidatePath("/module/listings");
     revalidatePath("/marketplace");
-    redirect(withParams(next, { success: "marketplace-listing-created" }));
+    redirect(withParams(next, { success: "listing-created" }));
   } catch (err) {
     unstable_rethrow(err);
     const message = err instanceof Error ? err.message : String(err);
@@ -167,12 +167,10 @@ export async function createMarketplaceListingAction(formData: FormData) {
   }
 }
 
-export async function publishMarketplaceListingAction(formData: FormData) {
-  const marketplace_listing_id = toStringValue(
-    formData.get("marketplace_listing_id")
-  );
-  if (!marketplace_listing_id) {
-    redirect(listingsUrl({ error: "marketplace_listing_id is required" }));
+export async function publishListingAction(formData: FormData) {
+  const listing_id = toStringValue(formData.get("listing_id"));
+  if (!listing_id) {
+    redirect(listingsUrl({ error: "listing_id is required" }));
   }
 
   const next = normalizeNext(
@@ -182,12 +180,12 @@ export async function publishMarketplaceListingAction(formData: FormData) {
 
   try {
     await postJson(
-      `/marketplace/listings/${encodeURIComponent(marketplace_listing_id)}/publish`,
+      `/listings/${encodeURIComponent(listing_id)}/publish`,
       {}
     );
-    revalidatePath("/module/marketplace-listings");
+    revalidatePath("/module/listings");
     revalidatePath("/marketplace");
-    redirect(withParams(next, { success: "marketplace-listing-published" }));
+    redirect(withParams(next, { success: "listing-published" }));
   } catch (err) {
     unstable_rethrow(err);
     const message = err instanceof Error ? err.message : String(err);
@@ -195,12 +193,10 @@ export async function publishMarketplaceListingAction(formData: FormData) {
   }
 }
 
-export async function unpublishMarketplaceListingAction(formData: FormData) {
-  const marketplace_listing_id = toStringValue(
-    formData.get("marketplace_listing_id")
-  );
-  if (!marketplace_listing_id) {
-    redirect(listingsUrl({ error: "marketplace_listing_id is required" }));
+export async function unpublishListingAction(formData: FormData) {
+  const listing_id = toStringValue(formData.get("listing_id"));
+  if (!listing_id) {
+    redirect(listingsUrl({ error: "listing_id is required" }));
   }
 
   const next = normalizeNext(
@@ -210,12 +206,12 @@ export async function unpublishMarketplaceListingAction(formData: FormData) {
 
   try {
     await patchJson(
-      `/marketplace/listings/${encodeURIComponent(marketplace_listing_id)}`,
+      `/listings/${encodeURIComponent(listing_id)}`,
       { is_published: false }
     );
-    revalidatePath("/module/marketplace-listings");
+    revalidatePath("/module/listings");
     revalidatePath("/marketplace");
-    redirect(withParams(next, { success: "marketplace-listing-unpublished" }));
+    redirect(withParams(next, { success: "listing-unpublished" }));
   } catch (err) {
     unstable_rethrow(err);
     const message = err instanceof Error ? err.message : String(err);

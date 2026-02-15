@@ -37,7 +37,7 @@ export function useMarketplaceApplyForm(params: {
 
   const applyStartUrl = useMemo(
     () =>
-      `/api/public/marketplace/listings/${encodeURIComponent(listingSlug)}/apply-start`,
+      `/api/public/listings/${encodeURIComponent(listingSlug)}/apply-start`,
     [listingSlug]
   );
 
@@ -92,7 +92,7 @@ export function useMarketplaceApplyForm(params: {
     };
 
     try {
-      const response = await fetch("/api/public/marketplace/applications", {
+      const response = await fetch("/api/public/listings/applications", {
         method: "POST",
         headers: {
           Accept: "application/json",

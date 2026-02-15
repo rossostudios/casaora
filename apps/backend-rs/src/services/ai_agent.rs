@@ -43,15 +43,14 @@ pub fn list_supported_tables() -> Vec<String> {
         "application_submissions",
         "audit_logs",
         "calendar_blocks",
-        "channels",
         "collection_records",
         "expenses",
         "guests",
         "integration_events",
         "lease_charges",
         "leases",
+        "integrations",
         "listings",
-        "marketplace_listings",
         "message_logs",
         "message_templates",
         "organization_invites",
@@ -368,12 +367,10 @@ async fn call_openai_chat_completion(
         {
             Ok(value) => value,
             Err(error) => {
-                let detail = if state.config.is_production() {
-                    "AI provider is unreachable.".to_string()
-                } else {
-                    format!("AI provider is unreachable on model '{model_name}': {error}")
-                };
-                last_error = Some(AppError::Dependency(detail));
+                tracing::error!(error = %error, model = %model_name, "AI provider is unreachable");
+                last_error = Some(AppError::Dependency(
+                    "AI provider is unreachable.".to_string(),
+                ));
                 if index < model_chain.len() - 1 {
                     fallback_used = true;
                     continue;
@@ -1038,7 +1035,7 @@ async fn tool_get_org_snapshot(state: &AppState, org_id: &str) -> AppResult<Valu
         "application_submissions",
         "leases",
         "collection_records",
-        "marketplace_listings",
+        "listings",
     ];
 
     let pool = db_pool(state)?;
@@ -1216,8 +1213,7 @@ fn table_config(table: &str) -> AppResult<TableConfig> {
         "organization_invites"
         | "properties"
         | "units"
-        | "channels"
-        | "listings"
+        | "integrations"
         | "guests"
         | "reservations"
         | "calendar_blocks"
@@ -1225,7 +1221,7 @@ fn table_config(table: &str) -> AppResult<TableConfig> {
         | "expenses"
         | "owner_statements"
         | "pricing_templates"
-        | "marketplace_listings"
+        | "listings"
         | "application_submissions"
         | "application_events"
         | "leases"
@@ -1481,9 +1477,7 @@ fn db_pool(state: &AppState) -> AppResult<&sqlx::PgPool> {
     })
 }
 
-fn supabase_error(state: &AppState, error: &sqlx::Error) -> AppError {
-    if state.config.is_production() {
-        return AppError::Dependency("Supabase request failed.".to_string());
-    }
-    AppError::Dependency(format!("Supabase request failed: {error}"))
+fn supabase_error(_state: &AppState, error: &sqlx::Error) -> AppError {
+    tracing::error!(error = %error, "Database query failed");
+    AppError::Dependency("External service request failed.".to_string())
 }

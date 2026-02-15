@@ -175,8 +175,7 @@ function keysFromRows(rows: DataTableRow[]): string[] {
     "organization_id",
     "property_id",
     "unit_id",
-    "channel_id",
-    "listing_id",
+    "integration_id",
     "guest_id",
     "reservation_id",
     "template_id",
@@ -857,7 +856,7 @@ export function DataTable<TRow extends DataTableRow = DataTableRow>({
                             "organizations",
                             "properties",
                             "units",
-                            "channels",
+                            "integrations",
                           ].includes(
                             String(rowHrefBase.split("/").filter(Boolean).pop())
                           ) ? (

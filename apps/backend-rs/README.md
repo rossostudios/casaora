@@ -1,10 +1,6 @@
-# Puerta Abierta Rust Backend (Migration Service)
+# Puerta Abierta Rust Backend
 
-This service is the Axum + SQLx backend used to migrate off FastAPI while preserving `/v1` API compatibility.
-
-## Migration status
-
-All 123/123 FastAPI endpoints have been migrated to Rust (Axum) with full wire compatibility. The proxy fallback (`PROXY_UNMIGRATED_TO`) is no longer required for any endpoint.
+Primary API backend built with Axum + SQLx, serving all `/v1` endpoints for the Puerta Abierta platform.
 
 ## Run locally
 
@@ -14,4 +10,4 @@ cp .env.example .env
 cargo run
 ```
 
-Default port is `8100` in this service to support dual-run with FastAPI (`8000`).
+The server listens on port `8000` by default. Override with the `PORT` environment variable.

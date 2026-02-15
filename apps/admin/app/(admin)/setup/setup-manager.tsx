@@ -27,19 +27,16 @@ import { humanizeKey } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 import {
-  createChannelAction,
-  createListingAction,
+  createIntegrationAction,
   createOrganizationAction,
   createPropertyAction,
   createUnitAction,
-  deleteChannelAction,
-  deleteListingAction,
+  deleteIntegrationAction,
   deleteOrganizationAction,
   deletePropertyAction,
   deleteUnitAction,
-  syncListingIcalAction,
-  updateChannelAction,
-  updateListingAction,
+  syncIntegrationIcalAction,
+  updateIntegrationAction,
   updateOrganizationAction,
   updatePropertyAction,
   updateUnitAction,
@@ -49,8 +46,7 @@ type SetupTab =
   | "organizations"
   | "properties"
   | "units"
-  | "channels"
-  | "listings";
+  | "integrations";
 
 type SetupManagerProps = {
   orgId: string;
@@ -58,11 +54,10 @@ type SetupManagerProps = {
   organizations: DataTableRow[];
   properties: DataTableRow[];
   units: DataTableRow[];
-  channels: DataTableRow[];
-  listings: DataTableRow[];
+  integrations: DataTableRow[];
 };
 
-type EntityKind = "organization" | "property" | "unit" | "channel" | "listing";
+type EntityKind = "organization" | "property" | "unit" | "integration";
 type SheetMode = "create" | "view" | "edit";
 
 const API_BASE_URL =
@@ -108,7 +103,7 @@ function sortKeys(keys: string[]): string[] {
     "organization_id",
     "property_id",
     "unit_id",
-    "channel_id",
+    "integration_id",
     "external_account_ref",
     "is_active",
     "created_at",
@@ -135,11 +130,9 @@ function recordLabel(kind: EntityKind, record: DataTableRow | null): string {
   if (kind === "property")
     return asString(record.name || record.code || record.id);
   if (kind === "unit") return asString(record.name || record.code || record.id);
-  if (kind === "channel")
-    return asString(record.name || record.kind || record.id);
-  if (kind === "listing")
+  if (kind === "integration")
     return asString(
-      record.public_name || record.external_listing_id || record.id
+      record.public_name || record.channel_name || record.kind || record.id
     );
   return asString(record.id);
 }
@@ -240,8 +233,7 @@ function toTab(value: string | null | undefined): SetupTab | null {
     value === "organizations" ||
     value === "properties" ||
     value === "units" ||
-    value === "channels" ||
-    value === "listings"
+    value === "integrations"
   )
     return value;
   return null;
@@ -253,8 +245,7 @@ export function SetupManager({
   organizations,
   properties,
   units,
-  channels,
-  listings,
+  integrations,
 }: SetupManagerProps) {
   const [tab, setTab] = useState<SetupTab>(
     () => toTab(initialTab ?? null) ?? "organizations"
@@ -287,17 +278,6 @@ export function SetupManager({
     [units]
   );
 
-  const channelOptions = useMemo(
-    () =>
-      channels
-        .map((row) => ({
-          id: asString(row.id),
-          label: asString(row.name || row.kind || row.id),
-        }))
-        .filter((item) => item.id),
-    [channels]
-  );
-
   const openSheet = useCallback(
     (
       nextKind: EntityKind,
@@ -327,9 +307,7 @@ export function SetupManager({
         ? "Propiedades"
         : tab === "units"
           ? "Unidades"
-          : tab === "channels"
-            ? "Canales"
-            : "Anuncios";
+          : "Integraciones";
 
   const sheetTitle = (() => {
     const labels =
@@ -339,9 +317,7 @@ export function SetupManager({
           ? { base: "Propiedad", create: "Nueva propiedad" }
           : sheetKind === "unit"
             ? { base: "Unidad", create: "Nueva unidad" }
-            : sheetKind === "channel"
-              ? { base: "Canal", create: "Nuevo canal" }
-              : { base: "Anuncio", create: "Nuevo anuncio" };
+            : { base: "Integración", create: "Nueva integración" };
 
     if (sheetMode === "create") return labels.create;
     const label = recordLabel(sheetKind, record);
@@ -397,9 +373,7 @@ export function SetupManager({
         ? properties
         : tab === "units"
           ? units
-          : tab === "channels"
-            ? channels
-            : listings;
+          : integrations;
 
   const cardTitle =
     tab === "organizations"
@@ -408,9 +382,7 @@ export function SetupManager({
         ? "Propiedades"
         : tab === "units"
           ? "Unidades"
-          : tab === "channels"
-            ? "Canales"
-            : "Anuncios";
+          : "Integraciones";
 
   const cardSubtitle =
     tab === "organizations"
@@ -419,9 +391,7 @@ export function SetupManager({
         ? "/properties"
         : tab === "units"
           ? "/units"
-          : tab === "channels"
-            ? "/channels"
-            : "/listings";
+          : "/integrations";
 
   const onNew = () => {
     const kind: EntityKind =
@@ -431,9 +401,7 @@ export function SetupManager({
           ? "property"
           : tab === "units"
             ? "unit"
-            : tab === "channels"
-              ? "channel"
-              : "listing";
+            : "integration";
     openSheet(kind, "create", null);
   };
 
@@ -444,24 +412,20 @@ export function SetupManager({
         ? renderActions("property")
         : tab === "units"
           ? renderActions("unit")
-          : tab === "channels"
-            ? renderActions("channel")
-            : renderActions("listing");
+          : renderActions("integration");
 
   const moduleLink =
     sheetKind === "property"
       ? "/module/properties"
       : sheetKind === "unit"
         ? "/module/units"
-        : sheetKind === "channel"
-          ? "/module/channels"
-          : sheetKind === "listing"
-            ? "/module/listings"
-            : null;
+        : sheetKind === "integration"
+          ? "/module/integrations"
+          : null;
 
   const recordId = asString(record?.id);
   const listingExportToken =
-    sheetKind === "listing" ? asString(record?.ical_export_token) : "";
+    sheetKind === "integration" ? asString(record?.ical_export_token) : "";
   const listingExportUrl = listingExportToken
     ? buildPublicIcalUrl(listingExportToken)
     : "";
@@ -479,8 +443,7 @@ export function SetupManager({
               {organizations.length +
                 properties.length +
                 units.length +
-                channels.length +
-                listings.length}{" "}
+                integrations.length}{" "}
               registros totales
             </Badge>
           </div>
@@ -511,21 +474,12 @@ export function SetupManager({
               </span>
             </TabButton>
             <TabButton
-              active={tab === "channels"}
-              onClick={() => setTab("channels")}
+              active={tab === "integrations"}
+              onClick={() => setTab("integrations")}
             >
-              Canales{" "}
+              Integraciones{" "}
               <span className="text-muted-foreground text-xs">
-                {channels.length}
-              </span>
-            </TabButton>
-            <TabButton
-              active={tab === "listings"}
-              onClick={() => setTab("listings")}
-            >
-              Anuncios{" "}
-              <span className="text-muted-foreground text-xs">
-                {listings.length}
+                {integrations.length}
               </span>
             </TabButton>
           </div>
@@ -573,9 +527,7 @@ export function SetupManager({
                     ? deletePropertyAction
                     : sheetKind === "unit"
                       ? deleteUnitAction
-                      : sheetKind === "channel"
-                        ? deleteChannelAction
-                        : deleteListingAction
+                      : deleteIntegrationAction
               }
               className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between"
               ref={deleteFormRef}
@@ -599,9 +551,7 @@ export function SetupManager({
                         ? "propiedad"
                         : sheetKind === "unit"
                           ? "unidad"
-                          : sheetKind === "channel"
-                            ? "canal"
-                            : "anuncio";
+                          : "integración";
 
                   toast("Confirmar eliminación", {
                     description: label
@@ -653,7 +603,7 @@ export function SetupManager({
               </Button>
             </div>
 
-            {sheetKind === "listing" ? (
+            {sheetKind === "integration" ? (
               <div className="space-y-3 rounded-md border bg-muted/20 p-3">
                 <div>
                   <p className="font-medium text-sm">Conexión iCal</p>
@@ -894,35 +844,8 @@ export function SetupManager({
               </form>
             ) : null}
 
-            {sheetKind === "channel" ? (
-              <form action={createChannelAction} className="grid gap-3">
-                <input name="tab" type="hidden" value={tab} />
-                <input name="organization_id" type="hidden" value={orgId} />
-                <div className="grid gap-1">
-                  <label className="font-medium text-xs">Tipo</label>
-                  <select
-                    className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
-                    defaultValue="airbnb"
-                    name="kind"
-                    required
-                  >
-                    <option value="airbnb">Airbnb</option>
-                    <option value="bookingcom">Booking.com</option>
-                    <option value="direct">Directo</option>
-                    <option value="vrbo">Vrbo</option>
-                    <option value="other">Otro</option>
-                  </select>
-                </div>
-                <div className="grid gap-1">
-                  <label className="font-medium text-xs">Nombre</label>
-                  <Input name="name" placeholder="Airbnb" required />
-                </div>
-                <Button type="submit">Crear canal</Button>
-              </form>
-            ) : null}
-
-            {sheetKind === "listing" ? (
-              <form action={createListingAction} className="grid gap-3">
+            {sheetKind === "integration" ? (
+              <form action={createIntegrationAction} className="grid gap-3">
                 <input name="tab" type="hidden" value={tab} />
                 <input name="organization_id" type="hidden" value={orgId} />
 
@@ -946,22 +869,26 @@ export function SetupManager({
                 </div>
 
                 <div className="grid gap-1">
-                  <label className="font-medium text-xs">Canal</label>
+                  <label className="font-medium text-xs">Tipo</label>
                   <select
                     className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
-                    defaultValue={channelOptions[0]?.id ?? ""}
-                    name="channel_id"
+                    defaultValue="airbnb"
+                    name="kind"
                     required
                   >
-                    {channelOptions.length === 0 ? (
-                      <option value="">Crea un canal primero</option>
-                    ) : null}
-                    {channelOptions.map((channel) => (
-                      <option key={channel.id} value={channel.id}>
-                        {channel.label}
-                      </option>
-                    ))}
+                    <option value="airbnb">Airbnb</option>
+                    <option value="bookingcom">Booking.com</option>
+                    <option value="direct">Directo</option>
+                    <option value="vrbo">Vrbo</option>
+                    <option value="other">Otro</option>
                   </select>
+                </div>
+
+                <div className="grid gap-1">
+                  <label className="font-medium text-xs">
+                    Nombre del canal
+                  </label>
+                  <Input name="channel_name" placeholder="Airbnb" required />
                 </div>
 
                 <div className="grid gap-1">
@@ -991,44 +918,29 @@ export function SetupManager({
                 </div>
 
                 <Button
-                  disabled={
-                    unitOptions.length === 0 || channelOptions.length === 0
-                  }
+                  disabled={unitOptions.length === 0}
                   type="submit"
                 >
-                  Crear anuncio
+                  Crear integración
                 </Button>
 
-                {unitOptions.length === 0 || channelOptions.length === 0 ? (
+                {unitOptions.length === 0 ? (
                   <div className="space-y-2 rounded-md border bg-muted/20 p-3 text-sm">
                     <p className="text-muted-foreground">
-                      Los anuncios conectan una unidad con un canal. Crea una
-                      unidad y un canal primero.
+                      Las integraciones conectan una unidad con un canal externo.
+                      Crea una unidad primero.
                     </p>
-                    <div className="flex flex-wrap gap-2">
-                      <Button
-                        onClick={() => {
-                          setTab("units");
-                          openSheet("unit", "create", null);
-                        }}
-                        size="sm"
-                        type="button"
-                        variant="outline"
-                      >
-                        Crear una unidad
-                      </Button>
-                      <Button
-                        onClick={() => {
-                          setTab("channels");
-                          openSheet("channel", "create", null);
-                        }}
-                        size="sm"
-                        type="button"
-                        variant="outline"
-                      >
-                        Crear un canal
-                      </Button>
-                    </div>
+                    <Button
+                      onClick={() => {
+                        setTab("units");
+                        openSheet("unit", "create", null);
+                      }}
+                      size="sm"
+                      type="button"
+                      variant="outline"
+                    >
+                      Crear una unidad
+                    </Button>
                   </div>
                 ) : null}
               </form>
@@ -1225,10 +1137,11 @@ export function SetupManager({
               </form>
             ) : null}
 
-            {sheetKind === "channel" ? (
-              <form action={updateChannelAction} className="grid gap-3">
+            {sheetKind === "integration" ? (
+              <form action={updateIntegrationAction} className="grid gap-3">
                 <input name="tab" type="hidden" value={tab} />
                 <input name="id" type="hidden" value={recordId} />
+
                 <div className="grid gap-1">
                   <label className="font-medium text-xs">Tipo</label>
                   <select
@@ -1244,50 +1157,17 @@ export function SetupManager({
                     <option value="other">Otro</option>
                   </select>
                 </div>
+
                 <div className="grid gap-1">
-                  <label className="font-medium text-xs">Nombre</label>
+                  <label className="font-medium text-xs">
+                    Nombre del canal
+                  </label>
                   <Input
-                    defaultValue={asString(record.name)}
-                    name="name"
+                    defaultValue={asString(record.channel_name)}
+                    name="channel_name"
                     required
                   />
                 </div>
-                <div className="grid gap-1">
-                  <label className="font-medium text-xs">
-                    Ref. de cuenta externa
-                  </label>
-                  <Input
-                    defaultValue={asString(record.external_account_ref)}
-                    name="external_account_ref"
-                  />
-                </div>
-                <div className="flex items-center justify-between gap-3 rounded-md border bg-muted/20 px-3 py-2">
-                  <div>
-                    <p className="font-medium text-sm">Activo</p>
-                    <p className="text-muted-foreground text-xs">
-                      Desactiva canales que ya no sincronizas o usas para
-                      vender.
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <input
-                      className="h-4 w-4"
-                      defaultChecked={Boolean(record.is_active ?? true)}
-                      name="is_active"
-                      type="checkbox"
-                      value="true"
-                    />
-                    <input name="is_active" type="hidden" value="false" />
-                  </div>
-                </div>
-                <Button type="submit">Guardar cambios</Button>
-              </form>
-            ) : null}
-
-            {sheetKind === "listing" ? (
-              <form action={updateListingAction} className="grid gap-3">
-                <input name="tab" type="hidden" value={tab} />
-                <input name="id" type="hidden" value={recordId} />
 
                 <div className="grid gap-1">
                   <label className="font-medium text-xs">Nombre público</label>
@@ -1295,6 +1175,16 @@ export function SetupManager({
                     defaultValue={asString(record.public_name)}
                     name="public_name"
                     required
+                  />
+                </div>
+
+                <div className="grid gap-1">
+                  <label className="font-medium text-xs">
+                    Ref. de cuenta externa
+                  </label>
+                  <Input
+                    defaultValue={asString(record.external_account_ref)}
+                    name="external_account_ref"
                   />
                 </div>
 
@@ -1326,7 +1216,7 @@ export function SetupManager({
                     <CopyValue value={listingExportUrl} />
                   ) : (
                     <p className="text-muted-foreground text-sm">
-                      Guarda el anuncio primero para generar una URL de
+                      Guarda la integración primero para generar una URL de
                       exportación.
                     </p>
                   )}
@@ -1346,7 +1236,7 @@ export function SetupManager({
                   <div>
                     <p className="font-medium text-sm">Activo</p>
                     <p className="text-muted-foreground text-xs">
-                      Desactiva anuncios que ya no sincronizas.
+                      Desactiva integraciones que ya no sincronizas.
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
@@ -1365,7 +1255,7 @@ export function SetupManager({
                   <Button type="submit">Guardar cambios</Button>
                   <Button
                     disabled={!asString(record.ical_import_url).trim()}
-                    formAction={syncListingIcalAction}
+                    formAction={syncIntegrationIcalAction}
                     type="submit"
                     variant="outline"
                   >

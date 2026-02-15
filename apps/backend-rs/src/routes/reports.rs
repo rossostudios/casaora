@@ -340,7 +340,7 @@ async fn transparency_summary_report(
 
     let listings = list_rows(
         pool,
-        "marketplace_listings",
+        "listings",
         Some(&json_map(&[(
             "organization_id",
             Value::String(query.org_id.clone()),
@@ -365,14 +365,14 @@ async fn transparency_summary_report(
         json_map(&[("organization_id", Value::String(query.org_id.clone()))])
     } else {
         json_map(&[(
-            "marketplace_listing_id",
+            "listing_id",
             Value::Array(listing_ids.iter().cloned().map(Value::String).collect()),
         )])
     };
 
     let fee_lines = list_rows(
         pool,
-        "marketplace_listing_fee_lines",
+        "listing_fee_lines",
         Some(&fee_filters),
         if listing_ids.is_empty() {
             1000
@@ -388,7 +388,7 @@ async fn transparency_summary_report(
     let mut lines_by_listing: std::collections::HashMap<String, Vec<Value>> =
         std::collections::HashMap::new();
     for line in fee_lines {
-        let listing_id = value_str(&line, "marketplace_listing_id");
+        let listing_id = value_str(&line, "listing_id");
         if listing_id.is_empty() {
             continue;
         }
@@ -598,7 +598,10 @@ async fn finance_dashboard(
         let (year, month) = {
             let m = end_date.month() as i32 - offset as i32;
             if m <= 0 {
-                (end_date.year() - 1 + (m - 1) / 12, ((m - 1) % 12 + 12) as u32 + 1)
+                (
+                    end_date.year() - 1 + (m - 1) / 12,
+                    ((m - 1) % 12 + 12) as u32 + 1,
+                )
             } else {
                 (end_date.year(), m as u32)
             }
@@ -617,13 +620,40 @@ async fn finance_dashboard(
     let org_filter = json_map(&[("organization_id", Value::String(query.org_id.clone()))]);
 
     // Fetch reservations
-    let reservations = list_rows(pool, "reservations", Some(&org_filter), 10000, 0, "created_at", false).await?;
+    let reservations = list_rows(
+        pool,
+        "reservations",
+        Some(&org_filter),
+        10000,
+        0,
+        "created_at",
+        false,
+    )
+    .await?;
 
     // Fetch expenses
-    let expenses = list_rows(pool, "expenses", Some(&org_filter), 10000, 0, "created_at", false).await?;
+    let expenses = list_rows(
+        pool,
+        "expenses",
+        Some(&org_filter),
+        10000,
+        0,
+        "created_at",
+        false,
+    )
+    .await?;
 
     // Fetch collections
-    let collections = list_rows(pool, "collection_records", Some(&org_filter), 20000, 0, "created_at", false).await?;
+    let collections = list_rows(
+        pool,
+        "collection_records",
+        Some(&org_filter),
+        20000,
+        0,
+        "created_at",
+        false,
+    )
+    .await?;
 
     // Compute monthly data
     let mut monthly_data: Vec<Value> = Vec::new();
@@ -637,7 +667,9 @@ async fn finance_dashboard(
             }
             let check_in = parse_date(&value_str(reservation, "check_in_date")).ok();
             let check_out = parse_date(&value_str(reservation, "check_out_date")).ok();
-            let (Some(ci), Some(co)) = (check_in, check_out) else { continue };
+            let (Some(ci), Some(co)) = (check_in, check_out) else {
+                continue;
+            };
             if co <= *month_start || ci >= *month_end {
                 continue;
             }
@@ -681,7 +713,11 @@ async fn finance_dashboard(
                 }
             }
         }
-        let collection_rate = if scheduled > 0 { round4(paid as f64 / scheduled as f64) } else { 0.0 };
+        let collection_rate = if scheduled > 0 {
+            round4(paid as f64 / scheduled as f64)
+        } else {
+            0.0
+        };
 
         monthly_data.push(json!({
             "month": label,
@@ -695,14 +731,22 @@ async fn finance_dashboard(
     }
 
     // Expense breakdown by category (full period)
-    let period_start = month_boundaries.first().map(|(s, _, _)| *s).unwrap_or(end_date);
-    let mut category_totals: std::collections::HashMap<String, f64> = std::collections::HashMap::new();
+    let period_start = month_boundaries
+        .first()
+        .map(|(s, _, _)| *s)
+        .unwrap_or(end_date);
+    let mut category_totals: std::collections::HashMap<String, f64> =
+        std::collections::HashMap::new();
     for expense in &expenses {
         if let Ok(expense_date) = parse_date(&value_str(expense, "expense_date")) {
             if expense_date >= period_start && expense_date <= end_date {
                 let (amount, _) = expense_amount_pyg(expense);
                 let category = value_str(expense, "category");
-                let cat = if category.is_empty() { "other".to_string() } else { category };
+                let cat = if category.is_empty() {
+                    "other".to_string()
+                } else {
+                    category
+                };
                 *category_totals.entry(cat).or_insert(0.0) += amount;
             }
         }

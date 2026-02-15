@@ -9,13 +9,12 @@ export type ChecklistItem = {
 };
 
 type EntityCounts = {
-  channels: number;
-  listings: number;
+  integrations: number;
   reservations: number;
   tasks: number;
   expenses: number;
   pricing: number;
-  marketplaceListings: number;
+  listings: number;
   applications: number;
   leases: number;
   collections: number;
@@ -23,16 +22,10 @@ type EntityCounts = {
 
 const STR_ITEMS: Omit<ChecklistItem, "isDone">[] = [
   {
-    id: "str-channels",
-    labelEn: "Connect your first channel",
-    labelEs: "Conecta tu primer canal",
-    href: "/module/channels",
-  },
-  {
-    id: "str-listings",
-    labelEn: "Create a listing with iCal sync",
-    labelEs: "Crea un anuncio con sync iCal",
-    href: "/setup?tab=listings",
+    id: "str-integrations",
+    labelEn: "Connect your first integration",
+    labelEs: "Conecta tu primera integración",
+    href: "/module/integrations",
   },
   {
     id: "str-reservations",
@@ -65,7 +58,7 @@ const LTR_ITEMS: Omit<ChecklistItem, "isDone">[] = [
     id: "ltr-marketplace",
     labelEn: "Publish a marketplace listing",
     labelEs: "Publica un anuncio en el marketplace",
-    href: "/module/marketplace-listings",
+    href: "/module/listings",
   },
   {
     id: "ltr-applications",
@@ -89,10 +82,8 @@ const LTR_ITEMS: Omit<ChecklistItem, "isDone">[] = [
 
 function isDoneForId(id: string, counts: EntityCounts): boolean {
   switch (id) {
-    case "str-channels":
-      return counts.channels > 0;
-    case "str-listings":
-      return counts.listings > 0;
+    case "str-integrations":
+      return counts.integrations > 0;
     case "str-reservations":
       return counts.reservations > 0;
     case "str-tasks":
@@ -102,7 +93,7 @@ function isDoneForId(id: string, counts: EntityCounts): boolean {
     case "ltr-pricing":
       return counts.pricing > 0;
     case "ltr-marketplace":
-      return counts.marketplaceListings > 0;
+      return counts.listings > 0;
     case "ltr-applications":
       return counts.applications > 0;
     case "ltr-leases":

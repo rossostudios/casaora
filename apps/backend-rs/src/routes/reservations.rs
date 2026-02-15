@@ -139,14 +139,11 @@ async fn list_reservations(
     if let Some(unit_id) = non_empty_opt(query.unit_id.as_deref()) {
         filters.insert("unit_id".to_string(), Value::String(unit_id));
     }
-    if let Some(listing_id) = non_empty_opt(query.listing_id.as_deref()) {
-        filters.insert("listing_id".to_string(), Value::String(listing_id));
+    if let Some(integration_id) = non_empty_opt(query.integration_id.as_deref()) {
+        filters.insert("integration_id".to_string(), Value::String(integration_id));
     }
     if let Some(guest_id) = non_empty_opt(query.guest_id.as_deref()) {
         filters.insert("guest_id".to_string(), Value::String(guest_id));
-    }
-    if let Some(channel_id) = non_empty_opt(query.channel_id.as_deref()) {
-        filters.insert("channel_id".to_string(), Value::String(channel_id));
     }
     if let Some(status) = non_empty_opt(query.status.as_deref()) {
         filters.insert("status".to_string(), Value::String(status));

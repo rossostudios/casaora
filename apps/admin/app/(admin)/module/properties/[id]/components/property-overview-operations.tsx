@@ -40,7 +40,7 @@ export function PropertyOverviewOperations({
       label: isEn ? "Listings" : "Anuncios",
       value: overview.publishedListingCount,
       description: isEn ? "Live in marketplace" : "Publicados",
-      href: `/module/marketplace-listings?property_id=${encodeURIComponent(recordId)}`,
+      href: `/module/listings?property_id=${encodeURIComponent(recordId)}`,
     },
     {
       id: "applications",

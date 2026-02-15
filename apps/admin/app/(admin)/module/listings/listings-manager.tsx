@@ -7,10 +7,10 @@ import { usePathname, useSearchParams } from "next/navigation";
 import { useMemo, useState } from "react";
 
 import {
-  createMarketplaceListingAction,
-  publishMarketplaceListingAction,
-  unpublishMarketplaceListingAction,
-} from "@/app/(admin)/module/marketplace-listings/actions";
+  createListingAction,
+  publishListingAction,
+  unpublishListingAction,
+} from "@/app/(admin)/module/listings/actions";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { DataTable, type DataTableRow } from "@/components/ui/data-table";
@@ -39,7 +39,7 @@ function asBoolean(value: unknown): boolean {
   return value === true;
 }
 
-export function MarketplaceListingsManager({
+export function ListingsManager({
   orgId,
   listings,
   pricingTemplates,
@@ -350,9 +350,9 @@ export function MarketplaceListingsManager({
               ) : null}
 
               {published ? (
-                <Form action={unpublishMarketplaceListingAction}>
+                <Form action={unpublishListingAction}>
                   <input
-                    name="marketplace_listing_id"
+                    name="listing_id"
                     type="hidden"
                     value={id}
                   />
@@ -362,9 +362,9 @@ export function MarketplaceListingsManager({
                   </Button>
                 </Form>
               ) : (
-                <Form action={publishMarketplaceListingAction}>
+                <Form action={publishListingAction}>
                   <input
-                    name="marketplace_listing_id"
+                    name="listing_id"
                     type="hidden"
                     value={id}
                   />
@@ -390,7 +390,7 @@ export function MarketplaceListingsManager({
         open={open}
         title={isEn ? "New marketplace listing" : "Nuevo anuncio marketplace"}
       >
-        <Form action={createMarketplaceListingAction} className="space-y-4">
+        <Form action={createListingAction} className="space-y-4">
           <input name="organization_id" type="hidden" value={orgId} />
           <input name="next" type="hidden" value={nextPath} />
 

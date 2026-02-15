@@ -4,6 +4,11 @@ use tower_http::cors::{Any, CorsLayer};
 use crate::config::AppConfig;
 
 pub fn build_cors_layer(config: &AppConfig) -> CorsLayer {
+    let mut headers = vec![ACCEPT, AUTHORIZATION, CONTENT_TYPE];
+    if config.auth_dev_overrides_enabled() {
+        headers.push(axum::http::header::HeaderName::from_static("x-user-id"));
+    }
+
     let mut layer = CorsLayer::new()
         .allow_methods([
             axum::http::Method::GET,
@@ -13,12 +18,7 @@ pub fn build_cors_layer(config: &AppConfig) -> CorsLayer {
             axum::http::Method::DELETE,
             axum::http::Method::OPTIONS,
         ])
-        .allow_headers([
-            ACCEPT,
-            AUTHORIZATION,
-            CONTENT_TYPE,
-            axum::http::header::HeaderName::from_static("x-user-id"),
-        ]);
+        .allow_headers(headers);
 
     if config
         .cors_origins

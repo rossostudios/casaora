@@ -145,7 +145,7 @@ function roleQuickActions(role: DashboardRole): QuickAction[] {
         icon: ChartIcon,
       },
       {
-        href: "/module/marketplace-listings",
+        href: "/module/listings",
         labelEn: "Marketplace quality",
         labelEs: "Calidad de anuncios",
         detailEn: "Publish complete listings with transparent pricing.",
@@ -386,9 +386,8 @@ export default async function DashboardPage({
   let tasks: unknown[] = [];
   let applications: unknown[] = [];
   let collections: unknown[] = [];
-  let marketplaceListings: unknown[] = [];
-  let channels: unknown[] = [];
   let listings: unknown[] = [];
+  let integrations: unknown[] = [];
   let pricing: unknown[] = [];
   let expenses: unknown[] = [];
   let leases: unknown[] = [];
@@ -416,9 +415,8 @@ export default async function DashboardPage({
         taskRows,
         appRows,
         collectionRows,
-        marketplaceRows,
-        channelRows,
         listingRows,
+        integrationRows,
         pricingRows,
         expenseRows,
         leaseRows,
@@ -433,9 +431,8 @@ export default async function DashboardPage({
         safeList("/tasks", orgId),
         safeList("/applications", orgId),
         safeList("/collections", orgId),
-        safeList("/marketplace/listings", orgId),
-        safeList("/channels", orgId),
         safeList("/listings", orgId),
+        safeList("/integrations", orgId),
         safeList("/pricing-templates", orgId),
         safeList("/expenses", orgId),
         safeList("/leases", orgId),
@@ -451,9 +448,8 @@ export default async function DashboardPage({
       tasks = taskRows;
       applications = appRows;
       collections = collectionRows;
-      marketplaceListings = marketplaceRows;
-      channels = channelRows;
       listings = listingRows;
+      integrations = integrationRows;
       pricing = pricingRows;
       expenses = expenseRows;
       leases = leaseRows;
@@ -547,7 +543,7 @@ export default async function DashboardPage({
       : "0%";
 
   const publishedListings = (
-    marketplaceListings as Record<string, unknown>[]
+    listings as Record<string, unknown>[]
   ).filter((row) => Boolean(row.is_published));
   const transparentListings = publishedListings.filter((row) =>
     Boolean(row.fee_breakdown_complete)
@@ -718,13 +714,12 @@ export default async function DashboardPage({
             ];
 
   const checklistItems = getChecklistItems(orgRentalMode, {
-    channels: channels.length,
-    listings: listings.length,
+    integrations: integrations.length,
     reservations: reservations.length,
     tasks: tasks.length,
     expenses: expenses.length,
     pricing: pricing.length,
-    marketplaceListings: marketplaceListings.length,
+    listings: listings.length,
     applications: applications.length,
     leases: leases.length,
     collections: collections.length,
@@ -775,8 +770,8 @@ export default async function DashboardPage({
           </AlertTitle>
           <AlertDescription>
             {isEn
-              ? "Great start. Continue with channels, listings, and daily operations."
-              : "Excelente inicio. Continúa con canales, anuncios y la operación diaria."}
+              ? "Great start. Continue with integrations, listings, and daily operations."
+              : "Excelente inicio. Continúa con integraciones, anuncios y la operación diaria."}
           </AlertDescription>
         </Alert>
       ) : null}

@@ -13,18 +13,6 @@ function formatBackendError(text: string): string {
     if (typeof detail === "string") {
       return detail;
     }
-    if (Array.isArray(detail)) {
-      const messages = detail
-        .map((item) => {
-          if (!item || typeof item !== "object") return "";
-          const record = item as Record<string, unknown>;
-          return typeof record.msg === "string" ? record.msg : "";
-        })
-        .filter(Boolean);
-      if (messages.length) {
-        return messages.join("; ");
-      }
-    }
     return JSON.stringify(detail);
   } catch {
     return text;

@@ -317,7 +317,10 @@ async fn list_expense_rows(pool: &sqlx::PgPool, query: &ExpensesQuery) -> AppRes
         .build()
         .fetch_all(pool)
         .await
-        .map_err(|error| AppError::Dependency(format!("Supabase request failed: {error}")))?;
+        .map_err(|error| {
+            tracing::error!(error = %error, "Database query failed");
+            AppError::Dependency("External service request failed.".to_string())
+        })?;
 
     Ok(rows
         .into_iter()

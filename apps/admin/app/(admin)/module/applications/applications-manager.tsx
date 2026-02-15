@@ -53,7 +53,7 @@ type ApplicationRow = DataTableRow & {
   phone_e164: string | null;
   status: string;
   status_label: string;
-  marketplace_listing_title: string;
+  listing_title: string;
   monthly_income: number;
   first_response_minutes: number;
   created_at: string;
@@ -327,7 +327,7 @@ function buildMessageLinks(
   const context = {
     full_name: row.full_name,
     listing_title:
-      row.marketplace_listing_title || (isEn ? "Property" : "Propiedad"),
+      row.listing_title || (isEn ? "Property" : "Propiedad"),
     status: row.status_label,
     email: row.email,
     phone_e164: row.phone_e164 ?? "",
@@ -589,8 +589,8 @@ export function ApplicationsManager({
         phone_e164: asString(application.phone_e164).trim() || null,
         status,
         status_label: statusLabel(status, isEn),
-        marketplace_listing_title: asString(
-          application.marketplace_listing_title
+        listing_title: asString(
+          application.listing_title
         ).trim(),
         monthly_income: asNumber(application.monthly_income),
         first_response_minutes: asNumber(application.first_response_minutes),
@@ -963,7 +963,7 @@ export function ApplicationsManager({
         },
       },
       {
-        accessorKey: "marketplace_listing_title",
+        accessorKey: "listing_title",
         header: isEn ? "Listing" : "Anuncio",
       },
       {
@@ -1331,7 +1331,7 @@ export function ApplicationsManager({
                         <div>
                           <p className="font-medium text-sm">{row.full_name}</p>
                           <p className="text-muted-foreground text-xs">
-                            {row.marketplace_listing_title ||
+                            {row.listing_title ||
                               (isEn ? "No listing" : "Sin anuncio")}
                           </p>
                         </div>
@@ -1416,7 +1416,7 @@ export function ApplicationsManager({
                         <div className="space-y-0.5">
                           <p className="font-medium text-sm">{row.full_name}</p>
                           <p className="truncate text-muted-foreground text-xs">
-                            {row.marketplace_listing_title ||
+                            {row.listing_title ||
                               (isEn ? "No listing" : "Sin anuncio")}
                           </p>
                         </div>

@@ -20,7 +20,10 @@ const DOC_EDIT_ROLES: &[&str] = &["owner_admin", "operator", "accountant"];
 
 pub fn router() -> axum::Router<AppState> {
     axum::Router::new()
-        .route("/documents", axum::routing::get(list_documents).post(create_document))
+        .route(
+            "/documents",
+            axum::routing::get(list_documents).post(create_document),
+        )
         .route(
             "/documents/{document_id}",
             axum::routing::get(get_document).delete(delete_document),
@@ -71,7 +74,10 @@ async fn list_documents(
     let pool = db_pool(&state)?;
 
     let mut filters = Map::new();
-    filters.insert("organization_id".to_string(), Value::String(query.org_id.clone()));
+    filters.insert(
+        "organization_id".to_string(),
+        Value::String(query.org_id.clone()),
+    );
     if let Some(et) = non_empty_opt(query.entity_type.as_deref()) {
         filters.insert("entity_type".to_string(), Value::String(et));
     }
@@ -121,8 +127,14 @@ async fn create_document(
     let pool = db_pool(&state)?;
 
     let mut record = Map::new();
-    record.insert("organization_id".to_string(), Value::String(payload.organization_id.clone()));
-    record.insert("entity_type".to_string(), Value::String(payload.entity_type));
+    record.insert(
+        "organization_id".to_string(),
+        Value::String(payload.organization_id.clone()),
+    );
+    record.insert(
+        "entity_type".to_string(),
+        Value::String(payload.entity_type),
+    );
     if let Some(eid) = payload.entity_id {
         record.insert("entity_id".to_string(), Value::String(eid));
     }
@@ -135,7 +147,10 @@ async fn create_document(
         record.insert("mime_type".to_string(), Value::String(mime));
     }
     record.insert("category".to_string(), Value::String(payload.category));
-    record.insert("uploaded_by_user_id".to_string(), Value::String(user_id.clone()));
+    record.insert(
+        "uploaded_by_user_id".to_string(),
+        Value::String(user_id.clone()),
+    );
 
     let created = create_row(pool, "documents", &record).await?;
     let entity_id = val_str(&created, "id");

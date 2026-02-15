@@ -200,8 +200,9 @@ fn unfold_ical_lines(text: &str) -> Vec<String> {
             continue;
         }
         if (line.starts_with(' ') || line.starts_with('\t')) && !unfolded.is_empty() {
-            let last = unfolded.last_mut().unwrap();
-            last.push_str(&line[1..]);
+            if let Some(last) = unfolded.last_mut() {
+                last.push_str(&line[1..]);
+            }
         } else {
             unfolded.push(line.to_string());
         }
@@ -289,12 +290,13 @@ fn parse_ical_events(ics_text: &str) -> Vec<ICalEvent> {
 
         // Store as array of [params_object, value_string].
         let entry = Value::Array(vec![Value::Object(params), Value::String(value)]);
-        event
+        if let Some(arr) = event
             .entry(&key)
             .or_insert_with(|| Value::Array(Vec::new()))
             .as_array_mut()
-            .unwrap()
-            .push(entry);
+        {
+            arr.push(entry);
+        }
     }
 
     let mut parsed = Vec::new();
@@ -395,23 +397,26 @@ async fn fetch_ical_text(client: &Client, url: &str) -> AppResult<String> {
         .send()
         .await
         .map_err(|e| {
+            tracing::error!(error = %e, url = %url, "iCal fetch request failed");
             if e.is_timeout() {
-                AppError::Dependency(format!("iCal fetch timed out for {url}"))
+                AppError::Dependency("iCal fetch timed out.".to_string())
             } else {
-                AppError::Dependency(format!("iCal fetch failed for {url}: {e}"))
+                AppError::Dependency("iCal fetch failed.".to_string())
             }
         })?;
 
     let status = resp.status();
     if !status.is_success() {
-        return Err(AppError::Dependency(format!(
-            "iCal fetch failed ({status}) for {url}"
-        )));
+        tracing::error!(status = %status, url = %url, "iCal fetch returned non-success status");
+        return Err(AppError::Dependency(
+            "iCal fetch failed with non-success status.".to_string(),
+        ));
     }
 
-    resp.text()
-        .await
-        .map_err(|e| AppError::Dependency(format!("iCal fetch failed for {url}: {e}")))
+    resp.text().await.map_err(|e| {
+        tracing::error!(error = %e, url = %url, "iCal fetch body read failed");
+        AppError::Dependency("iCal fetch failed.".to_string())
+    })
 }
 
 pub async fn sync_listing_ical_reservations(
@@ -424,14 +429,12 @@ pub async fn sync_listing_ical_reservations(
         .as_object()
         .ok_or_else(|| AppError::BadRequest("Invalid listing object.".to_string()))?;
 
-    let listing_id = string_value(obj.get("id"))
-        .ok_or_else(|| AppError::BadRequest("Listing is missing id.".to_string()))?;
+    let integration_id = string_value(obj.get("id"))
+        .ok_or_else(|| AppError::BadRequest("Integration is missing id.".to_string()))?;
     let org_id = string_value(obj.get("organization_id"))
-        .ok_or_else(|| AppError::BadRequest("Listing is missing organization_id.".to_string()))?;
+        .ok_or_else(|| AppError::BadRequest("Integration is missing organization_id.".to_string()))?;
     let unit_id = string_value(obj.get("unit_id"))
-        .ok_or_else(|| AppError::BadRequest("Listing is missing unit_id.".to_string()))?;
-    let channel_id = string_value(obj.get("channel_id"))
-        .ok_or_else(|| AppError::BadRequest("Listing is missing channel_id.".to_string()))?;
+        .ok_or_else(|| AppError::BadRequest("Integration is missing unit_id.".to_string()))?;
     let ical_url = string_value(obj.get("ical_import_url")).ok_or_else(|| {
         AppError::BadRequest("Listing does not have an iCal import URL configured.".to_string())
     })?;
@@ -460,7 +463,7 @@ pub async fn sync_listing_ical_reservations(
         "reservations",
         Some(&json_map(&[
             ("organization_id", Value::String(org_id.clone())),
-            ("listing_id", Value::String(listing_id.clone())),
+            ("integration_id", Value::String(integration_id.clone())),
             ("source", Value::String("ical".to_string())),
         ])),
         5000,
@@ -505,26 +508,30 @@ pub async fn sync_listing_ical_reservations(
             continue;
         }
 
-        let desired_status = if is_cancelled { "cancelled" } else { "confirmed" };
+        let desired_status = if is_cancelled {
+            "cancelled"
+        } else {
+            "confirmed"
+        };
 
         if let Some(existing_row) = existing_by_external.get(uid.as_str()) {
-            let existing_obj = existing_row.as_object().unwrap();
+            let Some(existing_obj) = existing_row.as_object() else {
+                ignored += 1;
+                continue;
+            };
             let mut patch = Map::new();
 
             if string_value(existing_obj.get("unit_id")).as_deref() != Some(&unit_id) {
                 patch.insert("unit_id".to_string(), Value::String(unit_id.clone()));
             }
-            if string_value(existing_obj.get("listing_id")).as_deref() != Some(&listing_id) {
-                patch.insert("listing_id".to_string(), Value::String(listing_id.clone()));
+            if string_value(existing_obj.get("integration_id")).as_deref() != Some(&integration_id) {
+                patch.insert("integration_id".to_string(), Value::String(integration_id.clone()));
             }
-            if string_value(existing_obj.get("channel_id")).as_deref() != Some(&channel_id) {
-                patch.insert("channel_id".to_string(), Value::String(channel_id.clone()));
+            if string_value(existing_obj.get("integration_id")).as_deref() != Some(&integration_id) {
+                patch.insert("integration_id".to_string(), Value::String(integration_id.clone()));
             }
             if string_value(existing_obj.get("source")).as_deref() != Some("ical") {
-                patch.insert(
-                    "source".to_string(),
-                    Value::String("ical".to_string()),
-                );
+                patch.insert("source".to_string(), Value::String("ical".to_string()));
             }
             if string_value(existing_obj.get("check_in_date")).as_deref() != Some(start_date) {
                 patch.insert(
@@ -542,27 +549,18 @@ pub async fn sync_listing_ical_reservations(
             let current_status = string_value(existing_obj.get("status")).unwrap_or_default();
             if desired_status == "cancelled" {
                 if current_status != "cancelled" {
-                    patch.insert(
-                        "status".to_string(),
-                        Value::String("cancelled".to_string()),
-                    );
+                    patch.insert("status".to_string(), Value::String("cancelled".to_string()));
                     patch.insert(
                         "cancel_reason".to_string(),
                         Value::String("Cancelled in iCal feed".to_string()),
                     );
-                    patch.insert(
-                        "cancelled_at".to_string(),
-                        Value::String(now_iso.clone()),
-                    );
+                    patch.insert("cancelled_at".to_string(), Value::String(now_iso.clone()));
                 }
             } else if current_status != "checked_in"
                 && current_status != "checked_out"
                 && current_status != "confirmed"
             {
-                patch.insert(
-                    "status".to_string(),
-                    Value::String("confirmed".to_string()),
-                );
+                patch.insert("status".to_string(), Value::String("confirmed".to_string()));
                 patch.insert("cancel_reason".to_string(), Value::Null);
                 patch.insert("cancelled_at".to_string(), Value::Null);
             }
@@ -609,23 +607,14 @@ pub async fn sync_listing_ical_reservations(
         let mut payload = json_map(&[
             ("organization_id", Value::String(org_id.clone())),
             ("unit_id", Value::String(unit_id.clone())),
-            ("listing_id", Value::String(listing_id.clone())),
-            ("channel_id", Value::String(channel_id.clone())),
+            ("integration_id", Value::String(integration_id.clone())),
+            ("integration_id", Value::String(integration_id.clone())),
             ("external_reservation_id", Value::String(uid.clone())),
             ("status", Value::String("confirmed".to_string())),
             ("source", Value::String("ical".to_string())),
-            (
-                "check_in_date",
-                Value::String(start_date.to_string()),
-            ),
-            (
-                "check_out_date",
-                Value::String(end_date.to_string()),
-            ),
-            (
-                "created_by_user_id",
-                Value::String(user_id.to_string()),
-            ),
+            ("check_in_date", Value::String(start_date.to_string())),
+            ("check_out_date", Value::String(end_date.to_string())),
+            ("created_by_user_id", Value::String(user_id.to_string())),
         ]);
         if !summary.is_empty() {
             payload.insert(
@@ -698,13 +687,7 @@ pub async fn sync_listing_ical_reservations(
 
     if !errors.is_empty() {
         let truncated = errors.len() > 8;
-        result["errors"] = Value::Array(
-            errors
-                .into_iter()
-                .take(8)
-                .map(Value::String)
-                .collect(),
-        );
+        result["errors"] = Value::Array(errors.into_iter().take(8).map(Value::String).collect());
         result["errors_truncated"] = Value::Bool(truncated);
     }
 

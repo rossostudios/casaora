@@ -3,7 +3,7 @@
 Bootstrap a new Puerta Abierta database in Supabase:
 - Apply db/schema.sql
 - Insert a starter user + organization + membership
-- Print the IDs to use in apps/admin/.env.local and apps/backend/.env
+- Print the IDs to use in apps/admin/.env.local and apps/backend-rs/.env
 
 Requires a Supabase Personal Access Token (PAT). See execute_sql.py for token sources.
 

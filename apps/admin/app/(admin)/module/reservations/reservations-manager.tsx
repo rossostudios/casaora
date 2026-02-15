@@ -52,7 +52,8 @@ type ReservationRow = {
   guest_id?: string | null;
   guest_name?: string | null;
 
-  channel_id?: string | null;
+  integration_id?: string | null;
+  integration_name?: string | null;
   channel_name?: string | null;
 };
 
@@ -222,7 +223,7 @@ export function ReservationsManager({
           row.guest_name,
           row.unit_name,
           row.property_name,
-          row.channel_name,
+          row.integration_name,
           row.status,
         ]
           .map((value) => asString(value).trim().toLowerCase())
@@ -252,8 +253,8 @@ export function ReservationsManager({
           guest_id: asString(row.guest_id).trim() || null,
           guest_name: asString(row.guest_name).trim() || null,
 
-          channel_id: asString(row.channel_id).trim() || null,
-          channel_name: asString(row.channel_name).trim() || null,
+          integration_id: asString(row.integration_id).trim() || null,
+          integration_name: asString(row.integration_name).trim() || null,
 
           total_amount: asNumber(row.total_amount) ?? null,
           currency: asString(row.currency).trim() || null,
@@ -309,8 +310,8 @@ export function ReservationsManager({
         },
       },
       {
-        accessorKey: "channel_name",
-        header: isEn ? "Channel" : "Canal",
+        accessorKey: "integration_name",
+        header: isEn ? "Integration" : "Integración",
         size: 120,
         cell: ({ getValue }) => {
           const name = asString(getValue()).trim();

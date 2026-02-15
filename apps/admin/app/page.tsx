@@ -7,7 +7,7 @@ import { PublicFooter } from "@/components/marketplace/public-footer";
 import { PublicHeader } from "@/components/marketplace/public-header";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
-import { fetchPublicMarketplaceListings } from "@/lib/api";
+import { fetchPublicListings } from "@/lib/api";
 import { getActiveLocale } from "@/lib/i18n/server";
 import { cn } from "@/lib/utils";
 
@@ -39,7 +39,7 @@ export default async function PublicHomePage() {
 
   let listings: Record<string, unknown>[] = [];
   try {
-    const response = await fetchPublicMarketplaceListings({
+    const response = await fetchPublicListings({
       orgId: defaultOrgId || undefined,
       limit: 6,
     });

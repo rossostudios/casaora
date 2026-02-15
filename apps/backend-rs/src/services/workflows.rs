@@ -4,6 +4,7 @@ use crate::repository::table_service::{create_row, list_rows};
 
 /// Fire a workflow trigger event for an organization.
 /// Looks up active workflow_rules matching the trigger_event and executes actions.
+#[allow(dead_code)]
 pub async fn fire_trigger(
     pool: &sqlx::PgPool,
     org_id: &str,
@@ -21,7 +22,17 @@ pub async fn fire_trigger(
         Value::String(trigger_event.to_string()),
     );
 
-    let rules = match list_rows(pool, "workflow_rules", Some(&filters), 100, 0, "created_at", true).await {
+    let rules = match list_rows(
+        pool,
+        "workflow_rules",
+        Some(&filters),
+        100,
+        0,
+        "created_at",
+        true,
+    )
+    .await
+    {
         Ok(rules) => rules,
         Err(_) => return,
     };
@@ -82,8 +93,14 @@ async fn execute_create_task(
         .and_then(Value::as_str);
 
     let mut task = Map::new();
-    task.insert("organization_id".to_string(), Value::String(org_id.to_string()));
-    task.insert("title".to_string(), Value::String(resolve_template(title, context)));
+    task.insert(
+        "organization_id".to_string(),
+        Value::String(org_id.to_string()),
+    );
+    task.insert(
+        "title".to_string(),
+        Value::String(resolve_template(title, context)),
+    );
     task.insert("type".to_string(), Value::String(task_type.to_string()));
     task.insert("status".to_string(), Value::String("todo".to_string()));
     task.insert("priority".to_string(), Value::String(priority.to_string()));
@@ -129,11 +146,7 @@ async fn execute_send_notification(
     let recipient = context
         .get("recipient")
         .and_then(Value::as_str)
-        .or_else(|| {
-            context
-                .get("tenant_phone_e164")
-                .and_then(Value::as_str)
-        })
+        .or_else(|| context.get("tenant_phone_e164").and_then(Value::as_str))
         .unwrap_or_default();
 
     if recipient.is_empty() {
@@ -146,9 +159,15 @@ async fn execute_send_notification(
         .and_then(Value::as_str);
 
     let mut msg = Map::new();
-    msg.insert("organization_id".to_string(), Value::String(org_id.to_string()));
+    msg.insert(
+        "organization_id".to_string(),
+        Value::String(org_id.to_string()),
+    );
     msg.insert("channel".to_string(), Value::String(channel.to_string()));
-    msg.insert("recipient".to_string(), Value::String(recipient.to_string()));
+    msg.insert(
+        "recipient".to_string(),
+        Value::String(recipient.to_string()),
+    );
     msg.insert("status".to_string(), Value::String("queued".to_string()));
     if let Some(tid) = template_id {
         msg.insert("template_id".to_string(), Value::String(tid.to_string()));
@@ -183,12 +202,18 @@ async fn execute_create_expense(
     let today = chrono::Utc::now().format("%Y-%m-%d").to_string();
 
     let mut expense = Map::new();
-    expense.insert("organization_id".to_string(), Value::String(org_id.to_string()));
+    expense.insert(
+        "organization_id".to_string(),
+        Value::String(org_id.to_string()),
+    );
     expense.insert("category".to_string(), Value::String(category.to_string()));
     expense.insert("expense_date".to_string(), Value::String(today));
     expense.insert("amount".to_string(), json!(amount));
     expense.insert("currency".to_string(), Value::String("PYG".to_string()));
-    expense.insert("payment_method".to_string(), Value::String("bank_transfer".to_string()));
+    expense.insert(
+        "payment_method".to_string(),
+        Value::String("bank_transfer".to_string()),
+    );
     expense.insert("receipt_url".to_string(), Value::String(String::new()));
 
     if let Some(property_id) = context.get("property_id") {
@@ -207,10 +232,22 @@ async fn find_org_members_by_role(
     role: &str,
 ) -> Result<Vec<Value>, crate::error::AppError> {
     let mut filters = Map::new();
-    filters.insert("organization_id".to_string(), Value::String(org_id.to_string()));
+    filters.insert(
+        "organization_id".to_string(),
+        Value::String(org_id.to_string()),
+    );
     filters.insert("role".to_string(), Value::String(role.to_string()));
 
-    list_rows(pool, "organization_members", Some(&filters), 10, 0, "created_at", true).await
+    list_rows(
+        pool,
+        "organization_members",
+        Some(&filters),
+        10,
+        0,
+        "created_at",
+        true,
+    )
+    .await
 }
 
 /// Simple template variable replacement: replaces {{key}} with context values.

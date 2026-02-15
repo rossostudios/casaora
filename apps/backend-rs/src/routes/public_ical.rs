@@ -28,7 +28,7 @@ async fn export_ical(
     }
 
     let pool = db_pool(&state)?;
-    let listing = get_row(pool, "listings", token, "ical_export_token").await?;
+    let listing = get_row(pool, "integrations", token, "ical_export_token").await?;
 
     if !is_active_listing(&listing) {
         return Err(AppError::NotFound("Listing is inactive.".to_string()));
@@ -61,7 +61,10 @@ async fn export_ical(
     let mut response = Response::builder()
         .status(StatusCode::OK)
         .body(Body::from(ics))
-        .map_err(|error| AppError::Internal(format!("Could not build iCal response: {error}")))?;
+        .map_err(|error| {
+            tracing::error!(error = %error, "Could not build iCal response");
+            AppError::Internal("Could not build iCal response.".to_string())
+        })?;
     response.headers_mut().insert(
         CONTENT_TYPE,
         HeaderValue::from_static("text/calendar; charset=utf-8"),

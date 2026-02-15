@@ -55,13 +55,12 @@ pub async fn enrich_units(pool: &PgPool, units: Vec<Value>, org_id: &str) -> App
     Ok(enriched)
 }
 
-pub async fn enrich_listings(
+pub async fn enrich_integrations(
     pool: &PgPool,
-    listings: Vec<Value>,
+    integrations: Vec<Value>,
     org_id: &str,
 ) -> AppResult<Vec<Value>> {
-    let unit_ids = extract_ids(&listings, "unit_id");
-    let channel_ids = extract_ids(&listings, "channel_id");
+    let unit_ids = extract_ids(&integrations, "unit_id");
 
     let mut unit_name: std::collections::HashMap<String, String> = std::collections::HashMap::new();
     let mut unit_property: std::collections::HashMap<String, String> =
@@ -95,36 +94,6 @@ pub async fn enrich_listings(
         }
     }
 
-    let mut channel_name: std::collections::HashMap<String, String> =
-        std::collections::HashMap::new();
-    if !channel_ids.is_empty() {
-        let mut filters = Map::new();
-        filters.insert(
-            "organization_id".to_string(),
-            Value::String(org_id.to_string()),
-        );
-        filters.insert(
-            "id".to_string(),
-            Value::Array(
-                channel_ids
-                    .iter()
-                    .map(|id| Value::String(id.clone()))
-                    .collect(),
-            ),
-        );
-        let channels = list_rows(
-            pool,
-            "channels",
-            Some(&filters),
-            5000,
-            0,
-            "created_at",
-            false,
-        )
-        .await?;
-        channel_name = map_by_id_string_field(&channels, "name");
-    }
-
     let property_ids: std::collections::HashSet<String> = unit_property.values().cloned().collect();
     let mut property_name: std::collections::HashMap<String, String> =
         std::collections::HashMap::new();
@@ -156,9 +125,9 @@ pub async fn enrich_listings(
         property_name = map_by_id_string_field(&properties, "name");
     }
 
-    let mut enriched = Vec::with_capacity(listings.len());
-    for mut listing in listings {
-        if let Some(obj) = listing.as_object_mut() {
+    let mut enriched = Vec::with_capacity(integrations.len());
+    for mut integration in integrations {
+        if let Some(obj) = integration.as_object_mut() {
             if let Some(unit_id) = value_string(obj.get("unit_id")) {
                 if let Some(name) = unit_name.get(&unit_id) {
                     obj.insert("unit_name".to_string(), Value::String(name.clone()));
@@ -173,13 +142,8 @@ pub async fn enrich_listings(
                     }
                 }
             }
-            if let Some(channel_id) = value_string(obj.get("channel_id")) {
-                if let Some(name) = channel_name.get(&channel_id) {
-                    obj.insert("channel_name".to_string(), Value::String(name.clone()));
-                }
-            }
         }
-        enriched.push(listing);
+        enriched.push(integration);
     }
     Ok(enriched)
 }
@@ -191,8 +155,7 @@ pub async fn enrich_reservations(
 ) -> AppResult<Vec<Value>> {
     let unit_ids = extract_ids(&reservations, "unit_id");
     let guest_ids = extract_ids(&reservations, "guest_id");
-    let channel_ids = extract_ids(&reservations, "channel_id");
-    let listing_ids = extract_ids(&reservations, "listing_id");
+    let integration_ids = extract_ids(&reservations, "integration_id");
 
     let mut unit_name: std::collections::HashMap<String, String> = std::collections::HashMap::new();
     let mut unit_property: std::collections::HashMap<String, String> =
@@ -254,15 +217,17 @@ pub async fn enrich_reservations(
         guest_name = map_by_id_string_field(&guests, "full_name");
     }
 
-    let mut channel_name: std::collections::HashMap<String, String> =
+    let mut integration_name: std::collections::HashMap<String, String> =
         std::collections::HashMap::new();
-    if !channel_ids.is_empty() {
-        let channels = list_rows(
+    let mut integration_kind: std::collections::HashMap<String, String> =
+        std::collections::HashMap::new();
+    if !integration_ids.is_empty() {
+        let integrations = list_rows(
             pool,
-            "channels",
+            "integrations",
             Some(&filter_org_ids(
                 org_id,
-                channel_ids.iter().cloned().collect::<Vec<_>>(),
+                integration_ids.iter().cloned().collect::<Vec<_>>(),
             )),
             5000,
             0,
@@ -270,26 +235,8 @@ pub async fn enrich_reservations(
             false,
         )
         .await?;
-        channel_name = map_by_id_string_field(&channels, "name");
-    }
-
-    let mut listing_name: std::collections::HashMap<String, String> =
-        std::collections::HashMap::new();
-    if !listing_ids.is_empty() {
-        let listings = list_rows(
-            pool,
-            "listings",
-            Some(&filter_org_ids(
-                org_id,
-                listing_ids.iter().cloned().collect::<Vec<_>>(),
-            )),
-            5000,
-            0,
-            "created_at",
-            false,
-        )
-        .await?;
-        listing_name = map_by_id_string_field(&listings, "public_name");
+        integration_name = map_by_id_string_field(&integrations, "public_name");
+        integration_kind = map_by_id_string_field(&integrations, "channel_name");
     }
 
     let reservation_ids = extract_ids(&reservations, "id");
@@ -387,17 +334,14 @@ pub async fn enrich_reservations(
                 );
             }
 
-            if let Some(channel_id) = value_string(obj.get("channel_id")) {
+            if let Some(iid) = value_string(obj.get("integration_id")) {
+                obj.insert(
+                    "integration_name".to_string(),
+                    optional_string_value(integration_name.get(&iid).cloned()),
+                );
                 obj.insert(
                     "channel_name".to_string(),
-                    optional_string_value(channel_name.get(&channel_id).cloned()),
-                );
-            }
-
-            if let Some(listing_id) = value_string(obj.get("listing_id")) {
-                obj.insert(
-                    "listing_name".to_string(),
-                    optional_string_value(listing_name.get(&listing_id).cloned()),
+                    optional_string_value(integration_kind.get(&iid).cloned()),
                 );
             }
 

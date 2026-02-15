@@ -1,3 +1,5 @@
+import { cookies } from "next/headers";
+
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 const API_BASE_URL =
@@ -73,22 +75,34 @@ function buildUrl(path: string, query?: Record<string, QueryValue>): string {
   return url.toString();
 }
 
+let pendingTokenRequest: Promise<string | null> | null = null;
+
 async function getAccessToken(): Promise<string | null> {
-  try {
-    const supabase = await createSupabaseServerClient();
-    const { data } = await supabase.auth.getSession();
-    return data.session?.access_token ?? null;
-  } catch {
-    return null;
-  }
+  // Dedup concurrent token requests so only one Supabase client/session
+  // check runs at a time; others await its result.
+  if (pendingTokenRequest) return pendingTokenRequest;
+  pendingTokenRequest = (async () => {
+    try {
+      const supabase = await createSupabaseServerClient();
+      const { data } = await supabase.auth.getSession();
+      return data.session?.access_token ?? null;
+    } catch {
+      return null;
+    } finally {
+      pendingTokenRequest = null;
+    }
+  })();
+  return pendingTokenRequest;
 }
 
-export async function fetchJson<T>(
+const TRANSIENT_STATUS_CODES = new Set([502, 503, 504]);
+const RETRY_DELAY_MS = 1000;
+
+async function doFetch(
   path: string,
-  query?: Record<string, QueryValue>,
+  url: string,
   init?: RequestInit
-): Promise<T> {
-  let response: Response;
+): Promise<Response> {
   const controller = new AbortController();
   const timeoutHandle = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
   const signal =
@@ -97,7 +111,7 @@ export async function fetchJson<T>(
       : (init?.signal ?? controller.signal);
   try {
     const token = await getAccessToken();
-    response = await fetch(buildUrl(path, query), {
+    return await fetch(url, {
       cache: "no-store",
       ...init,
       signal,
@@ -119,6 +133,26 @@ export async function fetchJson<T>(
     );
   } finally {
     clearTimeout(timeoutHandle);
+  }
+}
+
+export async function fetchJson<T>(
+  path: string,
+  query?: Record<string, QueryValue>,
+  init?: RequestInit
+): Promise<T> {
+  const url = buildUrl(path, query);
+  const method = (init?.method ?? "GET").toUpperCase();
+
+  let response = await doFetch(path, url, init);
+
+  // Retry once on transient errors for safe (GET) requests
+  if (
+    method === "GET" &&
+    TRANSIENT_STATUS_CODES.has(response.status)
+  ) {
+    await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY_MS));
+    response = await doFetch(path, url, init);
   }
 
   if (!response.ok) {
@@ -142,19 +176,22 @@ export async function fetchJson<T>(
 
         if (typeof detail === "string") {
           detailMessage = detail;
-        } else if (Array.isArray(detail)) {
-          // FastAPI validation errors are usually an array with `msg` fields.
-          const messages = detail
-            .map((item) => {
-              if (!item || typeof item !== "object") return "";
-              const record = item as Record<string, unknown>;
-              return typeof record.msg === "string" ? record.msg : "";
-            })
-            .filter(Boolean);
-          if (messages.length) detailMessage = messages.join("; ");
         }
       } catch {
         // Keep the raw response text when it isn't JSON.
+      }
+    }
+
+    // Clear stale org cookie on 403 "not a member" to prevent infinite loops
+    if (
+      response.status === 403 &&
+      detailMessage.includes("not a member of this organization")
+    ) {
+      try {
+        const store = await cookies();
+        store.delete("pa-org-id");
+      } catch {
+        // cookies() not available in edge/client context — ignore
       }
     }
 
@@ -261,7 +298,7 @@ export function deleteJson(path: string): Promise<unknown> {
   });
 }
 
-export function fetchPublicMarketplaceListings(params?: {
+export function fetchPublicListings(params?: {
   city?: string;
   neighborhood?: string;
   q?: string;
@@ -279,7 +316,7 @@ export function fetchPublicMarketplaceListings(params?: {
   limit?: number;
 }): Promise<{ data?: Record<string, unknown>[] }> {
   return fetchJson<{ data?: Record<string, unknown>[] }>(
-    "/public/marketplace/listings",
+    "/public/listings",
     {
       city: params?.city,
       neighborhood: params?.neighborhood,
@@ -300,11 +337,11 @@ export function fetchPublicMarketplaceListings(params?: {
   );
 }
 
-export function fetchPublicMarketplaceListing(
+export function fetchPublicListing(
   slug: string
 ): Promise<Record<string, unknown>> {
   return fetchJson<Record<string, unknown>>(
-    `/public/marketplace/listings/${encodeURIComponent(slug)}`
+    `/public/listings/${encodeURIComponent(slug)}`
   );
 }
 

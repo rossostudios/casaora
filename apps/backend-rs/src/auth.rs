@@ -1,6 +1,7 @@
 #![allow(dead_code)]
 
 use axum::http::HeaderMap;
+use jsonwebtoken::{decode, Algorithm, DecodingKey, Validation};
 use serde::Deserialize;
 use serde_json::Value;
 
@@ -12,6 +13,14 @@ pub struct SupabaseUser {
     pub email: Option<String>,
     #[serde(default)]
     pub user_metadata: Option<Value>,
+}
+
+#[derive(Debug, Deserialize)]
+struct JwtClaims {
+    sub: String,
+    email: Option<String>,
+    #[serde(default)]
+    user_metadata: Option<Value>,
 }
 
 pub fn bearer_token(headers: &HeaderMap) -> Option<String> {
@@ -35,7 +44,7 @@ pub async fn current_user_id(state: &AppState, headers: &HeaderMap) -> Option<St
     }
 
     if let Some(token) = bearer_token(headers) {
-        if let Some(user) = fetch_supabase_user_for_token(state, &token).await {
+        if let Some(user) = resolve_user(state, &token).await {
             return Some(user.id);
         }
     }
@@ -53,7 +62,7 @@ pub async fn current_supabase_user(state: &AppState, headers: &HeaderMap) -> Opt
     }
 
     let token = bearer_token(headers)?;
-    fetch_supabase_user_for_token(state, &token).await
+    resolve_user(state, &token).await
 }
 
 pub async fn require_user_id(state: &AppState, headers: &HeaderMap) -> Result<String, AppError> {
@@ -82,6 +91,39 @@ fn header_string(headers: &HeaderMap, key: &str) -> Option<String> {
         .map(str::trim)
         .filter(|value| !value.is_empty())
         .map(ToOwned::to_owned)
+}
+
+/// Try local JWT validation first; fall back to the Supabase HTTP endpoint
+/// when no JWT secret is configured.
+async fn resolve_user(state: &AppState, token: &str) -> Option<SupabaseUser> {
+    if let Some(user) = validate_jwt_locally(state, token) {
+        return Some(user);
+    }
+    fetch_supabase_user_for_token(state, token).await
+}
+
+fn validate_jwt_locally(state: &AppState, token: &str) -> Option<SupabaseUser> {
+    let jwt_secret = state.config.supabase_jwt_secret.as_deref()?;
+    let key = DecodingKey::from_secret(jwt_secret.as_bytes());
+    let mut validation = Validation::new(Algorithm::HS256);
+    validation.set_audience(&["authenticated"]);
+    let issuer = format!(
+        "{}/auth/v1",
+        state
+            .config
+            .supabase_url
+            .as_deref()
+            .unwrap_or_default()
+            .trim_end_matches('/')
+    );
+    validation.set_issuer(&[&issuer]);
+
+    let token_data = decode::<JwtClaims>(token, &key, &validation).ok()?;
+    Some(SupabaseUser {
+        id: token_data.claims.sub,
+        email: token_data.claims.email,
+        user_metadata: token_data.claims.user_metadata,
+    })
 }
 
 async fn fetch_supabase_user_for_token(state: &AppState, token: &str) -> Option<SupabaseUser> {

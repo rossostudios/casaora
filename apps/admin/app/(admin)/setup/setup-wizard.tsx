@@ -29,8 +29,7 @@ import type { Locale } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
 import {
-  wizardCreateChannel,
-  wizardCreateListing,
+  wizardCreateIntegration,
   wizardCreateOrganization,
   wizardCreateProperty,
   wizardCreateUnit,
@@ -71,8 +70,7 @@ export type SetupWizardProps = {
   initialOrganizations: Row[];
   initialProperties: Row[];
   initialUnits: Row[];
-  channels: Row[];
-  listings: Row[];
+  integrations: Row[];
   locale: Locale;
   apiBaseUrl: string;
   initialTab?: string;
@@ -104,8 +102,7 @@ export function SetupWizard({
   initialOrganizations,
   initialProperties,
   initialUnits,
-  channels,
-  listings,
+  integrations,
   locale,
   apiBaseUrl,
   initialTab,
@@ -135,12 +132,11 @@ export function SetupWizard({
   const [properties, setProperties] = useState<Row[]>(initialProperties);
   const [units, setUnits] = useState<Row[]>(initialUnits);
   const [submitting, setSubmitting] = useState<
-    null | "org" | "property" | "unit" | "seed" | "channel" | "listing"
+    null | "org" | "property" | "unit" | "seed" | "integration"
   >(null);
   const [importPropertyOpen, setImportPropertyOpen] = useState(false);
   const [importUnitOpen, setImportUnitOpen] = useState(false);
-  const [step4ChannelId, setStep4ChannelId] = useState<string | null>(null);
-  const [step4ListingDone, setStep4ListingDone] = useState(false);
+  const [step4Done, setStep4Done] = useState(false);
   const [step4Skipped, setStep4Skipped] = useState(false);
 
   /* ---- Derived -------------------------------------------------- */
@@ -165,23 +161,18 @@ export function SetupWizard({
     }))
     .filter((item) => item.id);
 
-  const step4Done = step4Skipped || (step4ChannelId !== null && step4ListingDone);
+  const step4Complete = step4Skipped || step4Done;
 
   const showDemoSeed =
     orgDone &&
     properties.length === 0 &&
     units.length === 0 &&
-    channels.length === 0 &&
-    listings.length === 0;
+    integrations.length === 0;
 
   const strLinks = [
     {
-      href: "/module/channels",
-      label: isEn ? "Connect channels" : "Conectar canales",
-    },
-    {
-      href: "/module/listings",
-      label: isEn ? "Create listings" : "Crear anuncios",
+      href: "/module/integrations",
+      label: isEn ? "Connect an integration" : "Conectar una integración",
     },
     {
       href: "/module/reservations",
@@ -191,7 +182,7 @@ export function SetupWizard({
 
   const ltrLinks = [
     {
-      href: "/module/marketplace-listings",
+      href: "/module/listings",
       label: isEn ? "Publish listing" : "Publicar anuncio",
     },
     {
@@ -235,8 +226,8 @@ export function SetupWizard({
           {
             number: 4,
             label: isEn ? "Connect" : "Conectar",
-            done: step4Done,
-            active: !step4Done,
+            done: step4Complete,
+            active: !step4Complete,
           },
         ]
       : []),
@@ -367,59 +358,34 @@ export function SetupWizard({
     setSubmitting(null);
   };
 
-  const handleCreateChannelStep4 = async (e: FormEvent<HTMLFormElement>) => {
+  const handleCreateIntegrationStep4 = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (submitting || !orgId) return;
-    setSubmitting("channel");
+    setSubmitting("integration");
 
     const form = e.currentTarget;
-    const result = await wizardCreateChannel({
-      organization_id: orgId,
-      kind: fd(form, "kind"),
-      name: fd(form, "name"),
-    });
-
-    if (!result.ok) {
-      toast.error(
-        isEn ? "Could not create channel" : "No se pudo crear el canal",
-        { description: result.error }
-      );
-      setSubmitting(null);
-      return;
-    }
-
-    setStep4ChannelId(result.data.id);
-    toast.success(isEn ? "Channel created" : "Canal creado", {
-      description: result.data.name,
-    });
-    setSubmitting(null);
-  };
-
-  const handleCreateListingStep4 = async (e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    if (submitting || !orgId || !step4ChannelId) return;
-    setSubmitting("listing");
-
-    const form = e.currentTarget;
-    const result = await wizardCreateListing({
+    const result = await wizardCreateIntegration({
       organization_id: orgId,
       unit_id: fd(form, "unit_id"),
-      channel_id: step4ChannelId,
+      kind: fd(form, "kind"),
+      channel_name: fd(form, "channel_name"),
       public_name: fd(form, "public_name"),
       ical_import_url: fd(form, "ical_import_url") || undefined,
     });
 
     if (!result.ok) {
       toast.error(
-        isEn ? "Could not create listing" : "No se pudo crear el anuncio",
+        isEn ? "Could not create integration" : "No se pudo crear la integración",
         { description: result.error }
       );
       setSubmitting(null);
       return;
     }
 
-    setStep4ListingDone(true);
-    toast.success(isEn ? "Listing created" : "Anuncio creado");
+    setStep4Done(true);
+    toast.success(isEn ? "Integration created" : "Integración creada", {
+      description: result.data.name,
+    });
     setSubmitting(null);
   };
 
@@ -775,8 +741,8 @@ export function SetupWizard({
         />
       )}
 
-      {/* Step 4: Optional — Connect channel or publish listing */}
-      {onboardingDone && !step4Done ? (
+      {/* Step 4: Optional — Connect an integration or publish listing */}
+      {onboardingDone && !step4Complete ? (
         <OptionalStepCard
           stepNumber={4}
           title={
@@ -785,8 +751,8 @@ export function SetupWizard({
                 ? "Publish your first listing"
                 : "Publica tu primer anuncio"
               : isEn
-                ? "Connect a channel"
-                : "Conecta un canal"
+                ? "Connect an integration"
+                : "Conecta una integración"
           }
           description={
             rentalMode === "ltr"
@@ -801,155 +767,109 @@ export function SetupWizard({
         >
           {rentalMode !== "ltr" ? (
             <div className="space-y-4">
-              {!step4ChannelId ? (
-                <form
-                  onSubmit={handleCreateChannelStep4}
-                  className="grid gap-3"
-                >
-                  <label className="grid gap-1">
-                    <span className="text-xs font-medium text-muted-foreground">
-                      {isEn ? "Channel type" : "Tipo de canal"}
-                    </span>
-                    <select
-                      className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
-                      defaultValue="airbnb"
-                      name="kind"
-                      required
-                    >
-                      <option value="airbnb">Airbnb</option>
-                      <option value="bookingcom">Booking.com</option>
-                      <option value="direct">
-                        {isEn ? "Direct" : "Directo"}
-                      </option>
-                      <option value="vrbo">Vrbo</option>
-                      <option value="other">
-                        {isEn ? "Other" : "Otro"}
-                      </option>
-                    </select>
-                  </label>
-                  <label className="grid gap-1">
-                    <span className="text-xs font-medium text-muted-foreground">
-                      {isEn ? "Channel name" : "Nombre del canal"}
-                    </span>
-                    <Input name="name" placeholder="Airbnb" required />
-                  </label>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      className="flex-1"
-                      type="submit"
-                      disabled={submitting !== null}
-                    >
-                      {submitting === "channel" ? (
-                        <>
-                          <Spinner
-                            size="sm"
-                            className="text-primary-foreground"
-                          />
-                          {isEn ? "Creating..." : "Creando..."}
-                        </>
-                      ) : isEn ? (
-                        "Create channel"
-                      ) : (
-                        "Crear canal"
-                      )}
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setStep4Skipped(true)}
-                    >
-                      {isEn ? "Skip" : "Omitir"}
-                    </Button>
-                  </div>
-                </form>
-              ) : !step4ListingDone ? (
-                <div className="space-y-3">
-                  <div className="flex items-center gap-2 rounded-lg border border-primary/20 bg-primary/5 px-3 py-2">
-                    <span className="text-sm font-medium text-primary">
-                      {isEn
-                        ? "Channel created — now create a listing"
-                        : "Canal creado — ahora crea un anuncio"}
-                    </span>
-                  </div>
-                  <form
-                    onSubmit={handleCreateListingStep4}
-                    className="grid gap-3"
+              <form
+                onSubmit={handleCreateIntegrationStep4}
+                className="grid gap-3"
+              >
+                <label className="grid gap-1">
+                  <span className="text-xs font-medium text-muted-foreground">
+                    {isEn ? "Channel type" : "Tipo de canal"}
+                  </span>
+                  <select
+                    className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+                    defaultValue="airbnb"
+                    name="kind"
+                    required
                   >
-                    <label className="grid gap-1">
-                      <span className="text-xs font-medium text-muted-foreground">
-                        {isEn ? "Unit" : "Unidad"}
-                      </span>
-                      <select
-                        className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
-                        defaultValue={unitOptions[0]?.id ?? ""}
-                        name="unit_id"
-                        required
-                      >
-                        {unitOptions.map((unit) => (
-                          <option key={unit.id} value={unit.id}>
-                            {unit.label}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <label className="grid gap-1">
-                      <span className="text-xs font-medium text-muted-foreground">
-                        {isEn ? "Public name" : "Nombre público"}
-                      </span>
-                      <Input
-                        name="public_name"
-                        placeholder={
-                          isEn
-                            ? "Airbnb - Apartment A1"
-                            : "Airbnb - Departamento A1"
-                        }
-                        required
-                      />
-                    </label>
-                    <label className="grid gap-1">
-                      <span className="text-xs font-medium text-muted-foreground">
-                        {isEn
-                          ? "iCal import URL (optional)"
-                          : "URL de importación iCal (opcional)"}
-                      </span>
-                      <Input
-                        name="ical_import_url"
-                        placeholder="https://calendar.google.com/calendar/ical/..."
-                      />
-                    </label>
-                    <div className="flex items-center gap-2">
-                      <Button
-                        className="flex-1"
-                        type="submit"
-                        disabled={submitting !== null}
-                      >
-                        {submitting === "listing" ? (
-                          <>
-                            <Spinner
-                              size="sm"
-                              className="text-primary-foreground"
-                            />
-                            {isEn ? "Creating..." : "Creando..."}
-                          </>
-                        ) : isEn ? (
-                          "Create listing"
-                        ) : (
-                          "Crear anuncio"
-                        )}
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setStep4ListingDone(true)}
-                      >
-                        {isEn ? "Skip" : "Omitir"}
-                      </Button>
-                    </div>
-                  </form>
+                    <option value="airbnb">Airbnb</option>
+                    <option value="bookingcom">Booking.com</option>
+                    <option value="direct">
+                      {isEn ? "Direct" : "Directo"}
+                    </option>
+                    <option value="vrbo">Vrbo</option>
+                    <option value="other">
+                      {isEn ? "Other" : "Otro"}
+                    </option>
+                  </select>
+                </label>
+                <label className="grid gap-1">
+                  <span className="text-xs font-medium text-muted-foreground">
+                    {isEn ? "Channel name" : "Nombre del canal"}
+                  </span>
+                  <Input name="channel_name" placeholder="Airbnb" required />
+                </label>
+                <label className="grid gap-1">
+                  <span className="text-xs font-medium text-muted-foreground">
+                    {isEn ? "Unit" : "Unidad"}
+                  </span>
+                  <select
+                    className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+                    defaultValue={unitOptions[0]?.id ?? ""}
+                    name="unit_id"
+                    required
+                  >
+                    {unitOptions.map((unit) => (
+                      <option key={unit.id} value={unit.id}>
+                        {unit.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="grid gap-1">
+                  <span className="text-xs font-medium text-muted-foreground">
+                    {isEn ? "Public name" : "Nombre público"}
+                  </span>
+                  <Input
+                    name="public_name"
+                    placeholder={
+                      isEn
+                        ? "Airbnb - Apartment A1"
+                        : "Airbnb - Departamento A1"
+                    }
+                    required
+                  />
+                </label>
+                <label className="grid gap-1">
+                  <span className="text-xs font-medium text-muted-foreground">
+                    {isEn
+                      ? "iCal import URL (optional)"
+                      : "URL de importación iCal (opcional)"}
+                  </span>
+                  <Input
+                    name="ical_import_url"
+                    placeholder="https://calendar.google.com/calendar/ical/..."
+                  />
+                </label>
+                <div className="flex items-center gap-2">
+                  <Button
+                    className="flex-1"
+                    type="submit"
+                    disabled={submitting !== null}
+                  >
+                    {submitting === "integration" ? (
+                      <>
+                        <Spinner
+                          size="sm"
+                          className="text-primary-foreground"
+                        />
+                        {isEn ? "Creating..." : "Creando..."}
+                      </>
+                    ) : isEn ? (
+                      "Create integration"
+                    ) : (
+                      "Crear integración"
+                    )}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setStep4Skipped(true)}
+                  >
+                    {isEn ? "Skip" : "Omitir"}
+                  </Button>
                 </div>
-              ) : null}
+              </form>
 
               {rentalMode === "both" ? (
                 <div className="mt-1 space-y-2 border-t border-border/40 pt-3">
@@ -963,7 +883,7 @@ export function SetupWizard({
                       className={cn(
                         buttonVariants({ variant: "outline", size: "sm" })
                       )}
-                      href="/module/marketplace-listings"
+                      href="/module/listings"
                     >
                       {isEn
                         ? "Create marketplace listing"
@@ -991,7 +911,7 @@ export function SetupWizard({
               <div className="flex flex-wrap gap-2">
                 <Link
                   className={cn(buttonVariants({ variant: "outline" }))}
-                  href="/module/marketplace-listings"
+                  href="/module/listings"
                 >
                   {isEn
                     ? "Create marketplace listing"
@@ -1051,8 +971,8 @@ export function SetupWizard({
                     </CardTitle>
                     <CardDescription>
                       {isEn
-                        ? "Full CRUD manager for organizations, properties, units, channels, and listings."
-                        : "Administrador CRUD completo para organizaciones, propiedades, unidades, canales y anuncios."}
+                        ? "Full CRUD manager for organizations, properties, units, and integrations."
+                        : "Administrador CRUD completo para organizaciones, propiedades, unidades e integraciones."}
                     </CardDescription>
                   </div>
                   <CollapsibleTrigger
@@ -1070,9 +990,8 @@ export function SetupWizard({
               <CollapsibleContent>
                 <CardContent>
                   <SetupManager
-                    channels={channels}
+                    integrations={integrations}
                     initialTab={initialTab}
-                    listings={listings}
                     organizations={initialOrganizations}
                     orgId={orgId!}
                     properties={properties}

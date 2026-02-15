@@ -204,8 +204,7 @@ function RelationshipRail({
     "organization_id",
     "property_id",
     "unit_id",
-    "channel_id",
-    "listing_id",
+    "integration_id",
     "guest_id",
     "reservation_id",
     "task_id",
@@ -268,7 +267,7 @@ function getModuleEmptyState(slug: string, isEn: boolean): EmptyStateConfig | un
         : "Crea una manualmente o conecta un canal OTA para importar automáticamente.",
       actionLabel: isEn ? "Create reservation" : "Crear reserva",
       actionHref: "/module/reservations",
-      secondaryActions: [{ label: isEn ? "Connect a channel" : "Conectar canal", href: "/module/channels" }],
+      secondaryActions: [{ label: isEn ? "Connect an integration" : "Conectar integración", href: "/module/integrations" }],
     },
     tasks: {
       title: isEn ? "No tasks yet" : "Sin tareas aún",
@@ -278,13 +277,13 @@ function getModuleEmptyState(slug: string, isEn: boolean): EmptyStateConfig | un
       actionLabel: isEn ? "Create a task" : "Crear una tarea",
       actionHref: "/module/tasks",
     },
-    channels: {
-      title: isEn ? "No channels connected" : "Sin canales conectados",
+    integrations: {
+      title: isEn ? "No integrations connected" : "Sin integraciones conectadas",
       description: isEn
         ? "Connect Airbnb, Booking.com, or VRBO to sync calendars via iCal."
         : "Conecta Airbnb, Booking.com o VRBO para sincronizar calendarios vía iCal.",
-      actionLabel: isEn ? "Connect your first channel" : "Conecta tu primer canal",
-      actionHref: "/setup?tab=channels",
+      actionLabel: isEn ? "Connect your first integration" : "Conecta tu primera integración",
+      actionHref: "/setup?tab=integrations",
     },
     expenses: {
       title: isEn ? "No expenses recorded" : "Sin gastos registrados",
@@ -300,7 +299,7 @@ function getModuleEmptyState(slug: string, isEn: boolean): EmptyStateConfig | un
         ? "Publish a marketplace listing to start receiving applications."
         : "Publica un anuncio en el marketplace para empezar a recibir aplicaciones.",
       actionLabel: isEn ? "Create a marketplace listing" : "Crear un anuncio",
-      actionHref: "/module/marketplace-listings",
+      actionHref: "/module/listings",
     },
     leases: {
       title: isEn ? "No leases yet" : "Sin contratos aún",
@@ -326,13 +325,13 @@ function getModuleEmptyState(slug: string, isEn: boolean): EmptyStateConfig | un
       actionLabel: isEn ? "Create a template" : "Crear una plantilla",
       actionHref: "/module/pricing",
     },
-    "marketplace-listings": {
-      title: isEn ? "No marketplace listings" : "Sin anuncios en marketplace",
+    listings: {
+      title: isEn ? "No listings" : "Sin anuncios",
       description: isEn
         ? "Publish listings with transparent pricing to attract tenants."
         : "Publica anuncios con precios transparentes para atraer inquilinos.",
       actionLabel: isEn ? "Create a listing" : "Crear un anuncio",
-      actionHref: "/module/marketplace-listings",
+      actionHref: "/module/listings",
     },
     guests: {
       title: isEn ? "No guests yet" : "Sin huéspedes aún",
@@ -448,7 +447,7 @@ export function ModuleTableCard({
       "organization_id",
       "property_id",
       "unit_id",
-      "channel_id",
+      "integration_id",
       "guest_id",
       "check_in_date",
       "check_out_date",

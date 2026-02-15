@@ -282,8 +282,8 @@ export default async function DocumentationPage({
           <CardTitle>{isEn ? "API Endpoints" : "Endpoints API"}</CardTitle>
           <CardDescription>
             {isEn
-              ? "Discovered from FastAPI router decorators in backend source."
-              : "Descubiertos desde decoradores de routers FastAPI en el backend."}
+              ? "Discovered from route handlers in the Rust backend."
+              : "Descubiertos desde handlers de rutas en el backend Rust."}
           </CardDescription>
         </CardHeader>
         <CardContent>
