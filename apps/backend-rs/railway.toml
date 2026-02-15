@@ -1,3 +1,6 @@
+[build]
+watchPatterns = ["apps/backend-rs/**"]
+
 [deploy]
 startCommand = "cargo run --release"
 healthcheckPath = "/v1/health"
