@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { cookies, headers } from "next/headers";
 import { redirect, unstable_rethrow } from "next/navigation";
-import { deleteJson, fetchJson, patchJson, postJson } from "@/lib/api";
+import { deleteJson, patchJson, postJson } from "@/lib/api";
 import { shouldUseSecureCookie } from "@/lib/cookies";
 import { ORG_COOKIE_NAME } from "@/lib/org";
 
@@ -65,19 +65,6 @@ export async function wizardCreateOrganization(payload: {
 
     const newOrgId = created?.id ?? "";
     if (newOrgId) {
-      // Verify the org is accessible (proves membership was committed)
-      try {
-        await fetchJson<{ data?: unknown[] }>("/organizations", {
-          org_id: newOrgId,
-        });
-      } catch {
-        return {
-          ok: false,
-          error:
-            "Organization created but access verification failed. Please refresh and try again.",
-        };
-      }
-
       const hdrs = await headers();
       const store = await cookies();
       store.set(ORG_COOKIE_NAME, newOrgId, {
