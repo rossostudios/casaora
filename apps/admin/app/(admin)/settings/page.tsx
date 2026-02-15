@@ -9,6 +9,7 @@ import {
   WorkflowSquare03Icon,
 } from "@hugeicons/core-free-icons";
 import Link from "next/link";
+import { OrgList } from "@/components/settings/org-list";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import {
@@ -20,11 +21,13 @@ import {
 } from "@/components/ui/card";
 import { Icon } from "@/components/ui/icon";
 import { getActiveLocale } from "@/lib/i18n/server";
+import { getActiveOrgId } from "@/lib/org";
 import { cn } from "@/lib/utils";
 
 export default async function SettingsPage() {
   const locale = await getActiveLocale();
   const isEn = locale === "en-US";
+  const activeOrgId = await getActiveOrgId();
 
   const workspaceItems = [
     {
@@ -134,6 +137,22 @@ export default async function SettingsPage() {
               </Link>
             </article>
           ))}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="space-y-2">
+          <CardTitle>
+            {isEn ? "Your organizations" : "Tus organizaciones"}
+          </CardTitle>
+          <CardDescription>
+            {isEn
+              ? "Manage your organization memberships."
+              : "Gestiona tus membresías de organización."}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <OrgList activeOrgId={activeOrgId} isEn={isEn} />
         </CardContent>
       </Card>
 

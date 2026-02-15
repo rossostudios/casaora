@@ -1,0 +1,157 @@
+"use client";
+
+import { useRouter } from "next/navigation";
+import { useEffect, useState, useTransition } from "react";
+import { toast } from "sonner";
+
+import { deleteOrganizationFromSettingsAction } from "@/app/(admin)/settings/actions";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+
+type Org = {
+  id: string;
+  name?: string | null;
+};
+
+type MeResponse = {
+  organizations?: Org[];
+};
+
+function shortId(value: string): string {
+  if (value.length <= 14) return value;
+  return `${value.slice(0, 8)}…${value.slice(-4)}`;
+}
+
+export function OrgList({
+  activeOrgId,
+  isEn,
+}: {
+  activeOrgId: string | null;
+  isEn: boolean;
+}) {
+  const router = useRouter();
+  const [orgs, setOrgs] = useState<Org[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [pending, startTransition] = useTransition();
+
+  useEffect(() => {
+    let mounted = true;
+
+    async function load() {
+      try {
+        const response = await fetch("/api/me", { cache: "no-store" });
+        if (!response.ok) {
+          if (mounted) setLoading(false);
+          return;
+        }
+        const payload = (await response.json()) as MeResponse;
+        if (!mounted) return;
+        setOrgs(payload.organizations ?? []);
+        setLoading(false);
+      } catch {
+        if (mounted) setLoading(false);
+      }
+    }
+
+    load();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const canDelete = orgs.length >= 2;
+
+  const deleteOrg = (orgId: string) => {
+    toast(isEn ? "Confirm deletion" : "Confirmar eliminación", {
+      description: isEn
+        ? "This organization and all its data will be permanently deleted."
+        : "Esta organización y todos sus datos se eliminarán permanentemente.",
+      action: {
+        label: isEn ? "Delete" : "Eliminar",
+        onClick: () => {
+          startTransition(async () => {
+            const result = await deleteOrganizationFromSettingsAction({
+              organizationId: orgId,
+            });
+            if (!result.ok) {
+              toast.error(
+                isEn
+                  ? "Could not delete organization"
+                  : "No se pudo eliminar la organización",
+                { description: result.error }
+              );
+              return;
+            }
+            toast.success(
+              isEn ? "Organization deleted" : "Organización eliminada"
+            );
+            if (orgId === activeOrgId) {
+              await fetch("/api/org", {
+                method: "DELETE",
+                headers: { Accept: "application/json" },
+              });
+            }
+            router.refresh();
+          });
+        },
+      },
+    });
+  };
+
+  if (loading) {
+    return (
+      <div className="py-4 text-center text-muted-foreground text-sm">
+        {isEn ? "Loading..." : "Cargando..."}
+      </div>
+    );
+  }
+
+  if (orgs.length === 0) {
+    return (
+      <div className="py-4 text-muted-foreground text-sm">
+        {isEn ? "No organizations found." : "No se encontraron organizaciones."}
+      </div>
+    );
+  }
+
+  return (
+    <div className="divide-y overflow-hidden rounded-lg border">
+      {orgs.map((org) => {
+        const isActive = org.id === activeOrgId;
+        return (
+          <div
+            className="flex items-center justify-between gap-3 p-4"
+            key={org.id}
+          >
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="truncate font-medium text-sm">
+                  {org.name || (isEn ? "Unnamed Organization" : "Sin nombre")}
+                </p>
+                {isActive && (
+                  <Badge className="text-[11px]" variant="secondary">
+                    {isEn ? "Active" : "Activa"}
+                  </Badge>
+                )}
+              </div>
+              <p className="mt-0.5 font-mono text-muted-foreground text-xs">
+                {shortId(org.id)}
+              </p>
+            </div>
+            {canDelete && (
+              <Button
+                disabled={pending}
+                onClick={() => deleteOrg(org.id)}
+                size="sm"
+                type="button"
+                variant="outline"
+              >
+                {isEn ? "Delete" : "Eliminar"}
+              </Button>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
