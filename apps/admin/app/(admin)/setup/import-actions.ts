@@ -22,7 +22,13 @@ export async function batchCreateProperties(
     name: string;
     code?: string;
     address_line1?: string;
+    address_line2?: string;
     city?: string;
+    region?: string;
+    postal_code?: string;
+    country_code?: string;
+    latitude?: number;
+    longitude?: number;
   }>
 ): Promise<ImportResult> {
   const results: ImportRowResult[] = [];
@@ -40,7 +46,13 @@ export async function batchCreateProperties(
         name,
         code: row.code?.trim() || undefined,
         address_line1: row.address_line1?.trim() || undefined,
+        address_line2: row.address_line2?.trim() || undefined,
         city: row.city?.trim() || undefined,
+        region: row.region?.trim() || undefined,
+        postal_code: row.postal_code?.trim() || undefined,
+        country_code: row.country_code?.trim() || undefined,
+        latitude: row.latitude ?? undefined,
+        longitude: row.longitude ?? undefined,
       });
       results.push({ index: i, ok: true });
     } catch (err) {
@@ -73,6 +85,13 @@ export async function batchCreateUnits(
     max_guests?: number;
     bedrooms?: number;
     bathrooms?: number;
+    square_meters?: number;
+    default_nightly_rate?: number;
+    default_cleaning_fee?: number;
+    currency?: string;
+    check_in_time?: string;
+    check_out_time?: string;
+    is_active?: boolean;
   }>
 ): Promise<ImportResult> {
   const results: ImportRowResult[] = [];
@@ -98,6 +117,13 @@ export async function batchCreateUnits(
         max_guests: row.max_guests ?? 2,
         bedrooms: row.bedrooms ?? 1,
         bathrooms: row.bathrooms ?? 1,
+        square_meters: row.square_meters ?? undefined,
+        default_nightly_rate: row.default_nightly_rate ?? undefined,
+        default_cleaning_fee: row.default_cleaning_fee ?? undefined,
+        currency: row.currency?.trim() || undefined,
+        check_in_time: row.check_in_time?.trim() || undefined,
+        check_out_time: row.check_out_time?.trim() || undefined,
+        is_active: row.is_active ?? undefined,
       });
       results.push({ index: i, ok: true });
     } catch (err) {

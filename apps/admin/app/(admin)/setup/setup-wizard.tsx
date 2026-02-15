@@ -7,7 +7,7 @@ import { toast } from "sonner";
 
 import Link from "next/link";
 
-import { CsvImportSheet } from "@/components/import/csv-import-sheet";
+import { DataImportSheet } from "@/components/import/data-import-sheet";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
@@ -1103,7 +1103,7 @@ export function SetupWizard({
       {/* CSV Import sheets */}
       {orgId ? (
         <>
-          <CsvImportSheet
+          <DataImportSheet
             isEn={isEn}
             mode="properties"
             onImportComplete={() => router.refresh()}
@@ -1111,7 +1111,7 @@ export function SetupWizard({
             open={importPropertyOpen}
             orgId={orgId}
           />
-          <CsvImportSheet
+          <DataImportSheet
             isEn={isEn}
             mode="units"
             onImportComplete={() => router.refresh()}

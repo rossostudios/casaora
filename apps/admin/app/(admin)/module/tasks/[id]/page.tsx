@@ -18,9 +18,19 @@ import {
 import { CopyButton } from "@/components/ui/copy-button";
 import { Icon } from "@/components/ui/icon";
 import { Input } from "@/components/ui/input";
-import { StatusBadge, type StatusTone } from "@/components/ui/status-badge";
+import { StatusBadge } from "@/components/ui/status-badge";
 import { getApiBaseUrl } from "@/lib/api";
 import { errorMessage, isOrgMembershipError } from "@/lib/errors";
+import {
+  asBoolean,
+  asNumber,
+  asOptionalString,
+  asString,
+  localizedTaskActionLabel,
+  localizedTaskStatusLabel,
+  statusBadgeTone,
+  taskStatusActions,
+} from "@/lib/features/tasks/helpers";
 import { getActiveLocale } from "@/lib/i18n/server";
 import { getActiveOrgId } from "@/lib/org";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -76,93 +86,12 @@ class ApiRequestError extends Error {
   }
 }
 
-function asString(value: unknown): string {
-  return typeof value === "string" ? value : value ? String(value) : "";
-}
-
-function asOptionalString(value: unknown): string | null {
-  const text = asString(value).trim();
-  return text ? text : null;
-}
-
-function asBoolean(value: unknown): boolean {
-  if (typeof value === "boolean") return value;
-  if (typeof value === "number") return value !== 0;
-  if (typeof value === "string") {
-    const normalized = value.trim().toLowerCase();
-    if (["1", "true", "yes", "on"].includes(normalized)) return true;
-    if (["0", "false", "no", "off"].includes(normalized)) return false;
-  }
-  return false;
-}
-
-function asNumber(value: unknown): number {
-  if (typeof value === "number") return Number.isFinite(value) ? value : 0;
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : 0;
-}
-
 function safeDecode(value: string): string {
   try {
     return decodeURIComponent(value);
   } catch {
     return value;
   }
-}
-
-function taskStatusActions(status: string): { kind: string; next?: string }[] {
-  const normalized = status.trim().toLowerCase();
-  if (normalized === "todo") {
-    return [
-      { kind: "status", next: "in_progress" },
-      { kind: "status", next: "cancelled" },
-    ];
-  }
-  if (normalized === "in_progress") {
-    return [
-      { kind: "complete" },
-      { kind: "status", next: "todo" },
-      { kind: "status", next: "cancelled" },
-    ];
-  }
-  return [];
-}
-
-function localizedTaskStatusLabel(isEn: boolean, status: string): string {
-  const normalized = status.trim().toLowerCase();
-  if (!isEn) {
-    if (normalized === "todo") return "Pendiente";
-    if (normalized === "in_progress") return "En progreso";
-    if (normalized === "done") return "Hecha";
-    if (normalized === "cancelled") return "Cancelada";
-  }
-  if (normalized === "todo") return "To do";
-  if (normalized === "in_progress") return "In progress";
-  if (normalized === "done") return "Done";
-  if (normalized === "cancelled") return "Cancelled";
-  return status;
-}
-
-function localizedTaskActionLabel(
-  isEn: boolean,
-  kind: string,
-  next?: string
-): string {
-  if (kind === "complete") return isEn ? "Complete" : "Completar";
-
-  if (next === "in_progress") return isEn ? "Start" : "Iniciar";
-  if (next === "todo") return isEn ? "Back to todo" : "Volver";
-  if (next === "cancelled") return isEn ? "Cancel" : "Cancelar";
-  return next ?? kind;
-}
-
-function statusBadgeClass(status: string): StatusTone {
-  const normalized = status.trim().toLowerCase();
-  if (normalized === "done") return "success";
-  if (normalized === "cancelled") return "danger";
-  if (normalized === "in_progress") return "warning";
-  if (normalized === "todo") return "warning";
-  return "neutral";
 }
 
 function asDateTimeLabel(locale: string, value: string | null): string | null {
@@ -427,7 +356,7 @@ export default async function TaskDetailPage({
                 </Badge>
                 <StatusBadge
                   label={statusLabel}
-                  tone={statusBadgeClass(statusValue)}
+                  tone={statusBadgeTone(statusValue)}
                   value={statusValue}
                 />
               </div>

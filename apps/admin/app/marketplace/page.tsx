@@ -18,6 +18,7 @@ import {
 import { getActiveLocale } from "@/lib/i18n/server";
 import { CategoryPills } from "./components/category-pills";
 import { FeaturedListings } from "./components/featured-listings";
+import { HowItWorks } from "./components/how-it-works";
 import { MarketplaceFiltersForm } from "./components/marketplace-filters-form";
 import { MarketplaceHero } from "./components/marketplace-hero";
 import { MarketplaceResultsLayout } from "./components/marketplace-results-layout";
@@ -90,6 +91,8 @@ export default async function MarketplacePage({
           defaultMaxBudget={filters.maxMonthly?.toString()}
           isEn={isEn}
         />
+
+        <HowItWorks isEn={isEn} />
 
         <Suspense>
           <CategoryPills locale={locale} />

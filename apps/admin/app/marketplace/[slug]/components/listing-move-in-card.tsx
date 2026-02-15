@@ -24,9 +24,19 @@ export function ListingMoveInCard({ slug, isEn, listing }: ListingMoveInCardProp
             {isEn ? "Total move-in" : "Costo total de ingreso"}
           </p>
           <p className="font-semibold text-2xl">{listing.totalMoveInLabel}</p>
+          {listing.totalMoveInUsdApprox ? (
+            <p className="text-muted-foreground text-xs">
+              {listing.totalMoveInUsdApprox}
+            </p>
+          ) : null}
           <p className="text-muted-foreground text-xs">
             {isEn ? "Monthly recurring" : "Mensual recurrente"}: {listing.monthlyRecurringLabel}
           </p>
+          {listing.monthlyRecurringUsdApprox ? (
+            <p className="text-muted-foreground text-[11px]">
+              {listing.monthlyRecurringUsdApprox}
+            </p>
+          ) : null}
           {listing.maintenanceFee > 0 ? (
             <p className="text-muted-foreground text-xs">
               {isEn ? "Maintenance fee" : "Costo de mantenimiento"}: {" "}

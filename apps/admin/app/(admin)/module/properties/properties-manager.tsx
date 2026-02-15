@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { CsvImportSheet } from "@/components/import/csv-import-sheet";
+import { DataImportSheet } from "@/components/import/data-import-sheet";
 import { PortfolioSidebar } from "@/components/properties/portfolio-sidebar";
 import { filterPropertyPortfolioRows } from "@/lib/features/properties/analytics";
 import type {
@@ -106,7 +106,7 @@ export function PropertiesManager({
           <div className="mx-auto max-w-7xl space-y-8">
             <PropertiesPageHeader
               description={description}
-              importLabel={isEn ? "Import CSV" : "Importar CSV"}
+              importLabel={isEn ? "Import" : "Importar"}
               newPropertyLabel={dict.newProperty}
               onOpenCreate={() => setOpen(true)}
               onOpenImport={() => setImportOpen(true)}
@@ -181,7 +181,7 @@ export function PropertiesManager({
         title={dict.newProperty}
       />
 
-      <CsvImportSheet
+      <DataImportSheet
         isEn={isEn}
         mode="properties"
         onOpenChange={setImportOpen}

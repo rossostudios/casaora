@@ -1,4 +1,4 @@
-Codigo,Nombre,Propiedad,Huespedes,Dormitorios,Banos
-A1,Departamento A1,Villa Morra HQ,4,2,1
-A2,Departamento A2,Villa Morra HQ,2,1,1
-B1,Suite B1,Edificio Centro,6,3,2
+Codigo,Nombre,Propiedad,Huespedes,Dormitorios,Banos,Superficie (m2),Tarifa Noche,Limpieza,Moneda,Hora Entrada,Hora Salida,Activo
+A1,Departamento A1,Villa Morra HQ,4,2,1,65,150000,50000,PYG,14:00,11:00,si
+A2,Departamento A2,Villa Morra HQ,2,1,1,45,120000,40000,PYG,14:00,11:00,si
+B1,Suite B1,Edificio Centro,6,3,2,90,250000,80000,PYG,15:00,10:00,si

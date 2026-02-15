@@ -25,7 +25,7 @@ import { ImportProgress } from "./import-progress";
 
 type ImportMode = "properties" | "units";
 
-type CsvImportSheetProps = {
+type DataImportSheetProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   mode: ImportMode;
@@ -36,9 +36,21 @@ type CsvImportSheetProps = {
   onImportComplete?: () => void;
 };
 
-type CsvRow = Record<string, string>;
+type DataRow = Record<string, string>;
 
 type MappingEntry = { csvHeader: string; targetField: string };
+
+/** Convert any cell value from read-excel-file to a plain string. */
+function cellToString(value: unknown): string {
+  if (value == null) return "";
+  if (value instanceof Date) return value.toISOString();
+  if (typeof value === "boolean") return value ? "true" : "false";
+  return String(value);
+}
+
+function isExcelFile(name: string): boolean {
+  return /\.xlsx$/i.test(name);
+}
 
 function resolvePropertyId(
   value: string,
@@ -54,7 +66,7 @@ function resolvePropertyId(
   return null;
 }
 
-export function CsvImportSheet({
+export function DataImportSheet({
   open,
   onOpenChange,
   mode,
@@ -62,9 +74,9 @@ export function CsvImportSheet({
   isEn,
   properties = [],
   onImportComplete,
-}: CsvImportSheetProps) {
-  const [csvData, setCsvData] = useState<CsvRow[]>([]);
-  const [csvHeaders, setCsvHeaders] = useState<string[]>([]);
+}: DataImportSheetProps) {
+  const [data, setData] = useState<DataRow[]>([]);
+  const [headers, setHeaders] = useState<string[]>([]);
   const [mappings, setMappings] = useState<MappingEntry[]>([]);
   const [fileName, setFileName] = useState("");
   const [parseError, setParseError] = useState("");
@@ -73,15 +85,24 @@ export function CsvImportSheet({
   const [importProcessed, setImportProcessed] = useState(0);
   const [importDone, setImportDone] = useState(false);
 
+  // Excel sheet picker state
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [sheetNames, setSheetNames] = useState<string[]>([]);
+  const [pickingSheet, setPickingSheet] = useState(false);
+
   const targetFields = mode === "properties" ? PROPERTY_FIELDS : UNIT_FIELDS;
-  const templateUrl =
+  const csvTemplateUrl =
     mode === "properties"
       ? "/templates/properties-template.csv"
       : "/templates/units-template.csv";
+  const xlsxTemplateUrl =
+    mode === "properties"
+      ? "/templates/properties-template.xlsx"
+      : "/templates/units-template.xlsx";
 
   const reset = useCallback(() => {
-    setCsvData([]);
-    setCsvHeaders([]);
+    setData([]);
+    setHeaders([]);
     setMappings([]);
     setFileName("");
     setParseError("");
@@ -89,7 +110,97 @@ export function CsvImportSheet({
     setImportResults([]);
     setImportProcessed(0);
     setImportDone(false);
+    setPendingFile(null);
+    setSheetNames([]);
+    setPickingSheet(false);
   }, []);
+
+  /** Feed parsed headers + rows into the column mapping pipeline. */
+  const finalizeParse = useCallback(
+    (fileHeaders: string[], rows: DataRow[], name: string) => {
+      if (rows.length === 0) {
+        setParseError(isEn ? "File is empty" : "El archivo está vacío");
+        return;
+      }
+      setHeaders(fileHeaders);
+      setData(rows);
+      setFileName(name);
+      setMappings(autoDetectMappings(fileHeaders, targetFields));
+      setPendingFile(null);
+      setSheetNames([]);
+      setPickingSheet(false);
+    },
+    [isEn, targetFields]
+  );
+
+  /** Parse an Excel sheet by index. */
+  const parseExcelSheet = useCallback(
+    async (file: File, sheetIndex?: number) => {
+      try {
+        const readXlsxFile = (await import("read-excel-file")).default;
+
+        // Check for multi-sheet: read sheet names first
+        const { readSheetNames } = await import("read-excel-file");
+        const names = await readSheetNames(file);
+
+        if (names.length > 1 && sheetIndex === undefined) {
+          // Show sheet picker
+          setPendingFile(file);
+          setSheetNames(names);
+          setPickingSheet(true);
+          setFileName(file.name);
+          return;
+        }
+
+        const sheet = sheetIndex ?? 1; // read-excel-file uses 1-based index
+        const rows = await readXlsxFile(file, { sheet });
+
+        if (rows.length === 0) {
+          setParseError(isEn ? "Sheet is empty" : "La hoja está vacía");
+          return;
+        }
+
+        // First row = headers
+        const fileHeaders = rows[0].map((cell) => cellToString(cell));
+        const dataRows = rows.slice(1).map((row) => {
+          const obj: DataRow = {};
+          for (let i = 0; i < fileHeaders.length; i++) {
+            obj[fileHeaders[i]] = cellToString(row[i]);
+          }
+          return obj;
+        });
+
+        finalizeParse(fileHeaders, dataRows, file.name);
+      } catch (err) {
+        const message =
+          err instanceof Error ? err.message : String(err);
+        if (message.includes("password") || message.includes("encrypted")) {
+          setParseError(
+            isEn
+              ? "This file is password-protected. Please remove the password and try again."
+              : "Este archivo está protegido con contraseña. Elimina la contraseña e intenta de nuevo."
+          );
+        } else {
+          setParseError(
+            isEn
+              ? `Could not read Excel file: ${message}`
+              : `No se pudo leer el archivo Excel: ${message}`
+          );
+        }
+      }
+    },
+    [isEn, finalizeParse]
+  );
+
+  const handleSheetSelect = useCallback(
+    (index: number) => {
+      if (!pendingFile) return;
+      setPickingSheet(false);
+      setParseError("");
+      parseExcelSheet(pendingFile, index + 1); // 1-based
+    },
+    [pendingFile, parseExcelSheet]
+  );
 
   const handleFile = useCallback(
     (file: File) => {
@@ -97,8 +208,17 @@ export function CsvImportSheet({
       setImportDone(false);
       setImportResults([]);
       setImportProcessed(0);
+      setPickingSheet(false);
+      setSheetNames([]);
+      setPendingFile(null);
 
-      Papa.parse<CsvRow>(file, {
+      if (isExcelFile(file.name)) {
+        parseExcelSheet(file);
+        return;
+      }
+
+      // CSV / TSV parsing via PapaParse
+      Papa.parse<DataRow>(file, {
         header: true,
         skipEmptyLines: true,
         complete: (result) => {
@@ -106,22 +226,15 @@ export function CsvImportSheet({
             setParseError(result.errors[0].message);
             return;
           }
-          if (result.data.length === 0) {
-            setParseError(isEn ? "File is empty" : "El archivo está vacío");
-            return;
-          }
-          const headers = result.meta.fields ?? Object.keys(result.data[0]);
-          setCsvHeaders(headers);
-          setCsvData(result.data);
-          setFileName(file.name);
-          setMappings(autoDetectMappings(headers, targetFields));
+          const fileHeaders = result.meta.fields ?? Object.keys(result.data[0]);
+          finalizeParse(fileHeaders, result.data, file.name);
         },
         error: (err) => {
           setParseError(err.message);
         },
       });
     },
-    [isEn, targetFields]
+    [parseExcelSheet, finalizeParse]
   );
 
   const onDrop = useCallback(
@@ -164,11 +277,11 @@ export function CsvImportSheet({
     setImportDone(false);
 
     // Build mapped rows
-    const mappedRows = csvData.map((csvRow) => {
+    const mappedRows = data.map((row) => {
       const mapped: Record<string, string> = {};
       for (const m of mappings) {
         if (m.targetField) {
-          mapped[m.targetField] = csvRow[m.csvHeader] ?? "";
+          mapped[m.targetField] = row[m.csvHeader] ?? "";
         }
       }
       return mapped;
@@ -179,7 +292,13 @@ export function CsvImportSheet({
         name: row.name ?? "",
         code: row.code,
         address_line1: row.address_line1,
+        address_line2: row.address_line2,
         city: row.city,
+        region: row.region,
+        postal_code: row.postal_code,
+        country_code: row.country_code,
+        latitude: row.latitude ? Number(row.latitude) : undefined,
+        longitude: row.longitude ? Number(row.longitude) : undefined,
       }));
       const result = await batchCreateProperties(orgId, propertyPayloads);
       setImportResults(result.rows);
@@ -196,6 +315,23 @@ export function CsvImportSheet({
           max_guests: row.max_guests ? Number(row.max_guests) : undefined,
           bedrooms: row.bedrooms ? Number(row.bedrooms) : undefined,
           bathrooms: row.bathrooms ? Number(row.bathrooms) : undefined,
+          square_meters: row.square_meters
+            ? Number(row.square_meters)
+            : undefined,
+          default_nightly_rate: row.default_nightly_rate
+            ? Number(row.default_nightly_rate)
+            : undefined,
+          default_cleaning_fee: row.default_cleaning_fee
+            ? Number(row.default_cleaning_fee)
+            : undefined,
+          currency: row.currency || undefined,
+          check_in_time: row.check_in_time || undefined,
+          check_out_time: row.check_out_time || undefined,
+          is_active: row.is_active
+            ? !["false", "0", "no", "inactivo"].includes(
+                row.is_active.trim().toLowerCase()
+              )
+            : undefined,
         };
       });
       const result = await batchCreateUnits(orgId, unitPayloads);
@@ -208,7 +344,8 @@ export function CsvImportSheet({
     onImportComplete?.();
   };
 
-  const previewRows = csvData.slice(0, 5);
+  const previewRows = data.slice(0, 5);
+  const showDropZone = data.length === 0 && !importDone && !pickingSheet;
 
   return (
     <Sheet
@@ -237,22 +374,31 @@ export function CsvImportSheet({
       }
     >
       <div className="space-y-5">
-        {/* Download template */}
+        {/* Download templates */}
         <div className="flex items-center justify-between rounded-lg border border-border/70 bg-muted/20 px-3 py-2">
           <span className="text-sm text-muted-foreground">
-            {isEn ? "Download CSV template" : "Descargar plantilla CSV"}
+            {isEn ? "Download template" : "Descargar plantilla"}
           </span>
-          <a
-            className="text-sm font-medium text-primary hover:underline"
-            download
-            href={templateUrl}
-          >
-            {isEn ? "Download" : "Descargar"}
-          </a>
+          <div className="flex items-center gap-3">
+            <a
+              className="text-sm font-medium text-primary hover:underline"
+              download
+              href={csvTemplateUrl}
+            >
+              CSV
+            </a>
+            <a
+              className="text-sm font-medium text-primary hover:underline"
+              download
+              href={xlsxTemplateUrl}
+            >
+              Excel
+            </a>
+          </div>
         </div>
 
         {/* File drop zone */}
-        {csvData.length === 0 && !importDone ? (
+        {showDropZone ? (
           <div
             className="flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed border-border/70 bg-muted/10 px-4 py-10 text-center transition-colors hover:border-primary/30 hover:bg-muted/20"
             onDragOver={(e) => e.preventDefault()}
@@ -262,8 +408,8 @@ export function CsvImportSheet({
             <div>
               <p className="text-sm font-medium text-foreground">
                 {isEn
-                  ? "Drop your CSV file here"
-                  : "Suelta tu archivo CSV aquí"}
+                  ? "Drop your CSV or Excel file here"
+                  : "Suelta tu archivo CSV o Excel aquí"}
               </p>
               <p className="mt-1 text-xs text-muted-foreground">
                 {isEn ? "or click to select" : "o haz clic para seleccionar"}
@@ -272,12 +418,49 @@ export function CsvImportSheet({
             <label className="cursor-pointer rounded-md border bg-background px-3 py-1.5 text-sm font-medium hover:bg-muted/50">
               {isEn ? "Select file" : "Seleccionar archivo"}
               <input
-                accept=".csv,.tsv,.txt"
+                accept=".csv,.tsv,.txt,.xlsx"
                 className="hidden"
                 onChange={onFileSelect}
                 type="file"
               />
             </label>
+          </div>
+        ) : null}
+
+        {/* Sheet picker for multi-sheet Excel files */}
+        {pickingSheet && sheetNames.length > 0 ? (
+          <div className="space-y-3">
+            <div className="flex items-center justify-between text-sm">
+              <span className="font-medium">{fileName}</span>
+              <span className="text-muted-foreground">
+                {sheetNames.length} {isEn ? "sheets" : "hojas"}
+              </span>
+            </div>
+            <p className="text-xs font-medium text-muted-foreground">
+              {isEn
+                ? "This file has multiple sheets. Select one to import:"
+                : "Este archivo tiene varias hojas. Selecciona una para importar:"}
+            </p>
+            <div className="grid gap-2">
+              {sheetNames.map((name, i) => (
+                <button
+                  className="flex items-center gap-2 rounded-lg border border-border/70 bg-muted/20 px-4 py-3 text-left text-sm font-medium transition-colors hover:border-primary/40 hover:bg-primary/5"
+                  key={i}
+                  onClick={() => handleSheetSelect(i)}
+                  type="button"
+                >
+                  <span className="flex h-6 w-6 items-center justify-center rounded-md bg-primary/10 text-xs font-semibold text-primary">
+                    {i + 1}
+                  </span>
+                  {name}
+                </button>
+              ))}
+            </div>
+            <div className="flex justify-end">
+              <Button onClick={reset} type="button" variant="outline">
+                {isEn ? "Cancel" : "Cancelar"}
+              </Button>
+            </div>
           </div>
         ) : null}
 
@@ -289,17 +472,17 @@ export function CsvImportSheet({
         ) : null}
 
         {/* Column mapper */}
-        {csvHeaders.length > 0 && !importDone ? (
+        {headers.length > 0 && !importDone ? (
           <>
             <div className="flex items-center justify-between text-sm">
               <span className="font-medium">{fileName}</span>
               <span className="text-muted-foreground">
-                {csvData.length} {isEn ? "rows" : "filas"}
+                {data.length} {isEn ? "rows" : "filas"}
               </span>
             </div>
 
             <ColumnMapper
-              csvHeaders={csvHeaders}
+              csvHeaders={headers}
               isEn={isEn}
               mappings={mappings}
               onMappingChange={setMappings}
@@ -331,7 +514,7 @@ export function CsvImportSheet({
                   <table className="w-full text-xs">
                     <thead>
                       <tr className="border-b bg-muted/30">
-                        {csvHeaders.map((h) => (
+                        {headers.map((h) => (
                           <th
                             className="px-2 py-1.5 text-left font-medium text-muted-foreground"
                             key={h}
@@ -344,9 +527,9 @@ export function CsvImportSheet({
                     <tbody>
                       {previewRows.map((row, i) => (
                         <tr className="border-b" key={i}>
-                          {csvHeaders.map((h) => (
+                          {headers.map((h) => (
                             <td className="px-2 py-1.5" key={h}>
-                              {row[h] || "—"}
+                              {row[h] || "\u2014"}
                             </td>
                           ))}
                         </tr>
@@ -377,7 +560,7 @@ export function CsvImportSheet({
                   </>
                 ) : (
                   <>
-                    {isEn ? "Import" : "Importar"} {csvData.length}{" "}
+                    {isEn ? "Import" : "Importar"} {data.length}{" "}
                     {isEn ? "rows" : "filas"}
                   </>
                 )}
@@ -393,7 +576,7 @@ export function CsvImportSheet({
               isEn={isEn}
               processed={importProcessed}
               results={importResults}
-              total={csvData.length}
+              total={data.length}
             />
             <div className="flex justify-end gap-2">
               <Button

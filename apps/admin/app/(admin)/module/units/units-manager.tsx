@@ -3,7 +3,7 @@
 import { Add01Icon, Upload01Icon } from "@hugeicons/core-free-icons";
 import { useEffect, useMemo, useState } from "react";
 import { createUnitFromUnitsModuleAction } from "@/app/(admin)/module/units/actions";
-import { CsvImportSheet } from "@/components/import/csv-import-sheet";
+import { DataImportSheet } from "@/components/import/data-import-sheet";
 import { UnitNotionTable, type UnitRow } from "@/components/units/unit-notion-table";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -243,7 +243,7 @@ export function UnitsManager({
             variant="outline"
           >
             <Icon icon={Upload01Icon} size={16} />
-            {isEn ? "Import CSV" : "Importar CSV"}
+            {isEn ? "Import" : "Importar"}
           </Button>
           <Button
             disabled={propertyOptions.length === 0}
@@ -481,7 +481,7 @@ export function UnitsManager({
         </Form>
       </Sheet>
 
-      <CsvImportSheet
+      <DataImportSheet
         isEn={isEn}
         mode="units"
         onOpenChange={setImportOpen}

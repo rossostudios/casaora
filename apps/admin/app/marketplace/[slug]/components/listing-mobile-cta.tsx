@@ -9,6 +9,7 @@ import { getSafeWhatsAppUrl } from "@/lib/security/safe-external-url";
 type ListingMobileCtaProps = {
   slug: string;
   monthlyLabel: string;
+  monthlyUsdApprox?: string | null;
   whatsappUrl: string;
   isEn: boolean;
 };
@@ -16,6 +17,7 @@ type ListingMobileCtaProps = {
 export function ListingMobileCta({
   slug,
   monthlyLabel,
+  monthlyUsdApprox,
   whatsappUrl,
   isEn,
 }: ListingMobileCtaProps) {
@@ -32,6 +34,11 @@ export function ListingMobileCta({
               /{isEn ? "month" : "mes"}
             </span>
           </p>
+          {monthlyUsdApprox ? (
+            <p className="text-muted-foreground text-[11px]">
+              {monthlyUsdApprox}
+            </p>
+          ) : null}
         </div>
         <div className="flex shrink-0 items-center gap-2">
           {safeWhatsApp ? (
@@ -43,7 +50,7 @@ export function ListingMobileCta({
               target="_blank"
             >
               <Icon icon={WhatsappIcon} size={16} />
-              <span className="hidden sm:inline">WhatsApp</span>
+              <span>WhatsApp</span>
             </a>
           ) : null}
           <Link

@@ -2,7 +2,8 @@
 
 import dynamic from "next/dynamic";
 import { useState } from "react";
-import { MapsLocation01Icon } from "@hugeicons/core-free-icons";
+import { MapsLocation01Icon, Search01Icon } from "@hugeicons/core-free-icons";
+import Link from "next/link";
 
 import { MarketplaceListingCard } from "@/components/marketplace/listing-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -114,18 +115,27 @@ export function MarketplaceResultsLayout({
           ) : null}
         </div>
       ) : (
-        <Card>
-          <CardHeader>
-            <CardTitle>
-              {isEn ? "No listings found" : "No se encontraron anuncios"}
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="text-muted-foreground text-sm">
+        <div className="flex flex-col items-center justify-center py-16 text-center">
+          <div className="mb-4 inline-flex h-14 w-14 items-center justify-center rounded-full bg-muted">
+            <Icon icon={Search01Icon} size={24} />
+          </div>
+          <h3 className="mb-1 font-semibold text-base">
             {isEn
-              ? "Try different filters or check back soon."
-              : "Prueba otros filtros o vuelve pronto."}
-          </CardContent>
-        </Card>
+              ? "No listings match your filters"
+              : "Ningún anuncio coincide con tus filtros"}
+          </h3>
+          <p className="mb-5 max-w-sm text-muted-foreground text-sm">
+            {isEn
+              ? "Try broadening your search or resetting filters."
+              : "Intentá ampliar tu búsqueda o restablecer los filtros."}
+          </p>
+          <Link
+            className="inline-flex h-9 items-center rounded-xl border border-border/70 bg-card/80 px-4 text-sm font-medium transition-colors hover:bg-accent"
+            href="/marketplace"
+          >
+            {isEn ? "Reset all filters" : "Restablecer filtros"}
+          </Link>
+        </div>
       )}
 
       {/* Mobile map FAB */}

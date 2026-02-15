@@ -1,8 +1,9 @@
-import { WhatsappIcon } from "@hugeicons/core-free-icons";
+import { SecurityCheckIcon, WhatsappIcon } from "@hugeicons/core-free-icons";
 import Image from "next/image";
 
 import { Badge } from "@/components/ui/badge";
 import { Icon } from "@/components/ui/icon";
+import { PYG_TO_USD_APPROX } from "@/lib/features/marketplace/view-model";
 import { formatCurrency } from "@/lib/format";
 import { getSafeWhatsAppUrl } from "@/lib/security/safe-external-url";
 import { FavoriteButton } from "./favorite-button";
@@ -66,6 +67,11 @@ export function MarketplaceListingCard({
   const availableFrom = asText(listing.available_from);
   const propertyType = asText(listing.property_type);
   const furnished = listing.furnished === true;
+  const monthlyRaw = asNumber(listing.monthly_recurring_total);
+  const monthlyUsdApprox =
+    currency === "PYG" && monthlyRaw > 0
+      ? `~$${Math.round(monthlyRaw / PYG_TO_USD_APPROX).toLocaleString("en-US")} USD`
+      : null;
   const whatsappUrl = getSafeWhatsAppUrl(asText(listing.whatsapp_contact_url));
 
   return (
@@ -97,6 +103,11 @@ export function MarketplaceListingCard({
         ) : null}
 
         <FavoriteButton className="absolute top-3 right-3" slug={slug} />
+
+        <span className="absolute bottom-3 left-3 inline-flex items-center gap-1 rounded-full bg-background/90 px-2 py-0.5 text-[10px] font-medium text-emerald-700 shadow-sm backdrop-blur-sm dark:text-emerald-400">
+          <Icon icon={SecurityCheckIcon} size={10} />
+          {isEn ? "Verified" : "Verificado"}
+        </span>
       </div>
 
       <div className="space-y-1.5 p-3.5">
@@ -144,6 +155,11 @@ export function MarketplaceListingCard({
                 /{isEn ? "month" : "mes"}
               </span>
             </p>
+            {monthlyUsdApprox ? (
+              <p className="text-muted-foreground text-[11px]">
+                {monthlyUsdApprox}
+              </p>
+            ) : null}
             <p className="text-muted-foreground text-xs">
               {isEn ? "Move-in total" : "Total ingreso"}: {totalMoveIn}
             </p>

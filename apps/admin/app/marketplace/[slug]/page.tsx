@@ -186,6 +186,7 @@ export default async function MarketplaceListingPage({
       <ListingMobileCta
         isEn={isEn}
         monthlyLabel={listing.monthlyRecurringLabel}
+        monthlyUsdApprox={listing.monthlyRecurringUsdApprox}
         slug={slug}
         whatsappUrl={listing.whatsappUrl}
       />

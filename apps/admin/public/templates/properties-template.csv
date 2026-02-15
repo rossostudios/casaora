@@ -1,3 +1,3 @@
-Nombre,Codigo,Direccion,Ciudad
-Villa Morra HQ,VM-HQ,Av. España 1234,Asunción
-Edificio Centro,EC-01,Calle Palma 567,Asunción
+Nombre,Codigo,Direccion,Piso/Depto,Ciudad,Departamento,Codigo Postal,Pais,Latitud,Longitud
+Villa Morra HQ,VM-HQ,Av. España 1234,Piso 3,Asunción,Central,1234,PY,-25.2867,-57.6353
+Edificio Centro,EC-01,Calle Palma 567,,Asunción,Central,1001,PY,-25.2822,-57.6315

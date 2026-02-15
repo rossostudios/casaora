@@ -8,6 +8,15 @@ import { formatCurrency, humanizeKey } from "@/lib/format";
 import type { Locale } from "@/lib/i18n";
 import { cityToCoordinates, jitter } from "./geo";
 
+/** Approximate PYG → USD rate. Update periodically. */
+export const PYG_TO_USD_APPROX = 7500;
+
+function formatUsdApprox(pyg: number): string | null {
+  if (pyg <= 0) return null;
+  const usd = Math.round(pyg / PYG_TO_USD_APPROX);
+  return `~$${usd.toLocaleString("en-US")} USD`;
+}
+
 export type MarketplaceFeeLineViewModel = {
   key: string;
   label: string;
@@ -49,6 +58,8 @@ export type MarketplaceListingViewModel = {
   whatsappUrl: string;
   latitude: number | null;
   longitude: number | null;
+  monthlyRecurringUsdApprox: string | null;
+  totalMoveInUsdApprox: string | null;
 };
 
 function listingId(listing: MarketplaceListingRecord): string {
@@ -188,5 +199,9 @@ export function toMarketplaceListingViewModel(params: {
     whatsappUrl: asText(listing.whatsapp_contact_url),
     latitude,
     longitude,
+    monthlyRecurringUsdApprox:
+      currency === "PYG" ? formatUsdApprox(monthlyRecurring) : null,
+    totalMoveInUsdApprox:
+      currency === "PYG" ? formatUsdApprox(totalMoveIn) : null,
   };
 }
