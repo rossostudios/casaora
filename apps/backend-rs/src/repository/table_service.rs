@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 
 use serde_json::{Map, Value};
-use sqlx::{postgres::PgRow, Postgres, QueryBuilder, Row};
+use sqlx::{postgres::PgRow, PgConnection, Postgres, QueryBuilder, Row};
 
 use crate::error::AppError;
 
@@ -184,6 +184,61 @@ pub async fn create_row(
     let row = query
         .build()
         .fetch_optional(pool)
+        .await
+        .map_err(map_db_error)?;
+
+    row.and_then(|value| value.try_get::<Option<Value>, _>("row").ok().flatten())
+        .ok_or_else(|| AppError::Internal(format!("Could not create {table_name} record.")))
+}
+
+/// Same as `create_row` but executes within an existing transaction.
+pub async fn create_row_tx(
+    conn: &mut PgConnection,
+    table: &str,
+    payload: &Map<String, Value>,
+) -> Result<Value, AppError> {
+    let table_name = validate_table(table)?;
+    if payload.is_empty() {
+        return Err(AppError::BadRequest(format!(
+            "Could not create {table_name} record."
+        )));
+    }
+
+    let mut keys = payload.keys().cloned().collect::<Vec<_>>();
+    keys.sort_unstable();
+    for key in &keys {
+        validate_identifier(key)?;
+    }
+
+    let mut query = QueryBuilder::<Postgres>::new("INSERT INTO ");
+    query.push(table_name).push(" (");
+    {
+        let mut separated = query.separated(", ");
+        for key in &keys {
+            separated.push(validate_identifier(key)?);
+        }
+    }
+    query.push(") SELECT ");
+    {
+        let mut separated = query.separated(", ");
+        for key in &keys {
+            separated.push("r.");
+            separated.push_unseparated(validate_identifier(key)?);
+        }
+    }
+    query
+        .push(" FROM jsonb_populate_record(NULL::")
+        .push(table_name)
+        .push(", ");
+    query.push_bind(Value::Object(payload.clone()));
+    query
+        .push(") r RETURNING row_to_json(")
+        .push(table_name)
+        .push(".*) AS row");
+
+    let row = query
+        .build()
+        .fetch_optional(&mut *conn)
         .await
         .map_err(map_db_error)?;
 

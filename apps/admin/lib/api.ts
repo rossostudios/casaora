@@ -1,5 +1,3 @@
-import { cookies } from "next/headers";
-
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 const API_BASE_URL =
@@ -179,19 +177,6 @@ export async function fetchJson<T>(
         }
       } catch {
         // Keep the raw response text when it isn't JSON.
-      }
-    }
-
-    // Clear stale org cookie on 403 "not a member" to prevent infinite loops
-    if (
-      response.status === 403 &&
-      detailMessage.includes("not a member of this organization")
-    ) {
-      try {
-        const store = await cookies();
-        store.delete("pa-org-id");
-      } catch {
-        // cookies() not available in edge/client context — ignore
       }
     }
 

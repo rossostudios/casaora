@@ -11,7 +11,7 @@ use sqlx::{Postgres, QueryBuilder, Row};
 use crate::{
     auth::require_supabase_user,
     error::{AppError, AppResult},
-    repository::table_service::{create_row, delete_row, get_row, list_rows, update_row},
+    repository::table_service::{create_row, create_row_tx, delete_row, get_row, list_rows, update_row},
     schemas::{
         clamp_limit, remove_nulls, serialize_to_map, validate_input,
         AcceptOrganizationInviteInput, CreateOrganizationInput, CreateOrganizationInviteInput,
@@ -93,9 +93,30 @@ async fn create_organization(
 
     let mut record = remove_nulls(serialize_to_map(&payload));
     record.insert("owner_user_id".to_string(), Value::String(user.id.clone()));
-    let org = create_row(pool, "organizations", &record).await?;
+
+    // Use a single transaction so the org and membership are created atomically.
+    // If either fails, both roll back — no orphaned orgs without memberships.
+    let mut tx = pool.begin().await.map_err(|e| AppError::Dependency(format!("txn begin: {e}")))?;
+
+    let org = create_row_tx(&mut *tx, "organizations", &record).await?;
     let org_id = value_str(&org, "id");
-    ensure_org_membership(&state, &org_id, &user.id, "owner_admin", true).await?;
+
+    sqlx::query(
+        "INSERT INTO organization_members (organization_id, user_id, role, is_primary)
+         VALUES ($1::uuid, $2::uuid, $3::member_role, $4)
+         ON CONFLICT (organization_id, user_id)
+         DO UPDATE SET role = EXCLUDED.role, is_primary = EXCLUDED.is_primary",
+    )
+    .bind(&org_id)
+    .bind(&user.id)
+    .bind("owner_admin")
+    .bind(true)
+    .execute(&mut *tx)
+    .await
+    .map_err(|e| AppError::Dependency(format!("membership insert: {e}")))?;
+
+    tx.commit().await.map_err(|e| AppError::Dependency(format!("txn commit: {e}")))?;
+
     write_audit_log(
         state.db_pool.as_ref(),
         Some(&org_id),
