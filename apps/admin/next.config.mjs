@@ -8,9 +8,6 @@ const workspaceRoot = resolve(__dirname, "../..");
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  turbopack: {
-    root: workspaceRoot,
-  },
   outputFileTracingRoot: workspaceRoot,
   async headers() {
     return [
@@ -46,6 +43,9 @@ export default withSentryConfig(nextConfig, {
 
   // Upload a larger set of source maps for prettier stack traces (increases build time)
   widenClientFileUpload: true,
+
+  // Generate source maps for Sentry uploads, then remove from public output
+  hideSourceMaps: true,
 
   // Uncomment to route browser requests to Sentry through a Next.js rewrite to circumvent ad-blockers.
   // This can increase your server load as well as your hosting bill.
