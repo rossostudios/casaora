@@ -28,6 +28,29 @@ function settledOrEmpty(
   return [];
 }
 
+/**
+ * Retry wrapper for data fetches that may fail due to read-after-write
+ * inconsistency with Supavisor's transaction-mode connection pooler.
+ * After org creation the membership row may not be visible yet on the
+ * pooled connection used by `assert_org_member`, causing a 403.
+ */
+async function fetchWithRetry(
+  fn: () => Promise<unknown[]>,
+  retries = 2,
+  delayMs = 600
+): Promise<unknown[]> {
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      const isLastAttempt = attempt === retries;
+      if (isLastAttempt) throw err;
+      await new Promise((r) => setTimeout(r, delayMs));
+    }
+  }
+  return []; // unreachable, keeps TS happy
+}
+
 type SetupPageProps = {
   searchParams: Promise<{
     tab?: string;
@@ -213,13 +236,15 @@ export default async function SetupPage({ searchParams }: SetupPageProps) {
     );
   }
 
-  /* Phase B — Non-critical: properties, units, integrations */
+  /* Phase B — Non-critical: properties, units, integrations.
+     Wrapped in fetchWithRetry to handle read-after-write inconsistency
+     with Supavisor's transaction-mode pooler after org creation. */
   const warnings: string[] = [];
   const [propsResult, unitsResult, integrationsResult] =
     await Promise.allSettled([
-      fetchList("/properties", orgId, 25),
-      fetchList("/units", orgId, 25),
-      fetchList("/integrations", orgId, 50),
+      fetchWithRetry(() => fetchList("/properties", orgId, 25)),
+      fetchWithRetry(() => fetchList("/units", orgId, 25)),
+      fetchWithRetry(() => fetchList("/integrations", orgId, 50)),
     ]);
 
   const properties = settledOrEmpty(
