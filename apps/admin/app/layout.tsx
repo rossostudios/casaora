@@ -1,4 +1,5 @@
 import { GeistMono } from "geist/font/mono";
+import { GeistPixelSquare } from "geist/font/pixel";
 import { GeistSans } from "geist/font/sans";
 import type { Metadata } from "next";
 
@@ -77,7 +78,7 @@ export default async function RootLayout({
   const locale = await getActiveLocale();
   return (
     <html
-      className={`${GeistSans.variable} ${GeistMono.variable}`}
+      className={`${GeistSans.variable} ${GeistMono.variable} ${GeistPixelSquare.variable}`}
       lang={locale}
       suppressHydrationWarning
     >

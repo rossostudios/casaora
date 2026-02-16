@@ -172,6 +172,11 @@
     "Liberation Mono",
     monospace
   );
+  --font-pixel: var(
+    --font-geist-pixel-square,
+    "Geist Pixel Square",
+    monospace
+  );
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
