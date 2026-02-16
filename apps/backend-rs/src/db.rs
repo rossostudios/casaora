@@ -1,9 +1,10 @@
-use std::{str::FromStr, time::Duration};
+use std::time::Duration;
 
 use sqlx::{
-    postgres::{PgConnectOptions, PgPoolOptions},
+    postgres::{PgConnectOptions, PgPoolOptions, PgSslMode},
     PgPool,
 };
+use url::Url;
 
 use crate::{config::AppConfig, error::AppError};
 
@@ -12,11 +13,49 @@ pub fn create_pool(config: &AppConfig) -> Result<Option<PgPool>, AppError> {
         return Ok(None);
     };
 
-    // Parse the URL into connect options so we can set a TCP connect timeout.
-    // Without this, the first connection can hang for 60-120s if the DB host
-    // is unreachable, which blocks Railway healthchecks.
-    let connect_options = PgConnectOptions::from_str(database_url)
+    // Parse the URL manually so we preserve the full username.
+    // sqlx's PgConnectOptions::from_str can strip the project ref suffix
+    // (e.g. "postgres.thzhbiojhdeifjqhhzli" → "postgres") which breaks
+    // Supabase's session-mode pooler authentication.
+    let url = Url::parse(database_url)
         .map_err(|e| AppError::Dependency(format!("Invalid database URL: {e}")))?;
+
+    let username = url.username();
+    let password = url.password().unwrap_or("");
+    let host = url.host_str().unwrap_or("localhost");
+    let port = url.port().unwrap_or(5432);
+    let database = url.path().trim_start_matches('/');
+
+    // Check for ?sslmode= in the URL, default to Require for pooler connections.
+    let ssl_mode = url
+        .query_pairs()
+        .find(|(k, _)| k == "sslmode")
+        .map(|(_, v)| match v.as_ref() {
+            "disable" => PgSslMode::Disable,
+            "prefer" => PgSslMode::Prefer,
+            "require" => PgSslMode::Require,
+            "verify-ca" => PgSslMode::VerifyCa,
+            "verify-full" => PgSslMode::VerifyFull,
+            _ => PgSslMode::Require,
+        })
+        .unwrap_or(PgSslMode::Require);
+
+    tracing::info!(
+        db_user = username,
+        db_host = host,
+        db_port = port,
+        db_name = database,
+        ssl_mode = ?ssl_mode,
+        "Configuring database pool"
+    );
+
+    let connect_options = PgConnectOptions::new()
+        .host(host)
+        .port(port)
+        .username(username)
+        .password(password)
+        .database(database)
+        .ssl_mode(ssl_mode);
 
     let pool = PgPoolOptions::new()
         .max_connections(10)
