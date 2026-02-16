@@ -84,7 +84,7 @@ export type ViewportMode = "desktop" | "tablet" | "mobile";
 
 type SectionKey =
   | "workspace"
-  | "leasing"
+  | "rentals"
   | "operations"
   | "portfolio"
   | "finance"
@@ -124,6 +124,7 @@ type ResolvedLink = {
   href: string;
   label: string;
   iconElement: IconSvgElement;
+  count?: number | null;
 };
 
 type ResolvedSection = {
@@ -233,12 +234,12 @@ const INBOX_SEGMENT_LINKS: RouteLinkDef[] = [
 
 const SECTIONS: SectionDef[] = [
   {
-    key: "leasing",
+    key: "rentals",
     label: {
-      "es-PY": "Leasing",
-      "en-US": "Leasing",
+      "es-PY": "Alquileres",
+      "en-US": "Rentals",
     },
-    moduleSlugs: ["listings", "leases"],
+    moduleSlugs: ["listings", "leases", "reservations"],
     roles: ["owner_admin", "operator"],
   },
   {
@@ -247,7 +248,7 @@ const SECTIONS: SectionDef[] = [
       "es-PY": "Operaciones",
       "en-US": "Operations",
     },
-    moduleSlugs: ["tasks", "reservations", "guests"],
+    moduleSlugs: ["tasks", "guests"],
     roles: ["owner_admin", "operator", "cleaner"],
   },
   {
@@ -448,11 +449,13 @@ function ShortcutKbd({ keys }: { keys: string[] }) {
 
 function NavLinkRow({
   active,
+  count,
   href,
   icon,
   label,
 }: {
   active: boolean;
+  count?: number | null;
   href: string;
   icon: IconSvgElement;
   label: string;
@@ -482,6 +485,11 @@ function NavLinkRow({
       <span className="truncate font-medium text-[14px] leading-5">
         {label}
       </span>
+      {count != null && count > 0 && (
+        <span className="ml-auto shrink-0 rounded-full bg-sidebar-accent/60 px-1.5 py-px text-[10px] tabular-nums text-sidebar-foreground/50">
+          {count}
+        </span>
+      )}
     </Link>
   );
 
@@ -591,6 +599,8 @@ function SidebarContent({
   );
   const onboardingCompleted = completionPercent >= 100;
 
+  const [listingCount, setListingCount] = useState<number | null>(null);
+
   const [chatAgents, setChatAgents] = useState<ChatAgentItem[]>([]);
   const [recentChats, setRecentChats] = useState<ChatSummaryItem[]>([]);
   const [chatLoading, setChatLoading] = useState(false);
@@ -688,6 +698,37 @@ function SidebarContent({
     if (activeTab !== "chat") return;
     loadChatData().catch(() => undefined);
   }, [activeTab, loadChatData]);
+
+  useEffect(() => {
+    if (activeTab !== "home" || !orgId) return;
+    let cancelled = false;
+    fetch(`/api/listings/count?org_id=${encodeURIComponent(orgId)}`, {
+      cache: "no-store",
+    })
+      .then((res) => res.json() as Promise<{ count?: number | null }>)
+      .then((body) => {
+        if (!cancelled && typeof body.count === "number") {
+          setListingCount(body.count);
+        }
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTab, orgId]);
+
+  const sectionsWithCounts = useMemo(
+    () =>
+      sections.map((section) => ({
+        ...section,
+        links: section.links.map((link) =>
+          link.href === "/module/listings"
+            ? { ...link, count: listingCount }
+            : link
+        ),
+      })),
+    [sections, listingCount]
+  );
 
   const mutateRecentChat = useCallback(
     async (chatId: string, action: "archive" | "restore" | "delete") => {
@@ -1056,7 +1097,7 @@ function SidebarContent({
               </Link>
             ) : null}
 
-            {sections.map((section, index) => {
+            {sectionsWithCounts.map((section, index) => {
               const isCollapsed = collapsedSections.has(section.key);
 
               return (
@@ -1094,6 +1135,7 @@ function SidebarContent({
                         {section.links.map((link) => (
                           <NavLinkRow
                             active={isRouteActive(pathname, search, link.href)}
+                            count={link.count}
                             href={link.href}
                             icon={link.iconElement}
                             key={link.href}
