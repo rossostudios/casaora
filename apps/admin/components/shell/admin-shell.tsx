@@ -1,6 +1,6 @@
 "use client";
 
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { type ReactNode, useCallback, useEffect, useState } from "react";
 import { AppFooter } from "@/components/shell/app-footer";
 import { CommandPalette } from "@/components/shell/command-palette";
@@ -185,9 +185,22 @@ function AdminShellV2({
     setIsMobileDrawerOpen((open) => !open);
   };
 
+  const searchParams = useSearchParams();
+  const isPreviewMode = searchParams.get("preview") === "1";
+
   const shellSurfaceClass = BRAND_V1_ENABLED
     ? "bg-[var(--shell-surface)]"
     : "bg-background";
+
+  if (isPreviewMode) {
+    return (
+      <div className={cn("h-full w-full overflow-auto", shellSurfaceClass)}>
+        <div className="mx-auto w-full max-w-screen-2xl p-3 sm:p-4 lg:p-5 xl:p-7">
+          {children}
+        </div>
+      </div>
+    );
+  }
 
   const contentColumn = (
     <div className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden">

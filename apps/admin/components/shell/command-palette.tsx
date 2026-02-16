@@ -23,6 +23,39 @@ import {
 } from "@/lib/shortcuts";
 import { cn } from "@/lib/utils";
 
+function PreviewFrame({ href }: { href: string | null }) {
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    setLoading(true);
+  }, [href]);
+
+  if (!href) {
+    return (
+      <div className="flex h-full items-center justify-center p-6 text-center text-xs text-muted-foreground/60" />
+    );
+  }
+
+  const previewUrl = href + (href.includes("?") ? "&" : "?") + "preview=1";
+
+  return (
+    <div className="relative h-full w-full">
+      {loading && (
+        <div className="absolute inset-0 z-10 flex items-center justify-center bg-popover/80">
+          <div className="h-5 w-5 animate-spin rounded-full border-2 border-muted-foreground/30 border-t-primary" />
+        </div>
+      )}
+      <iframe
+        key={previewUrl}
+        className="pointer-events-none absolute top-0 left-0 h-[400%] w-[400%] origin-top-left scale-[0.25] border-0"
+        onLoad={() => setLoading(false)}
+        src={previewUrl}
+        title="Page preview"
+      />
+    </div>
+  );
+}
+
 type ActionItem = {
   key: string;
   label: string;
@@ -74,6 +107,8 @@ export function CommandPalette({
   const [pins, setPins] = useState<ShortcutItem[]>([]);
   const [recents, setRecents] = useState<ShortcutItem[]>([]);
 
+  const [debouncedHref, setDebouncedHref] = useState<string | null>(null);
+
   useEffect(() => {
     const sync = () => {
       setPins(getPins());
@@ -118,7 +153,10 @@ export function CommandPalette({
   }, [isControlled, open, onOpenChangeProp]);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      setDebouncedHref(null);
+      return;
+    }
     setQuery("");
     setCursor(0);
     window.setTimeout(() => inputRef.current?.focus(), 0);
@@ -128,7 +166,7 @@ export function CommandPalette({
     const moduleActions: ActionItem[] = MODULES.map((m) => ({
       key: `module:${m.slug}`,
       label: m.label,
-      meta: "Módulo",
+      meta: isEn ? "Module" : "Módulo",
       href: `/module/${m.slug}`,
       kind: "module",
     }));
@@ -142,11 +180,22 @@ export function CommandPalette({
     return all.filter((a) =>
       normalize(`${a.label} ${a.meta ?? ""} ${a.href}`).includes(q)
     );
-  }, [pins, query, recents]);
+  }, [isEn, pins, query, recents]);
 
   useEffect(() => {
     if (cursor >= actions.length) setCursor(0);
   }, [actions.length, cursor]);
+
+  const activeHref = actions[cursor]?.href ?? null;
+
+  useEffect(() => {
+    if (!activeHref) {
+      setDebouncedHref(null);
+      return;
+    }
+    const timer = setTimeout(() => setDebouncedHref(activeHref), 200);
+    return () => clearTimeout(timer);
+  }, [activeHref]);
 
   const go = (href: string) => {
     setOpen(false);
@@ -203,7 +252,7 @@ export function CommandPalette({
             onClick={() => setOpen(false)}
           />
 
-          <div className="absolute top-[9vh] left-1/2 w-[min(760px,calc(100vw-32px))] -translate-x-1/2">
+          <div className="absolute top-[9vh] left-1/2 w-[min(760px,calc(100vw-32px))] md:w-[min(1100px,calc(100vw-32px))] -translate-x-1/2">
             <div className="overflow-hidden rounded-3xl border border-border/80 bg-popover/98 shadow-[var(--shadow-floating)]">
               <div className="flex items-center gap-2 border-border/75 border-b px-4 py-3">
                 <Icon
@@ -215,12 +264,12 @@ export function CommandPalette({
                   className="border-0 bg-transparent px-0 focus-visible:ring-0"
                   onChange={(event) => setQuery(event.target.value)}
                   onKeyDown={onKeyDownList}
-                  placeholder="Buscar módulos, registros recientes o accesos fijados..."
+                  placeholder={isEn ? "Search modules, recents, or pins..." : "Buscar módulos, registros recientes o accesos fijados..."}
                   ref={inputRef}
                   value={query}
                 />
                 <button
-                  aria-label="Cerrar"
+                  aria-label={isEn ? "Close" : "Cerrar"}
                   className={cn(
                     buttonVariants({ variant: "ghost", size: "icon" }),
                     "h-9 w-9 rounded-xl"
@@ -232,55 +281,73 @@ export function CommandPalette({
                 </button>
               </div>
 
-              <div className="max-h-[52vh] overflow-auto p-2">
-                {actions.length ? (
-                  actions.map((action, index) => {
-                    const active = index === cursor;
-                    return (
-                      <button
-                        className={cn(
-                          "flex w-full items-center justify-between gap-4 rounded-2xl px-3 py-2.5 text-left text-sm transition-colors",
-                          active
-                            ? "bg-muted/56 shadow-[inset_0_0_0_1px_rgba(17,24,39,0.04)]"
-                            : "hover:bg-muted/34"
-                        )}
-                        key={action.key}
-                        onClick={() => go(action.href)}
-                        onMouseEnter={() => setCursor(index)}
-                        type="button"
-                      >
-                        <span className="min-w-0">
-                          <span className="block truncate font-medium text-foreground">
-                            {action.label}
+              <div className="flex max-h-[52vh]">
+                <div className="min-w-0 flex-1 overflow-auto p-2">
+                  {actions.length ? (
+                    actions.map((action, index) => {
+                      const active = index === cursor;
+                      return (
+                        <button
+                          className={cn(
+                            "flex w-full items-center justify-between gap-4 rounded-2xl px-3 py-2.5 text-left text-sm transition-colors",
+                            active
+                              ? "bg-muted/56 shadow-[inset_0_0_0_1px_rgba(17,24,39,0.04)]"
+                              : "hover:bg-muted/34"
+                          )}
+                          key={action.key}
+                          onClick={() => go(action.href)}
+                          onMouseEnter={() => setCursor(index)}
+                          type="button"
+                        >
+                          <span className="min-w-0">
+                            <span className="block truncate font-medium text-foreground">
+                              {action.label}
+                            </span>
+                            <span className="block truncate text-[11px] text-muted-foreground">
+                              {action.meta ? `${action.meta} · ` : ""}
+                              {action.href}
+                            </span>
                           </span>
-                          <span className="block truncate text-[11px] text-muted-foreground">
-                            {action.meta ? `${action.meta} · ` : ""}
-                            {action.href}
+                          <span className="text-[11px] text-muted-foreground">
+                            {action.kind === "pin"
+                              ? isEn ? "Pinned" : "Fijado"
+                              : action.kind === "recent"
+                                ? isEn ? "Recent" : "Reciente"
+                                : ""}
                           </span>
-                        </span>
-                        <span className="text-[11px] text-muted-foreground">
-                          {action.kind === "pin"
-                            ? "Fijado"
-                            : action.kind === "recent"
-                              ? "Reciente"
-                              : ""}
-                        </span>
-                      </button>
-                    );
-                  })
-                ) : (
-                  <div className="px-3 py-8 text-center text-muted-foreground text-sm">
-                    Sin resultados.
-                  </div>
-                )}
+                        </button>
+                      );
+                    })
+                  ) : (
+                    <div className="px-3 py-8 text-center text-muted-foreground text-sm">
+                      {isEn ? "No results." : "Sin resultados."}
+                    </div>
+                  )}
+                </div>
+
+                <div className="hidden w-[340px] shrink-0 overflow-hidden border-l border-border/60 md:block">
+                  <PreviewFrame href={debouncedHref} />
+                </div>
               </div>
 
               <div className="border-border/75 border-t px-4 py-2.5 text-muted-foreground text-xs">
-                Tip: <span className="font-medium text-foreground">Cmd+K</span>{" "}
-                para abrir. Usa{" "}
-                <span className="font-medium text-foreground">↑</span>/
-                <span className="font-medium text-foreground">↓</span> y luego{" "}
-                <span className="font-medium text-foreground">Enter</span>.
+                {isEn ? (
+                  <>
+                    Tip: <span className="font-medium text-foreground">Cmd+K</span>{" "}
+                    to open. Use{" "}
+                    <span className="font-medium text-foreground">↑</span>/
+                    <span className="font-medium text-foreground">↓</span> then{" "}
+                    <span className="font-medium text-foreground">Enter</span>.
+                  </>
+                ) : (
+                  <>
+                    Tip: <span className="font-medium text-foreground">Cmd+K</span>{" "}
+                    para abrir. Usa{" "}
+                    <span className="font-medium text-foreground">↑</span>/
+                    <span className="font-medium text-foreground">↓</span> y luego{" "}
+                    <span className="font-medium text-foreground">Enter</span>.
+                  </>
+                )}
               </div>
             </div>
           </div>
