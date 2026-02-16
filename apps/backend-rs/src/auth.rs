@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 
 use axum::http::HeaderMap;
-use jsonwebtoken::{decode, Algorithm, DecodingKey, Validation};
+use jsonwebtoken::{decode, decode_header, Algorithm, DecodingKey, Validation};
 use serde::Deserialize;
 use serde_json::Value;
 
@@ -93,20 +93,36 @@ fn header_string(headers: &HeaderMap, key: &str) -> Option<String> {
         .map(ToOwned::to_owned)
 }
 
-/// Try local JWT validation first; fall back to the Supabase HTTP endpoint
-/// when no JWT secret is configured.
+/// Try local JWT validation first (ES256 via JWKS); fall back to the Supabase
+/// HTTP endpoint when no JWKS URL is configured.
 async fn resolve_user(state: &AppState, token: &str) -> Option<SupabaseUser> {
-    if let Some(user) = validate_jwt_locally(state, token) {
+    if let Some(user) = validate_jwt_with_jwks(state, token).await {
         return Some(user);
     }
     fetch_supabase_user_for_token(state, token).await
 }
 
-fn validate_jwt_locally(state: &AppState, token: &str) -> Option<SupabaseUser> {
-    let jwt_secret = state.config.supabase_jwt_secret.as_deref()?;
-    let key = DecodingKey::from_secret(jwt_secret.as_bytes());
-    let mut validation = Validation::new(Algorithm::HS256);
-    validation.set_audience(&["authenticated"]);
+/// Validate a Supabase JWT using the ES256 public key from the JWKS endpoint.
+/// Returns None if JWKS is not configured or validation fails.
+async fn validate_jwt_with_jwks(state: &AppState, token: &str) -> Option<SupabaseUser> {
+    let jwks_cache = state.jwks_cache.as_ref()?;
+
+    let header = decode_header(token).ok()?;
+    let kid = header.kid.as_deref()?;
+
+    // Try with cached keys first
+    let mut jwks = jwks_cache.get_jwks().await.ok()?;
+    let mut jwk = jwks.keys.iter().find(|k| k.common.key_id.as_deref() == Some(kid));
+
+    // If kid not found, refresh once (handles key rotation)
+    if jwk.is_none() {
+        jwks = jwks_cache.refresh().await.ok()?;
+        jwk = jwks.keys.iter().find(|k| k.common.key_id.as_deref() == Some(kid));
+    }
+
+    let jwk = jwk?;
+    let decoding_key = DecodingKey::from_jwk(jwk).ok()?;
+
     let issuer = format!(
         "{}/auth/v1",
         state
@@ -116,9 +132,13 @@ fn validate_jwt_locally(state: &AppState, token: &str) -> Option<SupabaseUser> {
             .unwrap_or_default()
             .trim_end_matches('/')
     );
+
+    let mut validation = Validation::new(Algorithm::ES256);
+    validation.set_audience(&["authenticated"]);
     validation.set_issuer(&[&issuer]);
 
-    let token_data = decode::<JwtClaims>(token, &key, &validation).ok()?;
+    let token_data = decode::<JwtClaims>(token, &decoding_key, &validation).ok()?;
+
     Some(SupabaseUser {
         id: token_data.claims.sub,
         email: token_data.claims.email,

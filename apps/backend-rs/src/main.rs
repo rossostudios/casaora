@@ -39,9 +39,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         tracing::warn!("DEV AUTH OVERRIDES ARE ENABLED — do not use in production");
     }
 
-    if state.config.supabase_jwt_secret.is_none() {
+    if state.jwks_cache.is_none() {
         tracing::warn!(
-            "SUPABASE_JWT_SECRET is not set — falling back to HTTP auth (slower, uses service key)"
+            "SUPABASE_JWKS_URL is not set — falling back to HTTP auth (slower, uses service key)"
         );
     }
 
