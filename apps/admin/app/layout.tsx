@@ -67,6 +67,10 @@ export const metadata: Metadata = {
     locale: "es_PY",
     alternateLocale: "en_US",
   },
+  icons: {
+    icon: "/fav.svg",
+    apple: "/fav.svg",
+  },
   twitter: {
     card: "summary",
   },

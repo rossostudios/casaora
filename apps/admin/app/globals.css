@@ -4,41 +4,76 @@
 
 :root {
   color-scheme: light;
-  --background: #f9f8f7;
-  --foreground: #3d3d3d;
-  --card: #f4f4f4;
-  --card-foreground: #3d3d3d;
-  --popover: #f4f4f4;
-  --popover-foreground: #3d3d3d;
+
+  /* ── Backgrounds ──
+     Shifted from warm (#f9f8f7) to neutral white.
+     Card is now pure white so it lifts off the page background. */
+  --background: #f7f7f8;
+  --foreground: #0f0f10;
+
+  /* Card is WHITE, not gray. This creates the visual lift you're missing. */
+  --card: #ffffff;
+  --card-foreground: #0f0f10;
+  --popover: #ffffff;
+  --popover-foreground: #0f0f10;
+
+  /* ── Primary (unchanged) ── */
   --primary: #DA1E37;
   --primary-foreground: #ffffff;
-  --secondary: #f4f4f4;
-  --secondary-foreground: #3d3d3d;
-  --muted: #f4f4f4;
-  --muted-foreground: #848484;
-  --accent: #ebebeb;
-  --accent-foreground: #3d3d3d;
+
+  /* ── Secondary / Muted ──
+     Slightly cooler grays, wider spread between levels. */
+  --secondary: #f2f2f3;
+  --secondary-foreground: #1a1a1b;
+  --muted: #f2f2f3;
+  --muted-foreground: #737378;
+
+  /* ── Accent ── */
+  --accent: #eaeaec;
+  --accent-foreground: #1a1a1b;
+
+  /* ── Destructive ── */
   --destructive: oklch(0.577 0.245 27.325);
   --destructive-foreground: oklch(0.985 0 0);
-  --border: #dddddd;
-  --input: #d4d4d4;
+
+  /* ── Borders ──
+     Darker than before (#ddd → #d5d5d8). Visible but not heavy. */
+  --border: #d5d5d8;
+  --input: #cbcbcf;
   --ring: #DA1E37;
   --focus-ring: color-mix(in srgb, var(--ring) 36%, transparent);
-  --surface-1: #fbfbfb;
-  --surface-2: #f4f4f4;
-  --surface-3: #ededed;
+
+  /* ── Surfaces ──
+     Wider spread: 3 distinct levels your eye can actually read.
+     surface-1 is near-white (subtle cards/panels)
+     surface-2 is the main grouped background
+     surface-3 is for inset/recessed areas like table headers */
+  --surface-1: #fafafa;
+  --surface-2: #f2f2f3;
+  --surface-3: #eaeaec;
+
+  /* ── Overlays ── */
   --overlay-scrim: rgba(10, 14, 22, 0.32);
   --overlay-scrim-strong: rgba(10, 14, 22, 0.54);
-  --shadow-soft: 0 18px 44px rgba(15, 23, 42, 0.14);
-  --shadow-floating: 0 24px 54px rgba(15, 23, 42, 0.2);
+
+  /* ── Shadows ──
+     Slightly stronger so cards actually float. */
+  --shadow-soft: 0 1px 3px rgba(0, 0, 0, 0.04), 0 12px 32px rgba(0, 0, 0, 0.06);
+  --shadow-floating: 0 4px 12px rgba(0, 0, 0, 0.06), 0 24px 48px rgba(0, 0, 0, 0.1);
+
+  /* ── Charts ── */
   --chart-1: oklch(0.57 0.2 255);
   --chart-2: oklch(0.6 0.118 184.704);
   --chart-3: oklch(0.398 0.07 227.392);
   --chart-4: oklch(0.828 0.189 84.429);
   --chart-5: oklch(0.769 0.188 70.08);
   --radius: 0.625rem;
+
+  /* ── Warning ── */
   --warning: oklch(0.75 0.18 85);
   --warning-foreground: oklch(0.32 0.08 60);
+
+  /* ── Sidebar (Night Bordeaux — unchanged, this is great) ── */
   --sidebar: #641220;
   --sidebar-foreground: #fafafa;
   --sidebar-primary: #DA1E37;
@@ -47,35 +82,42 @@
   --sidebar-accent-foreground: #fafafa;
   --sidebar-border: #6E1423;
   --sidebar-ring: #DA1E37;
+
+  /* ── Shell ── */
   --shell-surface: var(--background);
   --shell-surface-muted: var(--surface-3);
-  --shell-active: #f9e4e8;
+  --shell-active: #fce8ec;
   --shell-active-border: #f0c0c8;
   --shell-ease: cubic-bezier(0.22, 1, 0.36, 1);
+
+  /* ── Marketplace ── */
   --marketplace-surface: var(--surface-2);
   --marketplace-surface-muted: var(--surface-1);
   --marketplace-hero-glow: #fce8ec;
   --marketplace-hero-gradient: linear-gradient(
     135deg,
-    #fdf8f8 0%,
+    #fafafa 0%,
     var(--marketplace-hero-glow) 40%,
     #f9eef0 100%
   );
   --marketplace-shell-shadow: var(--shadow-soft);
   --marketplace-map-road: rgba(146, 162, 188, 0.24);
   --marketplace-map-road-strong: rgba(113, 130, 160, 0.25);
-  --status-success-bg: #eaf6ef;
-  --status-success-border: #bbddca;
-  --status-success-fg: #1d6c40;
-  --status-warning-bg: #fdf3e2;
-  --status-warning-border: #f0d1a3;
-  --status-warning-fg: #8e5a0c;
-  --status-danger-bg: #fdeceb;
-  --status-danger-border: #efc0bc;
-  --status-danger-fg: #a33d3a;
-  --status-info-bg: #eaf2ff;
-  --status-info-border: #c0d5fb;
-  --status-info-fg: #26589d;
+
+  /* ── Status Tones ──
+     Slightly more saturated backgrounds so they read at a glance. */
+  --status-success-bg: #e8f5ee;
+  --status-success-border: #b4d9c5;
+  --status-success-fg: #16613a;
+  --status-warning-bg: #fcf1de;
+  --status-warning-border: #edcb98;
+  --status-warning-fg: #845208;
+  --status-danger-bg: #fdeae9;
+  --status-danger-border: #ecb8b4;
+  --status-danger-fg: #993836;
+  --status-info-bg: #e8f0fe;
+  --status-info-border: #b8cef8;
+  --status-info-fg: #1f5196;
 }
 
 .dark {
