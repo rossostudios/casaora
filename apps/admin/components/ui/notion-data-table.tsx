@@ -36,6 +36,7 @@ type NotionDataTableProps<TRow> = {
   footer?: ReactNode;
   defaultPageSize?: number;
   isEn?: boolean;
+  onRowClick?: (row: TRow) => void;
 };
 
 export function NotionDataTable<TRow>({
@@ -48,6 +49,7 @@ export function NotionDataTable<TRow>({
   footer,
   defaultPageSize = 50,
   isEn = true,
+  onRowClick,
 }: NotionDataTableProps<TRow>) {
   const [sorting, setSorting] = useState<SortingState>([]);
   const [globalFilter, setGlobalFilter] = useState("");
@@ -173,7 +175,25 @@ export function NotionDataTable<TRow>({
           <TableBody>
             {table.getRowModel().rows.length ? (
               table.getRowModel().rows.map((row) => (
-                <TableRow className="hover:bg-muted/20" key={row.id}>
+                <TableRow
+                  className={cn(
+                    "hover:bg-muted/20",
+                    onRowClick && "cursor-pointer"
+                  )}
+                  key={row.id}
+                  onClick={(event) => {
+                    if (!onRowClick) return;
+                    const target = event.target as HTMLElement | null;
+                    if (
+                      target?.closest(
+                        'a,button,input,select,textarea,label,[role="button"],[data-row-click="ignore"]'
+                      )
+                    ) {
+                      return;
+                    }
+                    onRowClick(row.original);
+                  }}
+                >
                   {row.getVisibleCells().map((cell) => (
                     <TableCell
                       className="py-1.5"

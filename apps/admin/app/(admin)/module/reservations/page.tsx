@@ -1,9 +1,6 @@
-import Link from "next/link";
-
 import { OrgAccessChanged } from "@/components/shell/org-access-changed";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
-import { buttonVariants } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -15,9 +12,9 @@ import { fetchList, getApiBaseUrl } from "@/lib/api";
 import { errorMessage, isOrgMembershipError } from "@/lib/errors";
 import { getActiveLocale } from "@/lib/i18n/server";
 import { getActiveOrgId } from "@/lib/org";
-import { cn } from "@/lib/utils";
 
 import { ReservationsManager } from "./reservations-manager";
+import { ReservationsPageClient } from "./reservations-page-client";
 
 type PageProps = {
   searchParams: Promise<{
@@ -165,24 +162,7 @@ export default async function ReservationsModulePage({
               </CardDescription>
             </div>
 
-            <div className="flex flex-wrap items-center gap-2">
-              <Link
-                className={cn(
-                  buttonVariants({ variant: "outline", size: "sm" })
-                )}
-                href="/module/calendar"
-              >
-                {isEn ? "Calendar" : "Calendario"}
-              </Link>
-              <Link
-                className={cn(
-                  buttonVariants({ variant: "secondary", size: "sm" })
-                )}
-                href="/module/tasks"
-              >
-                {isEn ? "Tasks" : "Tareas"}
-              </Link>
-            </div>
+            <ReservationsPageClient.HeaderButtons isEn={isEn} />
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
