@@ -2,6 +2,7 @@
 
 import { usePathname } from "next/navigation";
 import { type ReactNode, useCallback, useEffect, useState } from "react";
+import { AppFooter } from "@/components/shell/app-footer";
 import { CommandPalette } from "@/components/shell/command-palette";
 import { ShortcutsHelp } from "@/components/shell/shortcuts-help";
 import type { MemberRole, ViewportMode } from "@/components/shell/sidebar-new";
@@ -203,6 +204,7 @@ function AdminShellV2({
           </div>
         </ScrollArea>
       </main>
+      <AppFooter locale={locale} />
     </div>
   );
 

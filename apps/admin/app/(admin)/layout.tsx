@@ -1,5 +1,4 @@
 import { AdminShell } from "@/components/shell/admin-shell";
-import { AppFooter } from "@/components/shell/app-footer";
 import type { MemberRole } from "@/components/shell/sidebar-new";
 import { OrgBootstrap } from "@/components/shell/org-bootstrap";
 import { fetchMe } from "@/lib/api";
@@ -55,7 +54,6 @@ export default async function AdminLayout({
           {children}
         </AdminShell>
       </div>
-      <AppFooter locale={locale} />
       <OrgBootstrap activeOrgId={orgId} />
     </div>
   );
