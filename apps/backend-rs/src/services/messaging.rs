@@ -84,6 +84,7 @@ pub async fn process_queued_messages(
             "whatsapp" => send_whatsapp(http_client, config, &recipient, &body, &msg).await,
             "email" => send_email(http_client, config, &recipient, &body, &msg).await,
             "sms" => send_sms(http_client, config, &recipient, &body).await,
+            "marketplace" => send_email(http_client, config, &recipient, &body, &msg).await,
             _ => {
                 warn!("Unknown channel '{channel}' for message {id}");
                 Err("unsupported channel".to_string())

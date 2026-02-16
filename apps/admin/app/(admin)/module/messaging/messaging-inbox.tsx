@@ -111,6 +111,13 @@ function channelMeta(channel: string) {
         className:
           "border-amber-200/60 bg-amber-50/60 text-amber-700 dark:border-amber-800/40 dark:bg-amber-950/30 dark:text-amber-400",
       };
+    case "marketplace":
+      return {
+        label: "Marketplace",
+        icon: InboxIcon,
+        className:
+          "border-violet-200/60 bg-violet-50/60 text-violet-700 dark:border-violet-800/40 dark:bg-violet-950/30 dark:text-violet-400",
+      };
     default:
       return {
         label: "Email",

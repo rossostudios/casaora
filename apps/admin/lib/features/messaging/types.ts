@@ -52,6 +52,12 @@ function optStr(value: unknown): string | null {
 }
 
 export function toMessageLogItem(raw: Record<string, unknown>): MessageLogItem {
+  // body/subject live inside the payload jsonb column
+  const payload =
+    typeof raw.payload === "object" && raw.payload !== null
+      ? (raw.payload as Record<string, unknown>)
+      : {};
+
   return {
     id: str(raw.id),
     guest_id: optStr(raw.guest_id),
@@ -60,8 +66,8 @@ export function toMessageLogItem(raw: Record<string, unknown>): MessageLogItem {
     recipient: str(raw.recipient),
     status: str(raw.status) || "queued",
     direction: str(raw.direction) || "outbound",
-    body: optStr(raw.body),
-    subject: optStr(raw.subject),
+    body: optStr(payload.body) ?? optStr(raw.body),
+    subject: optStr(payload.subject) ?? optStr(raw.subject),
     template_name: optStr(raw.template_name),
     created_at: optStr(raw.created_at),
     scheduled_at: optStr(raw.scheduled_at),

@@ -4,6 +4,7 @@ import Script from "next/script";
 import { Suspense } from "react";
 
 import { ListingGalleryLightbox } from "@/components/marketplace/listing-gallery-lightbox";
+import { ListingInquiryForm } from "@/components/marketplace/listing-inquiry-form";
 import { PublicFooter } from "@/components/marketplace/public-footer";
 import { PublicHeader } from "@/components/marketplace/public-header";
 import { TrustBadges } from "@/components/marketplace/trust-badges";
@@ -236,8 +237,9 @@ export default async function MarketplaceListingPage({
 
           {/* Sticky sidebar */}
           <div className="hidden lg:block">
-            <div className="sticky top-20">
+            <div className="sticky top-20 space-y-4">
               <ListingMoveInCard isEn={isEn} listing={listing} slug={slug} />
+              <ListingInquiryForm isEn={isEn} slug={slug} />
             </div>
           </div>
         </div>

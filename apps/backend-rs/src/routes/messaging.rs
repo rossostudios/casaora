@@ -13,7 +13,7 @@ use crate::{
     repository::table_service::{create_row, get_row, list_rows, update_row},
     schemas::{
         clamp_limit_in_range, remove_nulls, serialize_to_map, CreateMessageTemplateInput,
-        MessageTemplatesQuery, SendMessageInput, TemplatePath,
+        MessageLogsQuery, MessageTemplatesQuery, SendMessageInput, TemplatePath,
     },
     services::audit::write_audit_log,
     services::collection_cycle::run_daily_collection_cycle,
@@ -27,6 +27,10 @@ use crate::{
 
 pub fn router() -> axum::Router<AppState> {
     axum::Router::new()
+        .route(
+            "/message-logs",
+            axum::routing::get(list_message_logs),
+        )
         .route(
             "/message-templates",
             axum::routing::get(list_templates).post(create_template),
@@ -56,6 +60,47 @@ pub fn router() -> axum::Router<AppState> {
             "/internal/process-sequences",
             axum::routing::post(process_sequences_endpoint),
         )
+}
+
+async fn list_message_logs(
+    State(state): State<AppState>,
+    Query(query): Query<MessageLogsQuery>,
+    headers: HeaderMap,
+) -> AppResult<Json<Value>> {
+    let user_id = require_user_id(&state, &headers).await?;
+    assert_org_member(&state, &user_id, &query.org_id).await?;
+    let pool = db_pool(&state)?;
+
+    let mut filters = Map::new();
+    filters.insert(
+        "organization_id".to_string(),
+        Value::String(query.org_id.clone()),
+    );
+    if let Some(channel) = non_empty_opt(query.channel.as_deref()) {
+        filters.insert("channel".to_string(), Value::String(channel));
+    }
+    if let Some(status) = non_empty_opt(query.status.as_deref()) {
+        filters.insert("status".to_string(), Value::String(status));
+    }
+    if let Some(direction) = non_empty_opt(query.direction.as_deref()) {
+        filters.insert("direction".to_string(), Value::String(direction));
+    }
+    if let Some(guest_id) = non_empty_opt(query.guest_id.as_deref()) {
+        filters.insert("guest_id".to_string(), Value::String(guest_id));
+    }
+
+    let rows = list_rows(
+        pool,
+        "message_logs",
+        Some(&filters),
+        clamp_limit_in_range(query.limit, 1, 1000),
+        0,
+        "created_at",
+        false,
+    )
+    .await?;
+
+    Ok(Json(json!({ "data": rows })))
 }
 
 async fn list_templates(
@@ -156,11 +201,30 @@ async fn send_message(
 
     let mut log = remove_nulls(serialize_to_map(&payload));
     log.insert("status".to_string(), Value::String("queued".to_string()));
+    log.insert("direction".to_string(), Value::String("outbound".to_string()));
     if !log.contains_key("scheduled_at") {
         log.insert(
             "scheduled_at".to_string(),
             Value::String(Utc::now().to_rfc3339()),
         );
+    }
+
+    // Build payload jsonb from body/subject so resolve_message_body can read them
+    let body_val = log.remove("body");
+    let subject_val = log.remove("subject");
+    let mut msg_payload = log
+        .get("payload")
+        .and_then(Value::as_object)
+        .cloned()
+        .unwrap_or_default();
+    if let Some(b) = body_val {
+        msg_payload.insert("body".to_string(), b);
+    }
+    if let Some(s) = subject_val {
+        msg_payload.insert("subject".to_string(), s);
+    }
+    if !msg_payload.is_empty() {
+        log.insert("payload".to_string(), Value::Object(msg_payload));
     }
 
     let created = create_row(pool, "message_logs", &log).await?;

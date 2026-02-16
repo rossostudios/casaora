@@ -812,6 +812,8 @@ pub struct SendMessageInput {
     pub guest_id: Option<String>,
     pub variables: Option<serde_json::Value>,
     pub scheduled_at: Option<String>,
+    pub body: Option<String>,
+    pub subject: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize, serde::Serialize)]
@@ -1188,4 +1190,30 @@ fn default_channel_whatsapp() -> String {
 
 fn default_language_es_py() -> String {
     "es-PY".to_string()
+}
+
+fn default_limit_500() -> i64 {
+    500
+}
+
+#[derive(Debug, Clone, Deserialize, serde::Serialize)]
+pub struct MessageLogsQuery {
+    pub org_id: String,
+    pub channel: Option<String>,
+    pub status: Option<String>,
+    pub direction: Option<String>,
+    pub guest_id: Option<String>,
+    #[serde(default = "default_limit_500")]
+    pub limit: i64,
+}
+
+#[derive(Debug, Clone, Deserialize, serde::Serialize, Validate)]
+pub struct MarketplaceInquiryInput {
+    #[validate(length(min = 1, max = 255))]
+    pub full_name: String,
+    #[validate(email)]
+    pub email: String,
+    pub phone_e164: Option<String>,
+    #[validate(length(min = 1, max = 2000))]
+    pub message: String,
 }

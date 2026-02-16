@@ -13,8 +13,8 @@ use crate::{
     repository::table_service::{create_row, get_row, list_rows, update_row},
     schemas::{
         clamp_limit_in_range, validate_input, CreateListingInput, ListingPath, ListingsQuery,
-        PublicListingApplicationInput, PublicListingsQuery, PublicListingSlugPath,
-        UpdateListingInput,
+        MarketplaceInquiryInput, PublicListingApplicationInput, PublicListingsQuery,
+        PublicListingSlugPath, UpdateListingInput,
     },
     services::{
         alerting::write_alert_event,
@@ -59,6 +59,10 @@ pub fn router() -> axum::Router<AppState> {
         .route(
             "/public/listings/{slug}/contact-whatsapp",
             axum::routing::post(track_public_listing_whatsapp_contact),
+        )
+        .route(
+            "/public/listings/{slug}/inquire",
+            axum::routing::post(submit_inquiry),
         )
         .route(
             "/public/listings/applications",
@@ -866,6 +870,121 @@ async fn submit_public_listing_application(
                 .get("listing_id")
                 .cloned()
                 .unwrap_or(Value::Null),
+        })),
+    ))
+}
+
+async fn submit_inquiry(
+    State(state): State<AppState>,
+    Path(path): Path<PublicListingSlugPath>,
+    Json(payload): Json<MarketplaceInquiryInput>,
+) -> AppResult<impl IntoResponse> {
+    validate_input(&payload)?;
+    ensure_marketplace_public_enabled(&state)?;
+    let pool = db_pool(&state)?;
+
+    let rows = list_rows(
+        pool,
+        "listings",
+        Some(&json_map(&[
+            ("public_slug", Value::String(path.slug.clone())),
+            ("is_published", Value::Bool(true)),
+        ])),
+        1,
+        0,
+        "created_at",
+        false,
+    )
+    .await?;
+    if rows.is_empty() {
+        return Err(AppError::NotFound(
+            "Public listing not found.".to_string(),
+        ));
+    }
+    let listing = rows
+        .first()
+        .cloned()
+        .unwrap_or_else(|| Value::Object(Map::new()));
+
+    let org_id = value_str(&listing, "organization_id");
+    if org_id.is_empty() {
+        return Err(AppError::BadRequest(
+            "Listing is missing organization context.".to_string(),
+        ));
+    }
+
+    let mut msg_payload = Map::new();
+    msg_payload.insert("body".to_string(), Value::String(payload.message.clone()));
+    msg_payload.insert(
+        "subject".to_string(),
+        Value::String(format!("Inquiry: {}", value_str(&listing, "title"))),
+    );
+    msg_payload.insert(
+        "sender_name".to_string(),
+        Value::String(payload.full_name.clone()),
+    );
+    msg_payload.insert(
+        "sender_email".to_string(),
+        Value::String(payload.email.clone()),
+    );
+    if let Some(phone) = &payload.phone_e164 {
+        msg_payload.insert(
+            "sender_phone".to_string(),
+            Value::String(phone.clone()),
+        );
+    }
+    msg_payload.insert(
+        "listing_slug".to_string(),
+        Value::String(path.slug.clone()),
+    );
+    msg_payload.insert(
+        "listing_id".to_string(),
+        listing.get("id").cloned().unwrap_or(Value::Null),
+    );
+
+    let mut log = Map::new();
+    log.insert("organization_id".to_string(), Value::String(org_id.clone()));
+    log.insert(
+        "channel".to_string(),
+        Value::String("marketplace".to_string()),
+    );
+    log.insert(
+        "recipient".to_string(),
+        Value::String(payload.email.clone()),
+    );
+    log.insert(
+        "direction".to_string(),
+        Value::String("inbound".to_string()),
+    );
+    log.insert(
+        "status".to_string(),
+        Value::String("delivered".to_string()),
+    );
+    log.insert(
+        "sent_at".to_string(),
+        Value::String(Utc::now().to_rfc3339()),
+    );
+    log.insert("payload".to_string(), Value::Object(msg_payload));
+
+    let created = create_row(pool, "message_logs", &log).await?;
+
+    write_analytics_event(
+        state.db_pool.as_ref(),
+        Some(&org_id),
+        "marketplace_inquiry",
+        Some(json!({
+            "listing_slug": path.slug,
+            "listing_id": listing.get("id").cloned().unwrap_or(Value::Null),
+            "sender_email": payload.email,
+        })),
+    )
+    .await;
+
+    Ok((
+        axum::http::StatusCode::CREATED,
+        Json(json!({
+            "ok": true,
+            "id": created.get("id").cloned().unwrap_or(Value::Null),
         })),
     ))
 }
