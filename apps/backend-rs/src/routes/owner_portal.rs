@@ -4,7 +4,8 @@ use axum::{
     response::IntoResponse,
     Json,
 };
-use chrono::Utc;
+use axum::extract::Path;
+use chrono::{Datelike, NaiveDate, Utc};
 use serde::Deserialize;
 use serde_json::{json, Map, Value};
 use sha1::Digest;
@@ -25,6 +26,10 @@ pub fn router() -> axum::Router<AppState> {
         .route("/public/owner/verify", axum::routing::post(verify_token))
         .route("/owner/dashboard", axum::routing::get(owner_dashboard))
         .route("/owner/statements", axum::routing::get(owner_statements))
+        .route(
+            "/owner/statements/{statement_id}",
+            axum::routing::get(owner_statement_detail),
+        )
         .route("/owner/properties", axum::routing::get(owner_properties))
         .route("/owner/reservations", axum::routing::get(owner_reservations))
 }
@@ -43,6 +48,11 @@ struct VerifyTokenInput {
 struct OwnerListQuery {
     #[serde(default = "default_limit")]
     limit: i64,
+}
+
+#[derive(Debug, Deserialize)]
+struct StatementIdPath {
+    statement_id: String,
 }
 
 fn default_limit() -> i64 {
@@ -244,6 +254,76 @@ async fn owner_dashboard(
         (active_leases.len() + active_reservations.len()) as f64 / units.len() as f64 * 100.0
     };
 
+    // Revenue by month (last 6 months)
+    let today = Utc::now().date_naive();
+    let six_months_ago = today - chrono::Duration::days(180);
+    let mut revenue_by_month: std::collections::BTreeMap<String, f64> = std::collections::BTreeMap::new();
+    for c in &collections {
+        if val_str(c, "status") != "paid" {
+            continue;
+        }
+        let paid_at = val_str(c, "paid_at");
+        let date_str = if paid_at.is_empty() { val_str(c, "due_date") } else { paid_at };
+        if date_str.is_empty() {
+            continue;
+        }
+        let date_key = date_str.get(..7).unwrap_or("").to_string();
+        if date_key.is_empty() {
+            continue;
+        }
+        if let Ok(d) = NaiveDate::parse_from_str(&format!("{date_key}-01"), "%Y-%m-%d") {
+            if d >= six_months_ago {
+                *revenue_by_month.entry(date_key).or_default() += val_f64(c, "amount");
+            }
+        }
+    }
+    let revenue_by_month_arr: Vec<Value> = revenue_by_month
+        .iter()
+        .map(|(month, amount)| json!({ "month": month, "amount": amount }))
+        .collect();
+
+    // Revenue by property
+    let mut revenue_by_prop: std::collections::HashMap<String, f64> = std::collections::HashMap::new();
+    for c in &collections {
+        if val_str(c, "status") != "paid" {
+            continue;
+        }
+        let prop_id = val_str(c, "property_id");
+        if !prop_id.is_empty() {
+            *revenue_by_prop.entry(prop_id).or_default() += val_f64(c, "amount");
+        }
+    }
+    // Resolve property names
+    let property_name_map: std::collections::HashMap<String, String> = properties
+        .iter()
+        .map(|p| (val_str(p, "id"), val_str(p, "name")))
+        .collect();
+    let revenue_by_property_arr: Vec<Value> = revenue_by_prop
+        .iter()
+        .map(|(pid, amount)| {
+            let name = property_name_map.get(pid).cloned().unwrap_or_default();
+            json!({ "property_id": pid, "property_name": name, "amount": amount })
+        })
+        .collect();
+
+    // Upcoming reservations (next 30 days)
+    let thirty_days = today + chrono::Duration::days(30);
+    let upcoming: Vec<&Value> = reservations
+        .iter()
+        .filter(|r| {
+            let status = val_str(r, "status");
+            if !["pending", "confirmed"].contains(&status.as_str()) {
+                return false;
+            }
+            let ci = val_str(r, "check_in_date");
+            if let Ok(d) = NaiveDate::parse_from_str(&ci, "%Y-%m-%d") {
+                d >= today && d <= thirty_days
+            } else {
+                false
+            }
+        })
+        .collect();
+
     Ok(Json(json!({
         "organization": org,
         "summary": {
@@ -255,6 +335,9 @@ async fn owner_dashboard(
             "total_collected": total_collected,
             "pending_statements": pending_statements.len(),
         },
+        "revenue_by_month": revenue_by_month_arr,
+        "revenue_by_property": revenue_by_property_arr,
+        "upcoming_reservations": upcoming,
     })))
 }
 
@@ -281,6 +364,68 @@ async fn owner_statements(
     .await?;
 
     Ok(Json(json!({ "data": rows })))
+}
+
+/// Get statement detail with associated collections + expenses.
+async fn owner_statement_detail(
+    State(state): State<AppState>,
+    Path(path): Path<StatementIdPath>,
+    headers: HeaderMap,
+) -> AppResult<Json<Value>> {
+    let (pool, org_id) = require_owner(&state, &headers).await?;
+
+    let statement = get_row(pool, "owner_statements", &path.statement_id, "id").await?;
+    let stmt_org = val_str(&statement, "organization_id");
+    if stmt_org != org_id {
+        return Err(AppError::Forbidden("Statement does not belong to this organization.".to_string()));
+    }
+
+    // Fetch collections for the statement period
+    let mut coll_filters = Map::new();
+    coll_filters.insert("organization_id".to_string(), Value::String(org_id.clone()));
+    let collections = list_rows(pool, "collection_records", Some(&coll_filters), 2000, 0, "due_date", true)
+        .await
+        .unwrap_or_default();
+
+    // Filter to the statement period
+    let period_start = val_str(&statement, "period_start");
+    let period_end = val_str(&statement, "period_end");
+    let period_collections: Vec<&Value> = if !period_start.is_empty() && !period_end.is_empty() {
+        collections
+            .iter()
+            .filter(|c| {
+                let due = val_str(c, "due_date");
+                val_str(c, "status") == "paid" && due >= period_start && due <= period_end
+            })
+            .collect()
+    } else {
+        Vec::new()
+    };
+
+    // Fetch expenses for the period
+    let mut exp_filters = Map::new();
+    exp_filters.insert("organization_id".to_string(), Value::String(org_id));
+    let expenses = list_rows(pool, "expenses", Some(&exp_filters), 2000, 0, "expense_date", true)
+        .await
+        .unwrap_or_default();
+
+    let period_expenses: Vec<&Value> = if !period_start.is_empty() && !period_end.is_empty() {
+        expenses
+            .iter()
+            .filter(|e| {
+                let d = val_str(e, "expense_date");
+                d >= period_start && d <= period_end
+            })
+            .collect()
+    } else {
+        Vec::new()
+    };
+
+    Ok(Json(json!({
+        "statement": statement,
+        "collections": period_collections,
+        "expenses": period_expenses,
+    })))
 }
 
 /// List owner's properties.

@@ -15,6 +15,7 @@ import {
   type MarketplaceListingViewModel,
   toMarketplaceListingViewModel,
 } from "@/lib/features/marketplace/view-model";
+import { SavedSearches } from "@/components/marketplace/saved-searches";
 import { getActiveLocale } from "@/lib/i18n/server";
 import { CategoryPills } from "./components/category-pills";
 import { FeaturedListings } from "./components/featured-listings";
@@ -127,6 +128,10 @@ export default async function MarketplacePage({
         {hasActiveFilters ? null : (
           <FeaturedListings isEn={isEn} listings={listings} locale={locale} />
         )}
+
+        <Suspense>
+          <SavedSearches isEn={isEn} />
+        </Suspense>
 
         <section className="overflow-hidden rounded-2xl bg-white shadow-[var(--marketplace-card-shadow)]">
           <MarketplaceFiltersForm

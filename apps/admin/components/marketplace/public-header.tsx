@@ -11,7 +11,6 @@ import { useEffect, useState } from "react";
 import { LanguageSelector } from "@/components/preferences/language-selector";
 import { Icon } from "@/components/ui/icon";
 import { Sheet } from "@/components/ui/sheet";
-import { CasaoraLogo } from "@/components/ui/casaora-logo";
 import {
   FAVORITES_CHANGE_EVENT,
   getFavoritesCount,
@@ -81,9 +80,8 @@ export function PublicHeader({ locale }: { locale: HeaderLocale }) {
             className="inline-flex items-center gap-2.5 transition-opacity hover:opacity-80"
             href="/"
           >
-            <CasaoraLogo className="text-primary" size={24} />
-            <span className="font-serif text-xl font-semibold tracking-tight text-[var(--marketplace-text)]">
-              Casaora
+            <span className="text-xl font-bold tracking-tight text-[var(--marketplace-text)]">
+              CASAORA
             </span>
           </Link>
 

@@ -1,17 +1,19 @@
 use axum::{
-    extract::{Query, State},
+    extract::{Path, Query, State},
     http::HeaderMap,
     Json,
 };
 use chrono::{DateTime, Datelike, NaiveDate, Utc};
+use serde::Deserialize;
 use serde_json::{json, Map, Value};
+use sqlx::Row;
 
 use crate::{
     auth::require_user_id,
     error::{AppError, AppResult},
     repository::table_service::list_rows,
     schemas::{OwnerSummaryQuery, ReportsPeriodQuery},
-    services::pricing::missing_required_fee_types,
+    services::{agent_chats, anomaly_detection, pricing::missing_required_fee_types},
     state::AppState,
     tenancy::assert_org_member,
 };
@@ -44,6 +46,30 @@ pub fn router() -> axum::Router<AppState> {
         .route(
             "/reports/kpi-dashboard",
             axum::routing::get(kpi_dashboard),
+        )
+        .route(
+            "/reports/occupancy-forecast",
+            axum::routing::get(occupancy_forecast),
+        )
+        .route(
+            "/reports/anomalies",
+            axum::routing::get(list_anomalies),
+        )
+        .route(
+            "/reports/anomalies/{id}/dismiss",
+            axum::routing::post(dismiss_anomaly),
+        )
+        .route(
+            "/reports/anomalies/scan",
+            axum::routing::post(run_anomaly_scan),
+        )
+        .route(
+            "/reports/agent-performance",
+            axum::routing::get(agent_performance),
+        )
+        .route(
+            "/reports/revenue-trend",
+            axum::routing::get(revenue_trend),
         )
 }
 
@@ -952,6 +978,324 @@ async fn kpi_dashboard(
         "median_maintenance_response_hours": median_maintenance_response_hours,
         "open_maintenance_tasks": open_maintenance,
         "expiring_leases_60d": expiring_leases,
+    })))
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct ForecastQuery {
+    org_id: String,
+    #[serde(default = "default_months_ahead")]
+    months_ahead: i64,
+}
+
+fn default_months_ahead() -> i64 {
+    3
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct AnomalyIdPath {
+    id: String,
+}
+
+/// GET /reports/occupancy-forecast — predict occupancy for upcoming months
+async fn occupancy_forecast(
+    State(state): State<AppState>,
+    Query(query): Query<ForecastQuery>,
+    headers: HeaderMap,
+) -> AppResult<Json<Value>> {
+    let user_id = require_user_id(&state, &headers).await?;
+    assert_org_member(&state, &user_id, &query.org_id).await?;
+    let pool = db_pool(&state)?;
+
+    let months_ahead = query.months_ahead.clamp(1, 6);
+    let today = Utc::now().date_naive();
+
+    // Total units
+    let unit_count: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*)::bigint FROM units WHERE organization_id = $1::uuid",
+    )
+    .bind(&query.org_id)
+    .fetch_one(pool)
+    .await
+    .unwrap_or(0);
+
+    if unit_count == 0 {
+        return Ok(Json(json!({
+            "organization_id": query.org_id,
+            "months": [],
+            "message": "No units found.",
+        })));
+    }
+
+    // Historical monthly occupancy (past 12 months)
+    let reservations = list_rows(
+        pool,
+        "reservations",
+        Some(&json_map(&[(
+            "organization_id",
+            Value::String(query.org_id.clone()),
+        )])),
+        6000,
+        0,
+        "created_at",
+        false,
+    )
+    .await?;
+
+    let mut monthly_nights: std::collections::HashMap<String, i64> =
+        std::collections::HashMap::new();
+
+    for reservation in &reservations {
+        let status = value_str(reservation, "status");
+        if !REPORTABLE_STATUSES.contains(&status.as_str()) {
+            continue;
+        }
+        let check_in = parse_date(&value_str(reservation, "check_in_date")).ok();
+        let check_out = parse_date(&value_str(reservation, "check_out_date")).ok();
+        let (Some(ci), Some(co)) = (check_in, check_out) else {
+            continue;
+        };
+        let twelve_months_ago = today - chrono::Duration::days(365);
+        if co <= twelve_months_ago {
+            continue;
+        }
+        let n = nights(ci, co);
+        let month_key = format!("{:04}-{:02}", ci.year(), ci.month());
+        *monthly_nights.entry(month_key).or_insert(0) += n;
+    }
+
+    // Compute moving average
+    let mut occ_rates: Vec<f64> = Vec::new();
+    for i in 1..=12 {
+        let past = today - chrono::Duration::days(i * 30);
+        let key = format!("{:04}-{:02}", past.year(), past.month());
+        let n = monthly_nights.get(&key).copied().unwrap_or(0);
+        let occ = (n as f64) / (unit_count as f64 * 30.0);
+        occ_rates.push(occ.clamp(0.0, 1.0));
+    }
+
+    let avg_occ = if occ_rates.is_empty() {
+        0.0
+    } else {
+        occ_rates.iter().sum::<f64>() / occ_rates.len() as f64
+    };
+
+    // Build historical series
+    let mut historical: Vec<Value> = Vec::new();
+    for i in (1..=6).rev() {
+        let past = today - chrono::Duration::days(i * 30);
+        let key = format!("{:04}-{:02}", past.year(), past.month());
+        let n = monthly_nights.get(&key).copied().unwrap_or(0);
+        let occ = ((n as f64) / (unit_count as f64 * 30.0)).clamp(0.0, 1.0);
+        historical.push(json!({
+            "month": key,
+            "occupancy_pct": round2(occ * 100.0),
+            "is_forecast": false,
+        }));
+    }
+
+    // Build forecast
+    let mut forecast: Vec<Value> = Vec::new();
+    for i in 0..months_ahead {
+        let future = today + chrono::Duration::days((i + 1) * 30);
+        let month_label = format!("{:04}-{:02}", future.year(), future.month());
+        let predicted_units = (avg_occ * unit_count as f64).round() as i64;
+        forecast.push(json!({
+            "month": month_label,
+            "occupancy_pct": round2(avg_occ * 100.0),
+            "units_occupied": predicted_units,
+            "total_units": unit_count,
+            "is_forecast": true,
+        }));
+    }
+
+    let mut all_months = historical;
+    all_months.extend(forecast);
+
+    Ok(Json(json!({
+        "organization_id": query.org_id,
+        "historical_avg_occupancy_pct": round2(avg_occ * 100.0),
+        "total_units": unit_count,
+        "months": all_months,
+    })))
+}
+
+/// GET /reports/anomalies — list active (non-dismissed) anomaly alerts
+async fn list_anomalies(
+    State(state): State<AppState>,
+    Query(query): Query<ReportsPeriodQuery>,
+    headers: HeaderMap,
+) -> AppResult<Json<Value>> {
+    let user_id = require_user_id(&state, &headers).await?;
+    assert_org_member(&state, &user_id, &query.org_id).await?;
+    let pool = db_pool(&state)?;
+
+    let rows = sqlx::query(
+        "SELECT row_to_json(t) AS row
+         FROM anomaly_alerts t
+         WHERE organization_id = $1::uuid
+           AND is_dismissed = false
+         ORDER BY detected_at DESC
+         LIMIT 100",
+    )
+    .bind(&query.org_id)
+    .fetch_all(pool)
+    .await
+    .map_err(|error| {
+        tracing::error!(error = %error, "Failed to list anomalies");
+        AppError::Dependency("Failed to list anomalies.".to_string())
+    })?;
+
+    let data: Vec<Value> = rows
+        .into_iter()
+        .filter_map(|row| row.try_get::<Option<Value>, _>("row").ok().flatten())
+        .collect();
+
+    Ok(Json(json!({
+        "organization_id": query.org_id,
+        "data": data,
+        "count": data.len(),
+    })))
+}
+
+/// POST /reports/anomalies/{id}/dismiss — dismiss an anomaly alert
+async fn dismiss_anomaly(
+    State(state): State<AppState>,
+    Path(path): Path<AnomalyIdPath>,
+    Query(query): Query<ReportsPeriodQuery>,
+    headers: HeaderMap,
+) -> AppResult<Json<Value>> {
+    let user_id = require_user_id(&state, &headers).await?;
+    assert_org_member(&state, &user_id, &query.org_id).await?;
+    let pool = db_pool(&state)?;
+
+    sqlx::query(
+        "UPDATE anomaly_alerts
+         SET is_dismissed = true, dismissed_at = now(), dismissed_by = $1::uuid
+         WHERE id = $2::uuid AND organization_id = $3::uuid",
+    )
+    .bind(&user_id)
+    .bind(&path.id)
+    .bind(&query.org_id)
+    .execute(pool)
+    .await
+    .map_err(|error| {
+        tracing::error!(error = %error, "Failed to dismiss anomaly");
+        AppError::Dependency("Failed to dismiss anomaly.".to_string())
+    })?;
+
+    Ok(Json(json!({ "ok": true, "id": path.id })))
+}
+
+/// POST /reports/anomalies/scan — trigger anomaly detection scan
+async fn run_anomaly_scan(
+    State(state): State<AppState>,
+    Query(query): Query<ReportsPeriodQuery>,
+    headers: HeaderMap,
+) -> AppResult<Json<Value>> {
+    let user_id = require_user_id(&state, &headers).await?;
+    assert_org_member(&state, &user_id, &query.org_id).await?;
+
+    let alerts = anomaly_detection::run_anomaly_scan(&state, &query.org_id).await?;
+
+    Ok(Json(json!({
+        "ok": true,
+        "new_alerts": alerts.len(),
+        "alerts": alerts,
+    })))
+}
+
+/// GET /reports/agent-performance — agent usage stats for last 30 days
+async fn agent_performance(
+    State(state): State<AppState>,
+    Query(query): Query<ReportsPeriodQuery>,
+    headers: HeaderMap,
+) -> AppResult<Json<Value>> {
+    let user_id = require_user_id(&state, &headers).await?;
+    assert_org_member(&state, &user_id, &query.org_id).await?;
+
+    let stats = agent_chats::get_agent_performance_stats(&state, &query.org_id).await?;
+    Ok(Json(stats))
+}
+
+/// GET /reports/revenue-trend — monthly revenue for past 6 months
+async fn revenue_trend(
+    State(state): State<AppState>,
+    Query(query): Query<ReportsPeriodQuery>,
+    headers: HeaderMap,
+) -> AppResult<Json<Value>> {
+    let user_id = require_user_id(&state, &headers).await?;
+    assert_org_member(&state, &user_id, &query.org_id).await?;
+    let pool = db_pool(&state)?;
+
+    let today = Utc::now().date_naive();
+    let org_filter = json_map(&[("organization_id", Value::String(query.org_id.clone()))]);
+
+    let reservations = list_rows(pool, "reservations", Some(&org_filter), 10000, 0, "created_at", false).await?;
+    let collections = list_rows(pool, "collection_records", Some(&org_filter), 20000, 0, "created_at", false).await?;
+
+    let mut monthly_data: Vec<Value> = Vec::new();
+    for i in (0..6).rev() {
+        let offset = i;
+        let (year, month) = {
+            let m = today.month() as i32 - offset as i32;
+            if m <= 0 {
+                (
+                    today.year() - 1 + (m - 1) / 12,
+                    ((m - 1) % 12 + 12) as u32 + 1,
+                )
+            } else {
+                (today.year(), m as u32)
+            }
+        };
+
+        let month_start = NaiveDate::from_ymd_opt(year, month, 1).unwrap_or(today);
+        let month_end = if month == 12 {
+            NaiveDate::from_ymd_opt(year + 1, 1, 1)
+        } else {
+            NaiveDate::from_ymd_opt(year, month + 1, 1)
+        }
+        .unwrap_or(today);
+
+        let label = format!("{:04}-{:02}", year, month);
+
+        let mut month_revenue = 0.0;
+        for reservation in &reservations {
+            let status = value_str(reservation, "status");
+            if !REPORTABLE_STATUSES.contains(&status.as_str()) {
+                continue;
+            }
+            let ci = parse_date(&value_str(reservation, "check_in_date")).ok();
+            let co = parse_date(&value_str(reservation, "check_out_date")).ok();
+            let (Some(ci), Some(co)) = (ci, co) else {
+                continue;
+            };
+            if co <= month_start || ci >= month_end {
+                continue;
+            }
+            month_revenue += number_from_value(reservation.get("total_amount"));
+        }
+
+        for collection in &collections {
+            if value_str(collection, "status") != "paid" {
+                continue;
+            }
+            if let Ok(due_date) = parse_date(&value_str(collection, "due_date")) {
+                if due_date >= month_start && due_date < month_end {
+                    month_revenue += number_from_value(collection.get("amount"));
+                }
+            }
+        }
+
+        monthly_data.push(json!({
+            "month": label,
+            "revenue": round2(month_revenue),
+        }));
+    }
+
+    Ok(Json(json!({
+        "organization_id": query.org_id,
+        "months": monthly_data,
     })))
 }
 

@@ -218,6 +218,12 @@ export default async function MarketplaceListingPage({
               availableFrom={listing.availableFrom}
               isEn={isEn}
               minimumLeaseMonths={listing.minimumLeaseMonths}
+              slug={slug}
+              unitId={
+                typeof listing.raw.unit_id === "string"
+                  ? listing.raw.unit_id
+                  : undefined
+              }
             />
 
             <ListingFeesCard isEn={isEn} listing={listing} />

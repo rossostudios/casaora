@@ -321,6 +321,11 @@ async fn transition_status(
 
     let _ = sync_turnover_tasks_for_status(pool, &updated, &user_id).await;
 
+    // Auto-release deposit on checkout
+    if payload.status == "checked_out" {
+        crate::routes::deposits::auto_release_deposit_on_checkout(pool, &updated).await;
+    }
+
     // Fire workflow triggers based on new status
     let trigger_event = match payload.status.as_str() {
         "confirmed" => Some("reservation_confirmed"),

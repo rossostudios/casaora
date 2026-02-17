@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import { AvailabilityCalendar } from "@/components/booking/availability-calendar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -62,6 +63,7 @@ export function BookingPage({
   const [notes, setNotes] = useState("");
   const [bookingState, setBookingState] = useState<BookingState>("form");
   const [bookingError, setBookingError] = useState("");
+  const [paymentUrl, setPaymentUrl] = useState<string | null>(null);
 
   // Fetch org + units
   useEffect(() => {
@@ -150,6 +152,10 @@ export function BookingPage({
           return;
         }
 
+        const body = await res.json().catch(() => ({}));
+        if (body.payment_url) {
+          setPaymentUrl(asString(body.payment_url));
+        }
         setBookingState("confirmed");
       } catch {
         setBookingError(
@@ -184,6 +190,7 @@ export function BookingPage({
   }
 
   if (bookingState === "confirmed") {
+    const brandColor = org?.brand_color || "#DA1E37";
     return (
       <div className="flex min-h-screen items-center justify-center bg-background p-6">
         <Card className="max-w-md w-full">
@@ -203,6 +210,15 @@ export function BookingPage({
               {checkIn} &rarr; {checkOut} ({nights}{" "}
               {isEn ? "nights" : "noches"})
             </p>
+            {paymentUrl ? (
+              <a
+                className="inline-flex items-center justify-center rounded-lg px-6 py-2.5 text-sm font-medium text-white transition-colors hover:opacity-90"
+                href={paymentUrl}
+                style={{ backgroundColor: brandColor }}
+              >
+                {isEn ? "Pay Deposit" : "Pagar Depósito"}
+              </a>
+            ) : null}
           </CardContent>
         </Card>
       </div>
@@ -259,6 +275,20 @@ export function BookingPage({
                   ))}
                 </Select>
               </label>
+
+              {/* Availability calendar */}
+              {unitId ? (
+                <AvailabilityCalendar
+                  brandColor={brandColor}
+                  isEn={isEn}
+                  onDateRangeSelect={(ci, co) => {
+                    setCheckIn(ci);
+                    setCheckOut(co);
+                  }}
+                  orgSlug={orgSlug}
+                  unitId={unitId}
+                />
+              ) : null}
 
               {/* Dates */}
               <div className="grid gap-4 sm:grid-cols-2">

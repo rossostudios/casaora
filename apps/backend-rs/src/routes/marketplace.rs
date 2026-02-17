@@ -5,6 +5,7 @@ use axum::{
     Json,
 };
 use chrono::{NaiveDate, Utc};
+use serde::Deserialize;
 use serde_json::{json, Map, Value};
 
 use crate::{
@@ -70,12 +71,22 @@ pub fn router() -> axum::Router<AppState> {
             axum::routing::post(track_public_listing_whatsapp_contact),
         )
         .route(
+            "/public/listings/{slug}/availability",
+            axum::routing::get(listing_availability),
+        )
+        .route(
             "/public/listings/{slug}/inquire",
             axum::routing::post(submit_inquiry),
         )
         .route(
             "/public/listings/applications",
             axum::routing::post(submit_public_listing_application),
+        )
+        .route(
+            "/public/saved-searches",
+            axum::routing::get(list_saved_searches)
+                .post(create_saved_search)
+                .delete(delete_saved_search),
         )
 }
 
@@ -693,6 +704,125 @@ async fn get_public_listing(
     Ok(Json(shaped))
 }
 
+/// Public availability calendar for a listing by slug.
+async fn listing_availability(
+    State(state): State<AppState>,
+    Path(path): Path<PublicListingSlugPath>,
+    Query(query): Query<std::collections::HashMap<String, String>>,
+) -> AppResult<Json<Value>> {
+    ensure_marketplace_public_enabled(&state)?;
+    let pool = db_pool(&state)?;
+
+    let month_str = query.get("month").cloned().unwrap_or_default();
+    let month_first = NaiveDate::parse_from_str(&format!("{month_str}-01"), "%Y-%m-%d")
+        .map_err(|_| AppError::BadRequest("Invalid month format. Use YYYY-MM.".to_string()))?;
+
+    // Look up the listing by slug
+    let rows = list_rows(
+        pool,
+        "listings",
+        Some(&json_map(&[
+            ("public_slug", Value::String(path.slug.clone())),
+            ("is_published", Value::Bool(true)),
+        ])),
+        1,
+        0,
+        "created_at",
+        false,
+    )
+    .await?;
+    if rows.is_empty() {
+        return Err(AppError::NotFound("Public listing not found.".to_string()));
+    }
+    let listing = &rows[0];
+    let org_id = value_str(listing, "organization_id");
+    let unit_id = value_str(listing, "unit_id");
+
+    if unit_id.is_empty() {
+        return Ok(Json(json!({ "month": month_str, "days": [] })));
+    }
+
+    // Build 42-day grid
+    use chrono::Datelike;
+    let weekday = month_first.weekday().num_days_from_monday();
+    let grid_start = month_first - chrono::Duration::days(weekday as i64);
+    let grid_end = grid_start + chrono::Duration::days(42);
+
+    // Fetch reservations
+    let mut res_filters = Map::new();
+    res_filters.insert("organization_id".to_string(), Value::String(org_id.clone()));
+    res_filters.insert("unit_id".to_string(), Value::String(unit_id.clone()));
+    let reservations = list_rows(pool, "reservations", Some(&res_filters), 500, 0, "check_in_date", true)
+        .await
+        .unwrap_or_default();
+
+    let active_statuses = ["pending", "confirmed", "checked_in"];
+    let booked_ranges: Vec<(NaiveDate, NaiveDate)> = reservations
+        .iter()
+        .filter_map(|r| {
+            let obj = r.as_object()?;
+            let status = obj.get("status")?.as_str()?;
+            if !active_statuses.contains(&status) {
+                return None;
+            }
+            let ci = NaiveDate::parse_from_str(obj.get("check_in_date")?.as_str()?, "%Y-%m-%d").ok()?;
+            let co = NaiveDate::parse_from_str(obj.get("check_out_date")?.as_str()?, "%Y-%m-%d").ok()?;
+            if co <= grid_start || ci >= grid_end {
+                return None;
+            }
+            Some((ci, co))
+        })
+        .collect();
+
+    // Fetch calendar blocks
+    let mut block_filters = Map::new();
+    block_filters.insert("organization_id".to_string(), Value::String(org_id));
+    block_filters.insert("unit_id".to_string(), Value::String(unit_id));
+    let blocks = list_rows(pool, "calendar_blocks", Some(&block_filters), 500, 0, "start_date", true)
+        .await
+        .unwrap_or_default();
+
+    let blocked_ranges: Vec<(NaiveDate, NaiveDate)> = blocks
+        .iter()
+        .filter_map(|b| {
+            let obj = b.as_object()?;
+            let sd = NaiveDate::parse_from_str(obj.get("start_date")?.as_str()?, "%Y-%m-%d").ok()?;
+            let ed = NaiveDate::parse_from_str(obj.get("end_date")?.as_str()?, "%Y-%m-%d").ok()?;
+            if ed <= grid_start || sd >= grid_end {
+                return None;
+            }
+            Some((sd, ed))
+        })
+        .collect();
+
+    let today = Utc::now().date_naive();
+    let mut days = Vec::new();
+    let mut current = grid_start;
+    while current < grid_end {
+        let status = if current < today {
+            "past"
+        } else if booked_ranges.iter().any(|(ci, co)| current >= *ci && current < *co) {
+            "booked"
+        } else if blocked_ranges.iter().any(|(sd, ed)| current >= *sd && current < *ed) {
+            "blocked"
+        } else {
+            "available"
+        };
+        days.push(json!({
+            "date": current.to_string(),
+            "status": status,
+        }));
+        current += chrono::Duration::days(1);
+    }
+
+    Ok(Json(json!({
+        "month": month_str,
+        "grid_start": grid_start.to_string(),
+        "grid_end": grid_end.to_string(),
+        "days": days,
+    })))
+}
+
 async fn start_public_listing_application(
     State(state): State<AppState>,
     Path(path): Path<PublicListingSlugPath>,
@@ -1051,6 +1181,106 @@ async fn submit_inquiry(
             "id": created.get("id").cloned().unwrap_or(Value::Null),
         })),
     ))
+}
+
+#[derive(Deserialize)]
+struct SavedSearchQuery {
+    visitor_id: String,
+}
+
+#[derive(Deserialize)]
+struct CreateSavedSearchInput {
+    visitor_id: String,
+    name: String,
+    filters: Value,
+}
+
+#[derive(Deserialize)]
+struct DeleteSavedSearchInput {
+    visitor_id: String,
+    id: String,
+}
+
+async fn list_saved_searches(
+    State(state): State<AppState>,
+    Query(query): Query<SavedSearchQuery>,
+) -> AppResult<Json<Value>> {
+    ensure_marketplace_public_enabled(&state)?;
+    let pool = db_pool(&state)?;
+
+    let visitor_id = query.visitor_id.trim();
+    if visitor_id.is_empty() {
+        return Ok(Json(json!({ "data": [] })));
+    }
+
+    let rows = list_rows(
+        pool,
+        "saved_searches",
+        Some(&json_map(&[
+            ("visitor_id", Value::String(visitor_id.to_string())),
+        ])),
+        50,
+        0,
+        "created_at",
+        false,
+    )
+    .await?;
+
+    Ok(Json(json!({ "data": rows })))
+}
+
+async fn create_saved_search(
+    State(state): State<AppState>,
+    Json(payload): Json<CreateSavedSearchInput>,
+) -> AppResult<impl IntoResponse> {
+    ensure_marketplace_public_enabled(&state)?;
+    let pool = db_pool(&state)?;
+
+    let visitor_id = payload.visitor_id.trim();
+    let name = payload.name.trim();
+    if visitor_id.is_empty() || name.is_empty() {
+        return Err(AppError::BadRequest(
+            "visitor_id and name are required.".to_string(),
+        ));
+    }
+
+    let record = json_map(&[
+        ("visitor_id", Value::String(visitor_id.to_string())),
+        ("name", Value::String(name.to_string())),
+        ("filters", payload.filters),
+    ]);
+
+    let created = create_row(pool, "saved_searches", &record).await?;
+
+    Ok((axum::http::StatusCode::CREATED, Json(created)))
+}
+
+async fn delete_saved_search(
+    State(state): State<AppState>,
+    Json(payload): Json<DeleteSavedSearchInput>,
+) -> AppResult<Json<Value>> {
+    ensure_marketplace_public_enabled(&state)?;
+    let pool = db_pool(&state)?;
+
+    let id = payload.id.trim();
+    let visitor_id = payload.visitor_id.trim();
+    if id.is_empty() || visitor_id.is_empty() {
+        return Err(AppError::BadRequest(
+            "id and visitor_id are required.".to_string(),
+        ));
+    }
+
+    sqlx::query("DELETE FROM saved_searches WHERE id = $1 AND visitor_id = $2")
+        .bind(id)
+        .bind(visitor_id)
+        .execute(pool)
+        .await
+        .map_err(|error| {
+            tracing::error!(error = %error, "Database query failed");
+            AppError::Dependency("External service request failed.".to_string())
+        })?;
+
+    Ok(Json(json!({ "ok": true })))
 }
 
 async fn slug_available(

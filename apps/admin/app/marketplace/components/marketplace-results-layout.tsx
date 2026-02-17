@@ -6,6 +6,11 @@ import { MapsLocation01Icon, Search01Icon } from "@hugeicons/core-free-icons";
 import Link from "next/link";
 
 import { MarketplaceListingCard } from "@/components/marketplace/listing-card";
+import {
+  CompareCheckbox,
+  ComparisonBar,
+  useListingComparison,
+} from "@/components/marketplace/listing-comparison";
 import { Icon } from "@/components/ui/icon";
 import {
   marketplaceListingKey,
@@ -37,6 +42,7 @@ export function MarketplaceResultsLayout({
 }: MarketplaceResultsLayoutProps) {
   const [showMap, setShowMap] = useState(false);
   const hasMapToken = !!process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
+  const comparison = useListingComparison();
 
   return (
     <section>
@@ -100,11 +106,20 @@ export function MarketplaceResultsLayout({
             )}
           >
             {listings.map((listing) => (
-              <MarketplaceListingCard
-                key={marketplaceListingKey(listing.raw)}
-                listing={listing.raw}
-                locale={locale}
-              />
+              <div className="relative" key={marketplaceListingKey(listing.raw)}>
+                <MarketplaceListingCard
+                  listing={listing.raw}
+                  locale={locale}
+                />
+                <div className="absolute left-2 top-2 z-10">
+                  <CompareCheckbox
+                    isEn={isEn}
+                    isSelected={comparison.isSelected(listing.raw)}
+                    listing={listing.raw}
+                    onToggle={comparison.toggle}
+                  />
+                </div>
+              </div>
             ))}
           </div>
 
@@ -142,6 +157,14 @@ export function MarketplaceResultsLayout({
       {hasMapToken && !showMap && listings.length > 0 ? (
         <MobileMapFab isEn={isEn} listings={listings} locale={locale} />
       ) : null}
+
+      <ComparisonBar
+        isEn={isEn}
+        locale={locale}
+        onClear={comparison.clear}
+        onRemove={comparison.remove}
+        selected={comparison.selected}
+      />
     </section>
   );
 }

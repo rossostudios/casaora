@@ -9,8 +9,12 @@ import {
 } from "@hugeicons/core-free-icons";
 import Link from "next/link";
 import { isRentalMode, type RentalMode } from "@/app/(admin)/setup/setup-components";
+import { AgentPerformance } from "@/components/dashboard/agent-performance";
+import { AnomalyAlerts } from "@/components/dashboard/anomaly-alerts";
 import { GettingStartedChecklist } from "@/components/dashboard/getting-started-checklist";
 import { DashboardInsights } from "@/components/dashboard/insights";
+import { OccupancyForecast } from "@/components/dashboard/occupancy-forecast";
+import { RevenueTrend } from "@/components/dashboard/revenue-trend";
 import { OrgAccessChanged } from "@/components/shell/org-access-changed";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -26,13 +30,19 @@ import { Icon } from "@/components/ui/icon";
 import { StatCard } from "@/components/ui/stat-card";
 import { TableCard } from "@/components/ui/table-card";
 import {
+  fetchAgentPerformance,
   fetchKpiDashboard,
   fetchList,
   fetchMe,
+  fetchOccupancyForecast,
   fetchOperationsSummary,
   fetchOwnerSummary,
+  fetchRevenueTrend,
+  type AgentPerformanceStats,
   type KpiDashboard,
+  type OccupancyForecastResponse,
   type OperationsSummary,
+  type RevenueTrendResponse,
 } from "@/lib/api";
 import { errorMessage, isOrgMembershipError } from "@/lib/errors";
 import { formatCurrency } from "@/lib/format";
@@ -407,6 +417,13 @@ export default async function DashboardPage({
   let summary: Record<string, unknown> = {};
   let operationsSummary: OperationsSummary = {};
   let kpiDashboard: KpiDashboard = {};
+  let forecastData: OccupancyForecastResponse = {
+    historical_avg_occupancy_pct: 0,
+    total_units: 0,
+    months: [],
+  };
+  let agentPerfData: AgentPerformanceStats | null = null;
+  let revenueTrendData: RevenueTrendResponse = { months: [] };
   let mePayload: Record<string, unknown> = {};
   let orgRentalMode: RentalMode = "both";
   let apiAvailable = true;
@@ -439,6 +456,9 @@ export default async function DashboardPage({
         me,
         orgRows,
         kpiData,
+        forecastResult,
+        agentPerfResult,
+        revenueTrendResult,
       ] = await Promise.all([
         safeList("/properties", orgId),
         safeList("/reservations", orgId),
@@ -456,6 +476,18 @@ export default async function DashboardPage({
         safeMe(),
         safeList("/organizations", orgId),
         fetchKpiDashboard(orgId).catch(() => ({}) as KpiDashboard),
+        fetchOccupancyForecast(orgId).catch(
+          () =>
+            ({
+              historical_avg_occupancy_pct: 0,
+              total_units: 0,
+              months: [],
+            }) as OccupancyForecastResponse
+        ),
+        fetchAgentPerformance(orgId).catch(() => null as AgentPerformanceStats | null),
+        fetchRevenueTrend(orgId).catch(
+          () => ({ months: [] }) as RevenueTrendResponse
+        ),
       ] as const);
 
       properties = props;
@@ -481,6 +513,9 @@ export default async function DashboardPage({
       operationsSummary = opsSummary;
       mePayload = me;
       kpiDashboard = kpiData;
+      forecastData = forecastResult;
+      agentPerfData = agentPerfResult;
+      revenueTrendData = revenueTrendResult;
 
       // Extract rental_mode from org record
       const orgRecord = (orgRows as Record<string, unknown>[]).find(
@@ -803,6 +838,11 @@ export default async function DashboardPage({
         </Link>
       </section>
 
+      {/* ── Anomaly Alerts ───────────────────────────────────── */}
+      {apiAvailable ? (
+        <AnomalyAlerts orgId={orgId} locale={locale} />
+      ) : null}
+
       {/* ── 1B: Needs Attention ─────────────────────────────── */}
       {needsAttention.length > 0 ? (
         <section className="rounded-3xl border border-border/80 bg-card/98 p-4 sm:p-5">
@@ -970,6 +1010,19 @@ export default async function DashboardPage({
         revenue={revenueSnapshot}
         taskStatuses={taskStatuses}
       />
+
+      {/* ── Phase 4: Forecast, Revenue Trend, Agent Performance */}
+      {apiAvailable ? (
+        <section className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
+          <OccupancyForecast
+            data={forecastData.months}
+            avgPct={forecastData.historical_avg_occupancy_pct}
+            locale={locale}
+          />
+          <RevenueTrend data={revenueTrendData.months} locale={locale} />
+          <AgentPerformance data={agentPerfData} locale={locale} />
+        </section>
+      ) : null}
 
       {/* ── Reservations table ──────────────────────────────── */}
       <TableCard

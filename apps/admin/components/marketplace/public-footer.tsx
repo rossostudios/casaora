@@ -32,11 +32,9 @@ export function PublicFooter({ locale }: { locale: "es-PY" | "en-US" }) {
         <div className="grid gap-12 sm:grid-cols-2 lg:grid-cols-4">
           {/* Brand */}
           <div className="space-y-4">
-            <img
-              alt="Casaora"
-              className="h-6"
-              src="/casaoralogo-dark.svg"
-            />
+            <span className="text-lg font-bold tracking-tight text-[#faf8f5]">
+              CASAORA
+            </span>
             <p className="font-serif text-sm italic text-[#faf8f5]/50">
               {isEn
                 ? "Where transparency meets home."

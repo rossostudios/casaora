@@ -3,7 +3,7 @@ use axum::{
     response::IntoResponse,
     Json,
 };
-use chrono::NaiveDate;
+use chrono::{Datelike, NaiveDate};
 use serde_json::{json, Map, Value};
 
 use crate::{
@@ -23,6 +23,10 @@ pub fn router() -> axum::Router<AppState> {
             axum::routing::get(check_availability),
         )
         .route(
+            "/public/booking/{org_slug}/calendar",
+            axum::routing::get(calendar_grid),
+        )
+        .route(
             "/public/booking/{org_slug}/reserve",
             axum::routing::post(create_booking),
         )
@@ -38,6 +42,12 @@ struct AvailabilityQuery {
     unit_id: Option<String>,
     start: String,
     end: String,
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct CalendarQuery {
+    unit_id: String,
+    month: String, // "2026-03"
 }
 
 #[derive(Debug, serde::Deserialize)]
@@ -311,7 +321,7 @@ async fn create_booking(
     let mut reservation_payload = Map::new();
     reservation_payload.insert(
         "organization_id".to_string(),
-        Value::String(org_id),
+        Value::String(org_id.clone()),
     );
     if !property_id.is_empty() {
         reservation_payload.insert(
@@ -324,6 +334,7 @@ async fn create_booking(
         Value::String(payload.unit_id),
     );
     reservation_payload.insert("guest_id".to_string(), Value::String(guest_id));
+    let check_in_date_str = payload.check_in_date.clone();
     reservation_payload.insert(
         "check_in_date".to_string(),
         Value::String(payload.check_in_date),
@@ -351,14 +362,169 @@ async fn create_booking(
     }
 
     let reservation = create_row(pool, "reservations", &reservation_payload).await?;
+    let reservation_id = val_str(&reservation, "id");
+
+    // Check if org has a deposit policy and create payment instruction if so
+    let require_deposit = org
+        .as_object()
+        .and_then(|o| o.get("require_deposit"))
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    let deposit_amount = org
+        .as_object()
+        .and_then(|o| o.get("deposit_amount"))
+        .and_then(|v| v.as_f64().or_else(|| v.as_str().and_then(|s| s.parse::<f64>().ok())))
+        .unwrap_or(0.0);
+
+    let mut payment_reference_code: Option<String> = None;
+    let mut payment_url: Option<String> = None;
+
+    if require_deposit && deposit_amount > 0.0 && !reservation_id.is_empty() {
+        // Create a collection record for the deposit
+        let mut coll = Map::new();
+        coll.insert("organization_id".to_string(), Value::String(org_id.clone()));
+        coll.insert("reservation_id".to_string(), Value::String(reservation_id.clone()));
+        coll.insert("amount".to_string(), json!(deposit_amount));
+        coll.insert("currency".to_string(), Value::String(
+            org.as_object()
+                .and_then(|o| o.get("default_currency"))
+                .and_then(Value::as_str)
+                .unwrap_or("PYG")
+                .to_string(),
+        ));
+        coll.insert("status".to_string(), Value::String("pending".to_string()));
+        coll.insert("label".to_string(), Value::String("Booking deposit".to_string()));
+        coll.insert("due_date".to_string(), Value::String(check_in_date_str.clone()));
+        if let Ok(coll_row) = create_row(pool, "collection_records", &coll).await {
+            let coll_id = val_str(&coll_row, "id");
+
+            // Create a payment instruction with a reference code
+            let ref_code = uuid::Uuid::new_v4().to_string().replace('-', "")[..12].to_string();
+            let mut pi = Map::new();
+            pi.insert("organization_id".to_string(), Value::String(org_id.clone()));
+            pi.insert("collection_record_id".to_string(), Value::String(coll_id));
+            pi.insert("reference_code".to_string(), Value::String(ref_code.clone()));
+            pi.insert("amount".to_string(), json!(deposit_amount));
+            pi.insert("currency".to_string(), coll.get("currency").cloned().unwrap_or(Value::Null));
+            pi.insert("status".to_string(), Value::String("pending".to_string()));
+
+            if create_row(pool, "payment_instructions", &pi).await.is_ok() {
+                let app_base_url = std::env::var("NEXT_PUBLIC_APP_URL")
+                    .unwrap_or_else(|_| "http://localhost:3000".to_string());
+                payment_url = Some(format!("{app_base_url}/pay/{ref_code}"));
+                payment_reference_code = Some(ref_code);
+            }
+        }
+    }
 
     Ok((
         axum::http::StatusCode::CREATED,
         Json(json!({
             "reservation": reservation,
             "guest": guest,
+            "payment_reference_code": payment_reference_code,
+            "payment_url": payment_url,
         })),
     ))
+}
+
+/// Return a per-day calendar grid for a specific unit and month.
+async fn calendar_grid(
+    State(state): State<AppState>,
+    Path(path): Path<OrgSlugPath>,
+    Query(query): Query<CalendarQuery>,
+) -> AppResult<Json<Value>> {
+    let pool = db_pool(&state)?;
+
+    let org = find_org_by_slug(pool, &path.org_slug).await?;
+    let org_id = val_str(&org, "id");
+
+    // Parse month string "2026-03" into first and last day
+    let month_first = NaiveDate::parse_from_str(&format!("{}-01", query.month), "%Y-%m-%d")
+        .map_err(|_| AppError::BadRequest("Invalid month format. Use YYYY-MM.".to_string()))?;
+
+    // Build a 42-day window (6 weeks) to cover the full calendar grid
+    // Start from the Monday on or before the 1st of the month
+    let weekday = month_first.weekday().num_days_from_monday(); // 0=Mon
+    let grid_start = month_first - chrono::Duration::days(weekday as i64);
+    let grid_end = grid_start + chrono::Duration::days(42);
+
+    // Fetch reservations for this unit in the range
+    let mut res_filters = Map::new();
+    res_filters.insert("organization_id".to_string(), Value::String(org_id.clone()));
+    res_filters.insert("unit_id".to_string(), Value::String(query.unit_id.clone()));
+    let reservations = list_rows(pool, "reservations", Some(&res_filters), 500, 0, "check_in_date", true)
+        .await
+        .unwrap_or_default();
+
+    let active_statuses = ["pending", "confirmed", "checked_in"];
+
+    // Collect booked date ranges
+    let booked_ranges: Vec<(NaiveDate, NaiveDate)> = reservations
+        .iter()
+        .filter_map(|r| {
+            let obj = r.as_object()?;
+            let status = obj.get("status")?.as_str()?;
+            if !active_statuses.contains(&status) {
+                return None;
+            }
+            let ci = NaiveDate::parse_from_str(obj.get("check_in_date")?.as_str()?, "%Y-%m-%d").ok()?;
+            let co = NaiveDate::parse_from_str(obj.get("check_out_date")?.as_str()?, "%Y-%m-%d").ok()?;
+            if co <= grid_start || ci >= grid_end {
+                return None;
+            }
+            Some((ci, co))
+        })
+        .collect();
+
+    // Fetch calendar_blocks for this unit
+    let mut block_filters = Map::new();
+    block_filters.insert("organization_id".to_string(), Value::String(org_id));
+    block_filters.insert("unit_id".to_string(), Value::String(query.unit_id));
+    let blocks = list_rows(pool, "calendar_blocks", Some(&block_filters), 500, 0, "start_date", true)
+        .await
+        .unwrap_or_default();
+
+    let blocked_ranges: Vec<(NaiveDate, NaiveDate)> = blocks
+        .iter()
+        .filter_map(|b| {
+            let obj = b.as_object()?;
+            let sd = NaiveDate::parse_from_str(obj.get("start_date")?.as_str()?, "%Y-%m-%d").ok()?;
+            let ed = NaiveDate::parse_from_str(obj.get("end_date")?.as_str()?, "%Y-%m-%d").ok()?;
+            if ed <= grid_start || sd >= grid_end {
+                return None;
+            }
+            Some((sd, ed))
+        })
+        .collect();
+
+    // Build per-day status array
+    let today = chrono::Utc::now().date_naive();
+    let mut days = Vec::new();
+    let mut current = grid_start;
+    while current < grid_end {
+        let status = if current < today {
+            "past"
+        } else if booked_ranges.iter().any(|(ci, co)| current >= *ci && current < *co) {
+            "booked"
+        } else if blocked_ranges.iter().any(|(sd, ed)| current >= *sd && current < *ed) {
+            "blocked"
+        } else {
+            "available"
+        };
+        days.push(json!({
+            "date": current.to_string(),
+            "status": status,
+        }));
+        current += chrono::Duration::days(1);
+    }
+
+    Ok(Json(json!({
+        "month": query.month,
+        "grid_start": grid_start.to_string(),
+        "grid_end": grid_end.to_string(),
+        "days": days,
+    })))
 }
 
 async fn find_org_by_slug(pool: &sqlx::PgPool, slug: &str) -> AppResult<Value> {

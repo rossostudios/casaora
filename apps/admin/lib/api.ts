@@ -282,6 +282,113 @@ export function fetchKpiDashboard(orgId: string): Promise<KpiDashboard> {
   });
 }
 
+// ── Phase 4: Occupancy Forecast ──
+
+export type OccupancyForecastMonth = {
+  month: string;
+  occupancy_pct: number;
+  is_forecast: boolean;
+  units_occupied?: number;
+  total_units?: number;
+};
+
+export type OccupancyForecastResponse = {
+  organization_id?: string;
+  historical_avg_occupancy_pct: number;
+  total_units: number;
+  months: OccupancyForecastMonth[];
+};
+
+export function fetchOccupancyForecast(
+  orgId: string,
+  monthsAhead = 3
+): Promise<OccupancyForecastResponse> {
+  return fetchJson<OccupancyForecastResponse>("/reports/occupancy-forecast", {
+    org_id: orgId,
+    months_ahead: monthsAhead,
+  });
+}
+
+// ── Phase 4: Anomaly Alerts ──
+
+export type AnomalyAlert = {
+  id: string;
+  alert_type: string;
+  severity: "info" | "warning" | "critical";
+  title: string;
+  description?: string;
+  detected_at: string;
+};
+
+export type AnomalyAlertsResponse = {
+  organization_id?: string;
+  data: AnomalyAlert[];
+  count: number;
+};
+
+export function fetchAnomalyAlerts(
+  orgId: string
+): Promise<AnomalyAlertsResponse> {
+  const today = new Date().toISOString().slice(0, 10);
+  return fetchJson<AnomalyAlertsResponse>("/reports/anomalies", {
+    org_id: orgId,
+    from_date: today,
+    to_date: today,
+  });
+}
+
+// ── Phase 4: Agent Performance ──
+
+export type AgentPerformanceStats = {
+  organization_id?: string;
+  period_days: number;
+  total_conversations: number;
+  total_messages: number;
+  avg_tool_calls_per_response: number;
+  model_usage: { model: string; count: number }[];
+  per_agent: { agent_name: string; message_count: number }[];
+};
+
+export function fetchAgentPerformance(
+  orgId: string
+): Promise<AgentPerformanceStats> {
+  const today = new Date().toISOString().slice(0, 10);
+  const from = new Date(new Date().getTime() - 30 * 86_400_000)
+    .toISOString()
+    .slice(0, 10);
+  return fetchJson<AgentPerformanceStats>("/reports/agent-performance", {
+    org_id: orgId,
+    from_date: from,
+    to_date: today,
+  });
+}
+
+// ── Phase 4: Revenue Trend ──
+
+export type RevenueTrendMonth = {
+  month: string;
+  revenue: number;
+};
+
+export type RevenueTrendResponse = {
+  organization_id?: string;
+  months: RevenueTrendMonth[];
+};
+
+export function fetchRevenueTrend(
+  orgId: string
+): Promise<RevenueTrendResponse> {
+  const today = new Date().toISOString().slice(0, 10);
+  const from = new Date(new Date().getTime() - 180 * 86_400_000)
+    .toISOString()
+    .slice(0, 10);
+  return fetchJson<RevenueTrendResponse>("/reports/revenue-trend", {
+    org_id: orgId,
+    from_date: from,
+    to_date: today,
+  });
+}
+
 export function postJson(
   path: string,
   payload: Record<string, unknown>

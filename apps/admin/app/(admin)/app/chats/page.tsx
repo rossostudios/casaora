@@ -1,3 +1,4 @@
+import { ApprovalQueue } from "@/components/agent/approval-queue";
 import { ChatHistory } from "@/components/agent/chat-history";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -47,10 +48,13 @@ export default async function ChatsPage({ searchParams }: PageProps) {
   }
 
   return (
-    <ChatHistory
-      defaultArchived={isTruthy(params.archived)}
-      locale={locale}
-      orgId={orgId}
-    />
+    <div className="space-y-4">
+      <ApprovalQueue orgId={orgId} locale={locale} />
+      <ChatHistory
+        defaultArchived={isTruthy(params.archived)}
+        locale={locale}
+        orgId={orgId}
+      />
+    </div>
   );
 }

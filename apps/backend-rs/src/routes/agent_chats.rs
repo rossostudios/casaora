@@ -1,10 +1,14 @@
+use std::convert::Infallible;
+
 use axum::{
     extract::{Path, Query, State},
     http::HeaderMap,
+    response::sse::{Event, Sse},
     Json,
 };
 use serde::Deserialize;
 use serde_json::{Map, Value};
+use tokio_stream::wrappers::ReceiverStream;
 
 use crate::{
     auth::require_user_id,
@@ -70,6 +74,10 @@ pub fn router() -> axum::Router<AppState> {
         .route(
             "/agent/chats/{chat_id}/messages",
             axum::routing::get(get_agent_chat_messages).post(post_agent_chat_message),
+        )
+        .route(
+            "/agent/chats/{chat_id}/messages/stream",
+            axum::routing::post(post_agent_chat_message_stream),
         )
         .route(
             "/agent/chats/{chat_id}/archive",
@@ -251,6 +259,73 @@ async fn post_agent_chat_message(
     response.extend(result);
 
     Ok(Json(Value::Object(response)))
+}
+
+async fn post_agent_chat_message_stream(
+    State(state): State<AppState>,
+    Path(path): Path<AgentChatPath>,
+    Query(query): Query<AgentOrgQuery>,
+    headers: HeaderMap,
+    Json(payload): Json<SendAgentMessageInput>,
+) -> AppResult<Sse<impl futures_core::Stream<Item = Result<Event, Infallible>>>> {
+    let user_id = require_user_id(&state, &headers).await?;
+    let membership = assert_org_member(&state, &user_id, &query.org_id).await?;
+    let role = membership
+        .as_object()
+        .and_then(|obj| obj.get("role"))
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .unwrap_or("viewer")
+        .to_string();
+
+    let (tx, rx) = tokio::sync::mpsc::channel(32);
+    let (sse_tx, sse_rx) = tokio::sync::mpsc::channel::<Result<Event, Infallible>>(32);
+
+    // Spawn the agent execution in a background task
+    let state_clone = state.clone();
+    let chat_id = path.chat_id.clone();
+    let org_id = query.org_id.clone();
+    let user_id_clone = user_id.clone();
+    let role_clone = role.clone();
+    let message = payload.message.clone();
+    let allow_mutations = payload.allow_mutations;
+    let confirm_write = payload.confirm_write;
+
+    tokio::spawn(async move {
+        let result = agent_chats::send_chat_message_streaming(
+            &state_clone,
+            &chat_id,
+            &org_id,
+            &user_id_clone,
+            &role_clone,
+            &message,
+            allow_mutations,
+            confirm_write,
+            tx,
+        )
+        .await;
+
+        if let Err(error) = result {
+            tracing::error!(error = %error, "Streaming agent chat failed");
+        }
+    });
+
+    // Forward agent stream events as SSE events
+    let sse_tx_clone = sse_tx.clone();
+    tokio::spawn(async move {
+        let mut rx = rx;
+        while let Some(event) = rx.recv().await {
+            let data = serde_json::to_string(&event).unwrap_or_default();
+            let sse_event = Event::default().data(data);
+            if sse_tx_clone.send(Ok(sse_event)).await.is_err() {
+                break;
+            }
+        }
+    });
+
+    let stream = ReceiverStream::new(sse_rx);
+    Ok(Sse::new(stream))
 }
 
 async fn archive_agent_chat(

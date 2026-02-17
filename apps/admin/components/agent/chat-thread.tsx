@@ -60,6 +60,54 @@ const PROMPTS: Record<string, { "en-US": string[]; "es-PY": string[] }> = {
       "Señala gastos inusuales de este mes.",
     ],
   },
+  "price-optimizer": {
+    "en-US": [
+      "Which units have the lowest occupancy this month?",
+      "Identify underpriced units based on market trends.",
+      "Suggest seasonal pricing adjustments for next quarter.",
+    ],
+    "es-PY": [
+      "¿Qué unidades tienen la ocupación más baja este mes?",
+      "Identifica unidades con precios bajos según tendencias.",
+      "Sugiere ajustes de precios estacionales para el próximo trimestre.",
+    ],
+  },
+  "market-match": {
+    "en-US": [
+      "Match the latest applicants to available listings.",
+      "Which pet-friendly listings are currently available?",
+      "Score the top 5 pending applications by fit.",
+    ],
+    "es-PY": [
+      "Empareja los últimos solicitantes con anuncios disponibles.",
+      "¿Qué anuncios pet-friendly están disponibles?",
+      "Puntúa las 5 mejores solicitudes pendientes por compatibilidad.",
+    ],
+  },
+  "maintenance-triage": {
+    "en-US": [
+      "Show open maintenance requests sorted by urgency.",
+      "Which properties have the most pending repairs?",
+      "Estimate repair costs for all open tickets this month.",
+    ],
+    "es-PY": [
+      "Muestra solicitudes de mantenimiento abiertas por urgencia.",
+      "¿Qué propiedades tienen más reparaciones pendientes?",
+      "Estima costos de reparación para tickets abiertos este mes.",
+    ],
+  },
+  "compliance-guard": {
+    "en-US": [
+      "Flag any leases expiring in the next 30 days.",
+      "Which tenants have overdue payments this month?",
+      "Check document expirations across all properties.",
+    ],
+    "es-PY": [
+      "Señala contratos que vencen en los próximos 30 días.",
+      "¿Qué inquilinos tienen pagos vencidos este mes?",
+      "Revisa vencimientos de documentos en todas las propiedades.",
+    ],
+  },
   default: {
     "en-US": [
       "Summarize the key risks for today.",
@@ -160,6 +208,10 @@ export function ChatThread({
   const [allowMutations, setAllowMutations] = useState(false);
   const [confirmWrite, setConfirmWrite] = useState(false);
   const [deleteArmed, setDeleteArmed] = useState(false);
+  const [streamingText, setStreamingText] = useState("");
+  const [streamingTools, setStreamingTools] = useState<
+    { name: string; preview?: string; ok?: boolean }[]
+  >([]);
 
   const quickPrompts = useMemo(() => {
     const key =
@@ -235,6 +287,160 @@ export function ChatThread({
     loadThread().catch(() => undefined);
   }, [loadThread]);
 
+  const sendMessageStream = async (message: string) => {
+    // Optimistically add user message
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: `temp-user-${Date.now()}`,
+        chat_id: chatId,
+        org_id: orgId,
+        role: "user" as const,
+        content: message,
+        fallback_used: false,
+        created_at: new Date().toISOString(),
+      },
+    ]);
+    setStreamingText("");
+    setStreamingTools([]);
+
+    const response = await fetch(
+      `/api/agent/chats/${encodeURIComponent(chatId)}/messages/stream?org_id=${encodeURIComponent(orgId)}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message,
+          allow_mutations: allowMutations,
+          confirm_write: confirmWrite,
+        }),
+      }
+    );
+
+    if (!response.ok || !response.body) {
+      throw new Error(
+        isEn ? "Streaming failed." : "La transmisión falló."
+      );
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() ?? "";
+
+      for (const line of lines) {
+        if (!line.startsWith("data: ")) continue;
+        const data = line.slice(6).trim();
+        if (!data) continue;
+
+        try {
+          const event = JSON.parse(data) as {
+            type: string;
+            name?: string;
+            preview?: string;
+            ok?: boolean;
+            text?: string;
+            content?: string;
+            tool_trace?: unknown[];
+            message?: string;
+          };
+
+          if (event.type === "tool_call" && event.name) {
+            setStreamingTools((prev) => [
+              ...prev,
+              { name: event.name as string },
+            ]);
+          } else if (event.type === "tool_result" && event.name) {
+            setStreamingTools((prev) =>
+              prev.map((t) =>
+                t.name === event.name && t.preview === undefined
+                  ? { ...t, preview: event.preview, ok: event.ok }
+                  : t
+              )
+            );
+          } else if (event.type === "token" && event.text) {
+            setStreamingText(event.text);
+          } else if (event.type === "done" && event.content) {
+            // Finalize: add assistant message
+            setMessages((prev) => [
+              ...prev,
+              {
+                id: `temp-assistant-${Date.now()}`,
+                chat_id: chatId,
+                org_id: orgId,
+                role: "assistant" as const,
+                content: event.content as string,
+                tool_trace: event.tool_trace as AgentChatMessage["tool_trace"],
+                fallback_used: false,
+                created_at: new Date().toISOString(),
+              },
+            ]);
+            setStreamingText("");
+            setStreamingTools([]);
+          } else if (event.type === "error") {
+            throw new Error(event.message || "Agent error");
+          }
+        } catch {
+          // Skip unparseable lines
+        }
+      }
+    }
+  };
+
+  const sendMessageFallback = async (message: string) => {
+    const response = await fetch(
+      `/api/agent/chats/${encodeURIComponent(chatId)}/messages`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify({
+          org_id: orgId,
+          message,
+          allow_mutations: allowMutations,
+          confirm_write: confirmWrite,
+        }),
+      }
+    );
+
+    const payload = (await response.json()) as {
+      error?: string;
+      user_message?: AgentChatMessage;
+      assistant_message?: AgentChatMessage;
+      chat?: AgentChatSummary;
+    };
+
+    if (!response.ok) {
+      throw new Error(
+        payload.error ||
+          (isEn ? "Message failed to send." : "No se pudo enviar el mensaje.")
+      );
+    }
+
+    if (payload.chat) {
+      setChat(payload.chat);
+    }
+
+    const appended: AgentChatMessage[] = [];
+    if (payload.user_message) appended.push(payload.user_message);
+    if (payload.assistant_message) appended.push(payload.assistant_message);
+
+    if (appended.length) {
+      setMessages((previous) => [...previous, ...appended]);
+    } else {
+      await loadThread();
+    }
+  };
+
   const sendMessage = async (value?: string) => {
     const message = (value ?? draft).trim();
     if (!message || sending) return;
@@ -243,56 +449,19 @@ export function ChatThread({
     setError(null);
 
     try {
-      const response = await fetch(
-        `/api/agent/chats/${encodeURIComponent(chatId)}/messages`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Accept: "application/json",
-          },
-          body: JSON.stringify({
-            org_id: orgId,
-            message,
-            allow_mutations: allowMutations,
-            confirm_write: confirmWrite,
-          }),
-        }
-      );
-
-      const payload = (await response.json()) as {
-        error?: string;
-        user_message?: AgentChatMessage;
-        assistant_message?: AgentChatMessage;
-        chat?: AgentChatSummary;
-      };
-
-      if (!response.ok) {
-        throw new Error(
-          payload.error ||
-            (isEn ? "Message failed to send." : "No se pudo enviar el mensaje.")
-        );
+      try {
+        await sendMessageStream(message);
+      } catch {
+        // Fall back to non-streaming POST
+        await sendMessageFallback(message);
       }
-
-      if (payload.chat) {
-        setChat(payload.chat);
-      }
-
-      const appended: AgentChatMessage[] = [];
-      if (payload.user_message) appended.push(payload.user_message);
-      if (payload.assistant_message) appended.push(payload.assistant_message);
-
-      if (appended.length) {
-        setMessages((previous) => [...previous, ...appended]);
-      } else {
-        await loadThread();
-      }
-
       setDraft("");
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setSending(false);
+      setStreamingText("");
+      setStreamingTools([]);
     }
   };
 
@@ -558,8 +727,39 @@ export function ChatThread({
 
           {sending ? (
             <div className="flex justify-start">
-              <div className="rounded-2xl border bg-card px-3 py-2 text-muted-foreground text-sm">
-                {isEn ? "Agent is thinking..." : "El agente está pensando..."}
+              <div className="max-w-[92%] rounded-2xl border border-border/60 bg-card px-3 py-2 space-y-2">
+                {streamingTools.length > 0 ? (
+                  <div className="space-y-1">
+                    {streamingTools.map((tool, index) => (
+                      <div
+                        className="flex items-center gap-2 rounded-md bg-muted/30 px-2 py-1 text-[11px]"
+                        key={`stream-tool-${index}`}
+                      >
+                        <span className="inline-block h-1.5 w-1.5 rounded-full bg-primary animate-pulse" />
+                        <span className="font-mono">{tool.name}</span>
+                        {tool.preview ? (
+                          <span className="text-muted-foreground">
+                            {tool.ok ? tool.preview : `error: ${tool.preview}`}
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground">
+                            {isEn ? "running..." : "ejecutando..."}
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+                {streamingText ? (
+                  <p className="whitespace-pre-wrap text-[13px] leading-relaxed">
+                    {streamingText}
+                  </p>
+                ) : streamingTools.length === 0 ? (
+                  <p className="text-muted-foreground text-sm flex items-center gap-2">
+                    <span className="inline-block h-1.5 w-1.5 rounded-full bg-primary animate-pulse" />
+                    {isEn ? "Agent is thinking..." : "El agente está pensando..."}
+                  </p>
+                ) : null}
               </div>
             </div>
           ) : null}

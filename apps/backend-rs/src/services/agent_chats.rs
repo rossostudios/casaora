@@ -6,7 +6,10 @@ use crate::{
     state::AppState,
 };
 
-use super::ai_agent::{run_ai_agent_chat, AgentConversationMessage, RunAiAgentChatParams};
+use super::ai_agent::{
+    run_ai_agent_chat, run_ai_agent_chat_streaming, AgentConversationMessage, AgentStreamEvent,
+    RunAiAgentChatParams,
+};
 
 const MAX_CHAT_LIMIT: i64 = 100;
 const MAX_MESSAGE_LIMIT: i64 = 300;
@@ -379,6 +382,237 @@ pub async fn send_chat_message(
     payload.insert("fallback_used".to_string(), Value::Bool(fallback_used));
 
     Ok(payload)
+}
+
+/// Streaming variant: runs the agent with SSE events, saves messages to DB after completion.
+#[allow(clippy::too_many_arguments)]
+pub async fn send_chat_message_streaming(
+    state: &AppState,
+    chat_id: &str,
+    org_id: &str,
+    user_id: &str,
+    role: &str,
+    message: &str,
+    allow_mutations: bool,
+    confirm_write: bool,
+    stream_tx: tokio::sync::mpsc::Sender<AgentStreamEvent>,
+) -> AppResult<()> {
+    let chat = ensure_chat_owner(state, chat_id, org_id, user_id).await?;
+    let agent_id = value_str(&chat, "agent_id").unwrap_or_default();
+    let agent = get_agent_by_id(state, &agent_id).await?;
+
+    let trimmed_message = message.trim();
+    if trimmed_message.is_empty() {
+        return Err(AppError::BadRequest("message is required.".to_string()));
+    }
+
+    let conversation = collect_context_messages(state, chat_id, org_id, user_id).await?;
+    let pool = db_pool(state)?;
+
+    // Save user message
+    sqlx::query(
+        "INSERT INTO ai_chat_messages (chat_id, organization_id, role, content, created_by_user_id)
+         VALUES ($1::uuid, $2::uuid, 'user', $3, $4::uuid)",
+    )
+    .bind(chat_id)
+    .bind(org_id)
+    .bind(trimmed_message)
+    .bind(user_id)
+    .execute(pool)
+    .await
+    .map_err(|error| {
+        tracing::error!(error = %error, "Failed to save user message");
+        AppError::Internal("Could not persist user message.".to_string())
+    })?;
+
+    let agent_name = value_str(&agent, "name").unwrap_or_else(|| "Operations Copilot".to_string());
+    let agent_prompt = value_str(&agent, "system_prompt");
+    let allowed_tools = agent_allowed_tools(&agent);
+
+    let agent_result = run_ai_agent_chat_streaming(
+        state,
+        RunAiAgentChatParams {
+            org_id,
+            role,
+            message: trimmed_message,
+            conversation: &conversation,
+            allow_mutations,
+            confirm_write,
+            agent_name: &agent_name,
+            agent_prompt: agent_prompt.as_deref(),
+            allowed_tools: allowed_tools.as_deref(),
+        },
+        stream_tx,
+    )
+    .await?;
+
+    // Save assistant message
+    let reply = agent_result
+        .get("reply")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(ToOwned::to_owned)
+        .unwrap_or_else(|| "No response generated.".to_string());
+
+    let fallback_used = agent_result
+        .get("fallback_used")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    let tool_trace = agent_result
+        .get("tool_trace")
+        .and_then(Value::as_array)
+        .cloned();
+    let model_used = agent_result
+        .get("model_used")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(ToOwned::to_owned);
+
+    let assistant_row = sqlx::query(
+        "INSERT INTO ai_chat_messages (
+            chat_id, organization_id, role, content, created_by_user_id,
+            fallback_used, tool_trace, model_used
+         ) VALUES ($1::uuid, $2::uuid, 'assistant', $3, $4::uuid, $5, $6, $7)
+         RETURNING created_at",
+    )
+    .bind(chat_id)
+    .bind(org_id)
+    .bind(&reply)
+    .bind(user_id)
+    .bind(fallback_used)
+    .bind(tool_trace.map(Value::Array))
+    .bind(model_used)
+    .fetch_optional(pool)
+    .await
+    .map_err(|error| {
+        tracing::error!(error = %error, "Failed to save assistant message");
+        AppError::Internal("Could not persist assistant message.".to_string())
+    })?;
+
+    // Update chat timestamp
+    if let Some(row) = assistant_row {
+        if let Ok(created_at) = row.try_get::<Option<String>, _>("created_at") {
+            if let Some(ts) = created_at {
+                let _ = sqlx::query(
+                    "UPDATE ai_chats SET last_message_at = $1::timestamptz WHERE id = $2::uuid",
+                )
+                .bind(&ts)
+                .bind(chat_id)
+                .execute(pool)
+                .await;
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// Get agent performance statistics for the last 30 days.
+pub async fn get_agent_performance_stats(
+    state: &AppState,
+    org_id: &str,
+) -> AppResult<Value> {
+    let pool = db_pool(state)?;
+
+    // Total conversations
+    let total_conversations: i64 = sqlx::query_scalar(
+        "SELECT COUNT(DISTINCT chat_id)::bigint
+         FROM ai_chat_messages
+         WHERE organization_id = $1::uuid
+           AND created_at > (now() - interval '30 days')",
+    )
+    .bind(org_id)
+    .fetch_one(pool)
+    .await
+    .unwrap_or(0);
+
+    // Total messages
+    let total_messages: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*)::bigint
+         FROM ai_chat_messages
+         WHERE organization_id = $1::uuid
+           AND created_at > (now() - interval '30 days')",
+    )
+    .bind(org_id)
+    .fetch_one(pool)
+    .await
+    .unwrap_or(0);
+
+    // Avg tool calls per assistant message
+    let avg_tool_calls: f64 = sqlx::query_scalar(
+        "SELECT COALESCE(AVG(jsonb_array_length(tool_trace)), 0)::float8
+         FROM ai_chat_messages
+         WHERE organization_id = $1::uuid
+           AND role = 'assistant'
+           AND tool_trace IS NOT NULL
+           AND created_at > (now() - interval '30 days')",
+    )
+    .bind(org_id)
+    .fetch_one(pool)
+    .await
+    .unwrap_or(0.0);
+
+    // Model usage breakdown
+    let model_rows = sqlx::query(
+        "SELECT model_used, COUNT(*)::bigint AS count
+         FROM ai_chat_messages
+         WHERE organization_id = $1::uuid
+           AND role = 'assistant'
+           AND model_used IS NOT NULL
+           AND created_at > (now() - interval '30 days')
+         GROUP BY model_used
+         ORDER BY count DESC",
+    )
+    .bind(org_id)
+    .fetch_all(pool)
+    .await
+    .unwrap_or_default();
+
+    let model_usage: Vec<Value> = model_rows
+        .iter()
+        .filter_map(|row| {
+            let model: String = row.try_get("model_used").ok()?;
+            let count: i64 = row.try_get("count").ok()?;
+            Some(json!({ "model": model, "count": count }))
+        })
+        .collect();
+
+    // Per-agent message counts
+    let agent_rows = sqlx::query(
+        "SELECT a.name AS agent_name, COUNT(m.id)::bigint AS message_count
+         FROM ai_chat_messages m
+         JOIN ai_chats c ON m.chat_id = c.id
+         JOIN ai_agents a ON c.agent_id = a.id
+         WHERE m.organization_id = $1::uuid
+           AND m.created_at > (now() - interval '30 days')
+         GROUP BY a.name
+         ORDER BY message_count DESC",
+    )
+    .bind(org_id)
+    .fetch_all(pool)
+    .await
+    .unwrap_or_default();
+
+    let per_agent: Vec<Value> = agent_rows
+        .iter()
+        .filter_map(|row| {
+            let name: String = row.try_get("agent_name").ok()?;
+            let count: i64 = row.try_get("message_count").ok()?;
+            Some(json!({ "agent_name": name, "message_count": count }))
+        })
+        .collect();
+
+    Ok(json!({
+        "organization_id": org_id,
+        "period_days": 30,
+        "total_conversations": total_conversations,
+        "total_messages": total_messages,
+        "avg_tool_calls_per_response": (avg_tool_calls * 100.0).round() / 100.0,
+        "model_usage": model_usage,
+        "per_agent": per_agent,
+    }))
 }
 
 pub async fn archive_chat(

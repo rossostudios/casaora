@@ -1,5 +1,6 @@
 use std::collections::BTreeSet;
 
+use serde::Serialize;
 use serde_json::{json, Map, Value};
 use sqlx::{Postgres, QueryBuilder, Row};
 
@@ -8,6 +9,24 @@ use crate::{
     repository::table_service::create_row,
     state::AppState,
 };
+
+/// SSE event types sent during streaming agent execution.
+#[derive(Debug, Clone, Serialize)]
+#[serde(tag = "type")]
+pub enum AgentStreamEvent {
+    #[serde(rename = "status")]
+    Status { message: String },
+    #[serde(rename = "tool_call")]
+    ToolCall { name: String, args: Map<String, Value> },
+    #[serde(rename = "tool_result")]
+    ToolResult { name: String, preview: String, ok: bool },
+    #[serde(rename = "token")]
+    Token { text: String },
+    #[serde(rename = "done")]
+    Done { content: String, tool_trace: Vec<Value> },
+    #[serde(rename = "error")]
+    Error { message: String },
+}
 
 const MUTATION_ROLES: &[&str] = &["owner_admin", "operator", "accountant"];
 
@@ -39,11 +58,14 @@ pub struct RunAiAgentChatParams<'a> {
 
 pub fn list_supported_tables() -> Vec<String> {
     let mut tables = vec![
+        "agent_approvals",
+        "anomaly_alerts",
         "application_events",
         "application_submissions",
         "audit_logs",
         "calendar_blocks",
         "collection_records",
+        "escrow_events",
         "expenses",
         "guests",
         "integration_events",
@@ -51,6 +73,7 @@ pub fn list_supported_tables() -> Vec<String> {
         "leases",
         "integrations",
         "listings",
+        "maintenance_requests",
         "message_logs",
         "message_templates",
         "organization_invites",
@@ -285,6 +308,271 @@ pub async fn run_ai_agent_chat(
     } else {
         final_text
     };
+
+    Ok(build_agent_result(
+        reply,
+        tool_trace,
+        mutations_allowed(&role_value, params.allow_mutations, params.confirm_write),
+        model_used,
+        fallback_used,
+    ))
+}
+
+/// Execute a tool call that was previously approved in the approval queue.
+pub async fn execute_approved_tool(
+    state: &AppState,
+    org_id: &str,
+    tool_name: &str,
+    args: &Map<String, Value>,
+) -> AppResult<Value> {
+    execute_tool(
+        state,
+        tool_name,
+        args,
+        ToolContext {
+            org_id,
+            role: "operator",
+            allow_mutations: true,
+            confirm_write: true,
+            allowed_tools: None,
+        },
+    )
+    .await
+}
+
+/// Streaming variant of `run_ai_agent_chat` that sends progress events through a channel.
+pub async fn run_ai_agent_chat_streaming(
+    state: &AppState,
+    params: RunAiAgentChatParams<'_>,
+    tx: tokio::sync::mpsc::Sender<AgentStreamEvent>,
+) -> AppResult<Map<String, Value>> {
+    if !state.config.ai_agent_enabled {
+        let _ = tx.send(AgentStreamEvent::Error {
+            message: "AI agent is disabled in this environment.".to_string(),
+        }).await;
+        return Err(AppError::ServiceUnavailable(
+            "AI agent is disabled in this environment.".to_string(),
+        ));
+    }
+
+    let role_value = normalize_role(params.role);
+    let base_prompt = params
+        .agent_prompt
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(ToOwned::to_owned)
+        .unwrap_or_else(|| {
+            format!(
+                "You are {} for Casaora, a property-management platform in Paraguay.",
+                params.agent_name
+            )
+        });
+
+    let system_prompt = format!(
+        "{base_prompt} Use tools for all data-backed answers. Keep replies concise and action-oriented. Current org_id is {}. Current user role is {}. Never access data outside this organization. When a user asks to create/update/delete data, call the matching tool. If a write tool returns an error, explain why and propose a safe next action.",
+        params.org_id,
+        role_value,
+    );
+
+    let mut messages = vec![json!({"role": "system", "content": system_prompt})];
+    let context_start = params.conversation.len().saturating_sub(12);
+    for item in &params.conversation[context_start..] {
+        let role_name = item.role.trim().to_ascii_lowercase();
+        let content = item.content.trim();
+        if matches!(role_name.as_str(), "user" | "assistant") && !content.is_empty() {
+            messages.push(json!({
+                "role": role_name,
+                "content": truncate_chars(content, 4000),
+            }));
+        }
+    }
+    messages.push(json!({
+        "role": "user",
+        "content": truncate_chars(params.message.trim(), 4000),
+    }));
+
+    let mut tool_trace: Vec<Value> = Vec::new();
+    let mut fallback_used = false;
+    let mut model_used = String::new();
+    let tool_definitions = tool_definitions(params.allowed_tools);
+
+    let _ = tx.send(AgentStreamEvent::Status {
+        message: "Thinking...".to_string(),
+    }).await;
+
+    let max_steps = std::cmp::max(1, state.config.ai_agent_max_tool_steps);
+    for _ in 0..max_steps {
+        let (completion, call_model, call_fallback) =
+            call_openai_chat_completion(state, &messages, Some(&tool_definitions)).await?;
+        model_used = call_model;
+        fallback_used = fallback_used || call_fallback;
+
+        let assistant_message = completion
+            .get("choices")
+            .and_then(Value::as_array)
+            .and_then(|choices| choices.first())
+            .and_then(Value::as_object)
+            .and_then(|choice| choice.get("message"))
+            .cloned()
+            .unwrap_or_else(|| Value::Object(Map::new()));
+
+        let assistant_text = extract_content_text(assistant_message.get("content"));
+        let tool_calls = assistant_message
+            .get("tool_calls")
+            .and_then(Value::as_array)
+            .cloned()
+            .unwrap_or_default();
+
+        if !tool_calls.is_empty() {
+            messages.push(json!({
+                "role": "assistant",
+                "content": assistant_text,
+                "tool_calls": tool_calls.clone(),
+            }));
+
+            for call in tool_calls {
+                let call_id = call
+                    .as_object()
+                    .and_then(|obj| obj.get("id"))
+                    .and_then(Value::as_str)
+                    .map(str::trim)
+                    .filter(|value| !value.is_empty())
+                    .unwrap_or("tool-call")
+                    .to_string();
+
+                let function_payload = call
+                    .as_object()
+                    .and_then(|obj| obj.get("function"))
+                    .and_then(Value::as_object)
+                    .cloned()
+                    .unwrap_or_default();
+
+                let tool_name = function_payload
+                    .get("name")
+                    .and_then(Value::as_str)
+                    .map(str::trim)
+                    .unwrap_or_default()
+                    .to_string();
+
+                let raw_arguments = function_payload.get("arguments").cloned();
+                let mut arguments = Map::new();
+
+                let _ = tx.send(AgentStreamEvent::ToolCall {
+                    name: tool_name.clone(),
+                    args: arguments.clone(),
+                }).await;
+
+                let tool_result = match parse_tool_arguments(raw_arguments) {
+                    Ok(parsed) => {
+                        arguments = parsed.clone();
+                        match execute_tool(
+                            state,
+                            &tool_name,
+                            &parsed,
+                            ToolContext {
+                                org_id: params.org_id,
+                                role: &role_value,
+                                allow_mutations: params.allow_mutations,
+                                confirm_write: params.confirm_write,
+                                allowed_tools: params.allowed_tools,
+                            },
+                        )
+                        .await
+                        {
+                            Ok(result) => result,
+                            Err(error) => {
+                                json!({ "ok": false, "error": tool_error_detail(state, &error) })
+                            }
+                        }
+                    }
+                    Err(error) => {
+                        json!({ "ok": false, "error": error.detail_message() })
+                    }
+                };
+
+                let preview = preview_result(&tool_result);
+                let ok = tool_result
+                    .as_object()
+                    .and_then(|obj| obj.get("ok"))
+                    .and_then(Value::as_bool)
+                    .unwrap_or(false);
+
+                let _ = tx.send(AgentStreamEvent::ToolResult {
+                    name: tool_name.clone(),
+                    preview: preview.clone(),
+                    ok,
+                }).await;
+
+                tool_trace.push(json!({
+                    "tool": tool_name,
+                    "args": arguments,
+                    "ok": ok,
+                    "preview": preview,
+                }));
+
+                let tool_payload = serde_json::to_string(&tool_result).unwrap_or_else(|_| {
+                    "{\"ok\":false,\"error\":\"Could not serialize tool result.\"}".to_string()
+                });
+                messages.push(json!({
+                    "role": "tool",
+                    "tool_call_id": call_id,
+                    "content": truncate_chars(&tool_payload, 12000),
+                }));
+            }
+            continue;
+        }
+
+        if !assistant_text.is_empty() {
+            let _ = tx.send(AgentStreamEvent::Token {
+                text: assistant_text.clone(),
+            }).await;
+            let _ = tx.send(AgentStreamEvent::Done {
+                content: assistant_text.clone(),
+                tool_trace: tool_trace.clone(),
+            }).await;
+            return Ok(build_agent_result(
+                assistant_text,
+                tool_trace,
+                mutations_allowed(&role_value, params.allow_mutations, params.confirm_write),
+                model_used,
+                fallback_used,
+            ));
+        }
+
+        break;
+    }
+
+    let (final_completion, final_model, final_fallback) =
+        call_openai_chat_completion(state, &messages, None).await?;
+    if !final_model.trim().is_empty() {
+        model_used = final_model;
+    }
+    fallback_used = fallback_used || final_fallback;
+
+    let final_text = final_completion
+        .get("choices")
+        .and_then(Value::as_array)
+        .and_then(|choices| choices.first())
+        .and_then(Value::as_object)
+        .and_then(|choice| choice.get("message"))
+        .and_then(Value::as_object)
+        .and_then(|message| message.get("content"))
+        .map(|content| extract_content_text(Some(content)))
+        .unwrap_or_default();
+
+    let reply = if final_text.is_empty() {
+        "I completed the tool calls but could not generate a final answer. Please rephrase the request.".to_string()
+    } else {
+        final_text
+    };
+
+    let _ = tx.send(AgentStreamEvent::Token {
+        text: reply.clone(),
+    }).await;
+    let _ = tx.send(AgentStreamEvent::Done {
+        content: reply.clone(),
+        tool_trace: tool_trace.clone(),
+    }).await;
 
     Ok(build_agent_result(
         reply,
@@ -576,6 +864,42 @@ fn tool_definitions(allowed_tools: Option<&[String]>) -> Vec<Value> {
                 }
             }
         }),
+        json!({
+            "type": "function",
+            "function": {
+                "name": "delegate_to_agent",
+                "description": "Delegate a question to another AI agent by slug. Use when the user's request falls outside your specialization.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "agent_slug": {"type": "string", "description": "Slug of the target agent (e.g. 'price-optimizer', 'maintenance-triage')."},
+                        "message": {"type": "string", "description": "The question or task to send to the target agent."}
+                    },
+                    "required": ["agent_slug", "message"]
+                }
+            }
+        }),
+        json!({
+            "type": "function",
+            "function": {
+                "name": "get_occupancy_forecast",
+                "description": "Get predicted occupancy rates for upcoming months based on historical reservation data.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "months_ahead": {"type": "integer", "minimum": 1, "maximum": 6, "default": 3, "description": "Number of months to forecast (default 3)."}
+                    }
+                }
+            }
+        }),
+        json!({
+            "type": "function",
+            "function": {
+                "name": "get_anomaly_alerts",
+                "description": "Get active anomaly alerts for the organization (revenue drops, expense spikes, occupancy cliffs, etc.).",
+                "parameters": {"type": "object", "properties": {}}
+            }
+        }),
     ];
 
     let Some(allowed_tools) = allowed_tools else {
@@ -671,6 +995,15 @@ async fn execute_tool(
                 args,
             )
             .await
+        }
+        "delegate_to_agent" => {
+            tool_delegate_to_agent(state, context.org_id, context.role, context.allow_mutations, context.confirm_write, args).await
+        }
+        "get_occupancy_forecast" => {
+            tool_get_occupancy_forecast(state, context.org_id, args).await
+        }
+        "get_anomaly_alerts" => {
+            tool_get_anomaly_alerts(state, context.org_id).await
         }
         _ => Ok(json!({
             "ok": false,
@@ -800,6 +1133,46 @@ async fn tool_get_row(
         "ok": false,
         "error": format!("No record found in {table}."),
     }))
+}
+
+/// Check if an approval is needed and create one if so.
+/// Returns Some(json) with a pending_approval response, or None to proceed.
+/// Currently available for explicit approval workflows; not auto-gated in mutations.
+#[allow(dead_code)]
+async fn maybe_create_approval(
+    state: &AppState,
+    org_id: &str,
+    confirm_write: bool,
+    tool_name: &str,
+    args: &Map<String, Value>,
+) -> AppResult<Option<Value>> {
+    if !confirm_write {
+        return Ok(None);
+    }
+
+    let pool = match state.db_pool.as_ref() {
+        Some(pool) => pool,
+        None => return Ok(None),
+    };
+
+    // Insert approval request
+    let _row = sqlx::query(
+        "INSERT INTO agent_approvals (organization_id, agent_slug, tool_name, tool_args, status)
+         VALUES ($1::uuid, 'system', $2, $3, 'pending')
+         RETURNING id"
+    )
+    .bind(org_id)
+    .bind(tool_name)
+    .bind(Value::Object(args.clone()))
+    .fetch_optional(pool)
+    .await
+    .ok();
+
+    Ok(Some(json!({
+        "ok": true,
+        "status": "pending_approval",
+        "message": "This action requires human approval. It has been queued for review.",
+    })))
 }
 
 async fn tool_create_row(
@@ -1063,6 +1436,207 @@ async fn tool_get_org_snapshot(state: &AppState, org_id: &str) -> AppResult<Valu
     Ok(json!({ "ok": true, "summary": summary }))
 }
 
+async fn tool_delegate_to_agent(
+    state: &AppState,
+    org_id: &str,
+    role: &str,
+    allow_mutations: bool,
+    confirm_write: bool,
+    args: &Map<String, Value>,
+) -> AppResult<Value> {
+    let agent_slug = args
+        .get("agent_slug")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .unwrap_or_default();
+    if agent_slug.is_empty() {
+        return Ok(json!({ "ok": false, "error": "agent_slug is required." }));
+    }
+
+    let message = args
+        .get("message")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .unwrap_or_default();
+    if message.is_empty() {
+        return Ok(json!({ "ok": false, "error": "message is required." }));
+    }
+
+    // Look up target agent
+    let pool = db_pool(state)?;
+    let agent_row = sqlx::query_as::<_, (String, String, Option<String>, Option<Value>)>(
+        "SELECT slug, name, system_prompt, allowed_tools FROM ai_agents WHERE slug = $1 AND is_active = true LIMIT 1"
+    )
+    .bind(agent_slug)
+    .fetch_optional(pool)
+    .await
+    .map_err(|error| {
+        tracing::error!(error = %error, "Failed to look up delegate agent");
+        AppError::Dependency("Failed to look up delegate agent.".to_string())
+    })?;
+
+    let Some((slug, name, system_prompt, allowed_tools_json)) = agent_row else {
+        return Ok(json!({ "ok": false, "error": format!("Agent '{}' not found or inactive.", agent_slug) }));
+    };
+
+    // Prevent delegation to tools that include delegate_to_agent (no chaining)
+    let target_tools: Vec<String> = allowed_tools_json
+        .and_then(|v| v.as_array().cloned())
+        .unwrap_or_default()
+        .into_iter()
+        .filter_map(|v| v.as_str().map(ToOwned::to_owned))
+        .filter(|t| t != "delegate_to_agent")
+        .collect();
+
+    let params = RunAiAgentChatParams {
+        org_id,
+        role,
+        message,
+        conversation: &[],
+        allow_mutations,
+        confirm_write,
+        agent_name: &name,
+        agent_prompt: system_prompt.as_deref(),
+        allowed_tools: Some(&target_tools),
+    };
+
+    match Box::pin(run_ai_agent_chat(state, params)).await {
+        Ok(result) => {
+            let reply = result
+                .get("reply")
+                .and_then(Value::as_str)
+                .unwrap_or("No response from delegate agent.")
+                .to_string();
+            Ok(json!({
+                "ok": true,
+                "delegated_to": slug,
+                "reply": reply,
+            }))
+        }
+        Err(error) => Ok(json!({
+            "ok": false,
+            "error": format!("Delegation to '{}' failed: {}", slug, error.detail_message()),
+        })),
+    }
+}
+
+async fn tool_get_occupancy_forecast(
+    state: &AppState,
+    org_id: &str,
+    args: &Map<String, Value>,
+) -> AppResult<Value> {
+    let months_ahead = coerce_limit(args.get("months_ahead"), 3).clamp(1, 6);
+    let pool = db_pool(state)?;
+
+    // Get total units
+    let unit_count: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*)::bigint FROM units WHERE organization_id = $1::uuid"
+    )
+    .bind(org_id)
+    .fetch_one(pool)
+    .await
+    .unwrap_or(0);
+
+    if unit_count == 0 {
+        return Ok(json!({
+            "ok": true,
+            "months": [],
+            "message": "No units found to forecast.",
+        }));
+    }
+
+    // Get monthly reservation nights for past 12 months
+    let rows = sqlx::query(
+        "SELECT
+            to_char(date_trunc('month', check_in_date::date), 'YYYY-MM') AS month,
+            SUM(GREATEST((LEAST(check_out_date::date, (date_trunc('month', check_in_date::date) + interval '1 month')::date) - check_in_date::date), 0)) AS nights
+         FROM reservations
+         WHERE organization_id = $1::uuid
+           AND status IN ('confirmed', 'checked_in', 'checked_out')
+           AND check_in_date::date >= (CURRENT_DATE - interval '12 months')
+         GROUP BY date_trunc('month', check_in_date::date)
+         ORDER BY month DESC
+         LIMIT 12"
+    )
+    .bind(org_id)
+    .fetch_all(pool)
+    .await
+    .map_err(|error| {
+        tracing::error!(error = %error, "Forecast query failed");
+        AppError::Dependency("Forecast query failed.".to_string())
+    })?;
+
+    let mut monthly_occ: Vec<f64> = Vec::new();
+    for row in &rows {
+        let nights: i64 = row.try_get("nights").unwrap_or(0);
+        let days_in_month = 30.0_f64;
+        let occ = (nights as f64) / (unit_count as f64 * days_in_month);
+        monthly_occ.push(occ.clamp(0.0, 1.0));
+    }
+
+    // Simple moving average for forecast
+    let avg_occ = if monthly_occ.is_empty() {
+        0.0
+    } else {
+        monthly_occ.iter().sum::<f64>() / monthly_occ.len() as f64
+    };
+
+    let today = chrono::Utc::now().date_naive();
+    let mut forecast_months: Vec<Value> = Vec::new();
+    for i in 1..=months_ahead {
+        let future_month = today + chrono::Duration::days(i * 30);
+        let month_label = future_month.format("%Y-%m").to_string();
+        let predicted_units = (avg_occ * unit_count as f64).round() as i64;
+        let pct = (avg_occ * 10000.0).round() / 100.0;
+        forecast_months.push(json!({
+            "month": month_label,
+            "predicted_occupancy_pct": pct,
+            "units_occupied": predicted_units,
+            "total_units": unit_count,
+        }));
+    }
+
+    Ok(json!({
+        "ok": true,
+        "historical_avg_occupancy_pct": (avg_occ * 10000.0).round() / 100.0,
+        "months": forecast_months,
+    }))
+}
+
+async fn tool_get_anomaly_alerts(
+    state: &AppState,
+    org_id: &str,
+) -> AppResult<Value> {
+    let pool = db_pool(state)?;
+
+    let rows = sqlx::query(
+        "SELECT row_to_json(t) AS row
+         FROM anomaly_alerts t
+         WHERE organization_id = $1::uuid
+           AND is_dismissed = false
+         ORDER BY detected_at DESC
+         LIMIT 50"
+    )
+    .bind(org_id)
+    .fetch_all(pool)
+    .await
+    .map_err(|error| {
+        tracing::error!(error = %error, "Anomaly alerts query failed");
+        AppError::Dependency("Anomaly alerts query failed.".to_string())
+    })?;
+
+    let alerts = rows
+        .into_iter()
+        .filter_map(|row| row.try_get::<Option<Value>, _>("row").ok().flatten())
+        .collect::<Vec<_>>();
+
+    Ok(json!({
+        "ok": true,
+        "alerts": alerts,
+        "count": alerts.len(),
+    }))
+}
+
 fn apply_filter(
     query: &mut QueryBuilder<'_, Postgres>,
     column: &str,
@@ -1204,10 +1778,22 @@ fn table_config(table: &str) -> AppResult<TableConfig> {
             can_update: true,
             can_delete: false,
         },
-        "audit_logs" => TableConfig {
+        "audit_logs" | "agent_approvals" | "anomaly_alerts" => TableConfig {
             org_column: "organization_id",
             can_create: false,
             can_update: false,
+            can_delete: false,
+        },
+        "escrow_events" => TableConfig {
+            org_column: "organization_id",
+            can_create: false,
+            can_update: false,
+            can_delete: false,
+        },
+        "maintenance_requests" => TableConfig {
+            org_column: "organization_id",
+            can_create: true,
+            can_update: true,
             can_delete: false,
         },
         "organization_invites"

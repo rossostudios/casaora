@@ -1,7 +1,6 @@
 "use client";
 
 import { KeyboardIcon } from "@hugeicons/core-free-icons";
-import Image from "next/image";
 import Link from "next/link";
 
 import { Icon } from "@/components/ui/icon";
@@ -31,20 +30,9 @@ export function AppFooter({ locale }: { locale: Locale }) {
         </button>
       </div>
 
-      <Image
-        alt="Casaora"
-        className="dark:hidden"
-        height={20}
-        src="/casaoralogo-light.svg"
-        width={88}
-      />
-      <Image
-        alt="Casaora"
-        className="hidden dark:block"
-        height={20}
-        src="/casaoralogo-dark.svg"
-        width={88}
-      />
+      <span className="text-[11px] font-bold tracking-wider text-muted-foreground/70">
+        CASAORA
+      </span>
 
       <div className="flex items-center gap-4">
         <Link className="transition-colors hover:text-foreground" href="/setup">
