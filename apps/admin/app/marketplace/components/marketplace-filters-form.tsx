@@ -32,39 +32,73 @@ export function MarketplaceFiltersForm({
   const [open, setOpen] = useState(false);
 
   return (
-    <div className="border-border/70 border-b">
-      <button
-        className="flex w-full items-center justify-between gap-3 px-4 py-3 text-sm transition-colors hover:bg-muted/30"
-        onClick={() => setOpen((v) => !v)}
-        type="button"
-      >
-        <span className="inline-flex items-center gap-2 font-medium text-muted-foreground">
+    <div className="border-b border-[#e8e4df]">
+      <div className="flex items-center justify-between gap-3 px-5 py-3">
+        <button
+          className="inline-flex items-center gap-2 text-sm font-medium text-[var(--marketplace-text-muted)] transition-colors hover:text-[var(--marketplace-text)]"
+          onClick={() => setOpen((v) => !v)}
+          type="button"
+        >
           <Icon icon={FilterHorizontalIcon} size={15} />
-          {isEn ? "Advanced filters" : "Filtros avanzados"}
+          <span className="font-serif">{isEn ? "Refine your search" : "Refinar búsqueda"}</span>
           {activeFilters > 0 ? (
-            <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 font-semibold text-[10px] text-primary-foreground">
+            <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 font-semibold text-[10px] text-white">
               {activeFilters}
             </span>
           ) : null}
-        </span>
-        <Icon
-          className="text-muted-foreground"
-          icon={open ? ArrowUp01Icon : ArrowDown01Icon}
-          size={14}
-        />
-      </button>
+          <Icon
+            className="text-[var(--marketplace-text-muted)]"
+            icon={open ? ArrowUp01Icon : ArrowDown01Icon}
+            size={14}
+          />
+        </button>
+
+        <div className="flex items-center gap-2 text-xs text-[var(--marketplace-text-muted)]">
+          <span>{isEn ? "Sort" : "Orden"}:</span>
+          <form id="marketplace-sort-form">
+            <select
+              className="rounded-lg border border-[#e8e4df] bg-[var(--marketplace-bg-muted)] px-2 py-1 text-xs text-[var(--marketplace-text)] outline-none"
+              defaultValue={filters.sort}
+              name="sort"
+              onChange={(e) => {
+                const form = e.target.closest("form");
+                if (form) form.requestSubmit();
+              }}
+            >
+              <option value="featured">
+                {isEn ? "Featured" : "Destacados"}
+              </option>
+              <option value="newest">
+                {isEn ? "Newest first" : "Más nuevos"}
+              </option>
+              <option value="move_in_desc">
+                {isEn ? "Move-in high" : "Ingreso mayor"}
+              </option>
+              <option value="move_in_asc">
+                {isEn ? "Move-in low" : "Ingreso menor"}
+              </option>
+              <option value="monthly_desc">
+                {isEn ? "Monthly high" : "Mensual mayor"}
+              </option>
+              <option value="monthly_asc">
+                {isEn ? "Monthly low" : "Mensual menor"}
+              </option>
+            </select>
+          </form>
+        </div>
+      </div>
 
       <form
         className={cn(
           "overflow-hidden transition-all",
-          open ? "p-3 sm:p-4" : "h-0 p-0"
+          open ? "px-5 pb-5 pt-2" : "h-0 p-0"
         )}
         id="marketplace-filters"
       >
-        <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 xl:grid-cols-7">
-          <label className="inline-flex h-11 w-full items-center gap-2 rounded-2xl border border-border/80 bg-card/85 px-3 sm:col-span-2 xl:col-span-2">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <label className="inline-flex h-11 w-full items-center gap-2 rounded-xl border border-[#e8e4df] bg-[var(--marketplace-bg-muted)] px-3 sm:col-span-2">
             <Icon
-              className="text-muted-foreground"
+              className="text-[var(--marketplace-text-muted)]"
               icon={Search01Icon}
               size={17}
             />
@@ -79,9 +113,9 @@ export function MarketplaceFiltersForm({
             />
           </label>
 
-          <label className="inline-flex h-11 w-full items-center gap-2 rounded-2xl border border-border/80 bg-card/85 px-3">
+          <label className="inline-flex h-11 w-full items-center gap-2 rounded-xl border border-[#e8e4df] bg-[var(--marketplace-bg-muted)] px-3">
             <Icon
-              className="text-muted-foreground"
+              className="text-[var(--marketplace-text-muted)]"
               icon={Location01Icon}
               size={16}
             />
@@ -94,9 +128,9 @@ export function MarketplaceFiltersForm({
             />
           </label>
 
-          <label className="inline-flex h-11 w-full items-center gap-2 rounded-2xl border border-border/80 bg-card/85 px-3">
+          <label className="inline-flex h-11 w-full items-center gap-2 rounded-xl border border-[#e8e4df] bg-[var(--marketplace-bg-muted)] px-3">
             <Icon
-              className="text-muted-foreground"
+              className="text-[var(--marketplace-text-muted)]"
               icon={Home01Icon}
               size={16}
             />
@@ -109,9 +143,9 @@ export function MarketplaceFiltersForm({
             />
           </label>
 
-          <label className="inline-flex h-11 w-full items-center gap-2 rounded-2xl border border-border/80 bg-card/85 px-3">
+          <label className="inline-flex h-11 w-full items-center gap-2 rounded-xl border border-[#e8e4df] bg-[var(--marketplace-bg-muted)] px-3">
             <Icon
-              className="text-muted-foreground"
+              className="text-[var(--marketplace-text-muted)]"
               icon={Home01Icon}
               size={16}
             />
@@ -131,9 +165,9 @@ export function MarketplaceFiltersForm({
             </select>
           </label>
 
-          <label className="inline-flex h-11 w-full items-center gap-2 rounded-2xl border border-border/80 bg-card/85 px-3">
+          <label className="inline-flex h-11 w-full items-center gap-2 rounded-xl border border-[#e8e4df] bg-[var(--marketplace-bg-muted)] px-3">
             <Icon
-              className="text-muted-foreground"
+              className="text-[var(--marketplace-text-muted)]"
               icon={Home01Icon}
               size={16}
             />
@@ -156,9 +190,9 @@ export function MarketplaceFiltersForm({
             </select>
           </label>
 
-          <label className="inline-flex h-11 w-full items-center gap-2 rounded-2xl border border-border/80 bg-card/85 px-3">
+          <label className="inline-flex h-11 w-full items-center gap-2 rounded-xl border border-[#e8e4df] bg-[var(--marketplace-bg-muted)] px-3">
             <Icon
-              className="text-muted-foreground"
+              className="text-[var(--marketplace-text-muted)]"
               icon={Wallet02Icon}
               size={16}
             />
@@ -167,67 +201,24 @@ export function MarketplaceFiltersForm({
               defaultValue={filters.minMonthly ?? ""}
               min={0}
               name="min_monthly"
-              placeholder={isEn ? "Min month" : "Min mes"}
+              placeholder={isEn ? "Min" : "Min"}
               type="number"
             />
-            <span className="text-muted-foreground text-xs">-</span>
+            <span className="text-[var(--marketplace-text-muted)] text-xs">-</span>
             <Input
               className="h-full min-w-0 flex-1 border-0 bg-transparent px-0 py-0 text-sm shadow-none focus-visible:ring-0"
               defaultValue={filters.maxMonthly ?? ""}
               min={0}
               name="max_monthly"
-              placeholder={isEn ? "Max month" : "Max mes"}
+              placeholder={isEn ? "Max" : "Max"}
               type="number"
             />
           </label>
+        </div>
 
-          <label className="inline-flex h-11 w-full items-center gap-2 rounded-2xl border border-border/80 bg-card/85 px-3">
-            <span className="text-muted-foreground text-xs">
-              {isEn ? "Pets" : "Mascotas"}
-            </span>
-            <Input
-              className="h-full w-full border-0 bg-transparent px-0 py-0 text-sm shadow-none focus-visible:ring-0"
-              defaultValue={filters.petPolicy}
-              name="pet_policy"
-              placeholder={isEn ? "Allowed / not allowed" : "Permitidas / no"}
-              type="text"
-            />
-          </label>
-
-          <label className="inline-flex h-11 w-full items-center gap-2 rounded-2xl border border-border/80 bg-card/85 px-3">
-            <Icon
-              className="text-muted-foreground"
-              icon={FilterHorizontalIcon}
-              size={16}
-            />
-            <select
-              className="h-full w-full min-w-0 bg-transparent text-sm outline-none"
-              defaultValue={filters.sort}
-              name="sort"
-            >
-              <option value="featured">
-                {isEn ? "Featured" : "Destacados"}
-              </option>
-              <option value="newest">
-                {isEn ? "Newest first" : "Más nuevos"}
-              </option>
-              <option value="move_in_desc">
-                {isEn ? "Move-in high" : "Ingreso mayor"}
-              </option>
-              <option value="move_in_asc">
-                {isEn ? "Move-in low" : "Ingreso menor"}
-              </option>
-              <option value="monthly_desc">
-                {isEn ? "Monthly high" : "Mensual mayor"}
-              </option>
-              <option value="monthly_asc">
-                {isEn ? "Monthly low" : "Mensual menor"}
-              </option>
-            </select>
-          </label>
-
-          <label className="inline-flex h-11 w-full items-center gap-2 rounded-2xl border border-border/80 bg-card/85 px-3">
-            <span className="text-muted-foreground text-xs">
+        <div className="mt-3 grid grid-cols-3 gap-3 sm:grid-cols-6">
+          <label className="inline-flex h-11 w-full items-center gap-2 rounded-xl border border-[#e8e4df] bg-[var(--marketplace-bg-muted)] px-3">
+            <span className="text-[var(--marketplace-text-muted)] text-xs">
               {isEn ? "Beds" : "Hab"}
             </span>
             <Input
@@ -240,8 +231,8 @@ export function MarketplaceFiltersForm({
             />
           </label>
 
-          <label className="inline-flex h-11 w-full items-center gap-2 rounded-2xl border border-border/80 bg-card/85 px-3">
-            <span className="text-muted-foreground text-xs">
+          <label className="inline-flex h-11 w-full items-center gap-2 rounded-xl border border-[#e8e4df] bg-[var(--marketplace-bg-muted)] px-3">
+            <span className="text-[var(--marketplace-text-muted)] text-xs">
               {isEn ? "Baths" : "Baños"}
             </span>
             <Input
@@ -255,9 +246,9 @@ export function MarketplaceFiltersForm({
             />
           </label>
 
-          <label className="inline-flex h-11 w-full items-center gap-2 rounded-2xl border border-border/80 bg-card/85 px-3">
-            <span className="text-muted-foreground text-xs">
-              {isEn ? "Parking >=" : "Estac. >="}
+          <label className="inline-flex h-11 w-full items-center gap-2 rounded-xl border border-[#e8e4df] bg-[var(--marketplace-bg-muted)] px-3">
+            <span className="text-[var(--marketplace-text-muted)] text-xs">
+              {isEn ? "Parking" : "Estac."}
             </span>
             <Input
               className="h-full w-full border-0 bg-transparent px-0 py-0 text-sm shadow-none focus-visible:ring-0"
@@ -269,28 +260,32 @@ export function MarketplaceFiltersForm({
             />
           </label>
 
+          <label className="inline-flex h-11 w-full items-center gap-2 rounded-xl border border-[#e8e4df] bg-[var(--marketplace-bg-muted)] px-3">
+            <span className="text-[var(--marketplace-text-muted)] text-xs">
+              {isEn ? "Pets" : "Mascotas"}
+            </span>
+            <Input
+              className="h-full w-full border-0 bg-transparent px-0 py-0 text-sm shadow-none focus-visible:ring-0"
+              defaultValue={filters.petPolicy}
+              name="pet_policy"
+              placeholder={isEn ? "Any" : "Cualquier"}
+              type="text"
+            />
+          </label>
+
           <button
-            className="inline-flex h-11 w-full items-center justify-center rounded-2xl bg-primary px-4 font-medium text-primary-foreground text-sm transition-colors hover:bg-primary/90"
+            className="inline-flex h-11 w-full items-center justify-center rounded-xl bg-stoa-gradient-warm px-4 font-medium text-white text-sm transition-opacity hover:opacity-90"
             type="submit"
           >
             {isEn ? "Apply" : "Aplicar"}
           </button>
 
           <Link
-            className="inline-flex h-11 w-full items-center justify-center rounded-2xl border border-border/80 bg-card/80 px-4 font-medium text-sm transition-colors hover:bg-accent"
+            className="inline-flex h-11 w-full items-center justify-center rounded-xl border border-[#e8e4df] bg-white px-4 font-medium text-sm text-[var(--marketplace-text-muted)] transition-colors hover:text-[var(--marketplace-text)]"
             href="/marketplace"
           >
             {isEn ? "Reset" : "Limpiar"}
           </Link>
-        </div>
-
-        <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-muted-foreground text-xs">
-          <span>
-            {isEn ? "Active filters" : "Filtros activos"}: {activeFilters}
-          </span>
-          <span>
-            {isEn ? "Sorted by" : "Orden"}: {sortLabel}
-          </span>
         </div>
       </form>
     </div>

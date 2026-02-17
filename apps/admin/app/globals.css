@@ -91,16 +91,22 @@
   --shell-ease: cubic-bezier(0.22, 1, 0.36, 1);
 
   /* ── Marketplace ── */
-  --marketplace-surface: var(--surface-2);
-  --marketplace-surface-muted: var(--surface-1);
-  --marketplace-hero-glow: #fce8ec;
+  --marketplace-bg: #faf8f5;
+  --marketplace-bg-muted: #f5f2ed;
+  --marketplace-surface: var(--marketplace-bg-muted);
+  --marketplace-surface-muted: #faf8f5;
+  --marketplace-text: #1a1a1a;
+  --marketplace-text-muted: #6b6560;
+  --marketplace-hero-glow: #f5ede8;
   --marketplace-hero-gradient: linear-gradient(
     135deg,
-    #fafafa 0%,
-    var(--marketplace-hero-glow) 40%,
-    #f9eef0 100%
+    #faf8f5 0%,
+    #f5ede8 50%,
+    #faf8f5 100%
   );
   --marketplace-shell-shadow: var(--shadow-soft);
+  --marketplace-card-shadow: 0 2px 8px rgba(0,0,0,0.04), 0 12px 40px rgba(0,0,0,0.06);
+  --marketplace-card-hover-shadow: 0 8px 24px rgba(0,0,0,0.08), 0 24px 48px rgba(0,0,0,0.1);
   --marketplace-map-road: rgba(146, 162, 188, 0.24);
   --marketplace-map-road-strong: rgba(113, 130, 160, 0.25);
 
@@ -204,6 +210,13 @@
     "Segoe UI",
     sans-serif
   );
+  --font-serif: var(
+    --font-playfair,
+    "Playfair Display",
+    Georgia,
+    "Times New Roman",
+    serif
+  );
   --font-mono: var(
     --font-geist-mono,
     ui-monospace,
@@ -290,7 +303,8 @@
   }
 
   .pa-marketplace-root {
-    background: var(--marketplace-surface);
+    background: var(--marketplace-bg);
+    color: var(--marketplace-text);
   }
 
   .pa-marketplace-panel {

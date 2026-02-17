@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { Location01Icon } from "@hugeicons/core-free-icons";
+import { ArrowRight02Icon, Location01Icon } from "@hugeicons/core-free-icons";
 import { Icon } from "@/components/ui/icon";
 
 const LocationMapInner = dynamic(
@@ -26,29 +26,32 @@ export function ListingLocation({
 }: ListingLocationProps) {
   return (
     <section>
-      <h2 className="mb-3 font-semibold text-lg tracking-tight">
+      <h2 className="mb-4 font-serif text-xl font-medium tracking-tight text-[var(--marketplace-text)]">
         {isEn ? "Location" : "Ubicación"}
       </h2>
-      <div className="overflow-hidden rounded-xl border border-border/70">
+      <div className="h-px bg-[#e8e4df]" />
+
+      <div className="mt-4 overflow-hidden rounded-2xl">
         {latitude !== null && longitude !== null ? (
-          <div className="h-64">
+          <div className="h-[50vh]">
             <LocationMapInner latitude={latitude} longitude={longitude} />
           </div>
         ) : null}
 
-        <div className="flex items-center justify-between gap-3 p-4">
-          <div className="flex items-center gap-2 text-sm">
-            <Icon className="text-muted-foreground" icon={Location01Icon} size={15} />
+        <div className="flex items-center justify-between gap-3 py-4">
+          <div className="flex items-center gap-2 text-sm text-[var(--marketplace-text-muted)]">
+            <Icon icon={Location01Icon} size={15} />
             {neighborhood ? `${neighborhood}, ${city}` : city}
           </div>
           {latitude !== null && longitude !== null ? (
             <a
-              className="text-primary text-xs hover:underline"
+              className="inline-flex items-center gap-1 text-xs font-medium text-primary transition-colors hover:text-primary/80"
               href={`https://www.google.com/maps?q=${latitude},${longitude}`}
               rel="noopener noreferrer"
               target="_blank"
             >
               {isEn ? "Open in Google Maps" : "Abrir en Google Maps"}
+              <Icon icon={ArrowRight02Icon} size={12} />
             </a>
           ) : null}
         </div>

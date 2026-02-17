@@ -22,32 +22,31 @@ export function ListingAvailability({
 
   return (
     <section>
-      <h2 className="mb-3 font-semibold text-lg tracking-tight">
+      <h2 className="mb-4 font-serif text-xl font-medium tracking-tight text-[var(--marketplace-text)]">
         {isEn ? "Availability" : "Disponibilidad"}
       </h2>
-      <div className="rounded-xl border border-border/70 p-4">
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
-            <Icon className="text-primary" icon={Calendar02Icon} size={18} />
-          </div>
-          <div>
-            <p className="font-medium text-sm">
-              {isAvailableNow
-                ? isEn
-                  ? "Available now"
-                  : "Disponible ahora"
-                : isEn
-                  ? `Available from ${availableFrom}`
-                  : `Disponible desde ${availableFrom}`}
+      <div className="h-px bg-[#e8e4df]" />
+      <div className="mt-4 flex items-center gap-3">
+        <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
+          <Icon className="text-primary" icon={Calendar02Icon} size={18} />
+        </span>
+        <div>
+          <p className="font-medium text-sm text-[var(--marketplace-text)]">
+            {isAvailableNow
+              ? isEn
+                ? "Available now"
+                : "Disponible ahora"
+              : isEn
+                ? `Available from ${availableFrom}`
+                : `Disponible desde ${availableFrom}`}
+          </p>
+          {minimumLeaseMonths ? (
+            <p className="text-xs text-[var(--marketplace-text-muted)]">
+              {isEn
+                ? `Minimum lease: ${minimumLeaseMonths} months`
+                : `Contrato mínimo: ${minimumLeaseMonths} meses`}
             </p>
-            {minimumLeaseMonths ? (
-              <p className="text-muted-foreground text-xs">
-                {isEn
-                  ? `Minimum lease: ${minimumLeaseMonths} months`
-                  : `Contrato mínimo: ${minimumLeaseMonths} meses`}
-              </p>
-            ) : null}
-          </div>
+          ) : null}
         </div>
       </div>
     </section>

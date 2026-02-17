@@ -24,18 +24,18 @@ export function ListingMobileCta({
   const safeWhatsApp = getSafeWhatsAppUrl(whatsappUrl);
 
   return (
-    <div className="fixed inset-x-0 bottom-0 z-40 border-border/70 border-t bg-background/95 px-4 py-3 backdrop-blur-md lg:hidden">
+    <div className="fixed inset-x-0 bottom-0 z-40 border-t border-[#e8e4df] bg-[var(--marketplace-bg)]/95 px-4 py-3 backdrop-blur-md lg:hidden">
       <div className="mx-auto flex max-w-lg items-center justify-between gap-3">
         <div className="min-w-0">
-          <p className="font-bold text-base leading-tight tracking-tight">
+          <p className="font-serif text-base font-medium tracking-tight text-[var(--marketplace-text)]">
             {monthlyLabel}
-            <span className="font-normal text-muted-foreground text-xs">
+            <span className="font-sans font-normal text-[var(--marketplace-text-muted)] text-xs">
               {" "}
               /{isEn ? "month" : "mes"}
             </span>
           </p>
           {monthlyUsdApprox ? (
-            <p className="text-muted-foreground text-[11px]">
+            <p className="text-[11px] text-[var(--marketplace-text-muted)]">
               {monthlyUsdApprox}
             </p>
           ) : null}
@@ -54,7 +54,7 @@ export function ListingMobileCta({
             </a>
           ) : null}
           <Link
-            className="inline-flex h-10 items-center rounded-xl bg-primary px-5 font-medium text-primary-foreground text-sm transition-colors hover:bg-primary/90"
+            className="inline-flex h-10 items-center rounded-xl bg-stoa-gradient-warm px-5 font-medium text-white text-sm transition-opacity hover:opacity-90"
             href={`/marketplace/apply/${encodeURIComponent(slug)}`}
           >
             {isEn ? "Apply" : "Aplicar"}

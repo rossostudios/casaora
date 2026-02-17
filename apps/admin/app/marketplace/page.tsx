@@ -108,10 +108,10 @@ export default async function MarketplacePage({
   const hasActiveFilters = activeFilters > 0 || availableNow;
 
   return (
-    <div className="pa-marketplace-root min-h-dvh bg-background">
+    <div className="pa-marketplace-root min-h-dvh">
       <PublicHeader locale={locale} />
 
-      <main className="mx-auto w-full max-w-[1560px] space-y-6 px-3 py-5 sm:px-6 sm:py-7 lg:px-8 lg:py-8">
+      <main className="mx-auto w-full max-w-[1560px] space-y-10 px-4 py-8 sm:px-6 sm:py-10 lg:space-y-14 lg:px-8 lg:py-12">
         <MarketplaceHero
           defaultCity={filters.city || undefined}
           defaultMaxBudget={filters.maxMonthly?.toString()}
@@ -128,7 +128,7 @@ export default async function MarketplacePage({
           <FeaturedListings isEn={isEn} listings={listings} locale={locale} />
         )}
 
-        <section className="pa-marketplace-shell overflow-hidden rounded-[30px] border border-border/75">
+        <section className="overflow-hidden rounded-2xl bg-white shadow-[var(--marketplace-card-shadow)]">
           <MarketplaceFiltersForm
             activeFilters={activeFilters}
             filters={filters}
@@ -136,7 +136,7 @@ export default async function MarketplacePage({
             sortLabel={marketplaceSortLabel(filters.sort, isEn)}
           />
 
-          <div className="p-3 sm:p-4 lg:p-5">
+          <div className="p-4 sm:p-5 lg:p-6">
             <MarketplaceResultsLayout
               apiError={apiError}
               isEn={isEn}

@@ -48,8 +48,8 @@ export function FavoriteButton({ slug, className }: FavoriteButtonProps) {
     <button
       aria-label={active ? "Remove from favorites" : "Add to favorites"}
       className={cn(
-        "inline-flex h-8 w-8 items-center justify-center rounded-full bg-background/80 shadow-sm backdrop-blur-sm transition-all hover:bg-background/95",
-        animate && "scale-125",
+        "inline-flex h-10 w-10 items-center justify-center rounded-full bg-white/90 shadow-sm backdrop-blur-sm transition-all hover:bg-white",
+        animate && "scale-110",
         className
       )}
       onClick={handleClick}
@@ -58,10 +58,10 @@ export function FavoriteButton({ slug, className }: FavoriteButtonProps) {
       <Icon
         className={cn(
           "transition-colors",
-          active ? "text-red-500" : "text-muted-foreground"
+          active ? "text-red-500" : "text-[var(--marketplace-text-muted)]"
         )}
         icon={active ? HeartCheckIcon : HeartAddIcon}
-        size={16}
+        size={18}
       />
     </button>
   );

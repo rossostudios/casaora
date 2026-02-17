@@ -36,7 +36,7 @@ export function ListingShareButton({ title, isEn }: ListingShareButtonProps) {
 
   return (
     <button
-      className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-border/70 bg-card/90 px-3 text-sm text-muted-foreground transition-colors hover:text-foreground"
+      className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-[#e8e4df] px-3 text-sm text-[var(--marketplace-text-muted)] transition-colors hover:text-[var(--marketplace-text)]"
       onClick={handleShare}
       type="button"
     >

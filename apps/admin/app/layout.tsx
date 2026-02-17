@@ -2,6 +2,13 @@ import { GeistMono } from "geist/font/mono";
 import { GeistPixelSquare } from "geist/font/pixel";
 import { GeistSans } from "geist/font/sans";
 import type { Metadata } from "next";
+import { Playfair_Display } from "next/font/google";
+
+const playfair = Playfair_Display({
+  subsets: ["latin"],
+  variable: "--font-playfair",
+  display: "swap",
+});
 
 import { ApiErrorToaster } from "@/components/shell/api-error-toaster";
 import { Toaster } from "@/components/ui/sonner";
@@ -82,7 +89,7 @@ export default async function RootLayout({
   const locale = await getActiveLocale();
   return (
     <html
-      className={`${GeistSans.variable} ${GeistMono.variable} ${GeistPixelSquare.variable}`}
+      className={`${GeistSans.variable} ${GeistMono.variable} ${GeistPixelSquare.variable} ${playfair.variable}`}
       lang={locale}
       suppressHydrationWarning
     >

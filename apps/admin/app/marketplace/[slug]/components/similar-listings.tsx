@@ -47,10 +47,10 @@ export async function SimilarListings({
 
   return (
     <section>
-      <h2 className="mb-3 font-semibold text-lg tracking-tight">
-        {isEn ? "Similar listings" : "Anuncios similares"}
+      <h2 className="mb-4 font-serif text-2xl font-medium tracking-tight text-[var(--marketplace-text)]">
+        {isEn ? "Similar properties" : "Propiedades similares"}
       </h2>
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
         {similar.map((listing) => (
           <MarketplaceListingCard
             key={listing.id || listing.slug}

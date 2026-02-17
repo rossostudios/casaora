@@ -36,12 +36,12 @@ export function RecentlyViewedSection({
 
   return (
     <section>
-      <div className="mb-3 flex items-center justify-between">
-        <h2 className="font-semibold text-lg tracking-tight">
+      <div className="mb-4 flex items-center justify-between">
+        <h2 className="font-serif text-2xl font-medium tracking-tight text-[var(--marketplace-text)]">
           {isEn ? "Recently viewed" : "Vistos recientemente"}
         </h2>
         <button
-          className="text-muted-foreground text-xs hover:text-foreground"
+          className="text-xs text-[var(--marketplace-text-muted)] transition-colors hover:text-primary"
           onClick={() => {
             clearRecentlyViewed();
             setRecentSlugs([]);
@@ -51,7 +51,7 @@ export function RecentlyViewedSection({
           {isEn ? "Clear" : "Limpiar"}
         </button>
       </div>
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
         {recentListings.map((listing) => (
           <MarketplaceListingCard
             key={listing.id || listing.slug}

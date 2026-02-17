@@ -1,6 +1,5 @@
 import {
   CarParking01Icon,
-  CheckListIcon,
   Dumbbell01Icon,
   SecurityCheckIcon,
   Tick01Icon,
@@ -45,21 +44,24 @@ export function ListingAmenities({ amenities, isEn }: ListingAmenitiesProps) {
 
   return (
     <section>
-      <h2 className="mb-3 font-semibold text-lg tracking-tight">
+      <h2 className="mb-4 font-serif text-xl font-medium tracking-tight text-[var(--marketplace-text)]">
         {isEn ? "Amenities" : "Amenidades"}
       </h2>
-      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="h-px bg-[#e8e4df]" />
+      <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {visible.map((amenity) => (
           <div
-            className="inline-flex items-center gap-2.5 rounded-xl border border-border/70 px-3 py-2.5 text-sm"
+            className="inline-flex items-center gap-3 py-2 text-sm"
             key={amenity}
           >
-            <Icon
-              className="shrink-0 text-muted-foreground"
-              icon={getAmenityIcon(amenity)}
-              size={16}
-            />
-            {amenity}
+            <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--marketplace-bg-muted)]">
+              <Icon
+                className="text-[var(--marketplace-text-muted)]"
+                icon={getAmenityIcon(amenity)}
+                size={14}
+              />
+            </span>
+            <span className="text-[var(--marketplace-text)]">{amenity}</span>
           </div>
         ))}
       </div>

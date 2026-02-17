@@ -1,10 +1,7 @@
 import Link from "next/link";
 
 import { WhatsAppContactButton } from "@/components/marketplace/whatsapp-contact-button";
-import { buttonVariants } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { MarketplaceListingViewModel } from "@/lib/features/marketplace/view-model";
-import { cn } from "@/lib/utils";
 
 import { ScheduleVisitButton } from "./schedule-visit-button";
 
@@ -16,39 +13,43 @@ type ListingMoveInCardProps = {
 
 export function ListingMoveInCard({ slug, isEn, listing }: ListingMoveInCardProps) {
   return (
-    <Card className="min-w-0">
-      <CardHeader>
-        <CardTitle>{isEn ? "Move-in summary" : "Resumen de ingreso"}</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="rounded-xl border border-border/70 bg-muted/20 px-3 py-2.5">
-          <p className="text-muted-foreground text-xs uppercase tracking-wide">
-            {isEn ? "Total move-in" : "Costo total de ingreso"}
+    <div className="rounded-2xl bg-white p-6 shadow-[var(--marketplace-card-shadow)]">
+      <div className="mb-5">
+        <p className="font-serif text-3xl font-medium tracking-tight text-[var(--marketplace-text)]">
+          {listing.monthlyRecurringLabel}
+        </p>
+        <p className="text-xs text-[var(--marketplace-text-muted)]">
+          /{isEn ? "month" : "mes"}
+        </p>
+        {listing.monthlyRecurringUsdApprox ? (
+          <p className="mt-1 text-xs text-[var(--marketplace-text-muted)]">
+            {listing.monthlyRecurringUsdApprox}
           </p>
-          <p className="font-semibold text-2xl">{listing.totalMoveInLabel}</p>
-          {listing.totalMoveInUsdApprox ? (
-            <p className="text-muted-foreground text-xs">
-              {listing.totalMoveInUsdApprox}
-            </p>
-          ) : null}
-          <p className="text-muted-foreground text-xs">
-            {isEn ? "Monthly recurring" : "Mensual recurrente"}: {listing.monthlyRecurringLabel}
-          </p>
-          {listing.monthlyRecurringUsdApprox ? (
-            <p className="text-muted-foreground text-[11px]">
-              {listing.monthlyRecurringUsdApprox}
-            </p>
-          ) : null}
-          {listing.maintenanceFee > 0 ? (
-            <p className="text-muted-foreground text-xs">
-              {isEn ? "Maintenance fee" : "Costo de mantenimiento"}: {" "}
-              {listing.maintenanceFeeLabel}
-            </p>
-          ) : null}
-        </div>
+        ) : null}
+      </div>
 
+      <div className="mb-5 rounded-xl bg-[var(--marketplace-bg-muted)] px-4 py-3">
+        <p className="text-xs text-[var(--marketplace-text-muted)]">
+          {isEn ? "Total move-in" : "Costo total de ingreso"}
+        </p>
+        <p className="font-semibold text-lg text-[var(--marketplace-text)]">
+          {listing.totalMoveInLabel}
+        </p>
+        {listing.totalMoveInUsdApprox ? (
+          <p className="text-xs text-[var(--marketplace-text-muted)]">
+            {listing.totalMoveInUsdApprox}
+          </p>
+        ) : null}
+        {listing.maintenanceFee > 0 ? (
+          <p className="mt-1 text-xs text-[var(--marketplace-text-muted)]">
+            {isEn ? "Maintenance fee" : "Costo de mantenimiento"}: {listing.maintenanceFeeLabel}
+          </p>
+        ) : null}
+      </div>
+
+      <div className="space-y-3">
         <Link
-          className={cn(buttonVariants({ variant: "default", size: "sm" }), "w-full")}
+          className="flex h-11 w-full items-center justify-center rounded-xl bg-stoa-gradient-warm font-medium text-white text-sm transition-opacity hover:opacity-90"
           href={`/marketplace/apply/${encodeURIComponent(slug)}`}
         >
           {isEn ? "Apply now" : "Aplicar ahora"}
@@ -68,7 +69,7 @@ export function ListingMoveInCard({ slug, isEn, listing }: ListingMoveInCardProp
             />
           </>
         ) : null}
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }

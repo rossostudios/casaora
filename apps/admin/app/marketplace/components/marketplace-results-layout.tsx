@@ -6,7 +6,6 @@ import { MapsLocation01Icon, Search01Icon } from "@hugeicons/core-free-icons";
 import Link from "next/link";
 
 import { MarketplaceListingCard } from "@/components/marketplace/listing-card";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Icon } from "@/components/ui/icon";
 import {
   marketplaceListingKey,
@@ -41,18 +40,21 @@ export function MarketplaceResultsLayout({
 
   return (
     <section>
-      <div className="flex items-center justify-between px-1 pb-3">
-        <p className="text-muted-foreground text-sm">
-          {listings.length} {isEn ? "results" : "resultados"}
+      <div className="flex items-center justify-between px-1 pb-4">
+        <p className="text-sm text-[var(--marketplace-text-muted)]">
+          <span className="font-serif text-lg font-medium text-[var(--marketplace-text)]">
+            {listings.length}
+          </span>{" "}
+          {isEn ? "properties" : "propiedades"}
         </p>
 
         {hasMapToken ? (
           <button
             className={cn(
-              "hidden items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors lg:inline-flex",
+              "hidden items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-medium transition-colors lg:inline-flex",
               showMap
                 ? "border-primary/30 bg-primary/10 text-primary"
-                : "border-border/80 text-muted-foreground hover:text-foreground"
+                : "border-[#e8e4df] text-[var(--marketplace-text-muted)] hover:text-[var(--marketplace-text)]"
             )}
             onClick={() => setShowMap((v) => !v)}
             type="button"
@@ -70,22 +72,20 @@ export function MarketplaceResultsLayout({
       </div>
 
       {apiError ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>
-              {isEn
-                ? "Could not load listings"
-                : "No se pudieron cargar anuncios"}
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="text-muted-foreground text-sm">
+        <div className="rounded-2xl bg-white p-6 shadow-[var(--marketplace-card-shadow)]">
+          <h3 className="font-serif text-lg font-medium text-[var(--marketplace-text)]">
+            {isEn
+              ? "Could not load listings"
+              : "No se pudieron cargar anuncios"}
+          </h3>
+          <p className="mt-2 text-sm text-[var(--marketplace-text-muted)]">
             {apiError}
-          </CardContent>
-        </Card>
+          </p>
+        </div>
       ) : listings.length ? (
         <div
           className={cn(
-            "grid gap-4",
+            "grid gap-6",
             showMap
               ? "lg:grid-cols-[minmax(380px,1fr)_minmax(0,1.2fr)]"
               : ""
@@ -93,7 +93,7 @@ export function MarketplaceResultsLayout({
         >
           <div
             className={cn(
-              "grid gap-4",
+              "grid gap-6",
               showMap
                 ? "sm:grid-cols-1 lg:max-h-[75vh] lg:overflow-y-auto lg:pr-2"
                 : "sm:grid-cols-2 lg:grid-cols-3"
@@ -115,22 +115,22 @@ export function MarketplaceResultsLayout({
           ) : null}
         </div>
       ) : (
-        <div className="flex flex-col items-center justify-center py-16 text-center">
-          <div className="mb-4 inline-flex h-14 w-14 items-center justify-center rounded-full bg-muted">
-            <Icon icon={Search01Icon} size={24} />
+        <div className="flex flex-col items-center justify-center py-20 text-center">
+          <div className="mb-5 inline-flex h-16 w-16 items-center justify-center rounded-full bg-[var(--marketplace-bg-muted)]">
+            <Icon className="text-[var(--marketplace-text-muted)]" icon={Search01Icon} size={24} />
           </div>
-          <h3 className="mb-1 font-semibold text-base">
+          <h3 className="mb-2 font-serif text-xl font-medium text-[var(--marketplace-text)]">
             {isEn
               ? "No listings match your filters"
               : "Ningún anuncio coincide con tus filtros"}
           </h3>
-          <p className="mb-5 max-w-sm text-muted-foreground text-sm">
+          <p className="mb-6 max-w-sm text-sm text-[var(--marketplace-text-muted)]">
             {isEn
               ? "Try broadening your search or resetting filters."
               : "Intentá ampliar tu búsqueda o restablecer los filtros."}
           </p>
           <Link
-            className="inline-flex h-9 items-center rounded-xl border border-border/70 bg-card/80 px-4 text-sm font-medium transition-colors hover:bg-accent"
+            className="inline-flex h-10 items-center rounded-xl border border-[#e8e4df] bg-white px-5 text-sm font-medium text-[var(--marketplace-text)] transition-colors hover:bg-[var(--marketplace-bg-muted)]"
             href="/marketplace"
           >
             {isEn ? "Reset all filters" : "Restablecer filtros"}
@@ -160,7 +160,7 @@ function MobileMapFab({
   return (
     <>
       <button
-        className="fixed bottom-6 left-1/2 z-40 inline-flex -translate-x-1/2 items-center gap-2 rounded-full bg-foreground px-5 py-3 font-medium text-background text-sm shadow-lg transition-transform hover:scale-105 lg:hidden"
+        className="fixed bottom-6 left-1/2 z-40 inline-flex -translate-x-1/2 items-center gap-2 rounded-full bg-[var(--marketplace-text)] px-5 py-3 font-medium text-white text-sm shadow-lg transition-transform hover:scale-105 lg:hidden"
         onClick={() => setOpen(true)}
         type="button"
       >
@@ -169,13 +169,13 @@ function MobileMapFab({
       </button>
 
       {open ? (
-        <div className="fixed inset-0 z-50 bg-background lg:hidden">
-          <div className="flex h-14 items-center justify-between border-b border-border/70 px-4">
-            <p className="font-medium text-sm">
+        <div className="fixed inset-0 z-50 bg-[var(--marketplace-bg)] lg:hidden">
+          <div className="flex h-14 items-center justify-between border-b border-[#e8e4df] px-4">
+            <p className="font-serif font-medium text-sm">
               {isEn ? "Map view" : "Vista mapa"}
             </p>
             <button
-              className="rounded-lg border border-border/70 px-3 py-1.5 text-sm"
+              className="rounded-lg border border-[#e8e4df] px-3 py-1.5 text-sm"
               onClick={() => setOpen(false)}
               type="button"
             >

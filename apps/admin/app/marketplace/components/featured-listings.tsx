@@ -19,10 +19,17 @@ export function FeaturedListings({
 
   return (
     <section>
-      <h2 className="mb-3 font-semibold text-lg tracking-tight">
-        {isEn ? "Featured listings" : "Anuncios destacados"}
-      </h2>
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="mb-4">
+        <h2 className="font-serif text-2xl font-medium tracking-tight text-[var(--marketplace-text)]">
+          {isEn ? "Curated for you" : "Seleccionados para ti"}
+        </h2>
+        <p className="mt-1 text-sm text-[var(--marketplace-text-muted)]">
+          {isEn
+            ? "Hand-picked properties matching your preferences"
+            : "Propiedades seleccionadas según tus preferencias"}
+        </p>
+      </div>
+      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
         {featured.map((listing) => (
           <MarketplaceListingCard
             key={listing.id || listing.slug}

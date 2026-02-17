@@ -12,7 +12,6 @@ import {
 import type { IconSvgElement } from "@hugeicons/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback } from "react";
-import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
 
 type Category = {
@@ -91,13 +90,11 @@ export function CategoryPills({ locale }: { locale: "es-PY" | "en-US" }) {
     (category: Category) => {
       const params = new URLSearchParams(searchParams.toString());
 
-      // Clear category-related params
       params.delete("property_type");
       params.delete("furnished");
       params.delete("pet_policy");
       params.delete("available_now");
 
-      // Apply new category params
       for (const [key, value] of Object.entries(category.params)) {
         params.set(key, value);
       }
@@ -111,23 +108,25 @@ export function CategoryPills({ locale }: { locale: "es-PY" | "en-US" }) {
   );
 
   return (
-    <div className="scrollbar-none flex gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+    <div className="scrollbar-none flex gap-1 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
       {CATEGORIES.map((category) => {
         const active = activeKey === category.key;
         return (
           <button
             className={cn(
-              "inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3.5 py-2 font-medium text-sm transition-colors",
+              "relative shrink-0 px-4 py-2.5 text-sm font-medium transition-colors",
               active
-                ? "border-foreground/20 bg-foreground text-background"
-                : "border-border/80 bg-card/90 text-muted-foreground hover:border-border hover:text-foreground"
+                ? "text-primary"
+                : "text-[var(--marketplace-text-muted)] hover:text-primary"
             )}
             key={category.key}
             onClick={() => handleClick(category)}
             type="button"
           >
-            <Icon icon={category.icon} size={15} />
             {category.label[locale]}
+            {active ? (
+              <span className="absolute inset-x-4 bottom-0 h-0.5 rounded-full bg-primary" />
+            ) : null}
           </button>
         );
       })}

@@ -1,7 +1,6 @@
-import { SecurityCheckIcon, WhatsappIcon } from "@hugeicons/core-free-icons";
+import { WhatsappIcon } from "@hugeicons/core-free-icons";
 import Image from "next/image";
 
-import { Badge } from "@/components/ui/badge";
 import { Icon } from "@/components/ui/icon";
 import { PYG_TO_USD_FALLBACK } from "@/lib/features/marketplace/view-model";
 import { formatCurrency } from "@/lib/format";
@@ -58,15 +57,9 @@ export function MarketplaceListingCard({
     currency,
     locale
   );
-  const totalMoveIn = formatCurrency(
-    asNumber(listing.total_move_in),
-    currency,
-    locale
-  );
   const specs = specsLabel(listing, locale);
   const availableFrom = asText(listing.available_from);
   const propertyType = asText(listing.property_type);
-  const furnished = listing.furnished === true;
   const monthlyRaw = asNumber(listing.monthly_recurring_total);
   const monthlyUsdApprox =
     currency === "PYG" && monthlyRaw > 0
@@ -76,14 +69,14 @@ export function MarketplaceListingCard({
 
   return (
     <IntentPrefetchLink
-      className="group block overflow-hidden rounded-2xl border border-border/80 bg-card/95 shadow-[0_1px_0_rgba(15,23,42,0.03)] transition-all duration-200 ease-out hover:border-primary/30 hover:shadow-[0_12px_28px_rgba(15,23,42,0.08)]"
+      className="group block overflow-hidden rounded-xl bg-white transition-all duration-300 ease-out shadow-[var(--marketplace-card-shadow)] hover:shadow-[var(--marketplace-card-hover-shadow)] hover:-translate-y-0.5"
       href={`/marketplace/${encodeURIComponent(slug)}`}
     >
-      <div className="relative aspect-[4/3] overflow-hidden bg-muted/40">
+      <div className="relative aspect-[3/2] overflow-hidden bg-[var(--marketplace-bg-muted)]">
         {coverImage ? (
           <Image
             alt={title}
-            className="object-cover transition-transform duration-300 ease-out group-hover:scale-[1.03]"
+            className="object-cover transition-transform duration-500 ease-out group-hover:scale-[1.02]"
             fill
             loading="lazy"
             sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
@@ -91,83 +84,63 @@ export function MarketplaceListingCard({
             unoptimized
           />
         ) : (
-          <div className="flex h-full w-full items-center justify-center text-muted-foreground text-sm">
+          <div className="flex h-full w-full items-center justify-center text-[var(--marketplace-text-muted)] text-sm">
             {isEn ? "No image yet" : "Sin imagen"}
           </div>
         )}
 
+        {/* Subtle gradient overlay at bottom */}
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-black/20 to-transparent" />
+
         {availableFrom ? (
-          <span className="absolute top-3 left-3 rounded-full bg-background/90 px-2.5 py-1 font-medium text-[11px] text-foreground shadow-sm backdrop-blur-sm">
-            {isEn ? "From" : "Desde"} {availableFrom}
+          <span className="absolute top-3 left-3 rounded-lg bg-white/85 px-2.5 py-1 text-[11px] font-medium text-[var(--marketplace-text)] shadow-sm backdrop-blur-sm">
+            {isEn ? "Available now" : "Disponible"}
           </span>
         ) : null}
 
         <FavoriteButton className="absolute top-3 right-3" slug={slug} />
-
-        <span className="absolute bottom-3 left-3 inline-flex items-center gap-1 rounded-full bg-background/90 px-2 py-0.5 text-[10px] font-medium text-emerald-700 shadow-sm backdrop-blur-sm dark:text-emerald-400">
-          <Icon icon={SecurityCheckIcon} size={10} />
-          {isEn ? "Verified" : "Verificado"}
-        </span>
       </div>
 
-      <div className="space-y-1.5 p-3.5">
-        <p className="text-[12px] text-muted-foreground">
-          {neighborhood ? `${neighborhood}, ${cityLabel}` : cityLabel}
+      <div className="space-y-2 p-4">
+        <p className="text-xs font-medium uppercase tracking-wider text-[var(--marketplace-text-muted)]">
+          {neighborhood ? `${neighborhood} · ${cityLabel}` : cityLabel}
         </p>
 
-        <h3 className="line-clamp-1 font-semibold text-[0.95rem] tracking-tight">
+        <h3 className="line-clamp-1 font-serif text-lg font-medium tracking-tight text-[var(--marketplace-text)]">
           {title}
         </h3>
 
         {specs ? (
-          <p className="text-muted-foreground text-xs">{specs}</p>
+          <p className="text-sm tabular-nums text-[var(--marketplace-text-muted)]">
+            {specs}
+          </p>
         ) : null}
 
-        <div className="flex flex-wrap gap-1.5 pt-0.5">
-          {propertyType ? (
-            <Badge
-              className="rounded-full border-border/60 px-2 py-0 text-[10px]"
-              variant="outline"
-            >
-              {propertyType}
-            </Badge>
-          ) : null}
-          <Badge
-            className="rounded-full border-border/60 px-2 py-0 text-[10px]"
-            variant="outline"
-          >
-            {furnished
-              ? isEn
-                ? "Furnished"
-                : "Amoblado"
-              : isEn
-                ? "Unfurnished"
-                : "Sin amoblar"}
-          </Badge>
-        </div>
+        {propertyType ? (
+          <p className="text-xs text-[var(--marketplace-text-muted)]">
+            {propertyType}
+          </p>
+        ) : null}
 
-        <div className="flex items-end justify-between gap-2 pt-2">
+        <div className="flex items-end justify-between gap-2 pt-1">
           <div className="min-w-0">
-            <p className="font-bold text-lg leading-tight tracking-tight">
+            <p className="text-xl font-semibold tracking-tight text-[var(--marketplace-text)]">
               {monthlyRecurring}
-              <span className="font-normal text-muted-foreground text-xs">
+              <span className="font-normal text-[var(--marketplace-text-muted)] text-xs">
                 {" "}
                 /{isEn ? "month" : "mes"}
               </span>
             </p>
             {monthlyUsdApprox ? (
-              <p className="text-muted-foreground text-[11px]">
+              <p className="text-xs text-[var(--marketplace-text-muted)]">
                 {monthlyUsdApprox}
               </p>
             ) : null}
-            <p className="text-muted-foreground text-xs">
-              {isEn ? "Move-in total" : "Total ingreso"}: {totalMoveIn}
-            </p>
           </div>
           {whatsappUrl ? (
             <a
               aria-label="WhatsApp"
-              className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#25D366]/10 text-[#25D366] transition-colors hover:bg-[#25D366]/20"
+              className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#25D366]/10 text-[#25D366] transition-colors hover:bg-[#25D366]/20"
               href={whatsappUrl}
               onClick={(e) => e.stopPropagation()}
               rel="noopener noreferrer"

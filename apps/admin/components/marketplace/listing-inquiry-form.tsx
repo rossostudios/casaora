@@ -2,8 +2,6 @@
 
 import { useCallback, useState } from "react";
 
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 
@@ -78,106 +76,103 @@ export function ListingInquiryForm({ slug, isEn }: ListingInquiryFormProps) {
 
   if (state === "success") {
     return (
-      <Card className="min-w-0">
-        <CardContent className="py-8 text-center">
-          <p className="text-sm font-semibold text-emerald-700 dark:text-emerald-400">
-            {isEn
-              ? "Your message has been sent!"
-              : "¡Tu mensaje ha sido enviado!"}
-          </p>
-          <p className="mt-1 text-xs text-muted-foreground">
-            {isEn
-              ? "The property manager will get back to you soon."
-              : "El administrador de la propiedad se pondrá en contacto contigo pronto."}
-          </p>
-        </CardContent>
-      </Card>
+      <div className="rounded-2xl bg-white p-6 shadow-[var(--marketplace-card-shadow)] text-center">
+        <p className="font-serif text-lg font-medium text-emerald-700">
+          {isEn
+            ? "Message sent!"
+            : "¡Mensaje enviado!"}
+        </p>
+        <p className="mt-2 text-xs text-[var(--marketplace-text-muted)]">
+          {isEn
+            ? "The property manager will get back to you soon."
+            : "El administrador de la propiedad se pondrá en contacto contigo pronto."}
+        </p>
+      </div>
     );
   }
 
   return (
-    <Card className="min-w-0">
-      <CardHeader>
-        <CardTitle className="text-base">
-          {isEn ? "Send a message" : "Enviar un mensaje"}
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        <form className="space-y-3" onSubmit={handleSubmit}>
-          <div className="grid gap-1.5">
-            <label className="text-xs font-medium" htmlFor="inquiry-name">
-              {isEn ? "Full name" : "Nombre completo"} *
-            </label>
-            <Input
-              id="inquiry-name"
-              name="full_name"
-              placeholder={isEn ? "Your full name" : "Tu nombre completo"}
-              required
-            />
-          </div>
+    <div className="rounded-2xl bg-white p-6 shadow-[var(--marketplace-card-shadow)]">
+      <h3 className="mb-4 font-serif text-base font-medium text-[var(--marketplace-text)]">
+        {isEn ? "Get in touch" : "Ponete en contacto"}
+      </h3>
+      <form className="space-y-3" onSubmit={handleSubmit}>
+        <div className="grid gap-1.5">
+          <label className="text-xs font-medium text-[var(--marketplace-text-muted)]" htmlFor="inquiry-name">
+            {isEn ? "Full name" : "Nombre completo"} *
+          </label>
+          <Input
+            className="rounded-xl border-[#e8e4df] bg-[var(--marketplace-bg-muted)]"
+            id="inquiry-name"
+            name="full_name"
+            placeholder={isEn ? "Your full name" : "Tu nombre completo"}
+            required
+          />
+        </div>
 
-          <div className="grid gap-1.5">
-            <label className="text-xs font-medium" htmlFor="inquiry-email">
-              {isEn ? "Email" : "Correo electrónico"} *
-            </label>
-            <Input
-              id="inquiry-email"
-              name="email"
-              placeholder="email@example.com"
-              required
-              type="email"
-            />
-          </div>
+        <div className="grid gap-1.5">
+          <label className="text-xs font-medium text-[var(--marketplace-text-muted)]" htmlFor="inquiry-email">
+            {isEn ? "Email" : "Correo electrónico"} *
+          </label>
+          <Input
+            className="rounded-xl border-[#e8e4df] bg-[var(--marketplace-bg-muted)]"
+            id="inquiry-email"
+            name="email"
+            placeholder="email@example.com"
+            required
+            type="email"
+          />
+        </div>
 
-          <div className="grid gap-1.5">
-            <label className="text-xs font-medium" htmlFor="inquiry-phone">
-              {isEn ? "Phone (optional)" : "Teléfono (opcional)"}
-            </label>
-            <Input
-              id="inquiry-phone"
-              name="phone_e164"
-              placeholder="+595 981 000 000"
-              type="tel"
-            />
-          </div>
+        <div className="grid gap-1.5">
+          <label className="text-xs font-medium text-[var(--marketplace-text-muted)]" htmlFor="inquiry-phone">
+            {isEn ? "Phone (optional)" : "Teléfono (opcional)"}
+          </label>
+          <Input
+            className="rounded-xl border-[#e8e4df] bg-[var(--marketplace-bg-muted)]"
+            id="inquiry-phone"
+            name="phone_e164"
+            placeholder="+595 981 000 000"
+            type="tel"
+          />
+        </div>
 
-          <div className="grid gap-1.5">
-            <label className="text-xs font-medium" htmlFor="inquiry-message">
-              {isEn ? "Message" : "Mensaje"} *
-            </label>
-            <Textarea
-              id="inquiry-message"
-              name="message"
-              placeholder={
-                isEn
-                  ? "I'm interested in this listing..."
-                  : "Estoy interesado en este anuncio..."
-              }
-              required
-              rows={3}
-            />
-          </div>
+        <div className="grid gap-1.5">
+          <label className="text-xs font-medium text-[var(--marketplace-text-muted)]" htmlFor="inquiry-message">
+            {isEn ? "Message" : "Mensaje"} *
+          </label>
+          <Textarea
+            className="rounded-xl border-[#e8e4df] bg-[var(--marketplace-bg-muted)]"
+            id="inquiry-message"
+            name="message"
+            placeholder={
+              isEn
+                ? "I'm interested in this listing..."
+                : "Estoy interesado en este anuncio..."
+            }
+            required
+            rows={3}
+          />
+        </div>
 
-          {state === "error" && errorMsg ? (
-            <p className="text-xs text-red-600 dark:text-red-400">{errorMsg}</p>
-          ) : null}
+        {state === "error" && errorMsg ? (
+          <p className="text-xs text-red-600">{errorMsg}</p>
+        ) : null}
 
-          <Button
-            className="w-full"
-            disabled={state === "submitting"}
-            size="sm"
-            type="submit"
-          >
-            {state === "submitting"
-              ? isEn
-                ? "Sending..."
-                : "Enviando..."
-              : isEn
-                ? "Send message"
-                : "Enviar mensaje"}
-          </Button>
-        </form>
-      </CardContent>
-    </Card>
+        <button
+          className="flex h-10 w-full items-center justify-center rounded-xl bg-stoa-gradient-warm font-medium text-white text-sm transition-opacity hover:opacity-90 disabled:opacity-60"
+          disabled={state === "submitting"}
+          type="submit"
+        >
+          {state === "submitting"
+            ? isEn
+              ? "Sending..."
+              : "Enviando..."
+            : isEn
+              ? "Send message"
+              : "Enviar mensaje"}
+        </button>
+      </form>
+    </div>
   );
 }

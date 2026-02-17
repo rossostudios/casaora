@@ -28,7 +28,7 @@ export function ListingGalleryLightbox({
 
   if (!images.length) {
     return (
-      <div className="flex aspect-[16/9] items-center justify-center rounded-2xl border border-border/70 bg-muted/30 text-muted-foreground text-sm">
+      <div className="flex aspect-[16/9] items-center justify-center rounded-2xl bg-[var(--marketplace-bg-muted)] text-[var(--marketplace-text-muted)] text-sm">
         {isEn ? "No images" : "Sin imágenes"}
       </div>
     );
@@ -42,13 +42,13 @@ export function ListingGalleryLightbox({
     <>
       <section className="grid gap-2 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
         <button
-          className="group relative min-w-0 overflow-hidden rounded-2xl border border-border/70"
+          className="group relative min-w-0 overflow-hidden rounded-2xl"
           onClick={() => setLightboxIndex(0)}
           type="button"
         >
           <Image
             alt={title}
-            className="h-full max-h-[540px] w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
+            className="h-full max-h-[540px] w-full object-cover transition-[transform,filter] duration-300 group-hover:scale-[1.02] group-hover:brightness-[0.97]"
             height={1080}
             loading="eager"
             sizes="(max-width: 1024px) 100vw, 66vw"
@@ -61,14 +61,14 @@ export function ListingGalleryLightbox({
         <div className="grid max-h-[540px] min-w-0 grid-cols-2 gap-2 overflow-hidden lg:grid-cols-1">
           {thumbnails.map((url, idx) => (
             <button
-              className="group relative overflow-hidden rounded-xl border border-border/70"
+              className="group relative overflow-hidden rounded-xl"
               key={url}
               onClick={() => setLightboxIndex(idx + 1)}
               type="button"
             >
               <Image
                 alt={`${title} ${idx + 2}`}
-                className="h-full min-h-[112px] w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
+                className="h-full min-h-[112px] w-full object-cover transition-[transform,filter] duration-300 group-hover:scale-[1.02] group-hover:brightness-[0.97]"
                 height={720}
                 loading="lazy"
                 sizes="(max-width: 1024px) 50vw, 33vw"
@@ -79,10 +79,10 @@ export function ListingGalleryLightbox({
 
               {/* "Show all photos" overlay on last thumbnail */}
               {idx === thumbnails.length - 1 && hasMore ? (
-                <div className="absolute inset-0 flex items-center justify-center bg-black/40 text-sm font-medium text-white">
-                  {isEn
-                    ? `+${images.length - 5} photos`
-                    : `+${images.length - 5} fotos`}
+                <div className="absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-[2px]">
+                  <span className="font-serif text-lg font-medium text-white">
+                    +{images.length - 5} {isEn ? "photos" : "fotos"}
+                  </span>
                 </div>
               ) : null}
             </button>

@@ -8,7 +8,6 @@ import { ListingInquiryForm } from "@/components/marketplace/listing-inquiry-for
 import { PublicFooter } from "@/components/marketplace/public-footer";
 import { PublicHeader } from "@/components/marketplace/public-header";
 import { TrustBadges } from "@/components/marketplace/trust-badges";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { fetchPublicListing, fetchUsdPygRate } from "@/lib/api";
 import { toMarketplaceListingViewModel } from "@/lib/features/marketplace/view-model";
 import { getActiveLocale } from "@/lib/i18n/server";
@@ -170,10 +169,10 @@ export default async function MarketplaceListingPage({
   };
 
   return (
-    <div className="pa-marketplace-root min-h-dvh bg-background">
+    <div className="pa-marketplace-root min-h-dvh">
       <PublicHeader locale={locale} />
 
-      <main className="mx-auto w-full max-w-[1320px] space-y-8 px-4 py-8 sm:px-6 lg:px-8">
+      <main className="mx-auto w-full max-w-[1400px] space-y-10 px-4 py-8 sm:px-6 lg:px-8">
         <ListingHeader
           city={listing.city}
           isEn={isEn}
@@ -198,22 +197,19 @@ export default async function MarketplaceListingPage({
           title={listing.title}
         />
 
-        <div className="grid min-w-0 gap-6 lg:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)]">
+        <div className="grid min-w-0 gap-8 lg:grid-cols-[1fr_400px]">
           {/* Main content */}
-          <div className="space-y-8">
+          <div className="space-y-10">
             {listing.description ? (
-              <Card className="min-w-0">
-                <CardHeader>
-                  <CardTitle>
-                    {isEn ? "About this listing" : "Sobre este anuncio"}
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="whitespace-pre-wrap text-sm leading-relaxed">
-                    {listing.description}
-                  </p>
-                </CardContent>
-              </Card>
+              <section className="min-w-0">
+                <h2 className="mb-4 font-serif text-xl font-medium tracking-tight text-[var(--marketplace-text)]">
+                  {isEn ? "About this listing" : "Sobre este anuncio"}
+                </h2>
+                <div className="h-px bg-[#e8e4df]" />
+                <p className="mt-4 whitespace-pre-wrap text-sm leading-relaxed text-[var(--marketplace-text-muted)]">
+                  {listing.description}
+                </p>
+              </section>
             ) : null}
 
             <ListingAmenities amenities={listing.amenities} isEn={isEn} />
@@ -237,7 +233,7 @@ export default async function MarketplaceListingPage({
 
           {/* Sticky sidebar */}
           <div className="hidden lg:block">
-            <div className="sticky top-20 space-y-4">
+            <div className="sticky top-20 space-y-5">
               <ListingMoveInCard isEn={isEn} listing={listing} slug={slug} />
               <ListingInquiryForm isEn={isEn} slug={slug} />
             </div>
