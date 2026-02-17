@@ -16,7 +16,6 @@ import {
   RepairIcon,
   Rocket01Icon,
   RulerIcon,
-  SlidersHorizontalIcon,
   Task01Icon,
   ViewIcon,
 } from "@hugeicons/core-free-icons";
@@ -54,11 +53,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Icon } from "@/components/ui/icon";
-import {
-  PopoverRoot,
-  PopoverTrigger,
-  PopoverContent,
-} from "@/components/ui/popover";
 import {
   Tooltip,
   TooltipContent,
@@ -135,16 +129,6 @@ function readinessLevel(score: number): "green" | "yellow" | "red" {
   return "red";
 }
 
-const TOGGLEABLE_COLUMNS: { id: string; en: string; es: string }[] = [
-  { id: "city", en: "City", es: "Ciudad" },
-  { id: "property_type", en: "Type", es: "Tipo" },
-  { id: "bedrooms", en: "Bedrooms", es: "Habitaciones" },
-  { id: "bathrooms", en: "Bathrooms", es: "Baños" },
-  { id: "square_meters", en: "Area (m²)", es: "Área (m²)" },
-  { id: "monthly_recurring_total", en: "Monthly", es: "Mensual" },
-  { id: "readiness", en: "Readiness", es: "Preparación" },
-  { id: "pipeline", en: "Pipeline", es: "Pipeline" },
-];
 
 /* ---------- types ---------- */
 
@@ -700,61 +684,25 @@ export function ListingNotionTable({
 
   return (
     <div className="space-y-3">
-      <div className="flex items-start gap-2">
-        <div className="flex-1 min-w-0">
-          <ListingsFilterBar
-            activeViewId={activeViewId}
-            globalFilter={globalFilter}
-            isEn={isEn}
-            onApplyView={onApplyView}
-            onGlobalFilterChange={onGlobalFilterChange}
-            onReadinessFilterChange={(v) =>
-              onReadinessFilterChange(v as ListingReadinessFilter)
-            }
-            onStatusFilterChange={(v) =>
-              onStatusFilterChange(v as ListingStatusFilter)
-            }
-            readinessFilter={readinessFilter as ListingReadinessFilter}
-            sorting={sorting}
-            statusFilter={statusFilter as ListingStatusFilter}
-          />
-        </div>
-        <PopoverRoot>
-          <PopoverTrigger
-            className={cn(
-              buttonVariants({ variant: "outline", size: "sm" }),
-              "h-10 w-10 shrink-0 rounded-xl border-border/60 p-0"
-            )}
-          >
-            <Icon icon={SlidersHorizontalIcon} size={15} />
-          </PopoverTrigger>
-          <PopoverContent align="end" className="w-[200px] p-2">
-            <p className="px-2 py-1 text-[10px] text-muted-foreground/60 uppercase tracking-widest">
-              {isEn ? "Columns" : "Columnas"}
-            </p>
-            {TOGGLEABLE_COLUMNS.map((col) => {
-              const visible = columnVisibility[col.id] !== false;
-              const responsiveHidden = responsiveDefaults[col.id] === false;
-              return (
-                <label
-                  className={cn(
-                    "flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm hover:bg-muted cursor-pointer",
-                    responsiveHidden && "opacity-40 pointer-events-none"
-                  )}
-                  key={col.id}
-                >
-                  <Checkbox
-                    checked={visible}
-                    disabled={responsiveHidden}
-                    onCheckedChange={() => toggleColumnPref(col.id)}
-                  />
-                  <span>{isEn ? col.en : col.es}</span>
-                </label>
-              );
-            })}
-          </PopoverContent>
-        </PopoverRoot>
-      </div>
+      <ListingsFilterBar
+        activeViewId={activeViewId}
+        columnVisibility={columnVisibility}
+        globalFilter={globalFilter}
+        isEn={isEn}
+        onApplyView={onApplyView}
+        onGlobalFilterChange={onGlobalFilterChange}
+        onReadinessFilterChange={(v) =>
+          onReadinessFilterChange(v as ListingReadinessFilter)
+        }
+        onStatusFilterChange={(v) =>
+          onStatusFilterChange(v as ListingStatusFilter)
+        }
+        onToggleColumn={toggleColumnPref}
+        readinessFilter={readinessFilter as ListingReadinessFilter}
+        responsiveDefaults={responsiveDefaults}
+        sorting={sorting}
+        statusFilter={statusFilter as ListingStatusFilter}
+      />
 
       <div className="overflow-x-auto rounded-md border">
         <Table

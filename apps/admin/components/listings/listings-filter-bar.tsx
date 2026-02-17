@@ -5,10 +5,12 @@ import {
   Cancel01Icon,
   FilterIcon,
   Search01Icon,
+  SlidersHorizontalIcon,
 } from "@hugeicons/core-free-icons";
 import { useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -20,6 +22,11 @@ import {
 import { Icon } from "@/components/ui/icon";
 import { Input } from "@/components/ui/input";
 import {
+  PopoverRoot,
+  PopoverTrigger,
+  PopoverContent,
+} from "@/components/ui/popover";
+import {
   type SavedView,
   PRESET_VIEWS,
   PRESET_VIEWS_ES,
@@ -28,6 +35,7 @@ import {
   deleteCustomView,
 } from "@/lib/features/listings/saved-views";
 import { cn } from "@/lib/utils";
+import type { VisibilityState } from "@tanstack/react-table";
 
 export type ListingStatusFilter = "all" | "published" | "draft";
 export type ListingReadinessFilter =
@@ -35,6 +43,17 @@ export type ListingReadinessFilter =
   | "ready"
   | "incomplete"
   | "not_ready";
+
+const TOGGLEABLE_COLUMNS: { id: string; en: string; es: string }[] = [
+  { id: "city", en: "City", es: "Ciudad" },
+  { id: "property_type", en: "Type", es: "Tipo" },
+  { id: "bedrooms", en: "Bedrooms", es: "Habitaciones" },
+  { id: "bathrooms", en: "Bathrooms", es: "Baños" },
+  { id: "square_meters", en: "Area (m²)", es: "Área (m²)" },
+  { id: "monthly_recurring_total", en: "Monthly", es: "Mensual" },
+  { id: "readiness", en: "Readiness", es: "Preparación" },
+  { id: "pipeline", en: "Pipeline", es: "Pipeline" },
+];
 
 type ListingsFilterBarProps = {
   globalFilter: string;
@@ -47,6 +66,9 @@ type ListingsFilterBarProps = {
   activeViewId?: string | null;
   onApplyView?: (view: SavedView) => void;
   sorting?: { id: string; desc: boolean }[];
+  columnVisibility?: VisibilityState;
+  responsiveDefaults?: VisibilityState;
+  onToggleColumn?: (colId: string) => void;
 };
 
 export function ListingsFilterBar({
@@ -60,6 +82,9 @@ export function ListingsFilterBar({
   activeViewId,
   onApplyView,
   sorting,
+  columnVisibility,
+  responsiveDefaults,
+  onToggleColumn,
 }: ListingsFilterBarProps) {
   const [inputValue, setInputValue] = useState(globalFilter);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -260,6 +285,43 @@ export function ListingsFilterBar({
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
+
+        {onToggleColumn && columnVisibility ? (
+          <PopoverRoot>
+            <PopoverTrigger>
+              <Button
+                className="h-10 gap-2 rounded-xl border-border/60 font-semibold text-muted-foreground hover:bg-muted"
+                size="sm"
+                variant="outline"
+              >
+                <Icon icon={SlidersHorizontalIcon} size={15} />
+                {isEn ? "Columns" : "Columnas"}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent align="end" className="w-[200px] p-2">
+              {TOGGLEABLE_COLUMNS.map((col) => {
+                const visible = columnVisibility[col.id] !== false;
+                const responsiveHidden = responsiveDefaults?.[col.id] === false;
+                return (
+                  <label
+                    className={cn(
+                      "flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm hover:bg-muted cursor-pointer",
+                      responsiveHidden && "opacity-40 pointer-events-none"
+                    )}
+                    key={col.id}
+                  >
+                    <Checkbox
+                      checked={visible}
+                      disabled={responsiveHidden}
+                      onCheckedChange={() => onToggleColumn(col.id)}
+                    />
+                    <span>{isEn ? col.en : col.es}</span>
+                  </label>
+                );
+              })}
+            </PopoverContent>
+          </PopoverRoot>
+        ) : null}
       </div>
     </div>
   );
