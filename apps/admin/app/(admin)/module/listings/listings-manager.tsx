@@ -239,13 +239,18 @@ export function ListingsManager({
     });
   }, [listings]);
 
-  const toggleSelectAll = useCallback(() => {
-    setSelectedIds((prev) =>
-      prev.size === rows.length
-        ? new Set()
-        : new Set(rows.map((r) => r.id))
-    );
-  }, [rows]);
+  const toggleSelectAll = useCallback((pageIds: string[]) => {
+    setSelectedIds((prev) => {
+      const allSelected = pageIds.every((id) => prev.has(id));
+      const next = new Set(prev);
+      if (allSelected) {
+        for (const id of pageIds) next.delete(id);
+      } else {
+        for (const id of pageIds) next.add(id);
+      }
+      return next;
+    });
+  }, []);
 
   const bulkAction = useCallback(
     async (action: "publish" | "unpublish") => {
@@ -359,45 +364,42 @@ export function ListingsManager({
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-muted-foreground text-sm">
-          {rows.length} {isEn ? "listings" : "anuncios"}
-          {selectedIds.size > 0
-            ? ` · ${selectedIds.size} ${isEn ? "selected" : "seleccionados"}`
-            : null}
-        </p>
-        <div className="flex gap-2">
-          {selectedIds.size > 0 ? (
-            <>
-              <Button
-                disabled={bulkProcessing}
-                onClick={() => bulkAction("publish")}
-                size="sm"
-                type="button"
-                variant="secondary"
-              >
-                {isEn
-                  ? `Publish (${selectedIds.size})`
-                  : `Publicar (${selectedIds.size})`}
-              </Button>
-              <Button
-                disabled={bulkProcessing}
-                onClick={() => bulkAction("unpublish")}
-                size="sm"
-                type="button"
-                variant="outline"
-              >
-                {isEn
-                  ? `Unpublish (${selectedIds.size})`
-                  : `Despublicar (${selectedIds.size})`}
-              </Button>
-            </>
-          ) : null}
-          <Button onClick={openCreate} type="button">
-            <Icon icon={PlusSignIcon} size={16} />
-            {isEn ? "New listing" : "Nuevo anuncio"}
-          </Button>
-        </div>
+      <div className="flex flex-wrap items-center justify-end gap-3">
+        {selectedIds.size > 0 ? (
+          <p className="mr-auto text-muted-foreground text-sm">
+            {selectedIds.size} {isEn ? "selected" : "seleccionados"}
+          </p>
+        ) : null}
+        {selectedIds.size > 0 ? (
+          <>
+            <Button
+              disabled={bulkProcessing}
+              onClick={() => bulkAction("publish")}
+              size="sm"
+              type="button"
+              variant="secondary"
+            >
+              {isEn
+                ? `Publish (${selectedIds.size})`
+                : `Publicar (${selectedIds.size})`}
+            </Button>
+            <Button
+              disabled={bulkProcessing}
+              onClick={() => bulkAction("unpublish")}
+              size="sm"
+              type="button"
+              variant="outline"
+            >
+              {isEn
+                ? `Unpublish (${selectedIds.size})`
+                : `Despublicar (${selectedIds.size})`}
+            </Button>
+          </>
+        ) : null}
+        <Button onClick={openCreate} type="button">
+          <Icon icon={PlusSignIcon} size={16} />
+          {isEn ? "New listing" : "Nuevo anuncio"}
+        </Button>
       </div>
 
       <ListingNotionTable

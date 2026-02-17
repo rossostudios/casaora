@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  Bathtub01Icon,
   BedDoubleIcon,
   CheckmarkCircle02Icon,
   City01Icon,
@@ -12,22 +13,36 @@ import {
   PencilEdit02Icon,
   PipelineIcon,
   Rocket01Icon,
+  RulerIcon,
   Task01Icon,
   ViewIcon,
 } from "@hugeicons/core-free-icons";
 import {
   type ColumnDef,
+  type FilterFn,
+  type PaginationState,
+  type SortingState,
+  type VisibilityState,
   flexRender,
   getCoreRowModel,
+  getFilteredRowModel,
+  getPaginationRowModel,
+  getSortedRowModel,
   useReactTable,
 } from "@tanstack/react-table";
-import { useCallback, useMemo, useOptimistic, useTransition } from "react";
+import { useCallback, useMemo, useOptimistic, useState, useTransition } from "react";
 import { toast } from "sonner";
 
 import { updateListingInlineAction } from "@/app/(admin)/module/listings/actions";
 import type { ListingRow } from "@/app/(admin)/module/listings/listings-manager";
 import { EditableCell } from "@/components/properties/editable-cell";
+import {
+  ListingsFilterBar,
+  type ListingReadinessFilter,
+  type ListingStatusFilter,
+} from "@/components/listings/listings-filter-bar";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { buttonVariants } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -50,6 +65,7 @@ import {
 } from "@/components/ui/table";
 import { PROPERTY_TYPES } from "@/lib/features/marketplace/constants";
 import { formatCurrency } from "@/lib/format";
+import { useMediaQuery } from "@/lib/hooks/use-media-query";
 import { cn } from "@/lib/utils";
 
 import { readinessScore } from "@/app/(admin)/module/listings/listings-manager";
@@ -76,15 +92,23 @@ const PROPERTY_TYPE_OPTIONS = PROPERTY_TYPES.map((pt) => ({
   value: pt.value,
 }));
 
-function propertyTypeLabel(
-  value: string | null,
-  isEn: boolean
-): string {
+function propertyTypeLabel(value: string | null, isEn: boolean): string {
   if (!value) return "";
   const found = PROPERTY_TYPES.find((pt) => pt.value === value);
   if (!found) return value;
   return isEn ? found.labelEn : found.labelEs;
 }
+
+/* ---------- global filter ---------- */
+
+const globalFilterFn: FilterFn<ListingRow> = (row, _columnId, filterValue) => {
+  const search = String(filterValue).toLowerCase();
+  if (!search) return true;
+  const d = row.original;
+  return [d.title, d.city, d.property_type, d.property_name, d.unit_name]
+    .filter(Boolean)
+    .some((field) => String(field).toLowerCase().includes(search));
+};
 
 /* ---------- types ---------- */
 
@@ -108,7 +132,7 @@ type Props = {
   summary: ListingSummary;
   selectedIds: Set<string>;
   onToggleSelect: (id: string) => void;
-  onToggleSelectAll: () => void;
+  onToggleSelectAll: (ids: string[]) => void;
   onEditInSheet: (row: ListingRow) => void;
   onPublish: (listingId: string) => void;
   onUnpublish: (listingId: string) => void;
@@ -130,6 +154,7 @@ export function ListingNotionTable({
 }: Props) {
   const [, startTransition] = useTransition();
 
+  /* --- optimistic editing --- */
   const [optimisticRows, addOptimistic] = useOptimistic(
     rows,
     (current: ListingRow[], action: OptimisticAction) =>
@@ -165,6 +190,55 @@ export function ListingNotionTable({
     [addOptimistic, isEn, startTransition]
   );
 
+  /* --- filter state --- */
+  const [sorting, setSorting] = useState<SortingState>([]);
+  const [globalFilter, setGlobalFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState<ListingStatusFilter>("all");
+  const [readinessFilter, setReadinessFilter] =
+    useState<ListingReadinessFilter>("all");
+  const [pagination, setPagination] = useState<PaginationState>({
+    pageIndex: 0,
+    pageSize: 50,
+  });
+
+  /* --- responsive column visibility --- */
+  const isSm = useMediaQuery("(min-width: 640px)");
+  const isMd = useMediaQuery("(min-width: 768px)");
+  const isLg = useMediaQuery("(min-width: 1024px)");
+
+  const columnVisibility = useMemo<VisibilityState>(() => {
+    return {
+      city: isSm,
+      monthly_recurring_total: isSm,
+      property_type: isMd,
+      bedrooms: isMd,
+      bathrooms: isMd,
+      square_meters: isMd,
+      readiness: isLg,
+      pipeline: isLg,
+    };
+  }, [isSm, isMd, isLg]);
+
+  /* --- pre-filter for status + readiness --- */
+  const filteredData = useMemo(() => {
+    let data = optimisticRows;
+    if (statusFilter === "published") {
+      data = data.filter((r) => r.is_published);
+    } else if (statusFilter === "draft") {
+      data = data.filter((r) => !r.is_published);
+    }
+    if (readinessFilter !== "all") {
+      data = data.filter((r) => {
+        const level = readinessScore(r).level;
+        if (readinessFilter === "ready") return level === "green";
+        if (readinessFilter === "incomplete") return level === "yellow";
+        return level === "red";
+      });
+    }
+    return data;
+  }, [optimisticRows, statusFilter, readinessFilter]);
+
+  /* --- columns --- */
   const columns = useMemo<ColumnDef<ListingRow>[]>(
     () => [
       {
@@ -173,13 +247,22 @@ export function ListingNotionTable({
         minSize: 40,
         maxSize: 40,
         enableResizing: false,
-        header: () => (
-          <Checkbox
-            aria-label="Select all"
-            checked={selectedIds.size === rows.length && rows.length > 0}
-            onCheckedChange={onToggleSelectAll}
-          />
-        ),
+        enableSorting: false,
+        header: ({ table: t }) => {
+          const pageRowIds = t
+            .getRowModel()
+            .rows.map((r) => r.original.id);
+          const allPageSelected =
+            pageRowIds.length > 0 &&
+            pageRowIds.every((id) => selectedIds.has(id));
+          return (
+            <Checkbox
+              aria-label="Select all"
+              checked={allPageSelected}
+              onCheckedChange={() => onToggleSelectAll(pageRowIds)}
+            />
+          );
+        },
         cell: ({ row }) => (
           <Checkbox
             aria-label="Select row"
@@ -200,9 +283,10 @@ export function ListingNotionTable({
         ),
         cell: ({ row }) => {
           const data = row.original;
-          const subtitle = [data.property_name, data.unit_name]
-            .filter(Boolean)
-            .join(" · ");
+          const parts = [data.property_name, data.unit_name].filter(Boolean);
+          // On mobile, show city in subtitle when city column is hidden
+          if (!isSm && data.city) parts.push(data.city);
+          const subtitle = parts.join(" · ");
           return (
             <EditableCell
               displayNode={
@@ -227,6 +311,11 @@ export function ListingNotionTable({
         accessorKey: "is_published",
         size: 110,
         minSize: 90,
+        sortingFn: (rowA, rowB) => {
+          const a = rowA.original.is_published ? 1 : 0;
+          const b = rowB.original.is_published ? 1 : 0;
+          return a - b;
+        },
         header: () => (
           <ColHeader
             icon={CheckmarkCircle02Icon}
@@ -247,6 +336,7 @@ export function ListingNotionTable({
         id: "readiness",
         size: 120,
         minSize: 90,
+        enableSorting: false,
         header: () => (
           <ColHeader
             icon={Task01Icon}
@@ -335,22 +425,51 @@ export function ListingNotionTable({
         },
       },
       {
-        id: "specs",
-        size: 110,
-        minSize: 80,
+        accessorKey: "bedrooms",
+        size: 70,
+        minSize: 60,
         header: () => (
-          <ColHeader
-            icon={BedDoubleIcon}
-            label={isEn ? "Specs" : "Specs"}
-          />
+          <ColHeader icon={BedDoubleIcon} label={isEn ? "Bd" : "Hab"} />
         ),
         cell: ({ row }) => {
-          const d = row.original;
+          const data = row.original;
           return (
-            <span className="text-sm tabular-nums">
-              {d.bedrooms} {isEn ? "bd" : "hab"} · {d.bathrooms}{" "}
-              {isEn ? "ba" : "ba"} · {d.square_meters} m²
-            </span>
+            <EditableCell
+              onCommit={(next) => commitEdit(data.id, "bedrooms", next)}
+              value={String(data.bedrooms)}
+            />
+          );
+        },
+      },
+      {
+        accessorKey: "bathrooms",
+        size: 70,
+        minSize: 60,
+        header: () => (
+          <ColHeader icon={Bathtub01Icon} label={isEn ? "Ba" : "Ba"} />
+        ),
+        cell: ({ row }) => {
+          const data = row.original;
+          return (
+            <EditableCell
+              onCommit={(next) => commitEdit(data.id, "bathrooms", next)}
+              value={String(data.bathrooms)}
+            />
+          );
+        },
+      },
+      {
+        accessorKey: "square_meters",
+        size: 80,
+        minSize: 60,
+        header: () => <ColHeader icon={RulerIcon} label="m²" />,
+        cell: ({ row }) => {
+          const data = row.original;
+          return (
+            <EditableCell
+              onCommit={(next) => commitEdit(data.id, "square_meters", next)}
+              value={String(data.square_meters)}
+            />
           );
         },
       },
@@ -378,6 +497,7 @@ export function ListingNotionTable({
         id: "pipeline",
         size: 90,
         minSize: 70,
+        accessorFn: (row) => row.application_count,
         header: () => (
           <ColHeader
             icon={PipelineIcon}
@@ -406,6 +526,7 @@ export function ListingNotionTable({
         minSize: 48,
         maxSize: 48,
         enableResizing: false,
+        enableSorting: false,
         cell: ({ row }) => {
           const listing = row.original;
           return (
@@ -464,12 +585,13 @@ export function ListingNotionTable({
         },
       },
     ],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [
       isEn,
+      isSm,
       formatLocale,
       commitEdit,
       selectedIds,
-      rows.length,
       onToggleSelect,
       onToggleSelectAll,
       onEditInSheet,
@@ -478,100 +600,184 @@ export function ListingNotionTable({
     ]
   );
 
+  /* --- table instance --- */
   const table = useReactTable({
-    data: optimisticRows,
+    data: filteredData,
     columns,
     columnResizeMode: "onChange",
+    state: { sorting, globalFilter, pagination, columnVisibility },
+    onSortingChange: setSorting,
+    onGlobalFilterChange: setGlobalFilter,
+    onPaginationChange: setPagination,
+    globalFilterFn,
     getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+    getFilteredRowModel: getFilteredRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
   });
 
+  const filteredCount = table.getFilteredRowModel().rows.length;
+  const totalCount = filteredData.length;
+
   return (
-    <div className="overflow-x-auto rounded-md border">
-      <Table
-        className="table-fixed"
-        style={{ width: table.getTotalSize() }}
-      >
-        <TableHeader>
-          {table.getHeaderGroups().map((hg) => (
-            <TableRow key={hg.id}>
-              {hg.headers.map((header) => (
-                <TableHead
-                  className="relative whitespace-nowrap select-none text-[11px] uppercase tracking-wider"
-                  grid
-                  key={header.id}
-                  style={{ width: header.getSize() }}
-                >
-                  {header.isPlaceholder
-                    ? null
-                    : flexRender(
+    <div className="space-y-3">
+      <ListingsFilterBar
+        globalFilter={globalFilter}
+        isEn={isEn}
+        onGlobalFilterChange={(v) => {
+          setGlobalFilter(v);
+          setPagination((p) => ({ ...p, pageIndex: 0 }));
+        }}
+        onReadinessFilterChange={(v) => {
+          setReadinessFilter(v);
+          setPagination((p) => ({ ...p, pageIndex: 0 }));
+        }}
+        onStatusFilterChange={(v) => {
+          setStatusFilter(v);
+          setPagination((p) => ({ ...p, pageIndex: 0 }));
+        }}
+        readinessFilter={readinessFilter}
+        statusFilter={statusFilter}
+      />
+
+      <div className="overflow-x-auto rounded-md border">
+        <Table
+          className="table-fixed"
+          style={{ width: table.getTotalSize() }}
+        >
+          <TableHeader>
+            {table.getHeaderGroups().map((hg) => (
+              <TableRow key={hg.id}>
+                {hg.headers.map((header) => (
+                  <TableHead
+                    className="relative whitespace-nowrap select-none text-[11px] uppercase tracking-wider"
+                    grid
+                    key={header.id}
+                    style={{ width: header.getSize() }}
+                  >
+                    {header.isPlaceholder ? null : header.column.getCanSort() ? (
+                      <button
+                        className="inline-flex items-center gap-1 hover:underline"
+                        onClick={header.column.getToggleSortingHandler()}
+                        type="button"
+                      >
+                        {flexRender(
+                          header.column.columnDef.header,
+                          header.getContext()
+                        )}
+                        {header.column.getIsSorted() === "asc"
+                          ? " \u2191"
+                          : header.column.getIsSorted() === "desc"
+                            ? " \u2193"
+                            : ""}
+                      </button>
+                    ) : (
+                      flexRender(
                         header.column.columnDef.header,
                         header.getContext()
-                      )}
+                      )
+                    )}
 
-                  {header.column.getCanResize() && (
-                    <div
-                      className={cn(
-                        "absolute right-0 top-0 h-full w-1 cursor-col-resize select-none touch-none",
-                        "hover:bg-primary/30",
-                        header.column.getIsResizing() && "bg-primary/50"
-                      )}
-                      onDoubleClick={() => header.column.resetSize()}
-                      onMouseDown={header.getResizeHandler()}
-                      onTouchStart={header.getResizeHandler()}
-                    />
-                  )}
-                </TableHead>
-              ))}
-            </TableRow>
-          ))}
-        </TableHeader>
+                    {header.column.getCanResize() && (
+                      <div
+                        className={cn(
+                          "absolute right-0 top-0 h-full w-1 cursor-col-resize select-none touch-none",
+                          "hover:bg-primary/30",
+                          header.column.getIsResizing() && "bg-primary/50"
+                        )}
+                        onDoubleClick={() => header.column.resetSize()}
+                        onMouseDown={header.getResizeHandler()}
+                        onTouchStart={header.getResizeHandler()}
+                      />
+                    )}
+                  </TableHead>
+                ))}
+              </TableRow>
+            ))}
+          </TableHeader>
 
-        <TableBody>
-          {table.getRowModel().rows.map((row) => (
-            <TableRow
-              className="hover:bg-muted/20"
-              data-state={selectedIds.has(row.original.id) && "selected"}
-              key={row.id}
-            >
-              {row.getVisibleCells().map((cell) => (
-                <TableCell
-                  className="py-1.5"
-                  grid
-                  key={cell.id}
-                  style={{ width: cell.column.getSize() }}
+          <TableBody>
+            {table.getRowModel().rows.length ? (
+              table.getRowModel().rows.map((row) => (
+                <TableRow
+                  className="hover:bg-muted/20"
+                  data-state={selectedIds.has(row.original.id) && "selected"}
+                  key={row.id}
                 >
-                  {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                  {row.getVisibleCells().map((cell) => (
+                    <TableCell
+                      className="py-1.5"
+                      grid
+                      key={cell.id}
+                      style={{ width: cell.column.getSize() }}
+                    >
+                      {flexRender(
+                        cell.column.columnDef.cell,
+                        cell.getContext()
+                      )}
+                    </TableCell>
+                  ))}
+                </TableRow>
+              ))
+            ) : (
+              <TableRow>
+                <TableCell
+                  className="py-8 text-center text-muted-foreground"
+                  colSpan={table.getVisibleLeafColumns().length}
+                >
+                  {isEn ? "No listings found" : "No se encontraron anuncios"}
                 </TableCell>
-              ))}
-            </TableRow>
-          ))}
-        </TableBody>
+              </TableRow>
+            )}
+          </TableBody>
 
-        <TableFooter>
-          <TableRow className="hover:bg-transparent">
-            <TableCell grid style={{ width: 40 }} />
-            <TableCell
-              className="font-medium uppercase tracking-wider text-xs"
-              grid
-            >
-              {summary.totalCount} {isEn ? "Listings" : "Anuncios"}
-            </TableCell>
-            <TableCell className="text-xs" grid>
-              {summary.publishedCount} {isEn ? "pub" : "pub"} /{" "}
-              {summary.draftCount} {isEn ? "draft" : "borr"}
-            </TableCell>
-            <TableCell grid />
-            <TableCell grid />
-            <TableCell grid />
-            <TableCell grid />
-            <TableCell grid />
-            <TableCell className="tabular-nums text-xs" grid>
-              {summary.totalApplications} {isEn ? "apps" : "apps"}
-            </TableCell>
-            <TableCell grid />
-          </TableRow>
-        </TableFooter>
-      </Table>
+          <TableFooter>
+            <TableRow className="hover:bg-transparent">
+              <TableCell
+                className="font-medium text-xs"
+                colSpan={table.getVisibleLeafColumns().length}
+              >
+                {summary.totalCount} {isEn ? "listings" : "anuncios"} &middot;{" "}
+                {summary.publishedCount} {isEn ? "published" : "publicados"} &middot;{" "}
+                {summary.draftCount} {isEn ? "draft" : "borrador"} &middot;{" "}
+                {summary.totalApplications} {isEn ? "applications" : "aplicaciones"}
+              </TableCell>
+            </TableRow>
+          </TableFooter>
+        </Table>
+      </div>
+
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div className="text-muted-foreground text-sm">
+          {filteredCount !== totalCount
+            ? `${filteredCount} / ${totalCount}`
+            : `${totalCount}`}{" "}
+          {isEn ? "listings" : "anuncios"}
+        </div>
+
+        <div className="flex items-center gap-2">
+          <Button
+            disabled={!table.getCanPreviousPage()}
+            onClick={() => table.previousPage()}
+            size="sm"
+            variant="outline"
+          >
+            {isEn ? "Previous" : "Anterior"}
+          </Button>
+          <span className="text-muted-foreground text-sm">
+            {table.getState().pagination.pageIndex + 1} /{" "}
+            {table.getPageCount() || 1}
+          </span>
+          <Button
+            disabled={!table.getCanNextPage()}
+            onClick={() => table.nextPage()}
+            size="sm"
+            variant="outline"
+          >
+            {isEn ? "Next" : "Siguiente"}
+          </Button>
+        </div>
+      </div>
     </div>
   );
 }

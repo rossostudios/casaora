@@ -304,6 +304,8 @@ export async function publishListingAction(formData: FormData) {
 
 const LISTING_FIELD_TO_API_KEY: Record<string, string> = {};
 
+const NUMERIC_FIELDS = new Set(["bedrooms", "bathrooms", "square_meters"]);
+
 export async function updateListingInlineAction({
   listingId,
   field,
@@ -311,12 +313,13 @@ export async function updateListingInlineAction({
 }: {
   listingId: string;
   field: string;
-  value: string;
+  value: string | number;
 }): Promise<{ ok: boolean; error?: string }> {
   const apiField = LISTING_FIELD_TO_API_KEY[field] ?? field;
+  const apiValue = NUMERIC_FIELDS.has(apiField) ? Number(value) || 0 : value;
   try {
     await patchJson(`/listings/${encodeURIComponent(listingId)}`, {
-      [apiField]: value,
+      [apiField]: apiValue,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
