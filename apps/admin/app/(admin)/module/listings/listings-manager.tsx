@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { ListingForm } from "@/components/listings/listing-form";
 import { ListingNotionTable } from "@/components/listings/listing-notion-table";
 import { ListingPreviewModal } from "@/components/listings/listing-preview-modal";
+import type { SavedView } from "@/lib/features/listings/saved-views";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { Sheet } from "@/components/ui/sheet";
@@ -155,6 +156,20 @@ export function ListingsManager({
     null
   );
 
+  /* --- scroll-to-field (Make Ready) --- */
+  const [scrollToField, setScrollToField] = useState<string | undefined>();
+
+  /* --- saved views --- */
+  const [activeViewId, setActiveViewId] = useState<string | null>("all");
+
+  const handleApplyView = useCallback(
+    (view: SavedView) => {
+      query.applyView(view);
+      setActiveViewId(view.id);
+    },
+    [query]
+  );
+
   /* --- convert API rows --- */
   const rows = useMemo<ListingRow[]>(() => {
     if (!query.data?.data) return [];
@@ -205,6 +220,14 @@ export function ListingsManager({
   }, []);
 
   const openEdit = useCallback((row: ListingRow) => {
+    setScrollToField(undefined);
+    setEditing(row);
+    setOpen(true);
+  }, []);
+
+  const handleMakeReady = useCallback((row: ListingRow) => {
+    const firstBlocking = row.readiness_blocking[0] ?? undefined;
+    setScrollToField(firstBlocking);
     setEditing(row);
     setOpen(true);
   }, []);
@@ -378,6 +401,7 @@ export function ListingsManager({
         onCommitEdit={handleCommitEdit}
         onEditInSheet={openEdit}
         onGlobalFilterChange={query.setGlobalFilter}
+        onMakeReady={handleMakeReady}
         onPaginationChange={query.setPagination}
         onPreview={setPreviewListing}
         onPublish={handlePublish}
@@ -395,6 +419,8 @@ export function ListingsManager({
         sorting={query.sorting}
         statusFilter={query.statusFilter}
         totalRows={query.totalRows}
+        activeViewId={activeViewId}
+        onApplyView={handleApplyView}
       />
 
       {/* ---- form sheet ---- */}
@@ -429,6 +455,7 @@ export function ListingsManager({
           isEn={isEn}
           key={editing?.id ?? "create"}
           locale={locale}
+          scrollToField={scrollToField}
           onPreview={
             editing
               ? () => {

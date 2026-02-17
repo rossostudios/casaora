@@ -3,6 +3,7 @@
 import {
   Bathtub01Icon,
   BedDoubleIcon,
+  Cancel01Icon,
   CheckmarkCircle02Icon,
   City01Icon,
   DollarCircleIcon,
@@ -12,8 +13,10 @@ import {
   MoreVerticalIcon,
   PencilEdit02Icon,
   PipelineIcon,
+  RepairIcon,
   Rocket01Icon,
   RulerIcon,
+  SlidersHorizontalIcon,
   Task01Icon,
   ViewIcon,
 } from "@hugeicons/core-free-icons";
@@ -26,7 +29,7 @@ import {
   getCoreRowModel,
   useReactTable,
 } from "@tanstack/react-table";
-import { useCallback, useMemo, useOptimistic, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useOptimistic, useState, useTransition } from "react";
 import { toast } from "sonner";
 
 import type { ListingRow } from "@/app/(admin)/module/listings/listings-manager";
@@ -36,6 +39,8 @@ import {
   type ListingReadinessFilter,
   type ListingStatusFilter,
 } from "@/components/listings/listings-filter-bar";
+import type { SavedView } from "@/lib/features/listings/saved-views";
+import { ReadinessRing } from "@/components/listings/readiness-ring";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { buttonVariants } from "@/components/ui/button";
@@ -49,6 +54,21 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Icon } from "@/components/ui/icon";
+import {
+  PopoverRoot,
+  PopoverTrigger,
+  PopoverContent,
+} from "@/components/ui/popover";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
+  readColumnVisibility,
+  writeColumnVisibility,
+  type ColumnVisibilityMap,
+} from "@/lib/features/listings/column-visibility";
 import {
   Table,
   TableBody,
@@ -92,17 +112,39 @@ function propertyTypeLabel(value: string | null, isEn: boolean): string {
   return isEn ? found.labelEn : found.labelEs;
 }
 
-function readinessLevel(
-  row: ListingRow
-): "green" | "yellow" | "red" {
-  if (row.readiness_blocking.length === 0) return "green";
-  if (
-    row.readiness_blocking.includes("cover_image") ||
-    row.readiness_blocking.includes("fee_lines")
-  )
-    return "red";
-  return "yellow";
+const READINESS_DIMENSIONS: {
+  field: string;
+  label: string;
+  labelEs: string;
+  weight: number;
+  critical: boolean;
+}[] = [
+  { field: "cover_image", label: "Cover Image", labelEs: "Imagen de portada", weight: 25, critical: true },
+  { field: "fee_lines", label: "Fee Breakdown", labelEs: "Desglose de cuotas", weight: 25, critical: true },
+  { field: "amenities", label: "Amenities", labelEs: "Amenidades", weight: 15, critical: false },
+  { field: "bedrooms", label: "Bedrooms", labelEs: "Habitaciones", weight: 10, critical: false },
+  { field: "square_meters", label: "Area (m²)", labelEs: "Área (m²)", weight: 10, critical: false },
+  { field: "available_from", label: "Available From", labelEs: "Disponible desde", weight: 5, critical: false },
+  { field: "minimum_lease", label: "Minimum Lease", labelEs: "Contrato mínimo", weight: 5, critical: false },
+  { field: "description", label: "Description", labelEs: "Descripción", weight: 5, critical: false },
+];
+
+function readinessLevel(score: number): "green" | "yellow" | "red" {
+  if (score >= 80) return "green";
+  if (score >= 50) return "yellow";
+  return "red";
 }
+
+const TOGGLEABLE_COLUMNS: { id: string; en: string; es: string }[] = [
+  { id: "city", en: "City", es: "Ciudad" },
+  { id: "property_type", en: "Type", es: "Tipo" },
+  { id: "bedrooms", en: "Bedrooms", es: "Habitaciones" },
+  { id: "bathrooms", en: "Bathrooms", es: "Baños" },
+  { id: "square_meters", en: "Area (m²)", es: "Área (m²)" },
+  { id: "monthly_recurring_total", en: "Monthly", es: "Mensual" },
+  { id: "readiness", en: "Readiness", es: "Preparación" },
+  { id: "pipeline", en: "Pipeline", es: "Pipeline" },
+];
 
 /* ---------- types ---------- */
 
@@ -120,6 +162,7 @@ type Props = {
   onToggleSelect: (id: string) => void;
   onToggleSelectAll: (ids: string[]) => void;
   onEditInSheet: (row: ListingRow) => void;
+  onMakeReady: (row: ListingRow) => void;
   onPublish: (listingId: string) => void;
   onUnpublish: (listingId: string) => void;
   onPreview: (row: ListingRow) => void;
@@ -142,6 +185,8 @@ type Props = {
   totalRows: number;
   pageCount: number;
   isLoading: boolean;
+  activeViewId?: string | null;
+  onApplyView?: (view: SavedView) => void;
 };
 
 /* ---------- component ---------- */
@@ -154,6 +199,7 @@ export function ListingNotionTable({
   onToggleSelect,
   onToggleSelectAll,
   onEditInSheet,
+  onMakeReady,
   onPublish,
   onUnpublish,
   onPreview,
@@ -171,6 +217,8 @@ export function ListingNotionTable({
   totalRows,
   pageCount,
   isLoading,
+  activeViewId,
+  onApplyView,
 }: Props) {
   const [, startTransition] = useTransition();
 
@@ -210,30 +258,51 @@ export function ListingNotionTable({
   const filteredData = useMemo(() => {
     if (readinessFilter === "all") return optimisticRows;
     return optimisticRows.filter((r) => {
-      const level = readinessLevel(r);
+      const level = readinessLevel(r.readiness_score);
       if (readinessFilter === "ready") return level === "green";
       if (readinessFilter === "incomplete") return level === "yellow";
       return level === "red";
     });
   }, [optimisticRows, readinessFilter]);
 
-  /* --- responsive column visibility --- */
+  /* --- user column visibility (persisted) --- */
+  const [userColumnPrefs, setUserColumnPrefs] = useState<ColumnVisibilityMap>(() =>
+    readColumnVisibility()
+  );
+
+  const toggleColumnPref = useCallback((colId: string) => {
+    setUserColumnPrefs((prev) => {
+      const next = { ...prev, [colId]: prev[colId] === false ? true : false };
+      writeColumnVisibility(next);
+      return next;
+    });
+  }, []);
+
+  /* --- responsive column visibility (merged with user prefs) --- */
   const isSm = useMediaQuery("(min-width: 640px)");
   const isMd = useMediaQuery("(min-width: 768px)");
   const isLg = useMediaQuery("(min-width: 1024px)");
 
+  const responsiveDefaults = useMemo<VisibilityState>(() => ({
+    city: isSm,
+    monthly_recurring_total: isSm,
+    property_type: isMd,
+    bedrooms: isMd,
+    bathrooms: isMd,
+    square_meters: isMd,
+    readiness: isLg,
+    pipeline: isLg,
+  }), [isSm, isMd, isLg]);
+
   const columnVisibility = useMemo<VisibilityState>(() => {
-    return {
-      city: isSm,
-      monthly_recurring_total: isSm,
-      property_type: isMd,
-      bedrooms: isMd,
-      bathrooms: isMd,
-      square_meters: isMd,
-      readiness: isLg,
-      pipeline: isLg,
-    };
-  }, [isSm, isMd, isLg]);
+    const merged = { ...responsiveDefaults };
+    for (const colId of Object.keys(userColumnPrefs)) {
+      // User can hide columns, but can't force-show columns hidden by responsive rules
+      if (responsiveDefaults[colId] === false) continue;
+      merged[colId] = userColumnPrefs[colId] !== false;
+    }
+    return merged;
+  }, [responsiveDefaults, userColumnPrefs]);
 
   /* --- columns --- */
   const columns = useMemo<ColumnDef<ListingRow>[]>(
@@ -335,39 +404,55 @@ export function ListingNotionTable({
           />
         ),
         cell: ({ row }) => {
-          const blocking = row.original.readiness_blocking;
-          const level = readinessLevel(row.original);
+          const { readiness_score, readiness_blocking } = row.original;
+          const blockingSet = new Set(readiness_blocking);
 
-          if (level === "green") {
-            return (
-              <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
-                {isEn ? "Ready" : "Listo"}
-              </Badge>
-            );
-          }
-          if (level === "yellow") {
-            return (
-              <div className="space-y-1">
-                <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
-                  {isEn
-                    ? `${blocking.length} missing`
-                    : `${blocking.length} faltante(s)`}
-                </Badge>
-                <p className="max-w-[180px] text-muted-foreground text-[11px]">
-                  {blocking.join(", ")}
-                </p>
-              </div>
-            );
-          }
           return (
-            <div className="space-y-1">
-              <Badge variant="destructive">
-                {isEn ? "Not ready" : "No listo"}
-              </Badge>
-              <p className="max-w-[180px] text-muted-foreground text-[11px]">
-                {blocking.join(", ")}
-              </p>
-            </div>
+            <Tooltip>
+              <TooltipTrigger>
+                <div className="inline-flex items-center gap-1.5 cursor-default">
+                  <ReadinessRing score={readiness_score} />
+                  <span className="tabular-nums text-xs font-medium">
+                    {readiness_score}%
+                  </span>
+                </div>
+              </TooltipTrigger>
+              <TooltipContent className="max-w-[220px] p-2.5" side="left">
+                <ul className="space-y-1">
+                  {READINESS_DIMENSIONS.map((dim) => {
+                    const satisfied = !blockingSet.has(dim.field);
+                    return (
+                      <li
+                        className="flex items-center gap-1.5 text-[11px]"
+                        key={dim.field}
+                      >
+                        <Icon
+                          className={
+                            satisfied
+                              ? "text-emerald-500"
+                              : "text-muted-foreground/50"
+                          }
+                          icon={satisfied ? CheckmarkCircle02Icon : Cancel01Icon}
+                          size={12}
+                        />
+                        <span
+                          className={
+                            satisfied
+                              ? "text-foreground"
+                              : "text-muted-foreground"
+                          }
+                        >
+                          {isEn ? dim.label : dim.labelEs}
+                        </span>
+                        <span className="ml-auto text-muted-foreground/60 text-[10px]">
+                          {dim.weight}pt
+                        </span>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </TooltipContent>
+            </Tooltip>
           );
         },
       },
@@ -541,6 +626,12 @@ export function ListingNotionTable({
                   <Icon className="mr-2" icon={PencilEdit02Icon} size={14} />
                   {isEn ? "Edit" : "Editar"}
                 </DropdownMenuItem>
+                {listing.readiness_blocking.length > 0 ? (
+                  <DropdownMenuItem onClick={() => onMakeReady(listing)}>
+                    <Icon className="mr-2" icon={RepairIcon} size={14} />
+                    {isEn ? "Make ready" : "Completar"}
+                  </DropdownMenuItem>
+                ) : null}
                 <DropdownMenuItem onClick={() => onPreview(listing)}>
                   <Icon className="mr-2" icon={ViewIcon} size={14} />
                   {isEn ? "Preview" : "Vista previa"}
@@ -586,6 +677,7 @@ export function ListingNotionTable({
       onToggleSelect,
       onToggleSelectAll,
       onEditInSheet,
+      onMakeReady,
       onPublish,
       onUnpublish,
       onPreview,
@@ -608,19 +700,61 @@ export function ListingNotionTable({
 
   return (
     <div className="space-y-3">
-      <ListingsFilterBar
-        globalFilter={globalFilter}
-        isEn={isEn}
-        onGlobalFilterChange={onGlobalFilterChange}
-        onReadinessFilterChange={(v) =>
-          onReadinessFilterChange(v as ListingReadinessFilter)
-        }
-        onStatusFilterChange={(v) =>
-          onStatusFilterChange(v as ListingStatusFilter)
-        }
-        readinessFilter={readinessFilter as ListingReadinessFilter}
-        statusFilter={statusFilter as ListingStatusFilter}
-      />
+      <div className="flex items-start gap-2">
+        <div className="flex-1 min-w-0">
+          <ListingsFilterBar
+            activeViewId={activeViewId}
+            globalFilter={globalFilter}
+            isEn={isEn}
+            onApplyView={onApplyView}
+            onGlobalFilterChange={onGlobalFilterChange}
+            onReadinessFilterChange={(v) =>
+              onReadinessFilterChange(v as ListingReadinessFilter)
+            }
+            onStatusFilterChange={(v) =>
+              onStatusFilterChange(v as ListingStatusFilter)
+            }
+            readinessFilter={readinessFilter as ListingReadinessFilter}
+            sorting={sorting}
+            statusFilter={statusFilter as ListingStatusFilter}
+          />
+        </div>
+        <PopoverRoot>
+          <PopoverTrigger
+            className={cn(
+              buttonVariants({ variant: "outline", size: "sm" }),
+              "h-10 w-10 shrink-0 rounded-xl border-border/60 p-0"
+            )}
+          >
+            <Icon icon={SlidersHorizontalIcon} size={15} />
+          </PopoverTrigger>
+          <PopoverContent align="end" className="w-[200px] p-2">
+            <p className="px-2 py-1 text-[10px] text-muted-foreground/60 uppercase tracking-widest">
+              {isEn ? "Columns" : "Columnas"}
+            </p>
+            {TOGGLEABLE_COLUMNS.map((col) => {
+              const visible = columnVisibility[col.id] !== false;
+              const responsiveHidden = responsiveDefaults[col.id] === false;
+              return (
+                <label
+                  className={cn(
+                    "flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm hover:bg-muted cursor-pointer",
+                    responsiveHidden && "opacity-40 pointer-events-none"
+                  )}
+                  key={col.id}
+                >
+                  <Checkbox
+                    checked={visible}
+                    disabled={responsiveHidden}
+                    onCheckedChange={() => toggleColumnPref(col.id)}
+                  />
+                  <span>{isEn ? col.en : col.es}</span>
+                </label>
+              );
+            })}
+          </PopoverContent>
+        </PopoverRoot>
+      </div>
 
       <div className="overflow-x-auto rounded-md border">
         <Table

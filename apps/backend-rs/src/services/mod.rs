@@ -15,4 +15,5 @@ pub mod payments;
 pub mod pricing;
 pub mod sequences;
 pub mod ai_guest_reply;
+pub mod readiness;
 pub mod workflows;

@@ -8,6 +8,7 @@ import {
   fetchListingsPaginated,
   type PaginatedListingsResponse,
 } from "./listings-api";
+import type { SavedView } from "./saved-views";
 
 export type ListingsQueryState = {
   sorting: SortingState;
@@ -20,6 +21,7 @@ export type ListingsQueryState = {
   setStatusFilter: (value: string) => void;
   readinessFilter: string;
   setReadinessFilter: (value: string) => void;
+  applyView: (view: SavedView) => void;
   data: PaginatedListingsResponse | undefined;
   isLoading: boolean;
   totalRows: number;
@@ -78,6 +80,13 @@ export function useListingsQuery(orgId: string): ListingsQueryState {
     readinessFilter,
     setReadinessFilter: useCallback((value: string) => {
       setReadinessFilter(value);
+      setPagination((prev) => ({ ...prev, pageIndex: 0 }));
+    }, []),
+    applyView: useCallback((view: SavedView) => {
+      setGlobalFilter(view.globalFilter);
+      setStatusFilter(view.statusFilter);
+      setReadinessFilter(view.readinessFilter);
+      setSorting(view.sorting);
       setPagination((prev) => ({ ...prev, pageIndex: 0 }));
     }, []),
     data,

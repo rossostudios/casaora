@@ -21,6 +21,7 @@ use crate::{
         analytics::write_analytics_event,
         audit::write_audit_log,
         pricing::{compute_pricing_totals, missing_required_fee_types, normalize_fee_lines},
+        readiness::{compute_readiness_report, readiness_summary},
     },
     state::AppState,
     tenancy::{assert_org_member, assert_org_role},
@@ -152,7 +153,7 @@ async fn list_listings(
     // Inject readiness into each row
     for row in &mut attached {
         if let Some(obj) = row.as_object_mut() {
-            let (score, blocking) = compute_readiness(obj);
+            let (score, blocking) = readiness_summary(obj);
             obj.insert("readiness_score".to_string(), json!(score));
             obj.insert(
                 "readiness_blocking".to_string(),
@@ -1106,108 +1107,9 @@ async fn listing_readiness(
     let mut rows = attach_fee_lines(pool, vec![record]).await?;
     let row = rows.pop().unwrap_or_else(|| Value::Object(Map::new()));
     let obj = row.as_object().cloned().unwrap_or_default();
-    let (score, blocking) = compute_readiness(&obj);
+    let report = compute_readiness_report(&obj);
 
-    Ok(Json(json!({
-        "score": score,
-        "blocking": blocking,
-    })))
-}
-
-fn compute_readiness(obj: &Map<String, Value>) -> (u32, Vec<String>) {
-    let mut score: u32 = 0;
-    let mut blocking: Vec<String> = Vec::new();
-
-    // cover_image (25pts)
-    let has_cover = obj
-        .get("cover_image_url")
-        .and_then(Value::as_str)
-        .map(str::trim)
-        .is_some_and(|v| !v.is_empty());
-    if has_cover {
-        score += 25;
-    } else {
-        blocking.push("cover_image".to_string());
-    }
-
-    // fee_breakdown (25pts)
-    let fee_complete = obj
-        .get("fee_breakdown_complete")
-        .and_then(Value::as_bool)
-        .unwrap_or(false);
-    if fee_complete {
-        score += 25;
-    } else {
-        blocking.push("fee_lines".to_string());
-    }
-
-    // amenities >= 3 (15pts)
-    let amenities_count = obj
-        .get("amenities")
-        .and_then(Value::as_array)
-        .map(|a| a.len())
-        .unwrap_or(0);
-    if amenities_count >= 3 {
-        score += 15;
-    } else {
-        blocking.push("amenities".to_string());
-    }
-
-    // bedrooms (10pts)
-    let has_bedrooms = obj
-        .get("bedrooms")
-        .is_some_and(|v| !v.is_null() && v.as_i64().is_some_and(|n| n > 0));
-    if has_bedrooms {
-        score += 10;
-    } else {
-        blocking.push("bedrooms".to_string());
-    }
-
-    // square_meters (10pts)
-    let has_sqm = obj
-        .get("square_meters")
-        .is_some_and(|v| !v.is_null() && v.as_f64().is_some_and(|n| n > 0.0));
-    if has_sqm {
-        score += 10;
-    } else {
-        blocking.push("square_meters".to_string());
-    }
-
-    // available_from (5pts)
-    let has_available = obj
-        .get("available_from")
-        .and_then(Value::as_str)
-        .map(str::trim)
-        .is_some_and(|v| !v.is_empty());
-    if has_available {
-        score += 5;
-    } else {
-        blocking.push("available_from".to_string());
-    }
-
-    // minimum_lease (5pts)
-    let has_lease = obj
-        .get("minimum_lease_months")
-        .is_some_and(|v| !v.is_null() && v.as_i64().is_some_and(|n| n > 0));
-    if has_lease {
-        score += 5;
-    } else {
-        blocking.push("minimum_lease".to_string());
-    }
-
-    // description (5pts)
-    let has_desc = obj
-        .get("description")
-        .and_then(Value::as_str)
-        .map(str::trim)
-        .is_some_and(|v| !v.is_empty());
-    if has_desc {
-        score += 5;
-    } else {
-        blocking.push("description".to_string());
-    }
-
-    (score, blocking)
+    Ok(Json(json!(report)))
 }
 
 async fn replace_fee_lines(

@@ -1,11 +1,13 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
+import { CheckmarkCircle02Icon, Cancel01Icon } from "@hugeicons/core-free-icons";
 import { useEffect, useRef, useState } from "react";
 import { Controller, useForm, type Resolver } from "react-hook-form";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
+import { ReadinessRing } from "@/components/listings/readiness-ring";
 import { ImageUpload } from "@/app/(admin)/module/listings/listing-image-upload";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -30,9 +32,22 @@ import {
 import {
   authedFetch,
   fetchSlugAvailable,
+  type ReadinessIssue,
 } from "@/lib/features/listings/listings-api";
+import { useListingReadiness } from "@/lib/features/listings/use-listing-readiness";
+import { Icon } from "@/components/ui/icon";
 import { slugify } from "@/lib/features/listings/slugify";
 import type { ListingRow } from "@/app/(admin)/module/listings/listings-manager";
+
+const READINESS_FIELD_MAP: Record<string, string> = {
+  cover_image: "cover_image_url",
+  amenities: "amenities",
+  bedrooms: "bedrooms",
+  square_meters: "square_meters",
+  available_from: "available_from",
+  minimum_lease: "minimum_lease_months",
+  description: "description",
+};
 
 type ListingFormProps = {
   orgId: string;
@@ -44,6 +59,7 @@ type ListingFormProps = {
   unitOptions: { id: string; label: string }[];
   onSuccess: () => void;
   onPreview?: () => void;
+  scrollToField?: string;
 };
 
 export function ListingForm({
@@ -56,10 +72,13 @@ export function ListingForm({
   unitOptions,
   onSuccess,
   onPreview,
+  scrollToField,
 }: ListingFormProps) {
   const queryClient = useQueryClient();
   const isEditing = editing !== null;
   const [submitting, setSubmitting] = useState(false);
+  const [savedListingId, setSavedListingId] = useState<string | null>(null);
+  const readinessQuery = useListingReadiness(savedListingId);
 
   const cityKey =
     editing?.city?.toLowerCase().replace(/\s+/g, "_") || "asuncion";
@@ -121,6 +140,29 @@ export function ListingForm({
           country_code: "PY",
         },
   });
+
+  /* ---- Scroll to blocking field ---- */
+
+  useEffect(() => {
+    if (!scrollToField) return;
+    if (scrollToField === "fee_lines") {
+      toast.info(
+        isEn
+          ? "Fees are managed via pricing templates"
+          : "Las cuotas se gestionan via plantillas de precios"
+      );
+      return;
+    }
+    const formField = READINESS_FIELD_MAP[scrollToField] ?? scrollToField;
+    const el = document.querySelector(`[data-field="${formField}"]`);
+    if (el) {
+      setTimeout(() => {
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+        const input = el.querySelector("input,textarea,select,button");
+        if (input instanceof HTMLElement) input.focus();
+      }, 200);
+    }
+  }, [scrollToField, isEn]);
 
   /* ---- Slug auto-generation + availability ---- */
 
@@ -232,16 +274,19 @@ export function ListingForm({
     payload.furnished = values.furnished ?? false;
 
     try {
+      let resultId: string;
       if (isEditing) {
         await authedFetch(
           `/listings/${encodeURIComponent(editing.id)}`,
           { method: "PATCH", body: JSON.stringify(payload) }
         );
+        resultId = editing.id;
       } else {
-        await authedFetch("/listings", {
+        const created = await authedFetch<{ id: string }>("/listings", {
           method: "POST",
           body: JSON.stringify({ ...payload, organization_id: orgId }),
         });
+        resultId = created.id;
       }
 
       queryClient.invalidateQueries({ queryKey: ["listings"] });
@@ -254,7 +299,7 @@ export function ListingForm({
             ? "Listing created"
             : "Anuncio creado"
       );
-      onSuccess();
+      setSavedListingId(resultId);
     } catch (err) {
       toast.error(isEn ? "Could not save" : "No se pudo guardar", {
         description: err instanceof Error ? err.message : String(err),
@@ -264,8 +309,77 @@ export function ListingForm({
     }
   }
 
+  function scrollToFormField(readinessField: string) {
+    if (readinessField === "fee_lines") {
+      toast.info(
+        isEn
+          ? "Fees are managed via pricing templates"
+          : "Las cuotas se gestionan via plantillas de precios"
+      );
+      return;
+    }
+    const formField = READINESS_FIELD_MAP[readinessField] ?? readinessField;
+    const el = document.querySelector(`[data-field="${formField}"]`);
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+      const input = el.querySelector("input,textarea,select,button");
+      if (input instanceof HTMLElement) input.focus();
+    }
+  }
+
+  const readinessData = readinessQuery.data;
+  const unsatisfied = readinessData?.issues.filter((i: ReadinessIssue) => !i.satisfied) ?? [];
+
   return (
     <form className="space-y-4" onSubmit={form.handleSubmit(onSubmit)}>
+      {savedListingId && readinessData ? (
+        <div className="rounded-xl border border-border/60 bg-muted/30 p-4 space-y-3">
+          <div className="flex items-center gap-3">
+            <ReadinessRing score={readinessData.score} />
+            <div className="flex-1 min-w-0">
+              <p className="font-medium text-sm">
+                {isEn ? "Readiness" : "Preparación"}: {readinessData.score}%
+                {unsatisfied.length > 0
+                  ? ` — ${unsatisfied.length} ${isEn ? (unsatisfied.length === 1 ? "issue remaining" : "issues remaining") : (unsatisfied.length === 1 ? "pendiente" : "pendientes")}`
+                  : ""}
+              </p>
+            </div>
+          </div>
+          {unsatisfied.length > 0 ? (
+            <ul className="space-y-1.5">
+              {unsatisfied.map((issue: ReadinessIssue) => (
+                <li
+                  className="flex items-center gap-2 text-sm"
+                  key={issue.field}
+                >
+                  <Icon
+                    className="text-muted-foreground/50"
+                    icon={Cancel01Icon}
+                    size={13}
+                  />
+                  <span className="text-muted-foreground">{issue.label}</span>
+                  <button
+                    className="ml-auto text-xs text-primary hover:underline"
+                    onClick={() => scrollToFormField(issue.field)}
+                    type="button"
+                  >
+                    {isEn ? "Fix now" : "Corregir"}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          <Button
+            className="w-full"
+            onClick={onSuccess}
+            type="button"
+            variant="outline"
+          >
+            {isEn ? "Done" : "Listo"}
+          </Button>
+        </div>
+      ) : null}
+
       <div className="grid gap-3 md:grid-cols-2">
         {/* Title */}
         <label className="space-y-1 text-sm md:col-span-2">
@@ -381,7 +495,7 @@ export function ListingForm({
         </label>
 
         {/* Cover image */}
-        <div className="space-y-1 text-sm md:col-span-2">
+        <div className="space-y-1 text-sm md:col-span-2" data-field="cover_image_url">
           <span>{isEn ? "Cover image" : "Imagen de portada"}</span>
           <Controller
             control={form.control}
@@ -425,7 +539,7 @@ export function ListingForm({
         </div>
 
         {/* Bedrooms */}
-        <label className="space-y-1 text-sm">
+        <label className="space-y-1 text-sm" data-field="bedrooms">
           <span>{isEn ? "Bedrooms" : "Habitaciones"}</span>
           <Input
             {...form.register("bedrooms")}
@@ -446,7 +560,7 @@ export function ListingForm({
         </label>
 
         {/* Area */}
-        <label className="space-y-1 text-sm">
+        <label className="space-y-1 text-sm" data-field="square_meters">
           <span>{isEn ? "Area (m²)" : "Área (m²)"}</span>
           <Input
             {...form.register("square_meters")}
@@ -501,7 +615,7 @@ export function ListingForm({
         />
 
         {/* Minimum lease */}
-        <label className="space-y-1 text-sm">
+        <label className="space-y-1 text-sm" data-field="minimum_lease_months">
           <span>
             {isEn
               ? "Minimum lease (months)"
@@ -515,7 +629,7 @@ export function ListingForm({
         </label>
 
         {/* Available from */}
-        <div className="space-y-1 text-sm">
+        <div className="space-y-1 text-sm" data-field="available_from">
           <span>{isEn ? "Available from" : "Disponible desde"}</span>
           <Controller
             control={form.control}
@@ -605,7 +719,7 @@ export function ListingForm({
               field.onChange(Array.from(next));
             };
             return (
-              <div className="space-y-2 text-sm md:col-span-2">
+              <div className="space-y-2 text-sm md:col-span-2" data-field="amenities">
                 <span>{isEn ? "Amenities" : "Amenidades"}</span>
                 <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                   {AMENITY_PRESETS.map((amenity) => (
@@ -629,7 +743,7 @@ export function ListingForm({
         />
 
         {/* Description */}
-        <label className="space-y-1 text-sm md:col-span-2">
+        <label className="space-y-1 text-sm md:col-span-2" data-field="description">
           <span>{isEn ? "Description" : "Descripción"}</span>
           <Textarea {...form.register("description")} />
         </label>

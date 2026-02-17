@@ -35,14 +35,14 @@ export function AppFooter({ locale }: { locale: Locale }) {
         alt="Casaora"
         className="dark:hidden"
         height={20}
-        src="/casaora-logo-dark.svg"
+        src="/casaoralogo-light.svg"
         width={88}
       />
       <Image
         alt="Casaora"
         className="hidden dark:block"
         height={20}
-        src="/casaora-logo-all-white.svg"
+        src="/casaoralogo-dark.svg"
         width={88}
       />
 

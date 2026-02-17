@@ -85,9 +85,18 @@ export function fetchSlugAvailable(
   );
 }
 
+export type ReadinessIssue = {
+  field: string;
+  label: string;
+  weight: number;
+  satisfied: boolean;
+  critical: boolean;
+};
+
 export type ReadinessResponse = {
   score: number;
-  blocking: string[];
+  blocking: boolean;
+  issues: ReadinessIssue[];
 };
 
 export function fetchListingReadiness(
