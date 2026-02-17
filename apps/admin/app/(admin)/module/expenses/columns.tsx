@@ -5,8 +5,24 @@ import { useMemo } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import type { DataTableRow } from "@/components/ui/data-table";
+import { StatusBadge } from "@/components/ui/status-badge";
 import { asNumber, asString, shortId } from "@/lib/features/expenses/utils";
 import { formatCurrency, humanizeKey } from "@/lib/format";
+
+function approvalTone(
+  status: string
+): "info" | "warning" | "success" | "danger" | "neutral" {
+  switch (status) {
+    case "pending":
+      return "warning";
+    case "approved":
+      return "success";
+    case "rejected":
+      return "danger";
+    default:
+      return "neutral";
+  }
+}
 
 export function useExpenseColumns(
   isEn: boolean,
@@ -114,6 +130,35 @@ export function useExpenseColumns(
             >
               {isEn ? "View" : "Ver"}
             </a>
+          );
+        },
+      },
+      {
+        accessorKey: "approval_status",
+        header: isEn ? "Approval" : "Aprobación",
+        cell: ({ getValue }) => {
+          const status = asString(getValue()).trim() || "pending";
+          return (
+            <StatusBadge value={status} tone={approvalTone(status)} />
+          );
+        },
+      },
+      {
+        id: "iva",
+        header: "IVA",
+        accessorFn: (row) => row.iva_amount,
+        cell: ({ row }) => {
+          const original = row.original;
+          const applicable = Boolean(original.iva_applicable);
+          if (!applicable)
+            return <span className="text-muted-foreground">-</span>;
+          const amount = asNumber(original.iva_amount);
+          const currency =
+            asString(original.currency).trim().toUpperCase() || "PYG";
+          return (
+            <span className="tabular-nums">
+              {formatCurrency(amount, currency, locale)}
+            </span>
           );
         },
       },

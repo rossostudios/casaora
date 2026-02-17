@@ -12,6 +12,7 @@ pub mod agent_chats;
 pub mod ai_agent;
 pub mod applications;
 pub mod calendar;
+pub mod cancellation_policies;
 pub mod collections;
 pub mod demo;
 pub mod documents;
@@ -40,6 +41,8 @@ pub mod tasks;
 pub mod tenant;
 pub mod sequences;
 pub mod booking;
+pub mod contract_templates;
+pub mod owner_portal;
 pub mod workflows;
 
 async fn public_fx_rate(State(state): State<AppState>) -> Json<Value> {
@@ -59,6 +62,7 @@ pub fn v1_router() -> Router<AppState> {
         .merge(guests::router())
         .merge(reservations::router())
         .merge(calendar::router())
+        .merge(cancellation_policies::router())
         .merge(tasks::router())
         .merge(expenses::router())
         .merge(collections::router())
@@ -82,5 +86,7 @@ pub fn v1_router() -> Router<AppState> {
         .merge(platform::router())
         .merge(sequences::router())
         .merge(booking::router())
+        .merge(contract_templates::router())
+        .merge(owner_portal::router())
         .merge(demo::router())
 }

@@ -34,6 +34,7 @@ import {
 import { getActiveLocale } from "@/lib/i18n/server";
 import { getActiveOrgId } from "@/lib/org";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { TaskPhotoUpload } from "@/components/tasks/task-photo-upload";
 import { cn } from "@/lib/utils";
 
 import {
@@ -74,6 +75,7 @@ type TaskItemRow = {
   sort_order: number;
   is_required: boolean;
   is_completed: boolean;
+  photo_urls: string[];
 };
 
 class ApiRequestError extends Error {
@@ -182,12 +184,18 @@ function normalizeTaskItems(rows: unknown[]): TaskItemRow[] {
       if (!id) return null;
 
       const label = asString(record.label).trim();
+      const rawPhotos = record.photo_urls;
+      const photo_urls = Array.isArray(rawPhotos)
+        ? rawPhotos.filter((u): u is string => typeof u === "string")
+        : [];
+
       return {
         id,
         label,
         sort_order: Math.max(0, asNumber(record.sort_order)),
         is_required: asBoolean(record.is_required),
         is_completed: asBoolean(record.is_completed),
+        photo_urls,
       } satisfies TaskItemRow;
     })
     .filter((item): item is TaskItemRow => Boolean(item))
@@ -620,6 +628,12 @@ export default async function TaskDetailPage({
                             : "Pendiente"}
                       </span>
                     </Button>
+                    <TaskPhotoUpload
+                      itemId={item.id}
+                      orgId={task.organization_id}
+                      photoUrls={item.photo_urls}
+                      taskId={task.id}
+                    />
                   </form>
                 );
               })}

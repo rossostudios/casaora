@@ -12,8 +12,8 @@ use crate::{
     error::{AppError, AppResult},
     repository::table_service::{create_row, delete_row, get_row, update_row},
     schemas::{
-        clamp_limit_in_range, remove_nulls, serialize_to_map, CreateExpenseInput, ExpensePath,
-        ExpensesQuery, UpdateExpenseInput,
+        clamp_limit_in_range, remove_nulls, serialize_to_map, CreateExpenseInput,
+        ExpenseApprovalInput, ExpensePath, ExpensesQuery, UpdateExpenseInput,
     },
     services::{audit::write_audit_log, enrichment::enrich_expenses, fx::get_usd_to_pyg_rate},
     state::AppState,
@@ -25,6 +25,14 @@ pub fn router() -> axum::Router<AppState> {
         .route(
             "/expenses",
             axum::routing::get(list_expenses).post(create_expense),
+        )
+        .route(
+            "/expenses/{expense_id}/approve",
+            axum::routing::post(approve_expense),
+        )
+        .route(
+            "/expenses/{expense_id}/reject",
+            axum::routing::post(reject_expense),
         )
         .route(
             "/expenses/{expense_id}",
@@ -106,6 +114,16 @@ async fn create_expense(
         }
     } else {
         record.remove("fx_rate_to_pyg");
+    }
+
+    // IVA auto-calculation (10% in Paraguay)
+    if payload.iva_applicable {
+        let iva = payload.iva_amount.unwrap_or_else(|| {
+            let base = payload.amount;
+            (base * 0.10 * 100.0).round() / 100.0
+        });
+        record.insert("iva_amount".to_string(), json!(iva));
+        record.insert("iva_applicable".to_string(), json!(true));
     }
 
     let created = create_row(pool, "expenses", &record).await?;
@@ -267,6 +285,94 @@ async fn delete_expense(
     Ok(Json(deleted))
 }
 
+async fn approve_expense(
+    State(state): State<AppState>,
+    Path(path): Path<ExpensePath>,
+    headers: HeaderMap,
+    Json(_payload): Json<ExpenseApprovalInput>,
+) -> AppResult<Json<Value>> {
+    let user_id = require_user_id(&state, &headers).await?;
+    let pool = db_pool(&state)?;
+
+    let record = get_row(pool, "expenses", &path.expense_id, "id").await?;
+    let org_id = value_str(&record, "organization_id");
+    assert_org_role(&state, &user_id, &org_id, &["owner_admin"]).await?;
+
+    let mut patch = Map::new();
+    patch.insert(
+        "approval_status".to_string(),
+        Value::String("approved".to_string()),
+    );
+    patch.insert("approved_by".to_string(), Value::String(user_id.clone()));
+    patch.insert(
+        "approved_at".to_string(),
+        Value::String(chrono::Utc::now().to_rfc3339()),
+    );
+
+    let updated = update_row(pool, "expenses", &path.expense_id, &patch, "id").await?;
+
+    write_audit_log(
+        state.db_pool.as_ref(),
+        Some(&org_id),
+        Some(&user_id),
+        "approve",
+        "expenses",
+        Some(&path.expense_id),
+        Some(record),
+        Some(updated.clone()),
+    )
+    .await;
+
+    let mut enriched = enrich_expenses(pool, vec![updated], &org_id).await?;
+    Ok(Json(
+        enriched.pop().unwrap_or_else(|| Value::Object(Map::new())),
+    ))
+}
+
+async fn reject_expense(
+    State(state): State<AppState>,
+    Path(path): Path<ExpensePath>,
+    headers: HeaderMap,
+    Json(_payload): Json<ExpenseApprovalInput>,
+) -> AppResult<Json<Value>> {
+    let user_id = require_user_id(&state, &headers).await?;
+    let pool = db_pool(&state)?;
+
+    let record = get_row(pool, "expenses", &path.expense_id, "id").await?;
+    let org_id = value_str(&record, "organization_id");
+    assert_org_role(&state, &user_id, &org_id, &["owner_admin"]).await?;
+
+    let mut patch = Map::new();
+    patch.insert(
+        "approval_status".to_string(),
+        Value::String("rejected".to_string()),
+    );
+    patch.insert("approved_by".to_string(), Value::String(user_id.clone()));
+    patch.insert(
+        "approved_at".to_string(),
+        Value::String(chrono::Utc::now().to_rfc3339()),
+    );
+
+    let updated = update_row(pool, "expenses", &path.expense_id, &patch, "id").await?;
+
+    write_audit_log(
+        state.db_pool.as_ref(),
+        Some(&org_id),
+        Some(&user_id),
+        "reject",
+        "expenses",
+        Some(&path.expense_id),
+        Some(record),
+        Some(updated.clone()),
+    )
+    .await;
+
+    let mut enriched = enrich_expenses(pool, vec![updated], &org_id).await?;
+    Ok(Json(
+        enriched.pop().unwrap_or_else(|| Value::Object(Map::new())),
+    ))
+}
+
 async fn list_expense_rows(pool: &sqlx::PgPool, query: &ExpensesQuery) -> AppResult<Vec<Value>> {
     let mut builder = QueryBuilder::<Postgres>::new(
         "SELECT row_to_json(t) AS row FROM expenses t WHERE organization_id = ",
@@ -308,6 +414,10 @@ async fn list_expense_rows(pool: &sqlx::PgPool, query: &ExpensesQuery) -> AppRes
     if let Some(vendor_name) = non_empty_opt(query.vendor_name.as_deref()) {
         builder.push(" AND vendor_name ILIKE ");
         builder.push_bind(format!("%{vendor_name}%"));
+    }
+    if let Some(approval_status) = non_empty_opt(query.approval_status.as_deref()) {
+        builder.push(" AND approval_status = ");
+        builder.push_bind(approval_status);
     }
 
     builder.push(" ORDER BY expense_date DESC LIMIT ");

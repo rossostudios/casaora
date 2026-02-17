@@ -32,6 +32,14 @@ pub fn router() -> axum::Router<AppState> {
             axum::routing::get(get_owner_statement),
         )
         .route(
+            "/owner-statements/{statement_id}/request-approval",
+            axum::routing::post(request_approval_owner_statement),
+        )
+        .route(
+            "/owner-statements/{statement_id}/approve",
+            axum::routing::post(approve_owner_statement),
+        )
+        .route(
             "/owner-statements/{statement_id}/finalize",
             axum::routing::post(finalize_owner_statement),
         )
@@ -198,6 +206,99 @@ async fn get_owner_statement(
         );
     }
     Ok(Json(item))
+}
+
+async fn request_approval_owner_statement(
+    State(state): State<AppState>,
+    Path(path): Path<OwnerStatementPath>,
+    headers: HeaderMap,
+) -> AppResult<Json<Value>> {
+    let user_id = require_user_id(&state, &headers).await?;
+    let pool = db_pool(&state)?;
+
+    let record = get_row(pool, "owner_statements", &path.statement_id, "id").await?;
+    let org_id = value_str(&record, "organization_id");
+    assert_org_role(&state, &user_id, &org_id, &["owner_admin", "accountant"]).await?;
+
+    let current_status = value_str(&record, "status");
+    if current_status != "draft" {
+        return Err(AppError::BadRequest(
+            "Only draft statements can be submitted for approval.".to_string(),
+        ));
+    }
+
+    let mut patch = Map::new();
+    patch.insert(
+        "approval_status".to_string(),
+        Value::String("pending".to_string()),
+    );
+    patch.insert(
+        "approval_requested_at".to_string(),
+        Value::String(chrono::Utc::now().to_rfc3339()),
+    );
+
+    let updated = update_row(pool, "owner_statements", &path.statement_id, &patch, "id").await?;
+
+    write_audit_log(
+        state.db_pool.as_ref(),
+        Some(&org_id),
+        Some(&user_id),
+        "request_approval",
+        "owner_statements",
+        Some(&path.statement_id),
+        Some(record),
+        Some(updated.clone()),
+    )
+    .await;
+
+    Ok(Json(updated))
+}
+
+async fn approve_owner_statement(
+    State(state): State<AppState>,
+    Path(path): Path<OwnerStatementPath>,
+    headers: HeaderMap,
+) -> AppResult<Json<Value>> {
+    let user_id = require_user_id(&state, &headers).await?;
+    let pool = db_pool(&state)?;
+
+    let record = get_row(pool, "owner_statements", &path.statement_id, "id").await?;
+    let org_id = value_str(&record, "organization_id");
+    assert_org_role(&state, &user_id, &org_id, &["owner_admin"]).await?;
+
+    let approval_status = value_str(&record, "approval_status");
+    if approval_status != "pending" {
+        return Err(AppError::BadRequest(
+            "Only statements with pending approval can be approved.".to_string(),
+        ));
+    }
+
+    let mut patch = Map::new();
+    patch.insert(
+        "approval_status".to_string(),
+        Value::String("approved".to_string()),
+    );
+    patch.insert("approved_by".to_string(), Value::String(user_id.clone()));
+    patch.insert(
+        "approved_at".to_string(),
+        Value::String(chrono::Utc::now().to_rfc3339()),
+    );
+
+    let updated = update_row(pool, "owner_statements", &path.statement_id, &patch, "id").await?;
+
+    write_audit_log(
+        state.db_pool.as_ref(),
+        Some(&org_id),
+        Some(&user_id),
+        "approve",
+        "owner_statements",
+        Some(&path.statement_id),
+        Some(record),
+        Some(updated.clone()),
+    )
+    .await;
+
+    Ok(Json(updated))
 }
 
 async fn finalize_owner_statement(

@@ -288,6 +288,56 @@ export async function setLeaseStatusAction(formData: FormData) {
   }
 }
 
+export async function sendRenewalOfferAction(formData: FormData) {
+  const lease_id = toStringValue(formData.get("lease_id"));
+  if (!lease_id) {
+    redirect(leasesUrl({ error: "lease_id is required" }));
+  }
+
+  const next = normalizeNext(toStringValue(formData.get("next")), leasesUrl());
+  const offered_rent = toOptionalNumber(formData.get("offered_rent"));
+  const notes = toStringValue(formData.get("notes")) || undefined;
+
+  try {
+    await postJson(`/leases/${encodeURIComponent(lease_id)}/renew`, {
+      ...(offered_rent !== undefined ? { offered_rent } : {}),
+      ...(notes ? { notes } : {}),
+    });
+
+    revalidatePath("/module/leases");
+    redirect(withParams(next, { success: "renewal-offer-sent" }));
+  } catch (err) {
+    unstable_rethrow(err);
+    const message = err instanceof Error ? err.message : String(err);
+    redirect(withParams(next, { error: message.slice(0, 240) }));
+  }
+}
+
+export async function acceptRenewalAction(formData: FormData) {
+  const lease_id = toStringValue(formData.get("lease_id"));
+  if (!lease_id) {
+    redirect(leasesUrl({ error: "lease_id is required" }));
+  }
+
+  const next = normalizeNext(toStringValue(formData.get("next")), leasesUrl());
+
+  try {
+    await postJson(
+      `/leases/${encodeURIComponent(lease_id)}/renewal-accept`,
+      {}
+    );
+
+    revalidatePath("/module/leases");
+    revalidatePath("/module/collections");
+    revalidatePath("/app");
+    redirect(withParams(next, { success: "renewal-accepted" }));
+  } catch (err) {
+    unstable_rethrow(err);
+    const message = err instanceof Error ? err.message : String(err);
+    redirect(withParams(next, { error: message.slice(0, 240) }));
+  }
+}
+
 export async function renewLeaseAction(formData: FormData) {
   const old_lease_id = toStringValue(formData.get("old_lease_id"));
   const organization_id = toStringValue(formData.get("organization_id"));

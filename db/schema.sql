@@ -391,6 +391,18 @@ CREATE TABLE guests (
 CREATE INDEX idx_guests_org_id ON guests(organization_id);
 CREATE INDEX idx_guests_email ON guests(organization_id, email);
 
+CREATE TABLE cancellation_policies (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  organization_id uuid NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  name text NOT NULL,
+  description text,
+  refund_percent numeric(5, 2) NOT NULL DEFAULT 100,
+  cutoff_hours integer NOT NULL DEFAULT 48,
+  is_default boolean NOT NULL DEFAULT false,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
 CREATE TABLE reservations (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   organization_id uuid NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
@@ -419,6 +431,10 @@ CREATE TABLE reservations (
   owner_payout_estimate numeric(12, 2) NOT NULL DEFAULT 0,
   payment_method payment_method,
   payment_reference text,
+  cancellation_policy_id uuid REFERENCES cancellation_policies(id) ON DELETE SET NULL,
+  deposit_amount numeric(12, 2) NOT NULL DEFAULT 0,
+  deposit_status text NOT NULL DEFAULT 'none',
+  deposit_refunded_at timestamptz,
   cancelled_at timestamptz,
   cancel_reason text,
   notes text,
@@ -452,6 +468,8 @@ CREATE TABLE calendar_blocks (
   ends_on date NOT NULL,
   period daterange GENERATED ALWAYS AS (daterange(starts_on, ends_on, '[)')) STORED,
   reason text,
+  recurrence_rule text,
+  recurrence_end_date date,
   created_by_user_id uuid REFERENCES app_users(id),
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now(),
@@ -504,6 +522,7 @@ CREATE TABLE task_items (
   is_completed boolean NOT NULL DEFAULT false,
   completed_by_user_id uuid REFERENCES app_users(id) ON DELETE SET NULL,
   completed_at timestamptz,
+  photo_urls jsonb NOT NULL DEFAULT '[]'::jsonb,
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now(),
   UNIQUE (task_id, sort_order)
@@ -530,6 +549,11 @@ CREATE TABLE expenses (
   invoice_ruc text,
   receipt_url text,
   notes text,
+  approval_status text NOT NULL DEFAULT 'pending',
+  approved_by uuid REFERENCES app_users(id) ON DELETE SET NULL,
+  approved_at timestamptz,
+  iva_applicable boolean NOT NULL DEFAULT false,
+  iva_amount numeric(12, 2) NOT NULL DEFAULT 0,
   created_by_user_id uuid REFERENCES app_users(id) ON DELETE SET NULL,
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now()
@@ -556,6 +580,10 @@ CREATE TABLE owner_statements (
   operating_expenses numeric(12, 2) NOT NULL DEFAULT 0,
   net_payout numeric(12, 2) NOT NULL DEFAULT 0,
   status statement_status NOT NULL DEFAULT 'draft',
+  approval_status text NOT NULL DEFAULT 'none',
+  approval_requested_at timestamptz,
+  approved_by uuid REFERENCES app_users(id) ON DELETE SET NULL,
+  approved_at timestamptz,
   pdf_url text,
   generated_at timestamptz NOT NULL DEFAULT now(),
   sent_at timestamptz,
@@ -1138,6 +1166,32 @@ CREATE TABLE audit_logs (
 );
 
 CREATE INDEX idx_audit_logs_org_created_at ON audit_logs(organization_id, created_at DESC);
+
+CREATE TABLE contract_templates (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  organization_id uuid NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  name text NOT NULL,
+  language text NOT NULL DEFAULT 'es',
+  body_template text NOT NULL DEFAULT '',
+  variables jsonb NOT NULL DEFAULT '[]'::jsonb,
+  is_default boolean NOT NULL DEFAULT false,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX idx_contract_templates_org ON contract_templates(organization_id);
+
+CREATE TABLE owner_access_tokens (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  owner_email text NOT NULL,
+  organization_id uuid NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  token_hash text NOT NULL UNIQUE,
+  expires_at timestamptz NOT NULL DEFAULT (now() + interval '7 days'),
+  last_used_at timestamptz,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX idx_owner_access_tokens_hash ON owner_access_tokens(token_hash);
 
 -- ---------- Update triggers ----------
 

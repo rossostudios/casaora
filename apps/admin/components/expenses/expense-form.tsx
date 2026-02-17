@@ -93,6 +93,14 @@ export function ExpenseForm({
   const [notes, setNotes] = useState(
     isEdit ? asString(editing?.notes).trim() : ""
   );
+  const [ivaApplicable, setIvaApplicable] = useState(
+    isEdit ? Boolean(editing?.iva_applicable) : false
+  );
+  const computedIva = (() => {
+    const base = Number(amount);
+    if (!Number.isFinite(base) || base <= 0) return 0;
+    return Math.round(base * 0.1 * 100) / 100;
+  })();
 
   const reservationLocked = reservationId.trim().length > 0;
 
@@ -319,6 +327,31 @@ export function ExpenseForm({
             value={invoiceRuc}
           />
         </label>
+      </div>
+
+      <div className="flex items-center gap-3 rounded-md border bg-muted/10 p-3">
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            checked={ivaApplicable}
+            name="iva_applicable"
+            onChange={(event) => setIvaApplicable(event.target.checked)}
+            type="checkbox"
+            value="true"
+          />
+          <span className="font-medium">
+            {isEn ? "IVA applicable (10%)" : "IVA aplicable (10%)"}
+          </span>
+        </label>
+        {ivaApplicable ? (
+          <span className="text-muted-foreground text-sm tabular-nums">
+            IVA: {currency} {computedIva.toLocaleString(locale)}
+          </span>
+        ) : null}
+        <input
+          name="iva_amount"
+          type="hidden"
+          value={ivaApplicable ? String(computedIva) : "0"}
+        />
       </div>
 
       <div className="space-y-2 rounded-md border bg-muted/10 p-3">

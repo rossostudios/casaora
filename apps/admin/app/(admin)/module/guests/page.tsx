@@ -33,6 +33,7 @@ type GuestCrmRow = {
   last_stay_end: string | null;
   next_stay_start: string | null;
   lifetime_value: number;
+  verification_status: string | null;
 };
 
 type PageProps = {
@@ -253,6 +254,7 @@ export default async function GuestsModulePage({ searchParams }: PageProps) {
         last_stay_end: lastStayEnd,
         next_stay_start: nextStayStart,
         lifetime_value: Math.round(lifetimeValue * 100) / 100,
+        verification_status: asOptionalString(guest.verification_status),
       } satisfies GuestCrmRow;
     })
     .filter((row): row is GuestCrmRow => Boolean(row));

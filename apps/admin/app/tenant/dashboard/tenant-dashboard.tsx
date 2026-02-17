@@ -71,6 +71,28 @@ export function TenantDashboard({ locale }: { locale: string }) {
   const unit = (data.unit ?? {}) as Record<string, unknown>;
   const nextPayment = data.next_payment as Record<string, unknown> | null;
   const upcomingCount = asNumber(data.total_upcoming_payments);
+  const renewalStatus = asString(lease.renewal_status);
+  const renewalOfferedRent = asNumber(lease.renewal_offered_rent);
+  const renewalNotes = asString(lease.renewal_notes);
+
+  const handleAcceptRenewal = async () => {
+    const token = localStorage.getItem("tenant_token");
+    if (!token) return;
+    const leaseId = asString(lease.id);
+    if (!leaseId) return;
+    try {
+      const res = await fetch(`${API_BASE}/leases/${leaseId}/renewal-accept`, {
+        method: "POST",
+        headers: { "x-tenant-token": token, "Content-Type": "application/json" },
+        body: "{}",
+      });
+      if (res.ok) {
+        fetchDashboard();
+      }
+    } catch {
+      /* ignore */
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -116,6 +138,39 @@ export function TenantDashboard({ locale }: { locale: string }) {
           </div>
         </CardContent>
       </Card>
+
+      {(renewalStatus === "offered" || renewalStatus === "pending") && (
+        <Card className="border-amber-200/60 bg-amber-50/20 dark:border-amber-800/40 dark:bg-amber-950/10">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-lg">
+              {isEn ? "Renewal Offer" : "Oferta de Renovación"}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              {isEn
+                ? "Your landlord has sent a renewal offer for your lease."
+                : "Tu arrendador ha enviado una oferta de renovación para tu contrato."}
+            </p>
+            {renewalOfferedRent > 0 && (
+              <p className="text-sm">
+                {isEn ? "Proposed rent:" : "Renta propuesta:"}{" "}
+                <span className="font-semibold">
+                  {formatCurrency(renewalOfferedRent, asString(lease.currency) || "PYG", locale)}
+                </span>
+              </p>
+            )}
+            {renewalNotes && (
+              <p className="text-sm text-muted-foreground">{renewalNotes}</p>
+            )}
+            <div className="flex gap-2">
+              <Button onClick={handleAcceptRenewal} variant="default">
+                {isEn ? "Accept Renewal" : "Aceptar Renovación"}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {nextPayment && (
         <Card>

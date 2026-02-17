@@ -7,6 +7,7 @@ import {
   createCalendarBlockAction,
   deleteCalendarBlockAction,
 } from "@/app/(admin)/module/calendar/actions";
+import { MonthlyTimeline } from "@/components/calendar/monthly-timeline";
 import { Button } from "@/components/ui/button";
 import { DataTable, type DataTableRow } from "@/components/ui/data-table";
 import { DatePicker } from "@/components/ui/date-picker";
@@ -137,6 +138,7 @@ export function CalendarManager({
   const isEn = locale === "en-US";
 
   const [open, setOpen] = useState(false);
+  const [viewMode, setViewMode] = useState<"timeline" | "list">("timeline");
 
   const [query, setQuery] = useState("");
   const [unitId, setUnitId] = useState("all");
@@ -271,85 +273,96 @@ export function CalendarManager({
       .filter((row) => row.id);
   }, [blocks, from, query, to, unitId]);
 
+  const timelineUnits = useMemo(() => {
+    return unitOptions.map((u) => ({ id: u.id, label: u.label }));
+  }, [unitOptions]);
+
+  const timelineEvents = useMemo(() => {
+    const events: Array<{
+      id: string;
+      unitId: string;
+      startDate: string;
+      endDate: string;
+      label: string;
+      type: "reservation" | "block";
+      status?: string | null;
+    }> = [];
+
+    for (const row of reservations as ReservationRow[]) {
+      const rowId = asString(row.id).trim();
+      const rowUnitId = asString(row.unit_id).trim();
+      const checkIn = isIsoDate(row.check_in_date) ? row.check_in_date : null;
+      const checkOut = isIsoDate(row.check_out_date) ? row.check_out_date : null;
+      const status = asString(row.status).trim();
+
+      if (rowId && rowUnitId && checkIn && checkOut) {
+        const guestName = asString(row.guest_name).trim();
+        events.push({
+          id: `res-${rowId}`,
+          unitId: rowUnitId,
+          startDate: checkIn,
+          endDate: checkOut,
+          label: guestName || status || rowId.slice(0, 8),
+          type: "reservation",
+          status,
+        });
+      }
+    }
+
+    for (const block of blocks as BlockRow[]) {
+      const blockId = asString(block.id).trim();
+      const blockUnitId = asString(block.unit_id).trim();
+      const startsOn = isIsoDate(block.starts_on) ? block.starts_on : null;
+      const endsOn = isIsoDate(block.ends_on) ? block.ends_on : null;
+
+      if (blockId && blockUnitId && startsOn && endsOn) {
+        const reason = asString(block.reason).trim();
+        events.push({
+          id: `blk-${blockId}`,
+          unitId: blockUnitId,
+          startDate: startsOn,
+          endDate: endsOn,
+          label: reason || (isEn ? "Blocked" : "Bloqueado"),
+          type: "block",
+        });
+      }
+    }
+
+    return events;
+  }, [reservations, blocks, isEn]);
+
+  function handleTimelineClickDay(clickUnitId: string, date: string) {
+    // Pre-fill the create block sheet with the clicked unit and date
+    setOpen(true);
+  }
+
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-        <div className="grid gap-3 md:grid-cols-5">
-          <label className="space-y-1 md:col-span-2">
-            <span className="block font-medium text-muted-foreground text-xs">
-              {isEn ? "Search" : "Buscar"}
-            </span>
-            <Input
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder={
-                isEn ? "Guest, unit, status..." : "Huésped, unidad, estado..."
-              }
-              value={query}
-            />
-          </label>
-
-          <label className="space-y-1">
-            <span className="block font-medium text-muted-foreground text-xs">
-              {isEn ? "Reservation status" : "Estado de reserva"}
-            </span>
-            <Select
-              onChange={(event) => setReservationStatus(event.target.value)}
-              value={reservationStatus}
-            >
-              <option value="active">{isEn ? "Active" : "Activas"}</option>
-              <option value="all">{isEn ? "All" : "Todas"}</option>
-              <option value="pending">pending</option>
-              <option value="confirmed">confirmed</option>
-              <option value="checked_in">checked_in</option>
-              <option value="checked_out">checked_out</option>
-              <option value="cancelled">cancelled</option>
-              <option value="no_show">no_show</option>
-            </Select>
-          </label>
-
-          <label className="space-y-1">
-            <span className="block font-medium text-muted-foreground text-xs">
-              {isEn ? "Unit" : "Unidad"}
-            </span>
-            <Select
-              onChange={(event) => setUnitId(event.target.value)}
-              value={unitId}
-            >
-              <option value="all">{isEn ? "All units" : "Todas"}</option>
-              {unitOptions.map((unit) => (
-                <option key={unit.id} value={unit.id}>
-                  {unit.label}
-                </option>
-              ))}
-            </Select>
-          </label>
-
-          <div className="grid grid-cols-2 gap-2 md:col-span-5 md:max-w-xl">
-            <label className="space-y-1">
-              <span className="block font-medium text-muted-foreground text-xs">
-                {isEn ? "From" : "Desde"}
-              </span>
-              <DatePicker
-                locale={locale}
-                max={to || undefined}
-                onValueChange={setFrom}
-                value={from}
-              />
-            </label>
-            <label className="space-y-1">
-              <span className="block font-medium text-muted-foreground text-xs">
-                {isEn ? "To" : "Hasta"}
-              </span>
-              <DatePicker
-                locale={locale}
-                min={from || undefined}
-                onValueChange={setTo}
-                value={to}
-              />
-            </label>
-          </div>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-1 rounded-lg border p-0.5">
+          <button
+            className={`rounded-md px-3 py-1 text-sm font-medium transition-colors ${
+              viewMode === "timeline"
+                ? "bg-primary/10 text-primary"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+            onClick={() => setViewMode("timeline")}
+            type="button"
+          >
+            {isEn ? "Timeline" : "Línea de tiempo"}
+          </button>
+          <button
+            className={`rounded-md px-3 py-1 text-sm font-medium transition-colors ${
+              viewMode === "list"
+                ? "bg-primary/10 text-primary"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+            onClick={() => setViewMode("list")}
+            type="button"
+          >
+            {isEn ? "List" : "Lista"}
+          </button>
         </div>
-
         <div className="flex flex-wrap items-center gap-2">
           <div className="text-muted-foreground text-sm">
             {reservationRows.length} {isEn ? "reservations" : "reservas"} ·{" "}
@@ -366,7 +379,105 @@ export function CalendarManager({
         </div>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      {viewMode === "timeline" ? (
+        <MonthlyTimeline
+          events={timelineEvents}
+          isEn={isEn}
+          locale={locale}
+          onClickDay={handleTimelineClickDay}
+          units={timelineUnits}
+        />
+      ) : null}
+
+      {viewMode === "list" ? (
+        <>
+          <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+            <div className="grid gap-3 md:grid-cols-5">
+              <label className="space-y-1 md:col-span-2">
+                <span className="block font-medium text-muted-foreground text-xs">
+                  {isEn ? "Search" : "Buscar"}
+                </span>
+                <Input
+                  onChange={(event) => setQuery(event.target.value)}
+                  placeholder={
+                    isEn
+                      ? "Guest, unit, status..."
+                      : "Huésped, unidad, estado..."
+                  }
+                  value={query}
+                />
+              </label>
+
+              <label className="space-y-1">
+                <span className="block font-medium text-muted-foreground text-xs">
+                  {isEn ? "Reservation status" : "Estado de reserva"}
+                </span>
+                <Select
+                  onChange={(event) =>
+                    setReservationStatus(event.target.value)
+                  }
+                  value={reservationStatus}
+                >
+                  <option value="active">
+                    {isEn ? "Active" : "Activas"}
+                  </option>
+                  <option value="all">{isEn ? "All" : "Todas"}</option>
+                  <option value="pending">pending</option>
+                  <option value="confirmed">confirmed</option>
+                  <option value="checked_in">checked_in</option>
+                  <option value="checked_out">checked_out</option>
+                  <option value="cancelled">cancelled</option>
+                  <option value="no_show">no_show</option>
+                </Select>
+              </label>
+
+              <label className="space-y-1">
+                <span className="block font-medium text-muted-foreground text-xs">
+                  {isEn ? "Unit" : "Unidad"}
+                </span>
+                <Select
+                  onChange={(event) => setUnitId(event.target.value)}
+                  value={unitId}
+                >
+                  <option value="all">
+                    {isEn ? "All units" : "Todas"}
+                  </option>
+                  {unitOptions.map((unit) => (
+                    <option key={unit.id} value={unit.id}>
+                      {unit.label}
+                    </option>
+                  ))}
+                </Select>
+              </label>
+
+              <div className="grid grid-cols-2 gap-2 md:col-span-5 md:max-w-xl">
+                <label className="space-y-1">
+                  <span className="block font-medium text-muted-foreground text-xs">
+                    {isEn ? "From" : "Desde"}
+                  </span>
+                  <DatePicker
+                    locale={locale}
+                    max={to || undefined}
+                    onValueChange={setFrom}
+                    value={from}
+                  />
+                </label>
+                <label className="space-y-1">
+                  <span className="block font-medium text-muted-foreground text-xs">
+                    {isEn ? "To" : "Hasta"}
+                  </span>
+                  <DatePicker
+                    locale={locale}
+                    min={from || undefined}
+                    onValueChange={setTo}
+                    value={to}
+                  />
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid gap-4 lg:grid-cols-2">
         <section className="space-y-3">
           <div className="flex items-center justify-between gap-2">
             <p className="font-medium">{isEn ? "Reservations" : "Reservas"}</p>
@@ -401,6 +512,8 @@ export function CalendarManager({
           />
         </section>
       </div>
+        </>
+      ) : null}
 
       <Sheet
         description={
@@ -458,6 +571,33 @@ export function CalendarManager({
                   : "Mantenimiento, uso propietario..."
               }
             />
+          </label>
+
+          <label className="block space-y-1">
+            <span className="block font-medium text-muted-foreground text-xs">
+              {isEn ? "Recurrence" : "Recurrencia"}
+            </span>
+            <Select defaultValue="" name="recurrence_rule">
+              <option value="">
+                {isEn ? "No recurrence" : "Sin recurrencia"}
+              </option>
+              <option value="FREQ=DAILY">
+                {isEn ? "Daily" : "Diario"}
+              </option>
+              <option value="FREQ=WEEKLY">
+                {isEn ? "Weekly" : "Semanal"}
+              </option>
+              <option value="FREQ=MONTHLY">
+                {isEn ? "Monthly" : "Mensual"}
+              </option>
+            </Select>
+          </label>
+
+          <label className="block space-y-1">
+            <span className="block font-medium text-muted-foreground text-xs">
+              {isEn ? "Recurrence end date (optional)" : "Fin de recurrencia (opcional)"}
+            </span>
+            <DatePicker locale={locale} name="recurrence_end_date" />
           </label>
 
           <div className="flex flex-wrap justify-end gap-2">

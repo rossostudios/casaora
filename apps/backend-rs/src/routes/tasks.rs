@@ -409,6 +409,19 @@ async fn update_task_item(
         patch.insert("sort_order".to_string(), json!(order));
     }
 
+    // photo_urls is serialized as a Vec<String>; convert to JSON array for JSONB column
+    if let Some(urls) = patch.get("photo_urls") {
+        if let Some(arr) = urls.as_array() {
+            for url in arr {
+                if !url.is_string() {
+                    return Err(AppError::BadRequest(
+                        "photo_urls must be an array of strings.".to_string(),
+                    ));
+                }
+            }
+        }
+    }
+
     let updated = update_row(pool, "task_items", &path.item_id, &patch, "id").await?;
 
     write_audit_log(

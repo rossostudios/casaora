@@ -3,6 +3,8 @@ import {
   Building01Icon,
   CreditCardIcon,
   FolderAttachmentIcon,
+  SecurityLockIcon,
+  Settings02Icon,
   UserCircle02Icon,
   UserGroupIcon,
   WebhookIcon,
@@ -30,6 +32,14 @@ export default async function SettingsPage() {
   const activeOrgId = await getActiveOrgId();
 
   const workspaceItems = [
+    {
+      href: "/settings/organization",
+      icon: Settings02Icon,
+      title: isEn ? "Organization config" : "Config. organización",
+      description: isEn
+        ? "Currency, timezone, and banking details."
+        : "Moneda, zona horaria y datos bancarios.",
+    },
     {
       href: "/module/organizations",
       icon: Building01Icon,
@@ -85,6 +95,14 @@ export default async function SettingsPage() {
       description: isEn
         ? "Manage your subscription plan and usage limits."
         : "Gestiona tu plan de suscripción y límites de uso.",
+    },
+    {
+      href: "/settings/security",
+      icon: SecurityLockIcon,
+      title: isEn ? "Security" : "Seguridad",
+      description: isEn
+        ? "Two-factor authentication and active sessions."
+        : "Autenticación de dos factores y sesiones activas.",
     },
   ];
 

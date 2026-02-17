@@ -89,6 +89,10 @@ export async function createExpenseAction(formData: FormData) {
   const receipt_url = toStringValue(formData.get("receipt_url"));
   const notes = toOptionalString(formData.get("notes"));
 
+  const iva_applicable =
+    toStringValue(formData.get("iva_applicable")) === "true";
+  const iva_amount = toOptionalNumber(formData.get("iva_amount"));
+
   if (!expense_date) {
     redirect(withParams(next, { error: "expense_date is required" }));
   }
@@ -118,6 +122,10 @@ export async function createExpenseAction(formData: FormData) {
       ...(reservation_id ? { reservation_id } : {}),
       ...(reservation_id ? {} : unit_id ? { unit_id } : {}),
       ...(reservation_id ? {} : property_id ? { property_id } : {}),
+      iva_applicable,
+      ...(iva_applicable && iva_amount !== undefined
+        ? { iva_amount }
+        : {}),
     });
 
     revalidatePath("/module/expenses");
@@ -159,6 +167,9 @@ export async function updateExpenseAction(formData: FormData) {
   const receipt_url = toOptionalString(formData.get("receipt_url"));
   const notes = toOptionalString(formData.get("notes"));
 
+  const iva_applicable_raw = toStringValue(formData.get("iva_applicable"));
+  const iva_amount = toOptionalNumber(formData.get("iva_amount"));
+
   if (category) patch.category = category;
   if (expense_date) patch.expense_date = expense_date;
   if (amount !== undefined) patch.amount = amount;
@@ -178,10 +189,62 @@ export async function updateExpenseAction(formData: FormData) {
     if (property_id) patch.property_id = property_id;
   }
 
+  if (iva_applicable_raw === "true") {
+    patch.iva_applicable = true;
+    if (iva_amount !== undefined) patch.iva_amount = iva_amount;
+  } else if (iva_applicable_raw === "false" || iva_applicable_raw === "") {
+    patch.iva_applicable = false;
+    patch.iva_amount = 0;
+  }
+
   try {
     await patchJson(`/expenses/${encodeURIComponent(expense_id)}`, patch);
     revalidatePath("/module/expenses");
     redirect(withParams(next, { success: "expense-updated" }));
+  } catch (err) {
+    unstable_rethrow(err);
+    const message = err instanceof Error ? err.message : String(err);
+    redirect(withParams(next, { error: message.slice(0, 240) }));
+  }
+}
+
+export async function approveExpenseAction(formData: FormData) {
+  const expense_id = toStringValue(formData.get("expense_id"));
+  if (!expense_id) {
+    redirect(expensesUrl({ error: "expense_id is required" }));
+  }
+
+  const next = normalizeNext(
+    toStringValue(formData.get("next")),
+    expensesUrl()
+  );
+
+  try {
+    await postJson(`/expenses/${encodeURIComponent(expense_id)}/approve`, {});
+    revalidatePath("/module/expenses");
+    redirect(withParams(next, { success: "expense-approved" }));
+  } catch (err) {
+    unstable_rethrow(err);
+    const message = err instanceof Error ? err.message : String(err);
+    redirect(withParams(next, { error: message.slice(0, 240) }));
+  }
+}
+
+export async function rejectExpenseAction(formData: FormData) {
+  const expense_id = toStringValue(formData.get("expense_id"));
+  if (!expense_id) {
+    redirect(expensesUrl({ error: "expense_id is required" }));
+  }
+
+  const next = normalizeNext(
+    toStringValue(formData.get("next")),
+    expensesUrl()
+  );
+
+  try {
+    await postJson(`/expenses/${encodeURIComponent(expense_id)}/reject`, {});
+    revalidatePath("/module/expenses");
+    redirect(withParams(next, { success: "expense-rejected" }));
   } catch (err) {
     unstable_rethrow(err);
     const message = err instanceof Error ? err.message : String(err);

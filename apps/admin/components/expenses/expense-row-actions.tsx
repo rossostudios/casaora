@@ -3,7 +3,11 @@
 import { Delete02Icon, PencilEdit01Icon } from "@hugeicons/core-free-icons";
 import Link from "next/link";
 
-import { deleteExpenseAction } from "@/app/(admin)/module/expenses/actions";
+import {
+  approveExpenseAction,
+  deleteExpenseAction,
+  rejectExpenseAction,
+} from "@/app/(admin)/module/expenses/actions";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Form } from "@/components/ui/form";
 import { Icon } from "@/components/ui/icon";
@@ -29,6 +33,8 @@ export function ExpenseRowActions({
   const id = asString(row.id).trim();
   if (!id) return null;
 
+  const isPending = (row.approval_status ?? "pending") === "pending";
+
   return (
     <div className="flex items-center justify-end gap-2">
       <Link
@@ -37,6 +43,24 @@ export function ExpenseRowActions({
       >
         {isEn ? "Open" : "Abrir"}
       </Link>
+      {canManage && isPending ? (
+        <Form action={approveExpenseAction}>
+          <input name="expense_id" type="hidden" value={id} />
+          <input name="next" type="hidden" value={nextPath} />
+          <Button size="sm" type="submit" variant="outline">
+            {isEn ? "Approve" : "Aprobar"}
+          </Button>
+        </Form>
+      ) : null}
+      {canManage && isPending ? (
+        <Form action={rejectExpenseAction}>
+          <input name="expense_id" type="hidden" value={id} />
+          <input name="next" type="hidden" value={nextPath} />
+          <Button size="sm" type="submit" variant="ghost">
+            {isEn ? "Reject" : "Rechazar"}
+          </Button>
+        </Form>
+      ) : null}
       {canManage ? (
         <Button
           onClick={() => onEdit(row)}

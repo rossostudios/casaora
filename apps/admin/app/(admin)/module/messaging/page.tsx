@@ -7,7 +7,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { EmptyState } from "@/components/ui/empty-state";
 import { fetchList, getApiBaseUrl } from "@/lib/api";
 import { errorMessage, isOrgMembershipError } from "@/lib/errors";
 import {
@@ -22,6 +21,7 @@ import { getActiveLocale } from "@/lib/i18n/server";
 import { getActiveOrgId } from "@/lib/org";
 
 import { MessagingInbox } from "./messaging-inbox";
+import { TemplateEditor } from "./template-editor";
 
 type PageProps = {
   searchParams: Promise<{
@@ -29,6 +29,7 @@ type PageProps = {
     error?: string;
     status?: string;
     segment?: string;
+    tab?: string;
   }>;
 };
 
@@ -39,6 +40,7 @@ export default async function MessagingModulePage({
   const isEn = locale === "en-US";
   const orgId = await getActiveOrgId();
   const sp = await searchParams;
+  const activeTab = sp.tab === "templates" ? "templates" : "inbox";
 
   if (!orgId) {
     return (
@@ -146,15 +148,58 @@ export default async function MessagingModulePage({
                 {isEn ? "Communications" : "Comunicaciones"}
               </Badge>
               <Badge className="text-[11px]" variant="secondary">
-                {isEn ? "Inbox" : "Bandeja"}
+                {activeTab === "templates"
+                  ? isEn
+                    ? "Templates"
+                    : "Plantillas"
+                  : isEn
+                    ? "Inbox"
+                    : "Bandeja"}
               </Badge>
             </div>
-            <CardTitle className="text-2xl">Inbox</CardTitle>
+            <CardTitle className="text-2xl">
+              {activeTab === "templates"
+                ? isEn
+                  ? "Message Templates"
+                  : "Plantillas de Mensaje"
+                : "Inbox"}
+            </CardTitle>
             <CardDescription>
-              {isEn
-                ? "View and manage guest conversations across WhatsApp, Email, and SMS."
-                : "Ver y gestionar conversaciones con huéspedes por WhatsApp, Email y SMS."}
+              {activeTab === "templates"
+                ? isEn
+                  ? "Create and manage reusable message templates for WhatsApp, Email, and SMS."
+                  : "Crea y gestiona plantillas de mensaje reutilizables para WhatsApp, Email y SMS."
+                : isEn
+                  ? "View and manage guest conversations across WhatsApp, Email, and SMS."
+                  : "Ver y gestionar conversaciones con huéspedes por WhatsApp, Email y SMS."}
             </CardDescription>
+          </div>
+
+          {/* Tab switcher */}
+          <div className="flex gap-1 border-b border-border/40 pb-0">
+            <a
+              className={`inline-flex items-center gap-1.5 border-b-2 px-3 py-2 text-sm font-medium transition-colors ${
+                activeTab === "inbox"
+                  ? "border-primary text-foreground"
+                  : "border-transparent text-muted-foreground hover:text-foreground"
+              }`}
+              href="/module/messaging"
+            >
+              {isEn ? "Inbox" : "Bandeja"}
+            </a>
+            <a
+              className={`inline-flex items-center gap-1.5 border-b-2 px-3 py-2 text-sm font-medium transition-colors ${
+                activeTab === "templates"
+                  ? "border-primary text-foreground"
+                  : "border-transparent text-muted-foreground hover:text-foreground"
+              }`}
+              href="/module/messaging?tab=templates"
+            >
+              {isEn ? "Templates" : "Plantillas"}
+              <Badge className="ml-1 px-1.5 py-0 text-[10px]" variant="secondary">
+                {templates.length}
+              </Badge>
+            </a>
           </div>
 
           {sp.success ? (
@@ -169,13 +214,17 @@ export default async function MessagingModulePage({
           ) : null}
         </CardHeader>
         <CardContent>
-          <MessagingInbox
-            conversations={conversations}
-            initialStatus={sp.status}
-            initialSegment={sp.segment}
-            orgId={orgId}
-            templates={templates}
-          />
+          {activeTab === "templates" ? (
+            <TemplateEditor orgId={orgId} templates={templates} />
+          ) : (
+            <MessagingInbox
+              conversations={conversations}
+              initialStatus={sp.status}
+              initialSegment={sp.segment}
+              orgId={orgId}
+              templates={templates}
+            />
+          )}
         </CardContent>
       </Card>
     </div>

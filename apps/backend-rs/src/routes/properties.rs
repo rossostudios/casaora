@@ -11,8 +11,9 @@ use crate::{
     error::{AppError, AppResult},
     repository::table_service::{create_row, delete_row, get_row, list_rows, update_row},
     schemas::{
-        clamp_limit, remove_nulls, serialize_to_map, CreatePropertyInput, CreateUnitInput,
-        PropertiesQuery, PropertyPath, UnitPath, UnitsQuery, UpdatePropertyInput, UpdateUnitInput,
+        clamp_limit, remove_nulls, serialize_to_map, BulkImportPropertiesInput,
+        CreatePropertyInput, CreateUnitInput, PropertiesQuery, PropertyPath, UnitPath, UnitsQuery,
+        UpdatePropertyInput, UpdateUnitInput,
     },
     services::{
         audit::write_audit_log,
@@ -28,6 +29,10 @@ pub fn router() -> axum::Router<AppState> {
         .route(
             "/properties",
             axum::routing::get(list_properties).post(create_property),
+        )
+        .route(
+            "/properties/import-csv",
+            axum::routing::post(bulk_import_properties),
         )
         .route(
             "/properties/{property_id}",
@@ -478,4 +483,110 @@ fn duplicate_unit_code_message(code: &str, suggestion: &str) -> String {
         return format!("Unit code '{code}' already exists for this property. Try '{suggestion}'.");
     }
     format!("Unit code '{code}' already exists for this property.")
+}
+
+/// Bulk import properties from a JSON array (parsed from CSV on the frontend).
+async fn bulk_import_properties(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(payload): Json<BulkImportPropertiesInput>,
+) -> AppResult<Json<Value>> {
+    let user_id = require_user_id(&state, &headers).await?;
+    assert_org_role(&state, &user_id, &payload.organization_id, &["owner_admin"]).await?;
+    let pool = db_pool(&state)?;
+
+    let mut results: Vec<Value> = Vec::new();
+    let mut succeeded = 0u32;
+    let mut failed = 0u32;
+
+    for (i, row) in payload.rows.iter().enumerate() {
+        let name = row.name.trim();
+        if name.is_empty() {
+            results.push(json!({
+                "index": i,
+                "ok": false,
+                "error": "Name is required",
+            }));
+            failed += 1;
+            continue;
+        }
+
+        let mut record = Map::new();
+        record.insert(
+            "organization_id".to_string(),
+            Value::String(payload.organization_id.clone()),
+        );
+        record.insert("name".to_string(), Value::String(name.to_string()));
+
+        if let Some(ref code) = row.code {
+            let code = code.trim();
+            if !code.is_empty() {
+                record.insert("code".to_string(), Value::String(code.to_string()));
+            }
+        }
+        if let Some(ref addr) = row.address_line1 {
+            let addr = addr.trim();
+            if !addr.is_empty() {
+                record.insert("address_line1".to_string(), Value::String(addr.to_string()));
+            }
+        }
+        if let Some(ref city) = row.city {
+            let city = city.trim();
+            if !city.is_empty() {
+                record.insert("city".to_string(), Value::String(city.to_string()));
+            }
+        }
+        if let Some(ref cc) = row.country_code {
+            let cc = cc.trim();
+            if !cc.is_empty() {
+                record.insert("country_code".to_string(), Value::String(cc.to_string()));
+            }
+        }
+        if let Some(lat) = row.latitude {
+            record.insert(
+                "latitude".to_string(),
+                Value::Number(serde_json::Number::from_f64(lat).unwrap_or_else(|| serde_json::Number::from(0))),
+            );
+        }
+        if let Some(lng) = row.longitude {
+            record.insert(
+                "longitude".to_string(),
+                Value::Number(serde_json::Number::from_f64(lng).unwrap_or_else(|| serde_json::Number::from(0))),
+            );
+        }
+
+        match create_row(pool, "properties", &record).await {
+            Ok(_created) => {
+                results.push(json!({ "index": i, "ok": true }));
+                succeeded += 1;
+            }
+            Err(err) => {
+                results.push(json!({
+                    "index": i,
+                    "ok": false,
+                    "error": err.to_string(),
+                }));
+                failed += 1;
+            }
+        }
+    }
+
+    write_audit_log(
+        Some(pool),
+        Some(&payload.organization_id),
+        Some(&user_id),
+        "bulk_import",
+        "property",
+        None,
+        None,
+        Some(json!({ "total": payload.rows.len(), "succeeded": succeeded, "failed": failed })),
+    )
+    .await;
+
+    Ok(Json(json!({
+        "total": payload.rows.len(),
+        "succeeded": succeeded,
+        "failed": failed,
+        "rows": results,
+    })))
 }

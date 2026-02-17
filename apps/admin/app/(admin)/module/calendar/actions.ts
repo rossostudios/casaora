@@ -23,6 +23,8 @@ export async function createCalendarBlockAction(formData: FormData) {
   const starts_on = toStringValue(formData.get("starts_on"));
   const ends_on = toStringValue(formData.get("ends_on"));
   const reason = toStringValue(formData.get("reason")) || undefined;
+  const recurrence_rule = toStringValue(formData.get("recurrence_rule")) || undefined;
+  const recurrence_end_date = toStringValue(formData.get("recurrence_end_date")) || undefined;
 
   if (!organization_id) {
     redirect(calendarUrl({ error: "Missing organization context." }));
@@ -42,6 +44,8 @@ export async function createCalendarBlockAction(formData: FormData) {
       ends_on,
       source: "manual",
       ...(reason ? { reason } : {}),
+      ...(recurrence_rule ? { recurrence_rule } : {}),
+      ...(recurrence_end_date ? { recurrence_end_date } : {}),
     });
 
     revalidatePath("/module/calendar");

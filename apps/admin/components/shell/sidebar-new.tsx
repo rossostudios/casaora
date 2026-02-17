@@ -4,6 +4,7 @@ import {
   AiVoiceGeneratorIcon,
   AuditIcon,
   Building01Icon,
+  Calendar03Icon,
   CalendarCheckIn01Icon,
   Cancel01Icon,
   ChartIcon,
@@ -25,6 +26,7 @@ import {
   SparklesIcon,
   StarIcon,
   Task01Icon,
+  Wrench01Icon,
   UserGroupIcon,
   WebhookIcon,
   WorkflowSquare03Icon,
@@ -62,6 +64,8 @@ const MODULE_ICONS: Record<string, IconSvgElement> = {
   integrations: Link01Icon,
   guests: UserGroupIcon,
   reservations: CalendarCheckIn01Icon,
+  calendar: Calendar03Icon,
+  maintenance: Wrench01Icon,
   tasks: Task01Icon,
   expenses: Invoice01Icon,
   "owner-statements": File01Icon,
@@ -78,6 +82,7 @@ const MODULE_ICONS: Record<string, IconSvgElement> = {
   documents: FolderAttachmentIcon,
   "workflow-rules": WorkflowSquare03Icon,
   billing: CreditCardIcon,
+  "notification-rules": MailReply01Icon,
 };
 
 export type ViewportMode = "desktop" | "tablet" | "mobile";
@@ -239,7 +244,7 @@ const SECTIONS: SectionDef[] = [
       "es-PY": "Alquileres",
       "en-US": "Rentals",
     },
-    moduleSlugs: ["listings", "leases", "reservations"],
+    moduleSlugs: ["listings", "leases", "reservations", "calendar"],
     roles: ["owner_admin", "operator"],
   },
   {
@@ -248,7 +253,7 @@ const SECTIONS: SectionDef[] = [
       "es-PY": "Operaciones",
       "en-US": "Operations",
     },
-    moduleSlugs: ["tasks", "guests"],
+    moduleSlugs: ["tasks", "maintenance", "guests", "notification-rules"],
     roles: ["owner_admin", "operator", "cleaner"],
   },
   {
@@ -266,7 +271,7 @@ const SECTIONS: SectionDef[] = [
       "es-PY": "Finanzas",
       "en-US": "Finance",
     },
-    moduleSlugs: ["expenses", "pricing", "reports"],
+    moduleSlugs: ["expenses", "owner-statements", "pricing", "reports"],
     roles: ["owner_admin", "accountant"],
   },
   {
@@ -286,7 +291,6 @@ const HOME_TAB_HIDDEN_MODULE_SLUGS = new Set([
   "applications",
   "collections",
   "messaging",
-  "owner-statements",
   "transparency-summary",
   "organizations",
   "integration-events",

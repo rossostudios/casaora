@@ -65,6 +65,7 @@ export function ExpensesManager({
   const [category, setCategory] = useState("all");
   const [currency, setCurrency] = useState("all");
   const [paymentMethod, setPaymentMethod] = useState("all");
+  const [approvalFilter, setApprovalFilter] = useState("all");
   const [propertyId, setPropertyId] = useState("all");
   const [unitId, setUnitId] = useState("all");
   const [fromDate, setFromDate] = useState("");
@@ -116,6 +117,7 @@ export function ExpensesManager({
     const normalizedCategory = category.trim().toLowerCase();
     const normalizedCurrency = currency.trim().toUpperCase();
     const normalizedPayment = paymentMethod.trim().toLowerCase();
+    const normalizedApproval = approvalFilter.trim().toLowerCase();
 
     const from = fromDate ? safeIsoDate(fromDate) : "";
     const to = toDate ? safeIsoDate(toDate) : "";
@@ -134,6 +136,12 @@ export function ExpensesManager({
           .trim()
           .toLowerCase();
         if (normalizedPayment !== "all" && rowPayment !== normalizedPayment)
+          return false;
+
+        const rowApproval = asString(expense.approval_status)
+          .trim()
+          .toLowerCase() || "pending";
+        if (normalizedApproval !== "all" && rowApproval !== normalizedApproval)
           return false;
 
         const rowPropertyId = asString(expense.property_id).trim();
@@ -187,11 +195,16 @@ export function ExpensesManager({
           invoice_ruc: asOptionalString(expense.invoice_ruc),
           receipt_url: asOptionalString(expense.receipt_url),
           notes: asOptionalString(expense.notes),
+          approval_status:
+            asOptionalString(expense.approval_status) ?? "pending",
+          iva_applicable: Boolean(expense.iva_applicable),
+          iva_amount: asNumber(expense.iva_amount),
           created_at: asOptionalString(expense.created_at),
           organization_id: asString(expense.organization_id).trim(),
         } satisfies ExpenseRow;
       });
   }, [
+    approvalFilter,
     category,
     currency,
     expenses,
@@ -360,6 +373,27 @@ export function ExpensesManager({
               <option value="card">card</option>
               <option value="qr">qr</option>
               <option value="other">other</option>
+            </Select>
+          </label>
+
+          <label className="space-y-1">
+            <span className="block font-medium text-muted-foreground text-xs">
+              {isEn ? "Approval" : "Aprobación"}
+            </span>
+            <Select
+              onChange={(event) => setApprovalFilter(event.target.value)}
+              value={approvalFilter}
+            >
+              <option value="all">{isEn ? "All" : "Todos"}</option>
+              <option value="pending">
+                {isEn ? "Pending" : "Pendiente"}
+              </option>
+              <option value="approved">
+                {isEn ? "Approved" : "Aprobado"}
+              </option>
+              <option value="rejected">
+                {isEn ? "Rejected" : "Rechazado"}
+              </option>
             </Select>
           </label>
 

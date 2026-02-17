@@ -14,7 +14,8 @@ use crate::{
     repository::table_service::{create_row, get_row, list_rows, update_row},
     schemas::{
         clamp_limit_in_range, remove_nulls, serialize_to_map, CreateReservationInput,
-        ReservationPath, ReservationStatusInput, ReservationsQuery, UpdateReservationInput,
+        DepositRefundInput, ReservationPath, ReservationStatusInput, ReservationsQuery,
+        UpdateReservationInput,
     },
     services::{audit::write_audit_log, enrichment::enrich_reservations, sequences::enroll_in_sequences, workflows::fire_trigger},
     state::AppState,
@@ -111,6 +112,10 @@ pub fn router() -> axum::Router<AppState> {
         .route(
             "/reservations",
             axum::routing::get(list_reservations).post(create_reservation),
+        )
+        .route(
+            "/reservations/{reservation_id}/refund-deposit",
+            axum::routing::post(refund_deposit),
         )
         .route(
             "/reservations/{reservation_id}",
@@ -823,6 +828,53 @@ fn db_pool(state: &AppState) -> AppResult<&sqlx::PgPool> {
             "Supabase database is not configured. Set SUPABASE_DB_URL or DATABASE_URL.".to_string(),
         )
     })
+}
+
+async fn refund_deposit(
+    State(state): State<AppState>,
+    Path(path): Path<ReservationPath>,
+    headers: HeaderMap,
+    Json(_payload): Json<DepositRefundInput>,
+) -> AppResult<Json<Value>> {
+    let user_id = require_user_id(&state, &headers).await?;
+    let pool = db_pool(&state)?;
+
+    let record = get_row(pool, "reservations", &path.reservation_id, "id").await?;
+    let org_id = value_str(&record, "organization_id");
+    assert_org_role(&state, &user_id, &org_id, &["owner_admin", "operator"]).await?;
+
+    let deposit_status = value_str(&record, "deposit_status");
+    if deposit_status != "held" && deposit_status != "collected" {
+        return Err(AppError::BadRequest(
+            "Deposit must be in 'held' or 'collected' status to refund.".to_string(),
+        ));
+    }
+
+    let mut patch = Map::new();
+    patch.insert(
+        "deposit_status".to_string(),
+        Value::String("refunded".to_string()),
+    );
+    patch.insert(
+        "deposit_refunded_at".to_string(),
+        Value::String(Utc::now().to_rfc3339()),
+    );
+
+    let updated = update_row(pool, "reservations", &path.reservation_id, &patch, "id").await?;
+
+    write_audit_log(
+        state.db_pool.as_ref(),
+        Some(&org_id),
+        Some(&user_id),
+        "refund_deposit",
+        "reservations",
+        Some(&path.reservation_id),
+        Some(record),
+        Some(updated.clone()),
+    )
+    .await;
+
+    Ok(Json(updated))
 }
 
 fn value_str(row: &Value, key: &str) -> String {

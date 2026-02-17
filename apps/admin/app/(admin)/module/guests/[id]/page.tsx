@@ -29,6 +29,8 @@ import { getActiveOrgId } from "@/lib/org";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { cn } from "@/lib/utils";
 
+import { VerificationCard } from "@/components/guests/verification-card";
+
 import { GuestProfileActions } from "../guest-profile-actions";
 
 type PageProps = {
@@ -46,6 +48,10 @@ type GuestRecord = {
   country_code: string | null;
   preferred_language: string | null;
   notes: string | null;
+  verification_status: string | null;
+  id_document_url: string | null;
+  selfie_url: string | null;
+  verified_at: string | null;
 };
 
 type ReservationRow = {
@@ -144,6 +150,10 @@ async function fetchGuest(options: {
     country_code: asOptionalString(record.country_code),
     preferred_language: asOptionalString(record.preferred_language),
     notes: asOptionalString(record.notes),
+    verification_status: asOptionalString(record.verification_status),
+    id_document_url: asOptionalString(record.id_document_url),
+    selfie_url: asOptionalString(record.selfie_url),
+    verified_at: asOptionalString(record.verified_at),
   };
 
   if (!guest.organization_id) {
@@ -469,6 +479,14 @@ export default async function GuestProfilePage({ params }: PageProps) {
           </CardContent>
         </Card>
       </section>
+
+      <VerificationCard
+        guestId={guest.id}
+        idDocumentUrl={guest.id_document_url}
+        selfieUrl={guest.selfie_url}
+        verificationStatus={guest.verification_status}
+        verifiedAt={guest.verified_at}
+      />
 
       <TableCard
         rowHrefBase="/module/reservations"

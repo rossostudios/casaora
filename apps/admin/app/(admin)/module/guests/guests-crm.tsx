@@ -22,6 +22,7 @@ import { HoverLink } from "@/components/ui/hover-link";
 import { Icon } from "@/components/ui/icon";
 import { Input } from "@/components/ui/input";
 import { Sheet } from "@/components/ui/sheet";
+import { StatusBadge } from "@/components/ui/status-badge";
 import { Textarea } from "@/components/ui/textarea";
 import { formatCurrency } from "@/lib/format";
 import { useActiveLocale } from "@/lib/i18n/client";
@@ -47,6 +48,7 @@ export type GuestCrmRow = {
   last_stay_end: string | null;
   next_stay_start: string | null;
   lifetime_value: number;
+  verification_status: string | null;
 };
 
 type Segment = "all" | "upcoming" | "returning" | "no_contact" | "notes";
@@ -283,6 +285,31 @@ export function GuestsCrm({
             <span className="tabular-nums">
               {formatCurrency(guest.lifetime_value, "PYG", locale)}
             </span>
+          );
+        },
+      },
+      {
+        id: "verification",
+        header: t("Verified", "Verificado"),
+        accessorFn: (row) => (row as GuestCrmRow).verification_status ?? "",
+        cell: ({ row }) => {
+          const guest = row.original as GuestCrmRow;
+          const status = guest.verification_status;
+          if (!status)
+            return <span className="text-muted-foreground">—</span>;
+          return (
+            <StatusBadge
+              value={status}
+              tone={
+                status === "verified"
+                  ? "success"
+                  : status === "pending"
+                    ? "warning"
+                    : status === "rejected"
+                      ? "danger"
+                      : "neutral"
+              }
+            />
           );
         },
       },

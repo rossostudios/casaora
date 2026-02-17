@@ -7,9 +7,11 @@ import { usePathname, useSearchParams } from "next/navigation";
 import { useCallback, useMemo, useOptimistic, useState } from "react";
 
 import {
+  acceptRenewalAction,
   createLeaseAction,
   generateCollectionsAction,
   renewLeaseAction,
+  sendRenewalOfferAction,
   setLeaseStatusAction,
   updateLeaseAction,
 } from "@/app/(admin)/module/leases/actions";
@@ -71,6 +73,7 @@ type LeaseRow = DataTableRow & {
   id: string;
   lease_status: string;
   lease_status_label: string;
+  renewal_status: string;
   tenant_full_name: string;
   tenant_email: string | null;
   tenant_phone_e164: string | null;
@@ -140,6 +143,7 @@ export function LeasesManager({
         tenant_phone_e164: asString(row.tenant_phone_e164).trim() || null,
         lease_status: status,
         lease_status_label: statusLabel(status, isEn),
+        renewal_status: asString(row.renewal_status).trim(),
         property_id: asString(row.property_id).trim() || null,
         property_name: asString(row.property_name).trim() || null,
         unit_id: asString(row.unit_id).trim() || null,
@@ -360,7 +364,7 @@ export function LeasesManager({
                 {isEn ? "Generate" : "Generar"}
               </Button>
 
-              {canRenew(status) ? (
+              {canRenew(status) && !(row as unknown as LeaseRow).renewal_status ? (
                 <Button
                   size="sm"
                   variant="ghost"
@@ -370,6 +374,26 @@ export function LeasesManager({
                 >
                   {isEn ? "Renew" : "Renovar"}
                 </Button>
+              ) : null}
+
+              {canRenew(status) && !(row as unknown as LeaseRow).renewal_status ? (
+                <Form action={sendRenewalOfferAction}>
+                  <input name="lease_id" type="hidden" value={id} />
+                  <input name="next" type="hidden" value={nextPath} />
+                  <Button size="sm" type="submit" variant="outline">
+                    {isEn ? "Send Offer" : "Enviar Oferta"}
+                  </Button>
+                </Form>
+              ) : null}
+
+              {(row as unknown as LeaseRow).renewal_status === "offered" || (row as unknown as LeaseRow).renewal_status === "pending" ? (
+                <Form action={acceptRenewalAction}>
+                  <input name="lease_id" type="hidden" value={id} />
+                  <input name="next" type="hidden" value={nextPath} />
+                  <Button size="sm" type="submit" variant="secondary">
+                    {isEn ? "Accept Renewal" : "Aceptar Renovación"}
+                  </Button>
+                </Form>
               ) : null}
 
               {canActivate(status) ? (

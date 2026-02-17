@@ -62,6 +62,26 @@ export const MODULES: ModuleDef[] = [
     description_en: "Reservation lifecycle and payout-ready data.",
   },
   {
+    slug: "calendar",
+    label: "Calendario",
+    label_en: "Calendar",
+    endpoint: "/calendar/blocks",
+    description:
+      "Línea de tiempo visual de reservas y bloqueos en todas las unidades.",
+    description_en:
+      "Visual timeline of reservations and blocks across all units.",
+  },
+  {
+    slug: "maintenance",
+    label: "Mantenimiento",
+    label_en: "Maintenance",
+    endpoint: "/maintenance-requests",
+    description:
+      "Seguimiento y resolución de solicitudes de mantenimiento de inquilinos.",
+    description_en:
+      "Track and resolve maintenance requests submitted by tenants.",
+  },
+  {
     slug: "tasks",
     label: "Tareas",
     label_en: "Tasks",
@@ -141,6 +161,16 @@ export const MODULES: ModuleDef[] = [
     endpoint: "/message-templates",
     description: "Mensajes por plantillas para WhatsApp, email y SMS.",
     description_en: "Template messaging for WhatsApp, email, and SMS.",
+  },
+  {
+    slug: "notification-rules",
+    label: "Reglas de notificación",
+    label_en: "Notification rules",
+    endpoint: "/notification-rules",
+    description:
+      "Configura notificaciones automáticas para vencimientos y eventos.",
+    description_en:
+      "Configure automated notifications for due dates and events.",
   },
   {
     slug: "integration-events",

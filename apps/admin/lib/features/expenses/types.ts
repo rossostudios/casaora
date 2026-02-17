@@ -17,6 +17,9 @@ export type ExpenseRow = {
   invoice_ruc?: string | null;
   receipt_url?: string | null;
   notes?: string | null;
+  approval_status?: string | null;
+  iva_applicable?: boolean | null;
+  iva_amount?: number | null;
   created_by_user_id?: string | null;
   created_at?: string | null;
 };

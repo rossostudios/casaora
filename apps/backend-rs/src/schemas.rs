@@ -72,6 +72,10 @@ pub struct UpdateOrganizationInput {
     pub profile_type: Option<String>,
     pub default_currency: Option<String>,
     pub timezone: Option<String>,
+    pub bank_name: Option<String>,
+    pub bank_account_number: Option<String>,
+    pub bank_account_holder: Option<String>,
+    pub qr_image_url: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize, serde::Serialize, Validate)]
@@ -310,6 +314,15 @@ pub struct GuestPath {
 fn default_source_manual() -> String {
     "manual".to_string()
 }
+fn default_deposit_status_none() -> String {
+    "none".to_string()
+}
+fn default_refund_percent() -> f64 {
+    100.0
+}
+fn default_cutoff_hours() -> i32 {
+    48
+}
 fn default_reservation_status_pending() -> String {
     "pending".to_string()
 }
@@ -406,6 +419,11 @@ pub struct CreateReservationInput {
     pub amount_paid: f64,
     pub payment_method: Option<String>,
     pub notes: Option<String>,
+    pub cancellation_policy_id: Option<String>,
+    #[serde(default)]
+    pub deposit_amount: f64,
+    #[serde(default = "default_deposit_status_none")]
+    pub deposit_status: String,
 }
 
 #[derive(Debug, Clone, Deserialize, serde::Serialize)]
@@ -414,6 +432,9 @@ pub struct UpdateReservationInput {
     pub amount_paid: Option<f64>,
     pub payment_method: Option<String>,
     pub notes: Option<String>,
+    pub cancellation_policy_id: Option<String>,
+    pub deposit_amount: Option<f64>,
+    pub deposit_status: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize, serde::Serialize)]
@@ -431,6 +452,8 @@ pub struct CreateCalendarBlockInput {
     #[serde(default = "default_source_manual")]
     pub source: String,
     pub reason: Option<String>,
+    pub recurrence_rule: Option<String>,
+    pub recurrence_end_date: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize, serde::Serialize)]
@@ -438,6 +461,47 @@ pub struct UpdateCalendarBlockInput {
     pub starts_on: Option<String>,
     pub ends_on: Option<String>,
     pub reason: Option<String>,
+    pub recurrence_rule: Option<String>,
+    pub recurrence_end_date: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize, serde::Serialize)]
+pub struct CreateCancellationPolicyInput {
+    pub organization_id: String,
+    pub name: String,
+    pub description: Option<String>,
+    #[serde(default = "default_refund_percent")]
+    pub refund_percent: f64,
+    #[serde(default = "default_cutoff_hours")]
+    pub cutoff_hours: i32,
+    #[serde(default = "default_false")]
+    pub is_default: bool,
+}
+
+#[derive(Debug, Clone, Deserialize, serde::Serialize)]
+pub struct UpdateCancellationPolicyInput {
+    pub name: Option<String>,
+    pub description: Option<String>,
+    pub refund_percent: Option<f64>,
+    pub cutoff_hours: Option<i32>,
+    pub is_default: Option<bool>,
+}
+
+#[derive(Debug, Clone, Deserialize, serde::Serialize)]
+pub struct CancellationPoliciesQuery {
+    pub org_id: String,
+    #[serde(default = "default_limit_200")]
+    pub limit: i64,
+}
+
+#[derive(Debug, Clone, Deserialize, serde::Serialize)]
+pub struct CancellationPolicyPath {
+    pub policy_id: String,
+}
+
+#[derive(Debug, Clone, Deserialize, serde::Serialize)]
+pub struct DepositRefundInput {
+    pub notes: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize, serde::Serialize)]
@@ -492,6 +556,7 @@ pub struct UpdateTaskItemInput {
     pub is_required: Option<bool>,
     pub is_completed: Option<bool>,
     pub sort_order: Option<i32>,
+    pub photo_urls: Option<Vec<String>>,
 }
 
 #[derive(Debug, Clone, Deserialize, serde::Serialize)]
@@ -513,6 +578,9 @@ pub struct CreateExpenseInput {
     pub invoice_ruc: Option<String>,
     pub receipt_url: String,
     pub notes: Option<String>,
+    #[serde(default = "default_false")]
+    pub iva_applicable: bool,
+    pub iva_amount: Option<f64>,
 }
 
 #[derive(Debug, Clone, Deserialize, serde::Serialize)]
@@ -531,6 +599,8 @@ pub struct UpdateExpenseInput {
     pub invoice_ruc: Option<String>,
     pub receipt_url: Option<String>,
     pub notes: Option<String>,
+    pub iva_applicable: Option<bool>,
+    pub iva_amount: Option<f64>,
 }
 
 #[derive(Debug, Clone, Deserialize, serde::Serialize)]
@@ -688,6 +758,7 @@ pub struct ExpensesQuery {
     pub property_id: Option<String>,
     pub unit_id: Option<String>,
     pub reservation_id: Option<String>,
+    pub approval_status: Option<String>,
     #[serde(default = "default_limit_300")]
     pub limit: i64,
 }
@@ -732,6 +803,11 @@ pub struct TaskPath {
 pub struct TaskItemPath {
     pub task_id: String,
     pub item_id: String,
+}
+
+#[derive(Debug, Clone, Deserialize, serde::Serialize)]
+pub struct ExpenseApprovalInput {
+    pub notes: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize, serde::Serialize)]
@@ -1246,4 +1322,69 @@ pub struct MarketplaceInquiryInput {
     pub phone_e164: Option<String>,
     #[validate(length(min = 1, max = 2000))]
     pub message: String,
+}
+
+// ===== Contract Templates =====
+
+#[derive(Debug, Clone, Deserialize, serde::Serialize)]
+pub struct ContractTemplatesQuery {
+    pub org_id: String,
+    #[serde(default = "default_limit_200")]
+    pub limit: i64,
+}
+
+#[derive(Debug, Clone, Deserialize, serde::Serialize)]
+pub struct ContractTemplatePath {
+    pub template_id: String,
+}
+
+#[derive(Debug, Clone, Deserialize, serde::Serialize)]
+pub struct CreateContractTemplateInput {
+    pub organization_id: String,
+    pub name: String,
+    #[serde(default = "default_language_es")]
+    pub language: String,
+    #[serde(default)]
+    pub body_template: String,
+    #[serde(default)]
+    pub variables: Vec<String>,
+    #[serde(default)]
+    pub is_default: bool,
+}
+
+fn default_language_es() -> String {
+    "es".to_string()
+}
+
+#[derive(Debug, Clone, Deserialize, serde::Serialize)]
+pub struct UpdateContractTemplateInput {
+    pub name: Option<String>,
+    pub language: Option<String>,
+    pub body_template: Option<String>,
+    pub variables: Option<Vec<String>>,
+    pub is_default: Option<bool>,
+}
+
+#[derive(Debug, Clone, Deserialize, serde::Serialize)]
+pub struct RenderContractInput {
+    pub lease_id: String,
+}
+
+// ===== Properties Bulk Import =====
+
+#[derive(Debug, Clone, Deserialize, serde::Serialize)]
+pub struct BulkImportPropertiesInput {
+    pub organization_id: String,
+    pub rows: Vec<BulkPropertyRow>,
+}
+
+#[derive(Debug, Clone, Deserialize, serde::Serialize)]
+pub struct BulkPropertyRow {
+    pub name: String,
+    pub code: Option<String>,
+    pub address_line1: Option<String>,
+    pub city: Option<String>,
+    pub country_code: Option<String>,
+    pub latitude: Option<f64>,
+    pub longitude: Option<f64>,
 }
