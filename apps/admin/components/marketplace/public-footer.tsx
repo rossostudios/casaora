@@ -8,7 +8,6 @@ import {
 import Link from "next/link";
 
 import { Icon } from "@/components/ui/icon";
-import { StoaLogo } from "@/components/ui/stoa-logo";
 
 const POPULAR_CITIES = [
   { label: "Asunción", param: "Asuncion" },
@@ -33,12 +32,11 @@ export function PublicFooter({ locale }: { locale: "es-PY" | "en-US" }) {
         <div className="grid gap-12 sm:grid-cols-2 lg:grid-cols-4">
           {/* Brand */}
           <div className="space-y-4">
-            <div className="flex items-center gap-2.5">
-              <StoaLogo className="text-primary" size={22} />
-              <span className="font-serif text-lg font-semibold tracking-tight text-[#faf8f5]">
-                Stoa
-              </span>
-            </div>
+            <img
+              alt="Casaora"
+              className="h-6"
+              src="/casaoralogo-dark.svg"
+            />
             <p className="font-serif text-sm italic text-[#faf8f5]/50">
               {isEn
                 ? "Where transparency meets home."
@@ -148,10 +146,10 @@ export function PublicFooter({ locale }: { locale: "es-PY" | "en-US" }) {
               <li>
                 <a
                   className="inline-flex items-center gap-2 text-[#faf8f5]/50 transition-colors hover:text-[#faf8f5]/80"
-                  href="mailto:info@stoa.com.py"
+                  href="mailto:info@casaora.co"
                 >
                   <Icon icon={Mail01Icon} size={15} />
-                  info@stoa.com.py
+                  info@casaora.co
                 </a>
               </li>
             </ul>
@@ -161,7 +159,7 @@ export function PublicFooter({ locale }: { locale: "es-PY" | "en-US" }) {
         {/* Bottom bar */}
         <div className="mt-14 flex flex-col items-center justify-between gap-3 border-t border-[#faf8f5]/10 pt-8 sm:flex-row">
           <p className="text-xs text-[#faf8f5]/40">
-            &copy; {new Date().getFullYear()} Stoa.{" "}
+            &copy; {new Date().getFullYear()} Casaora.{" "}
             {isEn ? "All rights reserved." : "Todos los derechos reservados."}
           </p>
           <div className="flex items-center gap-5 text-xs text-[#faf8f5]/40">

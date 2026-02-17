@@ -965,13 +965,43 @@ pub struct ReportsPeriodQuery {
     pub to_date: String,
 }
 
+fn default_page() -> i64 {
+    1
+}
+fn default_per_page() -> i64 {
+    50
+}
+fn default_sort_by_created_at() -> String {
+    "created_at".to_string()
+}
+fn default_sort_order_desc() -> String {
+    "desc".to_string()
+}
+
 #[derive(Debug, Clone, Deserialize, serde::Serialize)]
 pub struct ListingsQuery {
     pub org_id: String,
     pub is_published: Option<bool>,
     pub integration_id: Option<String>,
+    pub status: Option<String>,
+    pub q: Option<String>,
+    #[serde(default = "default_page")]
+    pub page: i64,
+    #[serde(default = "default_per_page")]
+    pub per_page: i64,
+    #[serde(default = "default_sort_by_created_at")]
+    pub sort_by: String,
+    #[serde(default = "default_sort_order_desc")]
+    pub sort_order: String,
     #[serde(default = "default_limit_200")]
     pub limit: i64,
+}
+
+#[derive(Debug, Clone, Deserialize, serde::Serialize)]
+pub struct SlugAvailableQuery {
+    pub slug: String,
+    pub org_id: String,
+    pub exclude_listing_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize, serde::Serialize)]

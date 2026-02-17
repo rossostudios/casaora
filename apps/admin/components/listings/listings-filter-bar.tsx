@@ -1,6 +1,7 @@
 "use client";
 
 import { FilterIcon, Search01Icon } from "@hugeicons/core-free-icons";
+import { useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -41,6 +42,24 @@ export function ListingsFilterBar({
   onReadinessFilterChange,
   isEn,
 }: ListingsFilterBarProps) {
+  const [inputValue, setInputValue] = useState(globalFilter);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      onGlobalFilterChange(inputValue);
+    }, 300);
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, [inputValue, onGlobalFilterChange]);
+
+  // Sync external changes (e.g. reset)
+  useEffect(() => {
+    setInputValue(globalFilter);
+  }, [globalFilter]);
+
   const activeCount =
     (statusFilter !== "all" ? 1 : 0) + (readinessFilter !== "all" ? 1 : 0);
 
@@ -54,13 +73,13 @@ export function ListingsFilterBar({
         />
         <Input
           className="h-10 rounded-xl border-border/50 bg-background/80 pl-10 focus-visible:ring-primary/20"
-          onChange={(e) => onGlobalFilterChange(e.target.value)}
+          onChange={(e) => setInputValue(e.target.value)}
           placeholder={
             isEn
               ? "Search by title, city, property..."
               : "Buscar por título, ciudad, propiedad..."
           }
-          value={globalFilter}
+          value={inputValue}
         />
       </div>
 

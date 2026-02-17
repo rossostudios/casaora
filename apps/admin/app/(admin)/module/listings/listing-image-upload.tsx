@@ -3,6 +3,7 @@
 import { Cancel01Icon, CloudUploadIcon } from "@hugeicons/core-free-icons";
 import { useCallback, useRef, useState, type DragEvent } from "react";
 
+import { ReorderableImageGrid } from "@/components/listings/reorderable-image-grid";
 import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
 
@@ -10,12 +11,18 @@ import { useListingImageUpload } from "./use-listing-image-upload";
 
 type ImageUploadProps = {
   orgId: string;
-  name: string;
+  name?: string;
   multiple?: boolean;
   labelEn: string;
   labelEs: string;
   isEn: boolean;
   defaultValue?: string | string[];
+  /** Controlled value — when provided, internal state is bypassed. */
+  value?: string | string[];
+  /** Called when value changes (controlled mode). */
+  onChange?: (value: string | string[]) => void;
+  /** Show reorderable grid instead of simple thumbnails (gallery mode). */
+  reorderable?: boolean;
 };
 
 export function ImageUpload({
@@ -26,15 +33,46 @@ export function ImageUpload({
   labelEs,
   isEn,
   defaultValue,
+  value: controlledValue,
+  onChange: controlledOnChange,
+  reorderable = false,
 }: ImageUploadProps) {
   const { upload, uploading } = useListingImageUpload(orgId);
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
 
-  const [urls, setUrls] = useState<string[]>(() => {
+  const isControlled = controlledValue !== undefined;
+
+  const [internalUrls, setInternalUrls] = useState<string[]>(() => {
     if (!defaultValue) return [];
     return Array.isArray(defaultValue) ? defaultValue : [defaultValue];
   });
+
+  const urls = isControlled
+    ? Array.isArray(controlledValue)
+      ? controlledValue
+      : controlledValue
+        ? [controlledValue]
+        : []
+    : internalUrls;
+
+  const setUrls = useCallback(
+    (updater: (prev: string[]) => string[]) => {
+      if (isControlled) {
+        const next = updater(
+          Array.isArray(controlledValue)
+            ? controlledValue
+            : controlledValue
+              ? [controlledValue]
+              : []
+        );
+        controlledOnChange?.(multiple ? next : next[0] ?? "");
+      } else {
+        setInternalUrls(updater);
+      }
+    },
+    [isControlled, controlledValue, controlledOnChange, multiple]
+  );
 
   const handleFiles = useCallback(
     (files: FileList | null) => {
@@ -49,7 +87,7 @@ export function ImageUpload({
         });
       }
     },
-    [multiple, upload]
+    [multiple, upload, setUrls]
   );
 
   const onDrop = useCallback(
@@ -61,15 +99,32 @@ export function ImageUpload({
     [handleFiles]
   );
 
-  const remove = (index: number) => {
-    setUrls((prev) => prev.filter((_, i) => i !== index));
-  };
+  const remove = useCallback(
+    (urlOrIndex: string | number) => {
+      setUrls((prev) => {
+        if (typeof urlOrIndex === "string") {
+          return prev.filter((u) => u !== urlOrIndex);
+        }
+        return prev.filter((_, i) => i !== urlOrIndex);
+      });
+    },
+    [setUrls]
+  );
+
+  const handleReorder = useCallback(
+    (newUrls: string[]) => {
+      setUrls(() => newUrls);
+    },
+    [setUrls]
+  );
 
   const serialized = multiple ? JSON.stringify(urls) : urls[0] ?? "";
 
   return (
     <div className="space-y-2">
-      <input name={name} type="hidden" value={serialized} />
+      {!isControlled && name ? (
+        <input name={name} type="hidden" value={serialized} />
+      ) : null}
 
       {/* Drop zone */}
       <div
@@ -118,24 +173,32 @@ export function ImageUpload({
 
       {/* Thumbnails */}
       {urls.length > 0 ? (
-        <div className="flex flex-wrap gap-2">
-          {urls.map((url, index) => (
-            <div className="group relative" key={url}>
-              <img
-                alt=""
-                className="h-20 w-20 rounded-md border object-cover"
-                src={url}
-              />
-              <button
-                className="absolute -top-1.5 -right-1.5 rounded-full bg-destructive p-0.5 text-destructive-foreground opacity-0 transition-opacity group-hover:opacity-100"
-                onClick={() => remove(index)}
-                type="button"
-              >
-                <Icon icon={Cancel01Icon} size={12} />
-              </button>
-            </div>
-          ))}
-        </div>
+        reorderable && multiple ? (
+          <ReorderableImageGrid
+            onRemove={(url) => remove(url)}
+            onReorder={handleReorder}
+            urls={urls}
+          />
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            {urls.map((url, index) => (
+              <div className="group relative" key={url}>
+                <img
+                  alt=""
+                  className="h-20 w-20 rounded-md border object-cover"
+                  src={url}
+                />
+                <button
+                  className="absolute -top-1.5 -right-1.5 rounded-full bg-destructive p-0.5 text-destructive-foreground opacity-0 transition-opacity group-hover:opacity-100"
+                  onClick={() => remove(index)}
+                  type="button"
+                >
+                  <Icon icon={Cancel01Icon} size={12} />
+                </button>
+              </div>
+            ))}
+          </div>
+        )
       ) : null}
 
       <p className="text-muted-foreground text-xs">

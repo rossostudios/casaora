@@ -5,7 +5,7 @@ import { getActiveLocale } from "@/lib/i18n/server";
 import { TenantPayments } from "./tenant-payments";
 
 export const metadata: Metadata = {
-  title: "Pagos | Portal del Inquilino | Stoa",
+  title: "Pagos | Portal del Inquilino | Casaora",
   robots: { index: false, follow: false },
 };
 

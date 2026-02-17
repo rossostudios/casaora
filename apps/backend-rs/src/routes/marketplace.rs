@@ -10,11 +10,11 @@ use serde_json::{json, Map, Value};
 use crate::{
     auth::require_user_id,
     error::{AppError, AppResult},
-    repository::table_service::{create_row, get_row, list_rows, update_row},
+    repository::table_service::{count_rows, create_row, get_row, list_rows, update_row},
     schemas::{
         clamp_limit_in_range, validate_input, CreateListingInput, ListingPath, ListingsQuery,
         MarketplaceInquiryInput, PublicListingApplicationInput, PublicListingsQuery,
-        PublicListingSlugPath, UpdateListingInput,
+        PublicListingSlugPath, SlugAvailableQuery, UpdateListingInput,
     },
     services::{
         alerting::write_alert_event,
@@ -37,8 +37,16 @@ pub fn router() -> axum::Router<AppState> {
             axum::routing::get(list_listings).post(create_listing),
         )
         .route(
+            "/listings/slug-available",
+            axum::routing::get(slug_available),
+        )
+        .route(
             "/listings/{listing_id}",
             axum::routing::get(get_listing).patch(update_listing),
+        )
+        .route(
+            "/listings/{listing_id}/readiness",
+            axum::routing::get(listing_readiness),
         )
         .route(
             "/listings/{listing_id}/publish",
@@ -87,23 +95,78 @@ async fn list_listings(
     if let Some(is_published) = query.is_published {
         filters.insert("is_published".to_string(), Value::Bool(is_published));
     }
+    if let Some(ref status) = query.status {
+        match status.as_str() {
+            "published" => {
+                filters.insert("is_published".to_string(), Value::Bool(true));
+            }
+            "draft" => {
+                filters.insert("is_published".to_string(), Value::Bool(false));
+            }
+            _ => {}
+        }
+    }
     if let Some(integration_id) = non_empty_opt(query.integration_id.as_deref()) {
         filters.insert("integration_id".to_string(), Value::String(integration_id));
     }
 
-    let rows = list_rows(
+    let page = query.page.max(1);
+    let per_page = query.per_page.clamp(1, 100);
+    let offset = (page - 1) * per_page;
+
+    let sort_by = non_empty_opt(Some(query.sort_by.as_str()))
+        .unwrap_or_else(|| "created_at".to_string());
+    let ascending = query.sort_order.to_ascii_lowercase() == "asc";
+
+    let total = count_rows(pool, "listings", Some(&filters)).await?;
+
+    let mut rows = list_rows(
         pool,
         "listings",
         Some(&filters),
-        clamp_limit_in_range(query.limit, 1, 1000),
-        0,
-        "created_at",
-        false,
+        per_page,
+        offset,
+        &sort_by,
+        ascending,
     )
     .await?;
 
-    let attached = attach_fee_lines(pool, rows).await?;
-    Ok(Json(json!({ "data": attached })))
+    // Post-hoc text search filter
+    if let Some(q) = non_empty_opt(query.q.as_deref()) {
+        let needle = q.to_ascii_lowercase();
+        rows.retain(|row| {
+            value_str(row, "title")
+                .to_ascii_lowercase()
+                .contains(&needle)
+                || value_str(row, "city")
+                    .to_ascii_lowercase()
+                    .contains(&needle)
+                || value_str(row, "property_type")
+                    .to_ascii_lowercase()
+                    .contains(&needle)
+        });
+    }
+
+    let mut attached = attach_fee_lines(pool, rows).await?;
+
+    // Inject readiness into each row
+    for row in &mut attached {
+        if let Some(obj) = row.as_object_mut() {
+            let (score, blocking) = compute_readiness(obj);
+            obj.insert("readiness_score".to_string(), json!(score));
+            obj.insert(
+                "readiness_blocking".to_string(),
+                Value::Array(blocking.into_iter().map(Value::String).collect()),
+            );
+        }
+    }
+
+    Ok(Json(json!({
+        "data": attached,
+        "total": total,
+        "page": page,
+        "per_page": per_page,
+    })))
 }
 
 async fn create_listing(
@@ -987,6 +1050,164 @@ async fn submit_inquiry(
             "id": created.get("id").cloned().unwrap_or(Value::Null),
         })),
     ))
+}
+
+async fn slug_available(
+    State(state): State<AppState>,
+    Query(query): Query<SlugAvailableQuery>,
+    headers: HeaderMap,
+) -> AppResult<Json<Value>> {
+    let user_id = require_user_id(&state, &headers).await?;
+    assert_org_member(&state, &user_id, &query.org_id).await?;
+    let pool = db_pool(&state)?;
+
+    let rows = list_rows(
+        pool,
+        "listings",
+        Some(&json_map(&[
+            ("public_slug", Value::String(query.slug.clone())),
+            ("organization_id", Value::String(query.org_id.clone())),
+        ])),
+        1,
+        0,
+        "created_at",
+        false,
+    )
+    .await?;
+
+    let available = if let Some(existing) = rows.first() {
+        if let Some(exclude_id) = &query.exclude_listing_id {
+            value_str(existing, "id") == *exclude_id
+        } else {
+            false
+        }
+    } else {
+        true
+    };
+
+    Ok(Json(json!({
+        "available": available,
+        "slug": query.slug,
+    })))
+}
+
+async fn listing_readiness(
+    State(state): State<AppState>,
+    Path(path): Path<ListingPath>,
+    headers: HeaderMap,
+) -> AppResult<Json<Value>> {
+    let user_id = require_user_id(&state, &headers).await?;
+    let pool = db_pool(&state)?;
+
+    let record = get_row(pool, "listings", &path.listing_id, "id").await?;
+    let org_id = value_str(&record, "organization_id");
+    assert_org_member(&state, &user_id, &org_id).await?;
+
+    let mut rows = attach_fee_lines(pool, vec![record]).await?;
+    let row = rows.pop().unwrap_or_else(|| Value::Object(Map::new()));
+    let obj = row.as_object().cloned().unwrap_or_default();
+    let (score, blocking) = compute_readiness(&obj);
+
+    Ok(Json(json!({
+        "score": score,
+        "blocking": blocking,
+    })))
+}
+
+fn compute_readiness(obj: &Map<String, Value>) -> (u32, Vec<String>) {
+    let mut score: u32 = 0;
+    let mut blocking: Vec<String> = Vec::new();
+
+    // cover_image (25pts)
+    let has_cover = obj
+        .get("cover_image_url")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .is_some_and(|v| !v.is_empty());
+    if has_cover {
+        score += 25;
+    } else {
+        blocking.push("cover_image".to_string());
+    }
+
+    // fee_breakdown (25pts)
+    let fee_complete = obj
+        .get("fee_breakdown_complete")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    if fee_complete {
+        score += 25;
+    } else {
+        blocking.push("fee_lines".to_string());
+    }
+
+    // amenities >= 3 (15pts)
+    let amenities_count = obj
+        .get("amenities")
+        .and_then(Value::as_array)
+        .map(|a| a.len())
+        .unwrap_or(0);
+    if amenities_count >= 3 {
+        score += 15;
+    } else {
+        blocking.push("amenities".to_string());
+    }
+
+    // bedrooms (10pts)
+    let has_bedrooms = obj
+        .get("bedrooms")
+        .is_some_and(|v| !v.is_null() && v.as_i64().is_some_and(|n| n > 0));
+    if has_bedrooms {
+        score += 10;
+    } else {
+        blocking.push("bedrooms".to_string());
+    }
+
+    // square_meters (10pts)
+    let has_sqm = obj
+        .get("square_meters")
+        .is_some_and(|v| !v.is_null() && v.as_f64().is_some_and(|n| n > 0.0));
+    if has_sqm {
+        score += 10;
+    } else {
+        blocking.push("square_meters".to_string());
+    }
+
+    // available_from (5pts)
+    let has_available = obj
+        .get("available_from")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .is_some_and(|v| !v.is_empty());
+    if has_available {
+        score += 5;
+    } else {
+        blocking.push("available_from".to_string());
+    }
+
+    // minimum_lease (5pts)
+    let has_lease = obj
+        .get("minimum_lease_months")
+        .is_some_and(|v| !v.is_null() && v.as_i64().is_some_and(|n| n > 0));
+    if has_lease {
+        score += 5;
+    } else {
+        blocking.push("minimum_lease".to_string());
+    }
+
+    // description (5pts)
+    let has_desc = obj
+        .get("description")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .is_some_and(|v| !v.is_empty());
+    if has_desc {
+        score += 5;
+    } else {
+        blocking.push("description".to_string());
+    }
+
+    (score, blocking)
 }
 
 async fn replace_fee_lines(

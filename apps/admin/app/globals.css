@@ -449,40 +449,40 @@
 }
 
 @layer utilities {
-  .bg-stoa-gradient {
+  .bg-casaora-gradient {
     background: linear-gradient(135deg, #641220 0%, #B21E35 100%);
   }
 
-  .bg-stoa-gradient-warm {
+  .bg-casaora-gradient-warm {
     background: linear-gradient(135deg, #6E1423 0%, #DA1E37 100%);
   }
 
-  .bg-stoa-gradient-hero {
+  .bg-casaora-gradient-hero {
     background: linear-gradient(to right, #6E1423, #DA1E37);
   }
 
-  .bg-stoa-gradient-subtle {
+  .bg-casaora-gradient-subtle {
     background: linear-gradient(135deg, #fdf2f4 0%, #fce8ec 100%);
   }
 
-  .dark .bg-stoa-gradient-subtle {
+  .dark .bg-casaora-gradient-subtle {
     background: linear-gradient(135deg, #1a1012 0%, #221418 100%);
   }
 
-  .text-stoa-gradient {
+  .text-casaora-gradient {
     background: linear-gradient(135deg, #B21E35, #DA1E37);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
   }
 
-  .shadow-stoa {
+  .shadow-casaora {
     box-shadow:
       0 0 0 1px rgba(218, 30, 55, 0.08),
       0 2px 8px rgba(218, 30, 55, 0.1);
   }
 
-  .dark .shadow-stoa {
+  .dark .shadow-casaora {
     box-shadow:
       0 0 0 1px rgba(218, 30, 55, 0.12),
       0 2px 8px rgba(218, 30, 55, 0.08);

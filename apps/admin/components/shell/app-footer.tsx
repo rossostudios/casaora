@@ -32,17 +32,17 @@ export function AppFooter({ locale }: { locale: Locale }) {
       </div>
 
       <Image
-        alt="Stoa"
+        alt="Casaora"
         className="dark:hidden"
         height={20}
-        src="/stoa-logo-dark.svg"
+        src="/casaora-logo-dark.svg"
         width={88}
       />
       <Image
-        alt="Stoa"
+        alt="Casaora"
         className="hidden dark:block"
         height={20}
-        src="/stoa-logo-all-white.svg"
+        src="/casaora-logo-all-white.svg"
         width={88}
       />
 

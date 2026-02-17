@@ -10,6 +10,7 @@ const playfair = Playfair_Display({
   display: "swap",
 });
 
+import { QueryProvider } from "@/components/providers/query-provider";
 import { ApiErrorToaster } from "@/components/shell/api-error-toaster";
 import { Toaster } from "@/components/ui/sonner";
 import { LocaleProvider } from "@/lib/i18n/locale-context";
@@ -60,17 +61,17 @@ const THEME_INIT_SCRIPT = `
 
 export const metadata: Metadata = {
   title: {
-    default: "Stoa",
-    template: "%s | Stoa",
+    default: "Casaora",
+    template: "%s | Casaora",
   },
   description:
     "Marketplace y sistema operativo para alquileres de largo plazo en Paraguay. Property management for long-term rentals in Paraguay.",
   metadataBase: new URL(
-    process.env.NEXT_PUBLIC_SITE_URL || "https://stoa.com.py"
+    process.env.NEXT_PUBLIC_SITE_URL || "https://casaora.co"
   ),
   openGraph: {
     type: "website",
-    siteName: "Stoa",
+    siteName: "Casaora",
     locale: "es_PY",
     alternateLocale: "en_US",
   },
@@ -100,7 +101,9 @@ export default async function RootLayout({
       >
         {/* biome-ignore lint/security/noDangerouslySetInnerHtml: needed to prevent theme flash before hydration */}
         <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
-        <LocaleProvider initialLocale={locale}>{children}</LocaleProvider>
+        <LocaleProvider initialLocale={locale}>
+          <QueryProvider>{children}</QueryProvider>
+        </LocaleProvider>
         <Toaster />
         <ApiErrorToaster />
       </body>

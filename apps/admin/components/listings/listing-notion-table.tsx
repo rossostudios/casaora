@@ -19,21 +19,16 @@ import {
 } from "@hugeicons/core-free-icons";
 import {
   type ColumnDef,
-  type FilterFn,
   type PaginationState,
   type SortingState,
   type VisibilityState,
   flexRender,
   getCoreRowModel,
-  getFilteredRowModel,
-  getPaginationRowModel,
-  getSortedRowModel,
   useReactTable,
 } from "@tanstack/react-table";
-import { useCallback, useMemo, useOptimistic, useState, useTransition } from "react";
+import { useCallback, useMemo, useOptimistic, useTransition } from "react";
 import { toast } from "sonner";
 
-import { updateListingInlineAction } from "@/app/(admin)/module/listings/actions";
 import type { ListingRow } from "@/app/(admin)/module/listings/listings-manager";
 import { EditableCell } from "@/components/properties/editable-cell";
 import {
@@ -68,8 +63,6 @@ import { formatCurrency } from "@/lib/format";
 import { useMediaQuery } from "@/lib/hooks/use-media-query";
 import { cn } from "@/lib/utils";
 
-import { readinessScore } from "@/app/(admin)/module/listings/listings-manager";
-
 /* ---------- helpers ---------- */
 
 function ColHeader({
@@ -99,25 +92,19 @@ function propertyTypeLabel(value: string | null, isEn: boolean): string {
   return isEn ? found.labelEn : found.labelEs;
 }
 
-/* ---------- global filter ---------- */
-
-const globalFilterFn: FilterFn<ListingRow> = (row, _columnId, filterValue) => {
-  const search = String(filterValue).toLowerCase();
-  if (!search) return true;
-  const d = row.original;
-  return [d.title, d.city, d.property_type, d.property_name, d.unit_name]
-    .filter(Boolean)
-    .some((field) => String(field).toLowerCase().includes(search));
-};
+function readinessLevel(
+  row: ListingRow
+): "green" | "yellow" | "red" {
+  if (row.readiness_blocking.length === 0) return "green";
+  if (
+    row.readiness_blocking.includes("cover_image") ||
+    row.readiness_blocking.includes("fee_lines")
+  )
+    return "red";
+  return "yellow";
+}
 
 /* ---------- types ---------- */
-
-export type ListingSummary = {
-  totalCount: number;
-  publishedCount: number;
-  draftCount: number;
-  totalApplications: number;
-};
 
 type OptimisticAction = {
   id: string;
@@ -129,13 +116,32 @@ type Props = {
   rows: ListingRow[];
   isEn: boolean;
   formatLocale: "en-US" | "es-PY";
-  summary: ListingSummary;
   selectedIds: Set<string>;
   onToggleSelect: (id: string) => void;
   onToggleSelectAll: (ids: string[]) => void;
   onEditInSheet: (row: ListingRow) => void;
   onPublish: (listingId: string) => void;
   onUnpublish: (listingId: string) => void;
+  onPreview: (row: ListingRow) => void;
+  onCommitEdit: (
+    listingId: string,
+    field: string,
+    value: string
+  ) => Promise<{ ok: boolean; error?: string }>;
+  /* server-side state */
+  sorting: SortingState;
+  onSortingChange: React.Dispatch<React.SetStateAction<SortingState>>;
+  pagination: PaginationState;
+  onPaginationChange: React.Dispatch<React.SetStateAction<PaginationState>>;
+  globalFilter: string;
+  onGlobalFilterChange: (value: string) => void;
+  statusFilter: string;
+  onStatusFilterChange: (value: string) => void;
+  readinessFilter: string;
+  onReadinessFilterChange: (value: string) => void;
+  totalRows: number;
+  pageCount: number;
+  isLoading: boolean;
 };
 
 /* ---------- component ---------- */
@@ -144,13 +150,27 @@ export function ListingNotionTable({
   rows,
   isEn,
   formatLocale,
-  summary,
   selectedIds,
   onToggleSelect,
   onToggleSelectAll,
   onEditInSheet,
   onPublish,
   onUnpublish,
+  onPreview,
+  onCommitEdit,
+  sorting,
+  onSortingChange,
+  pagination,
+  onPaginationChange,
+  globalFilter,
+  onGlobalFilterChange,
+  statusFilter,
+  onStatusFilterChange,
+  readinessFilter,
+  onReadinessFilterChange,
+  totalRows,
+  pageCount,
+  isLoading,
 }: Props) {
   const [, startTransition] = useTransition();
 
@@ -173,11 +193,7 @@ export function ListingNotionTable({
         });
       });
 
-      const result = await updateListingInlineAction({
-        listingId,
-        field,
-        value: next,
-      });
+      const result = await onCommitEdit(listingId, field, next);
 
       if (!result.ok) {
         toast.error(isEn ? "Failed to save" : "Error al guardar", {
@@ -187,19 +203,19 @@ export function ListingNotionTable({
         toast.success(isEn ? "Saved" : "Guardado");
       }
     },
-    [addOptimistic, isEn, startTransition]
+    [addOptimistic, isEn, startTransition, onCommitEdit]
   );
 
-  /* --- filter state --- */
-  const [sorting, setSorting] = useState<SortingState>([]);
-  const [globalFilter, setGlobalFilter] = useState("");
-  const [statusFilter, setStatusFilter] = useState<ListingStatusFilter>("all");
-  const [readinessFilter, setReadinessFilter] =
-    useState<ListingReadinessFilter>("all");
-  const [pagination, setPagination] = useState<PaginationState>({
-    pageIndex: 0,
-    pageSize: 50,
-  });
+  /* --- client-side readiness filter (readiness is not server-filterable) --- */
+  const filteredData = useMemo(() => {
+    if (readinessFilter === "all") return optimisticRows;
+    return optimisticRows.filter((r) => {
+      const level = readinessLevel(r);
+      if (readinessFilter === "ready") return level === "green";
+      if (readinessFilter === "incomplete") return level === "yellow";
+      return level === "red";
+    });
+  }, [optimisticRows, readinessFilter]);
 
   /* --- responsive column visibility --- */
   const isSm = useMediaQuery("(min-width: 640px)");
@@ -218,25 +234,6 @@ export function ListingNotionTable({
       pipeline: isLg,
     };
   }, [isSm, isMd, isLg]);
-
-  /* --- pre-filter for status + readiness --- */
-  const filteredData = useMemo(() => {
-    let data = optimisticRows;
-    if (statusFilter === "published") {
-      data = data.filter((r) => r.is_published);
-    } else if (statusFilter === "draft") {
-      data = data.filter((r) => !r.is_published);
-    }
-    if (readinessFilter !== "all") {
-      data = data.filter((r) => {
-        const level = readinessScore(r).level;
-        if (readinessFilter === "ready") return level === "green";
-        if (readinessFilter === "incomplete") return level === "yellow";
-        return level === "red";
-      });
-    }
-    return data;
-  }, [optimisticRows, statusFilter, readinessFilter]);
 
   /* --- columns --- */
   const columns = useMemo<ColumnDef<ListingRow>[]>(
@@ -284,7 +281,6 @@ export function ListingNotionTable({
         cell: ({ row }) => {
           const data = row.original;
           const parts = [data.property_name, data.unit_name].filter(Boolean);
-          // On mobile, show city in subtitle when city column is hidden
           if (!isSm && data.city) parts.push(data.city);
           const subtitle = parts.join(" · ");
           return (
@@ -311,11 +307,6 @@ export function ListingNotionTable({
         accessorKey: "is_published",
         size: 110,
         minSize: 90,
-        sortingFn: (rowA, rowB) => {
-          const a = rowA.original.is_published ? 1 : 0;
-          const b = rowB.original.is_published ? 1 : 0;
-          return a - b;
-        },
         header: () => (
           <ColHeader
             icon={CheckmarkCircle02Icon}
@@ -344,24 +335,26 @@ export function ListingNotionTable({
           />
         ),
         cell: ({ row }) => {
-          const r = readinessScore(row.original);
-          if (r.level === "green") {
+          const blocking = row.original.readiness_blocking;
+          const level = readinessLevel(row.original);
+
+          if (level === "green") {
             return (
               <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
                 {isEn ? "Ready" : "Listo"}
               </Badge>
             );
           }
-          if (r.level === "yellow") {
+          if (level === "yellow") {
             return (
               <div className="space-y-1">
                 <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
                   {isEn
-                    ? `${r.missing.length} missing`
-                    : `${r.missing.length} faltante(s)`}
+                    ? `${blocking.length} missing`
+                    : `${blocking.length} faltante(s)`}
                 </Badge>
                 <p className="max-w-[180px] text-muted-foreground text-[11px]">
-                  {r.missing.join(", ")}
+                  {blocking.join(", ")}
                 </p>
               </div>
             );
@@ -372,7 +365,7 @@ export function ListingNotionTable({
                 {isEn ? "Not ready" : "No listo"}
               </Badge>
               <p className="max-w-[180px] text-muted-foreground text-[11px]">
-                {r.missing.join(", ")}
+                {blocking.join(", ")}
               </p>
             </div>
           );
@@ -548,6 +541,10 @@ export function ListingNotionTable({
                   <Icon className="mr-2" icon={PencilEdit02Icon} size={14} />
                   {isEn ? "Edit" : "Editar"}
                 </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => onPreview(listing)}>
+                  <Icon className="mr-2" icon={ViewIcon} size={14} />
+                  {isEn ? "Preview" : "Vista previa"}
+                </DropdownMenuItem>
                 {listing.public_slug ? (
                   <DropdownMenuItem
                     onClick={() =>
@@ -557,7 +554,7 @@ export function ListingNotionTable({
                       )
                     }
                   >
-                    <Icon className="mr-2" icon={ViewIcon} size={14} />
+                    <Icon className="mr-2" icon={Link01Icon} size={14} />
                     {isEn ? "View public" : "Ver público"}
                   </DropdownMenuItem>
                 ) : null}
@@ -573,12 +570,6 @@ export function ListingNotionTable({
                     {isEn ? "Publish" : "Publicar"}
                   </DropdownMenuItem>
                 )}
-                <DropdownMenuItem
-                  onClick={() => navigator.clipboard.writeText(listing.id)}
-                >
-                  <Icon className="mr-2" icon={Link01Icon} size={14} />
-                  {isEn ? "Copy ID" : "Copiar ID"}
-                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           );
@@ -597,47 +588,38 @@ export function ListingNotionTable({
       onEditInSheet,
       onPublish,
       onUnpublish,
+      onPreview,
     ]
   );
 
-  /* --- table instance --- */
+  /* --- table instance (manual mode) --- */
   const table = useReactTable({
     data: filteredData,
     columns,
     columnResizeMode: "onChange",
-    state: { sorting, globalFilter, pagination, columnVisibility },
-    onSortingChange: setSorting,
-    onGlobalFilterChange: setGlobalFilter,
-    onPaginationChange: setPagination,
-    globalFilterFn,
+    manualPagination: true,
+    manualSorting: true,
+    state: { sorting, pagination, columnVisibility },
+    onSortingChange,
+    onPaginationChange,
+    pageCount,
     getCoreRowModel: getCoreRowModel(),
-    getSortedRowModel: getSortedRowModel(),
-    getFilteredRowModel: getFilteredRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
   });
-
-  const filteredCount = table.getFilteredRowModel().rows.length;
-  const totalCount = filteredData.length;
 
   return (
     <div className="space-y-3">
       <ListingsFilterBar
         globalFilter={globalFilter}
         isEn={isEn}
-        onGlobalFilterChange={(v) => {
-          setGlobalFilter(v);
-          setPagination((p) => ({ ...p, pageIndex: 0 }));
-        }}
-        onReadinessFilterChange={(v) => {
-          setReadinessFilter(v);
-          setPagination((p) => ({ ...p, pageIndex: 0 }));
-        }}
-        onStatusFilterChange={(v) => {
-          setStatusFilter(v);
-          setPagination((p) => ({ ...p, pageIndex: 0 }));
-        }}
-        readinessFilter={readinessFilter}
-        statusFilter={statusFilter}
+        onGlobalFilterChange={onGlobalFilterChange}
+        onReadinessFilterChange={(v) =>
+          onReadinessFilterChange(v as ListingReadinessFilter)
+        }
+        onStatusFilterChange={(v) =>
+          onStatusFilterChange(v as ListingStatusFilter)
+        }
+        readinessFilter={readinessFilter as ListingReadinessFilter}
+        statusFilter={statusFilter as ListingStatusFilter}
       />
 
       <div className="overflow-x-auto rounded-md border">
@@ -697,7 +679,16 @@ export function ListingNotionTable({
           </TableHeader>
 
           <TableBody>
-            {table.getRowModel().rows.length ? (
+            {isLoading ? (
+              <TableRow>
+                <TableCell
+                  className="py-8 text-center text-muted-foreground"
+                  colSpan={table.getVisibleLeafColumns().length}
+                >
+                  {isEn ? "Loading..." : "Cargando..."}
+                </TableCell>
+              </TableRow>
+            ) : table.getRowModel().rows.length ? (
               table.getRowModel().rows.map((row) => (
                 <TableRow
                   className="hover:bg-muted/20"
@@ -737,10 +728,7 @@ export function ListingNotionTable({
                 className="font-medium text-xs"
                 colSpan={table.getVisibleLeafColumns().length}
               >
-                {summary.totalCount} {isEn ? "listings" : "anuncios"} &middot;{" "}
-                {summary.publishedCount} {isEn ? "published" : "publicados"} &middot;{" "}
-                {summary.draftCount} {isEn ? "draft" : "borrador"} &middot;{" "}
-                {summary.totalApplications} {isEn ? "applications" : "aplicaciones"}
+                {totalRows} {isEn ? "listings" : "anuncios"}
               </TableCell>
             </TableRow>
           </TableFooter>
@@ -749,10 +737,7 @@ export function ListingNotionTable({
 
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div className="text-muted-foreground text-sm">
-          {filteredCount !== totalCount
-            ? `${filteredCount} / ${totalCount}`
-            : `${totalCount}`}{" "}
-          {isEn ? "listings" : "anuncios"}
+          {totalRows} {isEn ? "listings" : "anuncios"}
         </div>
 
         <div className="flex items-center gap-2">
@@ -765,8 +750,7 @@ export function ListingNotionTable({
             {isEn ? "Previous" : "Anterior"}
           </Button>
           <span className="text-muted-foreground text-sm">
-            {table.getState().pagination.pageIndex + 1} /{" "}
-            {table.getPageCount() || 1}
+            {pagination.pageIndex + 1} / {pageCount}
           </span>
           <Button
             disabled={!table.getCanNextPage()}

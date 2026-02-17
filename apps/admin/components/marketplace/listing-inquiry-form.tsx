@@ -160,7 +160,7 @@ export function ListingInquiryForm({ slug, isEn }: ListingInquiryFormProps) {
         ) : null}
 
         <button
-          className="flex h-10 w-full items-center justify-center rounded-xl bg-stoa-gradient-warm font-medium text-white text-sm transition-opacity hover:opacity-90 disabled:opacity-60"
+          className="flex h-10 w-full items-center justify-center rounded-xl bg-casaora-gradient-warm font-medium text-white text-sm transition-opacity hover:opacity-90 disabled:opacity-60"
           disabled={state === "submitting"}
           type="submit"
         >

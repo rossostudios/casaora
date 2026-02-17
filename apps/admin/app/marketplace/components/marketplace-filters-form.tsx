@@ -274,7 +274,7 @@ export function MarketplaceFiltersForm({
           </label>
 
           <button
-            className="inline-flex h-11 w-full items-center justify-center rounded-xl bg-stoa-gradient-warm px-4 font-medium text-white text-sm transition-opacity hover:opacity-90"
+            className="inline-flex h-11 w-full items-center justify-center rounded-xl bg-casaora-gradient-warm px-4 font-medium text-white text-sm transition-opacity hover:opacity-90"
             type="submit"
           >
             {isEn ? "Apply" : "Aplicar"}

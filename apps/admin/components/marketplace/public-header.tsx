@@ -11,7 +11,7 @@ import { useEffect, useState } from "react";
 import { LanguageSelector } from "@/components/preferences/language-selector";
 import { Icon } from "@/components/ui/icon";
 import { Sheet } from "@/components/ui/sheet";
-import { StoaLogo } from "@/components/ui/stoa-logo";
+import { CasaoraLogo } from "@/components/ui/casaora-logo";
 import {
   FAVORITES_CHANGE_EVENT,
   getFavoritesCount,
@@ -81,9 +81,9 @@ export function PublicHeader({ locale }: { locale: HeaderLocale }) {
             className="inline-flex items-center gap-2.5 transition-opacity hover:opacity-80"
             href="/"
           >
-            <StoaLogo className="text-primary" size={24} />
+            <CasaoraLogo className="text-primary" size={24} />
             <span className="font-serif text-xl font-semibold tracking-tight text-[var(--marketplace-text)]">
-              Stoa
+              Casaora
             </span>
           </Link>
 
@@ -130,7 +130,7 @@ export function PublicHeader({ locale }: { locale: HeaderLocale }) {
           <LanguageSelector className="hidden h-9 w-[7.25rem] rounded-xl border-[#e8e4df] bg-transparent text-xs sm:inline-flex sm:w-[8.4rem]" />
 
           <Link
-            className="hidden h-10 items-center rounded-xl bg-stoa-gradient-warm px-5 font-medium text-white text-sm transition-opacity hover:opacity-90 md:inline-flex"
+            className="hidden h-10 items-center rounded-xl bg-casaora-gradient-warm px-5 font-medium text-white text-sm transition-opacity hover:opacity-90 md:inline-flex"
             href={
               pathname.startsWith("/marketplace") ? "/login" : "/marketplace"
             }
@@ -152,7 +152,7 @@ export function PublicHeader({ locale }: { locale: HeaderLocale }) {
         onOpenChange={setMobileOpen}
         open={mobileOpen}
         side="left"
-        title="Stoa"
+        title="Casaora"
       >
         <nav className="flex flex-col gap-1">
           {NAV_ITEMS.map((item) => {
@@ -199,7 +199,7 @@ export function PublicHeader({ locale }: { locale: HeaderLocale }) {
 
         <div className="mt-4 px-3">
           <Link
-            className="flex h-10 w-full items-center justify-center rounded-xl bg-stoa-gradient-warm font-medium text-white text-sm transition-opacity hover:opacity-90"
+            className="flex h-10 w-full items-center justify-center rounded-xl bg-casaora-gradient-warm font-medium text-white text-sm transition-opacity hover:opacity-90"
             href={
               pathname.startsWith("/marketplace") ? "/login" : "/marketplace"
             }

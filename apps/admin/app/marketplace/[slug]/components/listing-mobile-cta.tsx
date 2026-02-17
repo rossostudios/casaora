@@ -54,7 +54,7 @@ export function ListingMobileCta({
             </a>
           ) : null}
           <Link
-            className="inline-flex h-10 items-center rounded-xl bg-stoa-gradient-warm px-5 font-medium text-white text-sm transition-opacity hover:opacity-90"
+            className="inline-flex h-10 items-center rounded-xl bg-casaora-gradient-warm px-5 font-medium text-white text-sm transition-opacity hover:opacity-90"
             href={`/marketplace/apply/${encodeURIComponent(slug)}`}
           >
             {isEn ? "Apply" : "Aplicar"}

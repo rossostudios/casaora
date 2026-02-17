@@ -64,7 +64,7 @@ export function MarketplaceHero({
           </label>
 
           <button
-            className="inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-stoa-gradient-warm px-6 font-medium text-white text-sm transition-opacity hover:opacity-90"
+            className="inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-casaora-gradient-warm px-6 font-medium text-white text-sm transition-opacity hover:opacity-90"
             type="submit"
           >
             <Icon icon={Search01Icon} size={16} />

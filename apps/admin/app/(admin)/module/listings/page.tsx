@@ -57,21 +57,17 @@ export default async function ListingsModulePage({
     );
   }
 
-  let listings: Record<string, unknown>[] = [];
   let pricingTemplates: Record<string, unknown>[] = [];
   let properties: Record<string, unknown>[] = [];
   let units: Record<string, unknown>[] = [];
 
   try {
-    const [listingRows, pricingRows, propertyRows, unitRows] =
-      await Promise.all([
-        fetchList("/listings", orgId, 500),
-        fetchList("/pricing/templates", orgId, 500),
-        fetchList("/properties", orgId, 500),
-        fetchList("/units", orgId, 500),
-      ]);
+    const [pricingRows, propertyRows, unitRows] = await Promise.all([
+      fetchList("/pricing/templates", orgId, 500),
+      fetchList("/properties", orgId, 500),
+      fetchList("/units", orgId, 500),
+    ]);
 
-    listings = listingRows as Record<string, unknown>[];
     pricingTemplates = pricingRows as Record<string, unknown>[];
     properties = propertyRows as Record<string, unknown>[];
     units = unitRows as Record<string, unknown>[];
@@ -139,7 +135,6 @@ export default async function ListingsModulePage({
           ) : null}
 
           <ListingsManager
-            listings={listings}
             orgId={orgId}
             pricingTemplates={pricingTemplates}
             properties={properties}

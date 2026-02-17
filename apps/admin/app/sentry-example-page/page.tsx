@@ -53,7 +53,7 @@ export default function Page() {
           <a
             target="_blank"
             rel="noopener"
-            href="https://stoa.sentry.io/issues/?project=4510892475875328"
+            href="https://casaora.sentry.io/issues/?project=4510892475875328"
           >
             Issues Page
           </a>

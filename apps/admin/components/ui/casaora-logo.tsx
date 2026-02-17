@@ -1,4 +1,4 @@
-export function StoaLogo({
+export function CasaoraLogo({
   size = 24,
   color = "currentColor",
   className,

@@ -49,7 +49,7 @@ export function ListingMoveInCard({ slug, isEn, listing }: ListingMoveInCardProp
 
       <div className="space-y-3">
         <Link
-          className="flex h-11 w-full items-center justify-center rounded-xl bg-stoa-gradient-warm font-medium text-white text-sm transition-opacity hover:opacity-90"
+          className="flex h-11 w-full items-center justify-center rounded-xl bg-casaora-gradient-warm font-medium text-white text-sm transition-opacity hover:opacity-90"
           href={`/marketplace/apply/${encodeURIComponent(slug)}`}
         >
           {isEn ? "Apply now" : "Aplicar ahora"}

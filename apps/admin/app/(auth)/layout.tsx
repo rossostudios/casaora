@@ -27,7 +27,7 @@ export default async function AuthLayout({
 
         <footer className="flex flex-wrap items-center justify-between gap-2 px-6 py-4 text-muted-foreground text-xs">
           <span>
-            &copy;{new Date().getFullYear()} Stoa.{" "}
+            &copy;{new Date().getFullYear()} Casaora.{" "}
             {isEn ? "All rights reserved." : "Todos los derechos reservados."}
           </span>
           <div className="flex items-center gap-3">

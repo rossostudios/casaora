@@ -322,6 +322,53 @@ pub async fn delete_row(
     Ok(existing)
 }
 
+pub async fn count_rows(
+    pool: &sqlx::PgPool,
+    table: &str,
+    filters: Option<&Map<String, Value>>,
+) -> Result<i64, AppError> {
+    let table_name = validate_table(table)?;
+
+    let mut query = QueryBuilder::<Postgres>::new("SELECT COUNT(*)::bigint AS total FROM ");
+    query.push(table_name).push(" t WHERE 1=1");
+
+    if let Some(filter_map) = filters {
+        for (key, value) in filter_map {
+            let filter_key = validate_identifier(key)?;
+            match value {
+                Value::Null => {}
+                Value::Array(items) => {
+                    let values = items.iter().map(render_scalar).collect::<Vec<_>>();
+                    if values.is_empty() {
+                        continue;
+                    }
+                    query
+                        .push(" AND (to_jsonb(t) ->> ")
+                        .push_bind(filter_key)
+                        .push(") = ANY(")
+                        .push_bind(values)
+                        .push(")");
+                }
+                _ => {
+                    query
+                        .push(" AND (to_jsonb(t) ->> ")
+                        .push_bind(filter_key)
+                        .push(") = ")
+                        .push_bind(render_scalar(value));
+                }
+            }
+        }
+    }
+
+    let row = query
+        .build()
+        .fetch_one(pool)
+        .await
+        .map_err(map_db_error)?;
+
+    Ok(row.try_get::<i64, _>("total").unwrap_or(0))
+}
+
 pub fn date_overlap(start: &str, end: &str, periods: &[Map<String, Value>]) -> bool {
     periods.iter().any(|period| {
         let from = period

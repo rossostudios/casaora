@@ -1,6 +1,6 @@
 {
-  "name": "Stoa – Tenant Portal",
-  "short_name": "Stoa",
+  "name": "Casaora – Tenant Portal",
+  "short_name": "Casaora",
   "description": "Portal del inquilino – pagos, mantenimiento y documentos",
   "start_url": "/tenant/dashboard",
   "scope": "/tenant/",

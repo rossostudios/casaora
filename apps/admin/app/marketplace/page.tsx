@@ -29,7 +29,7 @@ type MarketplacePageProps = {
 };
 
 export async function generateMetadata(): Promise<Metadata> {
-  const title = "Stoa Marketplace";
+  const title = "Casaora Marketplace";
   const description =
     "Alquileres de largo plazo con precios transparentes en Paraguay. Long-term rentals with transparent pricing in Paraguay.";
 
@@ -46,7 +46,7 @@ export async function generateMetadata(): Promise<Metadata> {
       title,
       description,
       type: "website",
-      siteName: "Stoa",
+      siteName: "Casaora",
       locale: "es_PY",
       alternateLocale: "en_US",
     },
