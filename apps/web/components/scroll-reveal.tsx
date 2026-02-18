@@ -20,11 +20,7 @@ export function ScrollReveal({
     const el = ref.current;
     if (!el) return;
 
-    const prefersReduced = window.matchMedia(
-      "(prefers-reduced-motion: reduce)"
-    ).matches;
-    if (prefersReduced) {
-      setVisible(true);
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
       return;
     }
 
@@ -45,8 +41,8 @@ export function ScrollReveal({
   return (
     <div
       className={cn(
-        "transition-all duration-700 ease-out",
-        visible ? "translate-y-0 opacity-100" : "translate-y-6 opacity-0",
+        "motion-safe:transition-all motion-safe:duration-700 motion-safe:ease-out",
+        visible ? "translate-y-0 opacity-100" : "motion-safe:translate-y-6 motion-safe:opacity-0",
         className
       )}
       ref={ref}

@@ -17,6 +17,7 @@ import {
   getFilteredRowModel,
   getPaginationRowModel,
   getSortedRowModel,
+  type OnChangeFn,
   type PaginationState,
   type SortingState,
   useReactTable,
@@ -24,7 +25,14 @@ import {
 } from "@tanstack/react-table";
 import Link from "next/link";
 import type React from "react";
-import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import {
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { toast } from "sonner";
 
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -611,17 +619,37 @@ export function DataTable<TRow extends DataTableRow = DataTableRow>({
     return next;
   }, [orderedKeys]);
 
-  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>(
-    () => defaultVisibility
+  const [columnVisibilityOverrides, setColumnVisibilityOverrides] =
+    useState<VisibilityState>({});
+  const columnVisibility = useMemo(
+    () => ({ ...defaultVisibility, ...columnVisibilityOverrides }),
+    [columnVisibilityOverrides, defaultVisibility]
   );
   const [pagination, setPagination] = useState<PaginationState>({
     pageIndex: 0,
     pageSize: defaultPageSize,
   });
 
-  useEffect(() => {
-    setColumnVisibility(defaultVisibility);
-  }, [defaultVisibility]);
+  const handleColumnVisibilityChange: OnChangeFn<VisibilityState> = useCallback(
+    (updater) => {
+      setColumnVisibilityOverrides((currentOverrides) => {
+        const current = { ...defaultVisibility, ...currentOverrides };
+        const next =
+          typeof updater === "function"
+            ? updater(current)
+            : updater;
+
+        const nextOverrides: VisibilityState = {};
+        for (const [key, value] of Object.entries(next)) {
+          if (defaultVisibility[key] !== value) {
+            nextOverrides[key] = value;
+          }
+        }
+        return nextOverrides;
+      });
+    },
+    [defaultVisibility]
+  );
 
   const table = useReactTable<TRow>({
     data,
@@ -635,7 +663,7 @@ export function DataTable<TRow extends DataTableRow = DataTableRow>({
     globalFilterFn: globalFilterFn as FilterFn<TRow>,
     onSortingChange: setSorting,
     onGlobalFilterChange: setGlobalFilter,
-    onColumnVisibilityChange: setColumnVisibility,
+    onColumnVisibilityChange: handleColumnVisibilityChange,
     onPaginationChange: setPagination,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
@@ -664,7 +692,7 @@ export function DataTable<TRow extends DataTableRow = DataTableRow>({
   const reset = () => {
     setGlobalFilter("");
     setSorting([]);
-    setColumnVisibility(defaultVisibility);
+    setColumnVisibilityOverrides({});
     setPagination((current) => ({ ...current, pageIndex: 0 }));
   };
 
@@ -877,8 +905,8 @@ export function DataTable<TRow extends DataTableRow = DataTableRow>({
                       description={
                         emptyStateConfig?.description ?? (
                         isEn
-                          ? "As you add data (onboarding, operations, or integrations), it will show up here."
-                          : "Cuando agregues datos (onboarding, operaciones o integraciones), aparecerán aquí."
+                          ? "As you add data (onboarding, operations, or channels), it will show up here."
+                          : "Cuando agregues datos (onboarding, operaciones o canales), aparecerán aquí."
                         )
                       }
                       icon={emptyStateConfig?.icon ?? InboxIcon}

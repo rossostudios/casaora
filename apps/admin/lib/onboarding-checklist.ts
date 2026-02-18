@@ -9,23 +9,39 @@ export type ChecklistItem = {
 };
 
 type EntityCounts = {
-  integrations: number;
+  properties: number;
+  units: number;
+  channels: number;
   reservations: number;
   tasks: number;
   expenses: number;
-  pricing: number;
   listings: number;
   applications: number;
   leases: number;
   collections: number;
 };
 
+const PORTFOLIO_ITEMS: Omit<ChecklistItem, "isDone">[] = [
+  {
+    id: "portfolio-properties",
+    labelEn: "Add your first property",
+    labelEs: "Agrega tu primera propiedad",
+    href: "/setup?tab=properties",
+  },
+  {
+    id: "portfolio-units",
+    labelEn: "Register your first unit",
+    labelEs: "Registra tu primera unidad",
+    href: "/setup?tab=units",
+  },
+];
+
 const STR_ITEMS: Omit<ChecklistItem, "isDone">[] = [
   {
-    id: "str-integrations",
-    labelEn: "Connect your first integration",
-    labelEs: "Conecta tu primera integración",
-    href: "/module/integrations",
+    id: "str-channels",
+    labelEn: "Connect your first channel",
+    labelEs: "Conecta tu primer canal",
+    href: "/module/channels",
   },
   {
     id: "str-reservations",
@@ -37,7 +53,7 @@ const STR_ITEMS: Omit<ChecklistItem, "isDone">[] = [
     id: "str-tasks",
     labelEn: "Set up a cleaning task",
     labelEs: "Configura una tarea de limpieza",
-    href: "/module/tasks",
+    href: "/module/operations?tab=tasks",
   },
   {
     id: "str-expenses",
@@ -48,12 +64,6 @@ const STR_ITEMS: Omit<ChecklistItem, "isDone">[] = [
 ];
 
 const LTR_ITEMS: Omit<ChecklistItem, "isDone">[] = [
-  {
-    id: "ltr-pricing",
-    labelEn: "Create a pricing template",
-    labelEs: "Crea una plantilla de precios",
-    href: "/module/pricing",
-  },
   {
     id: "ltr-marketplace",
     labelEn: "Publish a marketplace listing",
@@ -82,16 +92,18 @@ const LTR_ITEMS: Omit<ChecklistItem, "isDone">[] = [
 
 function isDoneForId(id: string, counts: EntityCounts): boolean {
   switch (id) {
-    case "str-integrations":
-      return counts.integrations > 0;
+    case "portfolio-properties":
+      return counts.properties > 0;
+    case "portfolio-units":
+      return counts.units > 0;
+    case "str-channels":
+      return counts.channels > 0;
     case "str-reservations":
       return counts.reservations > 0;
     case "str-tasks":
       return counts.tasks > 0;
     case "str-expenses":
       return counts.expenses > 0;
-    case "ltr-pricing":
-      return counts.pricing > 0;
     case "ltr-marketplace":
       return counts.listings > 0;
     case "ltr-applications":
@@ -112,10 +124,10 @@ export function getChecklistItems(
   const mode = rentalMode ?? "both";
   const templates =
     mode === "str"
-      ? STR_ITEMS
+      ? [...PORTFOLIO_ITEMS, ...STR_ITEMS]
       : mode === "ltr"
-        ? LTR_ITEMS
-        : [...STR_ITEMS, ...LTR_ITEMS];
+        ? [...PORTFOLIO_ITEMS, ...LTR_ITEMS]
+        : [...PORTFOLIO_ITEMS, ...STR_ITEMS, ...LTR_ITEMS];
 
   return templates.map((item) => ({
     ...item,

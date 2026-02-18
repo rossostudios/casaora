@@ -1,5 +1,7 @@
+import Link from "next/link";
 import { OrgAccessChanged } from "@/components/shell/org-access-changed";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { buttonVariants } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -11,6 +13,7 @@ import { fetchList, getApiBaseUrl } from "@/lib/api";
 import { errorMessage, isOrgMembershipError } from "@/lib/errors";
 import { getActiveLocale } from "@/lib/i18n/server";
 import { getActiveOrgId } from "@/lib/org";
+import { cn } from "@/lib/utils";
 
 import { ListingsManager } from "./listings-manager";
 
@@ -105,15 +108,25 @@ export default async function ListingsModulePage({
   return (
     <div className="space-y-6">
       <Card>
-        <CardHeader>
-          <CardTitle className="text-2xl">
-            {isEn ? "Marketplace listings" : "Anuncios del marketplace"}
-          </CardTitle>
-          <CardDescription>
-            {isEn
-              ? "Publish long-term listings only when transparency requirements are complete."
-              : "Publica anuncios de largo plazo solo cuando se cumplan los requisitos de transparencia."}
-          </CardDescription>
+        <CardHeader className="space-y-3">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="space-y-1">
+              <CardTitle className="text-2xl">
+                {isEn ? "Marketplace listings" : "Anuncios del marketplace"}
+              </CardTitle>
+              <CardDescription>
+                {isEn
+                  ? "Publish long-term listings only when transparency requirements are complete."
+                  : "Publica anuncios de largo plazo solo cuando se cumplan los requisitos de transparencia."}
+              </CardDescription>
+            </div>
+            <Link
+              className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
+              href="/module/pricing"
+            >
+              {isEn ? "Manage pricing templates" : "Gestionar plantillas de precios"}
+            </Link>
+          </div>
         </CardHeader>
         <CardContent className="space-y-4">
           {errorLabel ? (

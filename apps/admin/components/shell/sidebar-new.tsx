@@ -245,6 +245,15 @@ const INBOX_SEGMENT_LINKS: RouteLinkDef[] = [
 
 const SECTIONS: SectionDef[] = [
   {
+    key: "portfolio",
+    label: {
+      "es-PY": "Portafolio",
+      "en-US": "Portfolio",
+    },
+    moduleSlugs: ["properties", "units", "integrations"],
+    roles: ["owner_admin", "operator"],
+  },
+  {
     key: "rentals",
     label: {
       "es-PY": "Alquileres",
@@ -276,21 +285,19 @@ const SECTIONS: SectionDef[] = [
     roles: ["owner_admin", "operator", "cleaner"],
   },
   {
-    key: "portfolio",
-    label: {
-      "es-PY": "Portafolio",
-      "en-US": "Portfolio",
-    },
-    moduleSlugs: ["properties", "units", "integrations"],
-    roles: ["owner_admin", "operator"],
-  },
-  {
     key: "finance",
     label: {
       "es-PY": "Finanzas",
       "en-US": "Finance",
     },
-    moduleSlugs: ["expenses", "owner-statements", "pricing", "reports"],
+    routeLinks: [
+      {
+        href: "/module/reports/finance",
+        icon: ChartIcon,
+        label: { "es-PY": "Ingresos", "en-US": "Income" },
+      },
+    ],
+    moduleSlugs: ["expenses", "reports"],
     roles: ["owner_admin", "accountant"],
   },
   {
@@ -320,6 +327,8 @@ const HOME_TAB_HIDDEN_MODULE_SLUGS = new Set([
   "sequences",
   "tasks",
   "workflow-rules",
+  "owner-statements",
+  "pricing",
 ]);
 
 function isRouteActive(

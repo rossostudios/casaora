@@ -307,7 +307,7 @@ export function SetupManager({
         ? "Propiedades"
         : tab === "units"
           ? "Unidades"
-          : "Integraciones";
+          : "Canales";
 
   const sheetTitle = (() => {
     const labels =
@@ -315,9 +315,9 @@ export function SetupManager({
         ? { base: "Organización", create: "Nueva organización" }
         : sheetKind === "property"
           ? { base: "Propiedad", create: "Nueva propiedad" }
-          : sheetKind === "unit"
-            ? { base: "Unidad", create: "Nueva unidad" }
-            : { base: "Integración", create: "Nueva integración" };
+            : sheetKind === "unit"
+              ? { base: "Unidad", create: "Nueva unidad" }
+            : { base: "Canal", create: "Nuevo canal" };
 
     if (sheetMode === "create") return labels.create;
     const label = recordLabel(sheetKind, record);
@@ -382,7 +382,7 @@ export function SetupManager({
         ? "Propiedades"
         : tab === "units"
           ? "Unidades"
-          : "Integraciones";
+          : "Canales";
 
   const cardSubtitle =
     tab === "organizations"
@@ -420,7 +420,7 @@ export function SetupManager({
       : sheetKind === "unit"
         ? "/module/units"
         : sheetKind === "integration"
-          ? "/module/integrations"
+          ? "/module/channels"
           : null;
 
   const recordId = asString(record?.id);
@@ -477,7 +477,7 @@ export function SetupManager({
               active={tab === "integrations"}
               onClick={() => setTab("integrations")}
             >
-              Integraciones{" "}
+              Canales{" "}
               <span className="text-muted-foreground text-xs">
                 {integrations.length}
               </span>
@@ -551,7 +551,7 @@ export function SetupManager({
                         ? "propiedad"
                         : sheetKind === "unit"
                           ? "unidad"
-                          : "integración";
+                          : "canal";
 
                   toast("Confirmar eliminación", {
                     description: label
@@ -633,7 +633,7 @@ export function SetupManager({
                     )}
                     href="/module/integration-events?provider=ical"
                   >
-                    Ver eventos de integración
+                    Ver eventos de canal
                   </a>
                   <a
                     className={cn(
@@ -921,13 +921,13 @@ export function SetupManager({
                   disabled={unitOptions.length === 0}
                   type="submit"
                 >
-                  Crear integración
+                  Crear canal
                 </Button>
 
                 {unitOptions.length === 0 ? (
                   <div className="space-y-2 rounded-md border bg-muted/20 p-3 text-sm">
                     <p className="text-muted-foreground">
-                      Las integraciones conectan una unidad con un canal externo.
+                      Los canales conectan una unidad con un canal externo.
                       Crea una unidad primero.
                     </p>
                     <Button
@@ -1216,7 +1216,7 @@ export function SetupManager({
                     <CopyValue value={listingExportUrl} />
                   ) : (
                     <p className="text-muted-foreground text-sm">
-                      Guarda la integración primero para generar una URL de
+                      Guarda el canal primero para generar una URL de
                       exportación.
                     </p>
                   )}
@@ -1228,15 +1228,15 @@ export function SetupManager({
 
                 <p className="text-muted-foreground text-xs">
                   Tip: Solicitar una sincronización creará un evento de
-                  integración que puedes revisar en{" "}
-                  <span className="font-mono">Eventos de integración</span>.
+                  canal que puedes revisar en{" "}
+                  <span className="font-mono">Eventos de canal</span>.
                 </p>
 
                 <div className="flex items-center justify-between gap-3 rounded-md border bg-muted/20 px-3 py-2">
                   <div>
                     <p className="font-medium text-sm">Activo</p>
                     <p className="text-muted-foreground text-xs">
-                      Desactiva integraciones que ya no sincronizas.
+                      Desactiva canales que ya no sincronizas.
                     </p>
                   </div>
                   <div className="flex items-center gap-2">

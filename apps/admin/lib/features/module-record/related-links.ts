@@ -18,21 +18,24 @@ export function buildRelatedLinks(
     });
     links.push({ href: "/module/units", label: isEn ? "Units" : "Unidades" });
     links.push({
-      href: "/module/integrations",
-      label: isEn ? "Integrations" : "Integraciones",
+      href: "/module/channels",
+      label: isEn ? "Channels" : "Canales",
     });
     links.push({
       href: "/module/reservations",
       label: isEn ? "Reservations" : "Reservas",
     });
-    links.push({ href: "/module/tasks", label: isEn ? "Tasks" : "Tareas" });
+    links.push({
+      href: "/module/operations?tab=tasks",
+      label: isEn ? "Tasks" : "Tareas",
+    });
     links.push({
       href: "/module/expenses",
       label: isEn ? "Expenses" : "Gastos",
     });
     links.push({
       href: "/module/owner-statements",
-      label: isEn ? "Owner statements" : "Estados del propietario",
+      label: isEn ? "Payout statements" : "Liquidaciones",
     });
     return links;
   }
@@ -43,7 +46,7 @@ export function buildRelatedLinks(
       label: isEn ? "Units in this property" : "Unidades en esta propiedad",
     });
     links.push({
-      href: `/module/tasks?${q("property_id", recordId)}`,
+      href: `/module/operations?tab=tasks&${q("property_id", recordId)}`,
       label: isEn ? "Tasks in this property" : "Tareas de esta propiedad",
     });
     links.push({
@@ -53,8 +56,8 @@ export function buildRelatedLinks(
     links.push({
       href: `/module/owner-statements?${q("property_id", recordId)}`,
       label: isEn
-        ? "Owner statements in this property"
-        : "Estados del propietario de esta propiedad",
+        ? "Payout statements in this property"
+        : "Liquidaciones de esta propiedad",
     });
     links.push({
       href: `/module/leases?${q("property_id", recordId)}`,
@@ -73,10 +76,10 @@ export function buildRelatedLinks(
 
   if (slug === "units") {
     links.push({
-      href: `/module/integrations?${q("unit_id", recordId)}`,
+      href: `/module/channels?${q("unit_id", recordId)}`,
       label: isEn
-        ? "Integrations for this unit"
-        : "Integraciones de esta unidad",
+        ? "Channels for this unit"
+        : "Canales de esta unidad",
     });
     links.push({
       href: `/module/reservations?${q("unit_id", recordId)}`,
@@ -87,7 +90,7 @@ export function buildRelatedLinks(
       label: isEn ? "Calendar for this unit" : "Calendario de esta unidad",
     });
     links.push({
-      href: `/module/tasks?${q("unit_id", recordId)}`,
+      href: `/module/operations?tab=tasks&${q("unit_id", recordId)}`,
       label: isEn ? "Tasks for this unit" : "Tareas de esta unidad",
     });
     links.push({
@@ -97,8 +100,8 @@ export function buildRelatedLinks(
     links.push({
       href: `/module/owner-statements?${q("unit_id", recordId)}`,
       label: isEn
-        ? "Owner statements for this unit"
-        : "Estados del propietario de esta unidad",
+        ? "Payout statements for this unit"
+        : "Liquidaciones de esta unidad",
     });
     return links;
   }
@@ -107,8 +110,8 @@ export function buildRelatedLinks(
     links.push({
       href: `/module/reservations?${q("integration_id", recordId)}`,
       label: isEn
-        ? "Reservations for this integration"
-        : "Reservas de esta integración",
+        ? "Reservations for this channel"
+        : "Reservas de este canal",
     });
     return links;
   }
@@ -123,7 +126,7 @@ export function buildRelatedLinks(
 
   if (slug === "reservations") {
     links.push({
-      href: `/module/tasks?${q("reservation_id", recordId)}`,
+      href: `/module/operations?tab=tasks&${q("reservation_id", recordId)}`,
       label: isEn ? "Tasks for this reservation" : "Tareas de esta reserva",
     });
     links.push({

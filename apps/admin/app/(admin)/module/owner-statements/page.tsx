@@ -56,8 +56,8 @@ export default async function OwnerStatementsModulePage({
           </CardTitle>
           <CardDescription>
             {isEn
-              ? "Select an organization to load owner statements."
-              : "Selecciona una organización para cargar estados del propietario."}
+              ? "Select an organization to load payout statements."
+              : "Selecciona una organización para cargar liquidaciones."}
           </CardDescription>
         </CardHeader>
       </Card>
@@ -91,8 +91,8 @@ export default async function OwnerStatementsModulePage({
           </CardTitle>
           <CardDescription>
             {isEn
-              ? "Could not load owner statements from the backend."
-              : "No se pudieron cargar estados del propietario."}
+              ? "Could not load payout statements from the backend."
+              : "No se pudieron cargar liquidaciones."}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-2 text-muted-foreground text-sm">
@@ -119,11 +119,11 @@ export default async function OwnerStatementsModulePage({
                   {isEn ? "Finance" : "Finanzas"}
                 </Badge>
                 <Badge className="text-[11px]" variant="secondary">
-                  {isEn ? "Owner Statements" : "Estados"}
+                  {isEn ? "Payout Statements" : "Liquidaciones"}
                 </Badge>
               </div>
               <CardTitle className="text-2xl">
-                {isEn ? "Owner Statements" : "Estados del Propietario"}
+                {isEn ? "Payout Statements" : "Liquidaciones"}
               </CardTitle>
               <CardDescription>
                 {isEn

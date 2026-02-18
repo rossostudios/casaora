@@ -150,7 +150,7 @@ export default async function ExpensesModulePage({ searchParams }: PageProps) {
                 )}
                 href="/module/owner-statements"
               >
-                {isEn ? "Owner statements" : "Estados"}
+                {isEn ? "Payout statements" : "Liquidaciones"}
               </Link>
               <Link
                 className={cn(

@@ -153,8 +153,8 @@ export default async function ApplicationsModulePage({
               </AlertTitle>
               <AlertDescription className="mt-1 text-xs">
                 {isEn
-                  ? "Review Integration Events for failed marketplace application submissions."
-                  : "Revisa Eventos de Integración para envíos fallidos de aplicaciones del marketplace."}
+                  ? "Review Channel Events for failed marketplace application submissions."
+                  : "Revisa Eventos de canales para envíos fallidos de aplicaciones del marketplace."}
               </AlertDescription>
             </Alert>
           ) : null}

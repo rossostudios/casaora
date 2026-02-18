@@ -216,7 +216,7 @@ export function StatementsManager({
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `owner-statements-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.download = `payout-statements-${new Date().toISOString().slice(0, 10)}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   }
@@ -352,7 +352,7 @@ export function StatementsManager({
       <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         <div className="rounded-lg border p-3">
           <p className="text-muted-foreground text-xs">
-            {isEn ? "Total statements" : "Total estados"}
+            {isEn ? "Total payout statements" : "Total liquidaciones"}
           </p>
           <p className="text-2xl font-semibold tabular-nums">
             {summaries.total}
@@ -422,7 +422,7 @@ export function StatementsManager({
             variant="secondary"
           >
             <Icon icon={PlusSignIcon} size={16} />
-            {isEn ? "New statement" : "Nuevo estado"}
+            {isEn ? "New payout statement" : "Nueva liquidación"}
           </Button>
         </div>
       </div>
@@ -438,12 +438,12 @@ export function StatementsManager({
         contentClassName="max-w-xl"
         description={
           isEn
-            ? "Generate a new owner statement for a property and period."
-            : "Genera un nuevo estado del propietario para una propiedad y período."
+            ? "Generate a new payout statement for a property and period."
+            : "Genera una nueva liquidación para una propiedad y período."
         }
         onOpenChange={setOpen}
         open={open}
-        title={isEn ? "New owner statement" : "Nuevo estado del propietario"}
+        title={isEn ? "New payout statement" : "Nueva liquidación"}
       >
         <Form action={createStatementAction} className="space-y-4">
           <input name="organization_id" type="hidden" value={orgId} />

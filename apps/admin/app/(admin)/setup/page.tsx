@@ -259,7 +259,7 @@ export default async function SetupPage({ searchParams }: SetupPageProps) {
   );
   const integrations = settledOrEmpty(
     integrationsResult,
-    isEn ? "integrations" : "integraciones",
+    isEn ? "channels" : "canales",
     warnings
   );
 

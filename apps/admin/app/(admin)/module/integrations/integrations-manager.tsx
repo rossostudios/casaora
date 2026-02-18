@@ -88,7 +88,7 @@ export function IntegrationsManager({
           external_listing_id: formExternalId || undefined,
         }),
       });
-      toast.success(isEn ? "Integration created" : "Integración creada");
+      toast.success(isEn ? "Channel created" : "Canal creado");
       setCreateOpen(false);
       setFormUnitId("");
       setFormKind("ical");
@@ -97,7 +97,7 @@ export function IntegrationsManager({
       setFormExternalId("");
       router.refresh();
     } catch {
-      toast.error(isEn ? "Failed to create integration" : "Error al crear integración");
+      toast.error(isEn ? "Failed to create channel" : "Error al crear canal");
     } finally {
       setSubmitting(false);
     }
@@ -120,11 +120,11 @@ export function IntegrationsManager({
   }
 
   async function handleDelete(integrationId: string) {
-    if (!confirm(isEn ? "Delete this integration?" : "¿Eliminar esta integración?"))
+    if (!confirm(isEn ? "Delete this channel?" : "¿Eliminar este canal?"))
       return;
     try {
       await authedFetch(`/integrations/${integrationId}`, { method: "DELETE" });
-      toast.success(isEn ? "Integration deleted" : "Integración eliminada");
+      toast.success(isEn ? "Channel deleted" : "Canal eliminado");
       router.refresh();
     } catch {
       toast.error(isEn ? "Delete failed" : "Error al eliminar");
@@ -152,7 +152,7 @@ export function IntegrationsManager({
         </div>
         <Button onClick={() => setCreateOpen(true)} size="sm" type="button">
           <Icon icon={PlusSignIcon} size={16} />
-          {isEn ? "New integration" : "Nueva integración"}
+          {isEn ? "New channel" : "Nuevo canal"}
         </Button>
       </div>
 
@@ -161,8 +161,8 @@ export function IntegrationsManager({
           {integrations.length === 0 ? (
             <p className="text-muted-foreground text-sm">
               {isEn
-                ? "No integrations configured yet."
-                : "No hay integraciones configuradas."}
+                ? "No channels configured yet."
+                : "No hay canales configurados."}
             </p>
           ) : (
             <div className="divide-y rounded-lg border">
@@ -230,7 +230,7 @@ export function IntegrationsManager({
         <>
           {events.length === 0 ? (
             <p className="text-muted-foreground text-sm">
-              {isEn ? "No integration events yet." : "No hay eventos de integración."}
+              {isEn ? "No channel events yet." : "No hay eventos de canal."}
             </p>
           ) : (
             <div className="divide-y rounded-lg border">
@@ -278,7 +278,7 @@ export function IntegrationsManager({
         }
         onOpenChange={setCreateOpen}
         open={createOpen}
-        title={isEn ? "New integration" : "Nueva integración"}
+        title={isEn ? "New channel" : "Nuevo canal"}
       >
         <form className="space-y-4" onSubmit={handleCreate}>
           <label className="space-y-1 text-sm">

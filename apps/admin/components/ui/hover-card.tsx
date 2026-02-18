@@ -1,16 +1,11 @@
 "use client";
 
 import {
-  cloneElement,
   createContext,
-  type FocusEventHandler,
   forwardRef,
   type HTMLAttributes,
   isValidElement,
-  type KeyboardEventHandler,
-  type MouseEventHandler,
   type MutableRefObject,
-  type ReactElement,
   type ReactNode,
   type Ref,
   type RefCallback,
@@ -49,20 +44,6 @@ function useHoverCardContext(): HoverCardContextValue {
     throw new Error("HoverCard components must be used within <HoverCard />");
   }
   return ctx;
-}
-
-type PreventableEvent = { defaultPrevented: boolean };
-
-function composeEventHandlers<E extends PreventableEvent>(
-  theirs: ((event: E) => void) | undefined,
-  ours: (event: E) => void
-): (event: E) => void {
-  return (event) => {
-    theirs?.(event);
-    // Respect consumer preventDefault() for synthetic events.
-    if (event.defaultPrevented) return;
-    ours(event);
-  };
 }
 
 function mergeRefs<T>(...refs: Array<Ref<T> | undefined>): RefCallback<T> {
@@ -171,14 +152,6 @@ export function HoverCardTrigger({
     setOpen(false);
   }, [cancelTimers, setOpen]);
 
-  type TriggerEventHandlers = {
-    onBlur?: FocusEventHandler<HTMLElement>;
-    onFocus?: FocusEventHandler<HTMLElement>;
-    onKeyDown?: KeyboardEventHandler<HTMLElement>;
-    onMouseEnter?: MouseEventHandler<HTMLElement>;
-    onMouseLeave?: MouseEventHandler<HTMLElement>;
-  };
-
   if (asChild) {
     if (!isValidElement(children)) {
       throw new Error(
@@ -186,30 +159,24 @@ export function HoverCardTrigger({
       );
     }
 
-    const child = children as ReactElement<Record<string, unknown>>;
-    const childProps = child.props as TriggerEventHandlers;
-    const childRef = (child as unknown as { ref?: Ref<HTMLElement> }).ref;
-
-    return cloneElement(child, {
-      onBlur: composeEventHandlers(childProps.onBlur, (_event) =>
-        scheduleClose()
-      ),
-      onFocus: composeEventHandlers(childProps.onFocus, (_event) =>
-        scheduleOpen()
-      ),
-      onMouseEnter: composeEventHandlers(childProps.onMouseEnter, (_event) =>
-        scheduleOpen()
-      ),
-      onMouseLeave: composeEventHandlers(childProps.onMouseLeave, (_event) =>
-        scheduleClose()
-      ),
-      onKeyDown: composeEventHandlers(childProps.onKeyDown, (event) => {
-        if (event.key !== "Escape") return;
-        event.preventDefault();
-        close();
-      }),
-      ref: mergeRefs(childRef, setTriggerEl),
-    });
+    return (
+      <span
+        onBlur={() => scheduleClose()}
+        onFocus={() => scheduleOpen()}
+        onKeyDown={(event) => {
+          if (event.key !== "Escape") return;
+          event.preventDefault();
+          close();
+        }}
+        onMouseEnter={() => scheduleOpen()}
+        onMouseLeave={() => scheduleClose()}
+        ref={setTriggerEl as unknown as RefCallback<HTMLSpanElement>}
+        role="button"
+        tabIndex={0}
+      >
+        {children}
+      </span>
+    );
   }
 
   return (
@@ -255,16 +222,12 @@ export const HoverCardContent = forwardRef<
     const localRef = useRef<HTMLDivElement | null>(null);
     const ref = mergeRefs(forwardedRef, localRef);
 
-    const [portalEl, setPortalEl] = useState<HTMLElement | null>(null);
+    const portalEl = typeof document === "undefined" ? null : document.body;
     const [position, setPosition] = useState<{
       top: number;
       left: number;
       origin: string;
     } | null>(null);
-
-    useEffect(() => {
-      setPortalEl(document.body);
-    }, []);
 
     useLayoutEffect(() => {
       if (!open) return;

@@ -29,8 +29,22 @@ type HubSection = {
 
 const HUB_SECTIONS: HubSection[] = [
   {
+    href: "/module/reports/stakeholders",
+    title: {
+      "es-PY": "Reporte para stakeholders",
+      "en-US": "Stakeholder report",
+    },
+    description: {
+      "es-PY":
+        "Resumen ejecutivo para propietarios con KPIs financieros y operativos en un solo informe.",
+      "en-US":
+        "Executive owner-facing summary with financial and operations KPIs in one report.",
+    },
+    cta: { "es-PY": "Abrir reporte", "en-US": "Open report" },
+  },
+  {
     href: "/module/reports/finance",
-    title: { "es-PY": "Dashboard financiero", "en-US": "Financial dashboard" },
+    title: { "es-PY": "Dashboard de ingresos", "en-US": "Income dashboard" },
     description: {
       "es-PY":
         "Ingresos vs gastos, tendencia de cobro, desglose por categoría y cobros pendientes.",
@@ -52,14 +66,14 @@ const HUB_SECTIONS: HubSection[] = [
   },
   {
     href: "/module/owner-statements",
-    title: { "es-PY": "Estados del propietario", "en-US": "Owner statements" },
+    title: { "es-PY": "Liquidaciones", "en-US": "Payout statements" },
     description: {
       "es-PY":
         "Conciliación por período con líneas detalladas de cobros, gastos y fees.",
       "en-US":
         "Period-by-period reconciliation with line-item breakdowns for collections, expenses, and fees.",
     },
-    cta: { "es-PY": "Abrir estados", "en-US": "Open statements" },
+    cta: { "es-PY": "Abrir liquidaciones", "en-US": "Open payout statements" },
   },
   {
     href: "/module/transparency-summary",

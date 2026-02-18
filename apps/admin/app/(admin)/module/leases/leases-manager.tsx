@@ -404,10 +404,18 @@ export function LeasesManager({
         <p className="text-muted-foreground text-sm">
           {optimisticRows.length} {isEn ? "leases" : "contratos"}
         </p>
-        <Button onClick={openCreate} type="button">
-          <Icon icon={PlusSignIcon} size={16} />
-          {isEn ? "New lease" : "Nuevo contrato"}
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Link
+            className={cn(buttonVariants({ size: "sm", variant: "outline" }))}
+            href="/module/pricing"
+          >
+            {isEn ? "Manage pricing templates" : "Gestionar plantillas de precios"}
+          </Link>
+          <Button onClick={openCreate} type="button">
+            <Icon icon={PlusSignIcon} size={16} />
+            {isEn ? "New lease" : "Nuevo contrato"}
+          </Button>
+        </div>
       </div>
 
       <NotionDataTable

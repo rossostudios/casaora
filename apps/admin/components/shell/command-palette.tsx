@@ -24,11 +24,7 @@ import {
 import { cn } from "@/lib/utils";
 
 function PreviewFrame({ href }: { href: string | null }) {
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    setLoading(true);
-  }, [href]);
+  const [loadedHref, setLoadedHref] = useState<string | null>(null);
 
   if (!href) {
     return (
@@ -37,6 +33,7 @@ function PreviewFrame({ href }: { href: string | null }) {
   }
 
   const previewUrl = href + (href.includes("?") ? "&" : "?") + "preview=1";
+  const loading = loadedHref !== href;
 
   return (
     <div className="relative h-full w-full">
@@ -48,7 +45,7 @@ function PreviewFrame({ href }: { href: string | null }) {
       <iframe
         key={previewUrl}
         className="pointer-events-none absolute top-0 left-0 h-[400%] w-[400%] origin-top-left scale-[0.25] border-0"
-        onLoad={() => setLoading(false)}
+        onLoad={() => setLoadedHref(href)}
         src={previewUrl}
         title="Page preview"
       />

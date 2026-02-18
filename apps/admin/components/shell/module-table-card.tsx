@@ -267,7 +267,7 @@ function getModuleEmptyState(slug: string, isEn: boolean): EmptyStateConfig | un
         : "Crea una manualmente o conecta un canal OTA para importar automáticamente.",
       actionLabel: isEn ? "Create reservation" : "Crear reserva",
       actionHref: "/module/reservations",
-      secondaryActions: [{ label: isEn ? "Connect an integration" : "Conectar integración", href: "/module/integrations" }],
+      secondaryActions: [{ label: isEn ? "Connect a channel" : "Conectar canal", href: "/module/channels" }],
     },
     tasks: {
       title: isEn ? "No tasks yet" : "Sin tareas aún",
@@ -278,12 +278,12 @@ function getModuleEmptyState(slug: string, isEn: boolean): EmptyStateConfig | un
       actionHref: "/module/tasks",
     },
     integrations: {
-      title: isEn ? "No integrations connected" : "Sin integraciones conectadas",
+      title: isEn ? "No channels connected" : "Sin canales conectados",
       description: isEn
         ? "Connect Airbnb, Booking.com, or VRBO to sync calendars via iCal."
         : "Conecta Airbnb, Booking.com o VRBO para sincronizar calendarios vía iCal.",
-      actionLabel: isEn ? "Connect your first integration" : "Conecta tu primera integración",
-      actionHref: "/setup?tab=integrations",
+      actionLabel: isEn ? "Connect your first channel" : "Conecta tu primer canal",
+      actionHref: "/module/channels",
     },
     expenses: {
       title: isEn ? "No expenses recorded" : "Sin gastos registrados",

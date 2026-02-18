@@ -86,14 +86,14 @@ export function GettingStarted({
 
   const postOnboardingSteps: OnboardingStep[] = [
     {
-      id: "integrations",
-      label: isEn ? "Connect integrations" : "Conectar integraciones",
+      id: "channels",
+      label: isEn ? "Connect channels" : "Conectar canales",
       description: isEn
         ? "Link Airbnb, Booking.com, direct and more via iCal."
         : "Conecta Airbnb, Booking.com, direct y más vía iCal.",
       done: integrationCount > 0,
       icon: HotelIcon,
-      href: "/module/integrations",
+      href: "/module/channels",
     },
     {
       id: "ops-start",
@@ -163,7 +163,7 @@ export function GettingStarted({
     },
     {
       id: "statements",
-      label: isEn ? "Review owner statements" : "Revisar estados",
+      label: isEn ? "Review payout statements" : "Revisar liquidaciones",
       description: isEn
         ? "Validate net payout and reconciliation."
         : "Valida pago neto y conciliación.",
@@ -196,7 +196,7 @@ export function GettingStarted({
     },
     {
       id: "reconcile",
-      label: isEn ? "Reconcile statement" : "Conciliar estado",
+      label: isEn ? "Reconcile payout statements" : "Conciliar liquidaciones",
       description: isEn
         ? "Review statement diffs before closing month."
         : "Revisa diferencias antes de cerrar mes.",

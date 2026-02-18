@@ -114,7 +114,7 @@ function roleQuickActions(role: DashboardRole): QuickAction[] {
   if (role === "operator") {
     return [
       {
-        href: "/module/tasks",
+        href: "/module/operations?tab=tasks",
         labelEn: "Plan today",
         labelEs: "Planificar hoy",
         detailEn: "Create and assign high-priority tasks.",
@@ -144,10 +144,10 @@ function roleQuickActions(role: DashboardRole): QuickAction[] {
     return [
       {
         href: "/module/owner-statements",
-        labelEn: "Owner payouts",
-        labelEs: "Pagos a propietarios",
+        labelEn: "Payout statements",
+        labelEs: "Liquidaciones",
         detailEn: "View monthly payout statements.",
-        detailEs: "Revisa estados de pago mensuales.",
+        detailEs: "Revisa liquidaciones mensuales.",
         icon: Invoice01Icon,
       },
       {
@@ -181,8 +181,8 @@ function roleQuickActions(role: DashboardRole): QuickAction[] {
       },
       {
         href: "/module/owner-statements",
-        labelEn: "Reconcile statements",
-        labelEs: "Conciliar estados",
+        labelEn: "Reconcile payouts",
+        labelEs: "Conciliar liquidaciones",
         detailEn: "Match lease and collection records.",
         detailEs: "Verifica consistencia de contratos y cobros.",
         icon: File01Icon,
@@ -216,7 +216,7 @@ function roleQuickActions(role: DashboardRole): QuickAction[] {
       icon: CalendarCheckIn01Icon,
     },
     {
-      href: "/module/tasks",
+      href: "/module/operations?tab=tasks",
       labelEn: "Operations risks",
       labelEs: "Riesgos operativos",
       detailEn: "See overdue tasks and SLA risk signals.",
@@ -406,13 +406,13 @@ export default async function DashboardPage({
   }
 
   let properties: unknown[] = [];
+  let units: unknown[] = [];
   let reservations: unknown[] = [];
   let tasks: unknown[] = [];
   let applications: unknown[] = [];
   let collections: unknown[] = [];
   let listings: unknown[] = [];
   let integrations: unknown[] = [];
-  let pricing: unknown[] = [];
   let expenses: unknown[] = [];
   let leases: unknown[] = [];
   let opsAlerts: unknown[] = [];
@@ -443,13 +443,13 @@ export default async function DashboardPage({
     try {
       const [
         props,
+        unitRows,
         resas,
         taskRows,
         appRows,
         collectionRows,
         listingRows,
         integrationRows,
-        pricingRows,
         expenseRows,
         leaseRows,
         alertRows,
@@ -463,13 +463,13 @@ export default async function DashboardPage({
         revenueTrendResult,
       ] = await Promise.all([
         safeList("/properties", orgId),
+        safeList("/units", orgId),
         safeList("/reservations", orgId),
         safeList("/tasks", orgId),
         safeList("/applications", orgId),
         safeList("/collections", orgId),
         safeList("/listings", orgId),
         safeList("/integrations", orgId),
-        safeList("/pricing-templates", orgId),
         safeList("/expenses", orgId),
         safeList("/leases", orgId),
         safeList("/integration-events", orgId),
@@ -493,13 +493,13 @@ export default async function DashboardPage({
       ] as const);
 
       properties = props;
+      units = unitRows;
       reservations = resas;
       tasks = taskRows;
       applications = appRows;
       collections = collectionRows;
       listings = listingRows;
       integrations = integrationRows;
-      pricing = pricingRows;
       expenses = expenseRows;
       leases = leaseRows;
       opsAlerts = (alertRows as Record<string, unknown>[]).filter(
@@ -713,7 +713,7 @@ export default async function DashboardPage({
       key: "sla-breaches",
       labelEn: `${operationsKpis.slaBreachedTasks} SLA breach${operationsKpis.slaBreachedTasks > 1 ? "es" : ""}`,
       labelEs: `${operationsKpis.slaBreachedTasks} incumplimiento${operationsKpis.slaBreachedTasks > 1 ? "s" : ""} SLA`,
-      href: "/module/tasks",
+      href: "/module/operations?tab=tasks",
       ctaEn: "View",
       ctaEs: "Ver",
       priority: 1,
@@ -723,11 +723,12 @@ export default async function DashboardPage({
   needsAttention.sort((a, b) => a.priority - b.priority);
 
   const checklistItems = getChecklistItems(orgRentalMode, {
-    integrations: integrations.length,
+    properties: properties.length,
+    units: units.length,
+    channels: integrations.length,
     reservations: reservations.length,
     tasks: tasks.length,
     expenses: expenses.length,
-    pricing: pricing.length,
     listings: listings.length,
     applications: applications.length,
     leases: leases.length,
@@ -779,8 +780,8 @@ export default async function DashboardPage({
           </AlertTitle>
           <AlertDescription>
             {isEn
-              ? "Great start. Continue with integrations, listings, and daily operations."
-              : "Excelente inicio. Continúa con integraciones, anuncios y la operación diaria."}
+              ? "Great start. Continue with channels, listings, and daily operations."
+              : "Excelente inicio. Continúa con canales, anuncios y la operación diaria."}
           </AlertDescription>
         </Alert>
       ) : null}

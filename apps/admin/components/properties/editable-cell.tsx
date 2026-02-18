@@ -37,10 +37,6 @@ export function EditableCell({
   const selectRef = useRef<HTMLSelectElement>(null);
 
   useEffect(() => {
-    setDraft(value);
-  }, [value]);
-
-  useEffect(() => {
     if (state === "editing") {
       if (type === "select") {
         selectRef.current?.focus();
@@ -80,7 +76,10 @@ export function EditableCell({
           "group/cell flex w-full min-h-[28px] items-center gap-1.5 rounded px-1 -mx-1 text-left transition-colors hover:bg-primary/[0.04]",
           className
         )}
-        onClick={() => setState("editing")}
+        onClick={() => {
+          setDraft(value);
+          setState("editing");
+        }}
         type="button"
       >
         <span className="flex-1 truncate">

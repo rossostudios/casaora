@@ -187,8 +187,8 @@ export function SetupWizard({
 
   const strLinks = [
     {
-      href: "/module/integrations",
-      label: isEn ? "Connect an integration" : "Conectar una integración",
+      href: "/module/channels",
+      label: isEn ? "Connect a channel" : "Conectar un canal",
     },
     {
       href: "/module/reservations",
@@ -438,8 +438,8 @@ export function SetupWizard({
     if (!result.ok) {
       toast.error(
         isEn
-          ? "Could not create integration"
-          : "No se pudo crear la integración",
+          ? "Could not create channel"
+          : "No se pudo crear el canal",
         { description: result.error }
       );
       setSubmitting(null);
@@ -447,7 +447,7 @@ export function SetupWizard({
     }
 
     setStep4Done(true);
-    toast.success(isEn ? "Integration created" : "Integración creada", {
+    toast.success(isEn ? "Channel created" : "Canal creado", {
       description: result.data.name,
     });
     setSubmitting(null);
@@ -820,14 +820,14 @@ export function SetupWizard({
         />
       )}
 
-      {/* Step 4: Optional — Connect an integration or publish listing */}
+      {/* Step 4: Optional — Connect a channel or publish listing */}
       {onboardingDone && !step4Complete ? (
         <OptionalStepCard
           description={
             rentalMode === "both"
               ? isEn
-                ? "Set up an OTA integration or create a tenant lease."
-                : "Configura una integración OTA o crea un contrato de inquilino."
+                ? "Set up an OTA channel or create a tenant lease."
+                : "Configura un canal OTA o crea un contrato de inquilino."
               : rentalMode === "ltr"
                 ? isEn
                   ? "Set up a tenant contract and auto-generate the collection schedule."
@@ -847,9 +847,9 @@ export function SetupWizard({
                 ? isEn
                   ? "Create your first lease"
                   : "Crea tu primer contrato"
-                : isEn
-                  ? "Connect an integration"
-                  : "Conecta una integración"
+              : isEn
+                  ? "Connect a channel"
+                  : "Conecta un canal"
           }
         >
           {rentalMode === "both" ? (
@@ -865,8 +865,8 @@ export function SetupWizard({
                 type="button"
               >
                 {isEn
-                  ? "Short-term (Integration)"
-                  : "Corto plazo (Integración)"}
+                  ? "Short-term (Channel)"
+                  : "Corto plazo (Canal)"}
               </button>
               <button
                 className={cn(
@@ -970,9 +970,9 @@ export function SetupWizard({
                         {isEn ? "Creating..." : "Creando..."}
                       </>
                     ) : isEn ? (
-                      "Create integration"
+                      "Create channel"
                     ) : (
-                      "Crear integración"
+                      "Crear canal"
                     )}
                   </Button>
                   <Button
@@ -1186,8 +1186,8 @@ export function SetupWizard({
                     </CardTitle>
                     <CardDescription>
                       {isEn
-                        ? "Full CRUD manager for organizations, properties, units, and integrations."
-                        : "Administrador CRUD completo para organizaciones, propiedades, unidades e integraciones."}
+                        ? "Full CRUD manager for organizations, properties, units, and channels."
+                        : "Administrador CRUD completo para organizaciones, propiedades, unidades y canales."}
                     </CardDescription>
                   </div>
                   <CollapsibleTrigger

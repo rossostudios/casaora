@@ -39,13 +39,13 @@ export const MODULES: ModuleDef[] = [
   },
   {
     slug: "integrations",
-    label: "Integraciones",
-    label_en: "Integrations",
+    label: "Canales",
+    label_en: "Channels",
     endpoint: "/integrations",
     description:
-      "Conecta unidades a OTAs y canales de venta directa con sync iCal.",
+      "Conecta unidades a canales OTA y de venta directa con sync iCal.",
     description_en:
-      "Connect units to OTAs and direct-sales channels with iCal sync.",
+      "Connect units to OTA and direct-sales channels with iCal sync.",
   },
   {
     slug: "guests",
@@ -101,8 +101,8 @@ export const MODULES: ModuleDef[] = [
   },
   {
     slug: "owner-statements",
-    label: "Estados del propietario",
-    label_en: "Owner statements",
+    label: "Liquidaciones",
+    label_en: "Payout Statements",
     endpoint: "/owner-statements",
     description: "Borrador, cierre y conciliación de pagos mensuales.",
     description_en: "Draft, close, and reconcile monthly payouts.",
@@ -186,8 +186,8 @@ export const MODULES: ModuleDef[] = [
   },
   {
     slug: "integration-events",
-    label: "Eventos de integración",
-    label_en: "Integration events",
+    label: "Eventos de canales",
+    label_en: "Channel events",
     endpoint: "/integration-events",
     description: "Payloads entrantes de webhooks y estado de procesamiento.",
     description_en: "Incoming webhook payloads and processing status.",
@@ -219,9 +219,9 @@ export const MODULES: ModuleDef[] = [
     label_en: "Reports",
     endpoint: "/reports",
     description:
-      "Hub centralizado para resumen del propietario, estados y transparencia.",
+      "Hub centralizado para ingresos, liquidaciones, desempeño y transparencia.",
     description_en:
-      "Centralized hub for owner summary, statements, and transparency reports.",
+      "Centralized hub for income, payout statements, performance, and transparency reports.",
   },
   {
     slug: "documents",

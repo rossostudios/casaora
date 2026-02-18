@@ -52,6 +52,7 @@
     "babel-plugin-react-compiler": "^1.0.0",
     "knip": "^5.64.0",
     "openapi-typescript": "^7.13.0",
+    "react-doctor": "^0.0.20",
     "tailwindcss": "4.1.18",
     "typescript": "5.9.3",
     "ultracite": "7.1.4"

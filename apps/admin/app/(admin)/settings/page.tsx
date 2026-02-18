@@ -52,10 +52,10 @@ export default async function SettingsPage() {
     {
       href: "/module/integration-events",
       icon: WebhookIcon,
-      title: isEn ? "Integrations" : "Integraciones",
+      title: isEn ? "Channel events" : "Eventos de canales",
       description: isEn
-        ? "Review webhook activity and third-party sync events."
-        : "Revisa actividad de webhooks y eventos de sincronización.",
+        ? "Review webhook activity and third-party channel sync events."
+        : "Revisa actividad de webhooks y eventos de sincronización de canales.",
     },
     {
       href: "/module/audit-logs",
@@ -132,8 +132,8 @@ export default async function SettingsPage() {
           </CardTitle>
           <CardDescription>
             {isEn
-              ? "Centralized control for organizations, integrations, and auditing."
-              : "Control centralizado de organizaciones, integraciones y auditoría."}
+              ? "Centralized control for organizations, channels, and auditing."
+              : "Control centralizado de organizaciones, canales y auditoría."}
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-3 md:grid-cols-3">

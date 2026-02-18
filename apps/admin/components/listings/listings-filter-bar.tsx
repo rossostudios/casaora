@@ -86,26 +86,23 @@ export function ListingsFilterBar({
   responsiveDefaults,
   onToggleColumn,
 }: ListingsFilterBarProps) {
-  const [inputValue, setInputValue] = useState(globalFilter);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [customViews, setCustomViews] = useState<SavedView[]>(() =>
     getCustomViews()
   );
 
   useEffect(() => {
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => {
-      onGlobalFilterChange(inputValue);
-    }, 300);
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
-  }, [inputValue, onGlobalFilterChange]);
+  }, []);
 
-  // Sync external changes (e.g. reset)
-  useEffect(() => {
-    setInputValue(globalFilter);
-  }, [globalFilter]);
+  const handleGlobalFilterInput = (nextValue: string) => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      onGlobalFilterChange(nextValue);
+    }, 300);
+  };
 
   const activeCount =
     (statusFilter !== "all" ? 1 : 0) + (readinessFilter !== "all" ? 1 : 0);
@@ -187,13 +184,14 @@ export function ListingsFilterBar({
           />
           <Input
             className="h-10 rounded-xl border-border/50 bg-background/80 pl-10 focus-visible:ring-primary/20"
-            onChange={(e) => setInputValue(e.target.value)}
+            defaultValue={globalFilter}
+            key={globalFilter}
+            onChange={(e) => handleGlobalFilterInput(e.target.value)}
             placeholder={
               isEn
                 ? "Search by title, city, property..."
                 : "Buscar por título, ciudad, propiedad..."
             }
-            value={inputValue}
           />
         </div>
 

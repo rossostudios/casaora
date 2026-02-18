@@ -1,5 +1,7 @@
+import Link from "next/link";
 import { OrgAccessChanged } from "@/components/shell/org-access-changed";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { buttonVariants } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -11,6 +13,7 @@ import { fetchList, getApiBaseUrl } from "@/lib/api";
 import { errorMessage, isOrgMembershipError } from "@/lib/errors";
 import { getActiveLocale } from "@/lib/i18n/server";
 import { getActiveOrgId } from "@/lib/org";
+import { cn } from "@/lib/utils";
 import dynamic from "next/dynamic";
 
 const LeasesManager = dynamic(() =>
@@ -105,15 +108,25 @@ export default async function LeasesModulePage({ searchParams }: PageProps) {
   return (
     <div className="space-y-6">
       <Card>
-        <CardHeader>
-          <CardTitle className="text-2xl">
-            {isEn ? "Leases" : "Contratos"}
-          </CardTitle>
-          <CardDescription>
-            {isEn
-              ? "Manage lease lifecycle and monitor collection performance."
-              : "Administra el ciclo de vida de contratos y el desempeño de cobros."}
-          </CardDescription>
+        <CardHeader className="space-y-3">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="space-y-1">
+              <CardTitle className="text-2xl">
+                {isEn ? "Leases" : "Contratos"}
+              </CardTitle>
+              <CardDescription>
+                {isEn
+                  ? "Manage lease lifecycle and monitor collection performance."
+                  : "Administra el ciclo de vida de contratos y el desempeño de cobros."}
+              </CardDescription>
+            </div>
+            <Link
+              className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
+              href="/module/pricing"
+            >
+              {isEn ? "Manage pricing templates" : "Gestionar plantillas de precios"}
+            </Link>
+          </div>
         </CardHeader>
         <CardContent className="space-y-4">
           {errorLabel ? (

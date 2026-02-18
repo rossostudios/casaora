@@ -180,7 +180,7 @@ export async function wizardCreateIntegration(payload: {
     return { ok: false, error: "El ID de la unidad es obligatorio." };
   const kind = payload.kind.trim();
   if (!kind)
-    return { ok: false, error: "El tipo de integración es obligatorio." };
+    return { ok: false, error: "El tipo de canal es obligatorio." };
   const channel_name = payload.channel_name.trim();
   if (!channel_name)
     return { ok: false, error: "El nombre del canal es obligatorio." };
@@ -546,7 +546,7 @@ export async function createIntegrationAction(formData: FormData) {
     redirect(
       setupUrl({
         tab,
-        error: "El ID de la unidad es obligatorio para una integración.",
+        error: "El ID de la unidad es obligatorio para un canal.",
       })
     );
   }
@@ -554,7 +554,7 @@ export async function createIntegrationAction(formData: FormData) {
     redirect(
       setupUrl({
         tab,
-        error: "El tipo de integración es obligatorio (p. ej., airbnb).",
+        error: "El tipo de canal es obligatorio (p. ej., airbnb).",
       })
     );
   }
@@ -573,7 +573,7 @@ export async function createIntegrationAction(formData: FormData) {
       ical_import_url,
     });
     revalidatePath("/setup");
-    redirect(setupUrl({ tab, success: "integracion-creada" }));
+    redirect(setupUrl({ tab, success: "canal-creado" }));
   } catch (err) {
     unstable_rethrow(err);
     const message = err instanceof Error ? err.message : String(err);
@@ -750,7 +750,7 @@ export async function updateIntegrationAction(formData: FormData) {
 
   if (!id)
     redirect(
-      setupUrl({ tab, error: "El ID de la integración es obligatorio." })
+      setupUrl({ tab, error: "El ID del canal es obligatorio." })
     );
   if (!public_name)
     redirect(setupUrl({ tab, error: "El nombre público es obligatorio." }));
@@ -766,7 +766,7 @@ export async function updateIntegrationAction(formData: FormData) {
       is_active: is_active ? is_active === "true" : undefined,
     });
     revalidatePath("/setup");
-    redirect(setupUrl({ tab, success: "integracion-actualizada" }));
+    redirect(setupUrl({ tab, success: "canal-actualizado" }));
   } catch (err) {
     unstable_rethrow(err);
     const message = err instanceof Error ? err.message : String(err);
@@ -779,7 +779,7 @@ export async function syncIntegrationIcalAction(formData: FormData) {
   const id = toStringValue(formData.get("id"));
   if (!id)
     redirect(
-      setupUrl({ tab, error: "El ID de la integración es obligatorio." })
+      setupUrl({ tab, error: "El ID del canal es obligatorio." })
     );
 
   try {
@@ -815,13 +815,13 @@ export async function deleteIntegrationAction(formData: FormData) {
   const id = toStringValue(formData.get("id"));
   if (!id)
     redirect(
-      setupUrl({ tab, error: "El ID de la integración es obligatorio." })
+      setupUrl({ tab, error: "El ID del canal es obligatorio." })
     );
 
   try {
     await deleteJson(`/integrations/${id}`);
     revalidatePath("/setup");
-    redirect(setupUrl({ tab, success: "integracion-eliminada" }));
+    redirect(setupUrl({ tab, success: "canal-eliminado" }));
   } catch (err) {
     unstable_rethrow(err);
     const message = err instanceof Error ? err.message : String(err);

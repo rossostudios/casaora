@@ -35,8 +35,8 @@ export default async function IntegrationsModulePage({
           </CardTitle>
           <CardDescription>
             {isEn
-              ? "Select an organization to manage integrations."
-              : "Selecciona una organización para gestionar integraciones."}
+              ? "Select an organization to manage channels."
+              : "Selecciona una organización para gestionar canales."}
           </CardDescription>
         </CardHeader>
       </Card>
@@ -56,16 +56,16 @@ export default async function IntegrationsModulePage({
     if (isOrgMembershipError(errorMessage(err)))
       return <OrgAccessChanged orgId={orgId} />;
     return (
-      <Card>
+        <Card>
         <CardHeader>
-          <CardTitle>{isEn ? "Integrations" : "Integraciones"}</CardTitle>
+          <CardTitle>{isEn ? "Channels" : "Canales"}</CardTitle>
         </CardHeader>
         <CardContent>
           <Alert variant="destructive">
             <AlertDescription>
               {isEn
-                ? "Failed to load integrations."
-                : "Error al cargar integraciones."}
+                ? "Failed to load channels."
+                : "Error al cargar canales."}
             </AlertDescription>
           </Alert>
         </CardContent>
@@ -76,11 +76,11 @@ export default async function IntegrationsModulePage({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>{isEn ? "Integrations" : "Integraciones"}</CardTitle>
+        <CardTitle>{isEn ? "Channels" : "Canales"}</CardTitle>
         <CardDescription>
           {isEn
-            ? "Connect units to OTAs and direct-sales channels with iCal sync."
-            : "Conecta unidades a OTAs y canales de venta directa con sync iCal."}
+            ? "Connect units to OTA and direct-sales channels with iCal sync."
+            : "Conecta unidades a canales OTA y de venta directa con sync iCal."}
         </CardDescription>
       </CardHeader>
       <CardContent>
