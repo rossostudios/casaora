@@ -71,10 +71,7 @@ async fn list_applications(
         );
     }
     if let Some(listing_id) = non_empty_opt(query.listing_id.as_deref()) {
-        filters.insert(
-            "listing_id".to_string(),
-            Value::String(listing_id),
-        );
+        filters.insert("listing_id".to_string(), Value::String(listing_id));
     }
 
     let rows = list_rows(
@@ -526,10 +523,7 @@ async fn convert_application_to_lease(
     })))
 }
 
-async fn listing_fee_lines(
-    pool: &sqlx::PgPool,
-    listing_id: &str,
-) -> AppResult<Vec<Value>> {
+async fn listing_fee_lines(pool: &sqlx::PgPool, listing_id: &str) -> AppResult<Vec<Value>> {
     list_rows(
         pool,
         "listing_fee_lines",
@@ -558,45 +552,9 @@ async fn enrich_applications(pool: &sqlx::PgPool, rows: Vec<Value>) -> AppResult
         .map(str::trim)
         .filter(|value| !value.is_empty())
         .map(ToOwned::to_owned)
+        .collect::<std::collections::HashSet<_>>()
+        .into_iter()
         .collect::<Vec<_>>();
-
-    let mut listing_context: std::collections::HashMap<String, (Option<String>, f64)> =
-        std::collections::HashMap::new();
-    if !listing_ids.is_empty() {
-        let listings = list_rows(
-            pool,
-            "listings",
-            Some(&json_map(&[(
-                "id",
-                Value::Array(listing_ids.iter().cloned().map(Value::String).collect()),
-            )])),
-            std::cmp::max(200, listing_ids.len() as i64),
-            0,
-            "created_at",
-            false,
-        )
-        .await?;
-        for listing in listings {
-            let listing_id = value_str(&listing, "id");
-            if listing_id.is_empty() {
-                continue;
-            }
-            let title = listing
-                .as_object()
-                .and_then(|obj| obj.get("title"))
-                .and_then(Value::as_str)
-                .map(str::trim)
-                .filter(|value| !value.is_empty())
-                .map(ToOwned::to_owned);
-            let monthly_recurring_total = number_from_value(
-                listing
-                    .as_object()
-                    .and_then(|obj| obj.get("monthly_recurring_total")),
-            )
-            .max(0.0);
-            listing_context.insert(listing_id, (title, monthly_recurring_total));
-        }
-    }
 
     let assigned_user_ids = rows
         .iter()
@@ -606,53 +564,112 @@ async fn enrich_applications(pool: &sqlx::PgPool, rows: Vec<Value>) -> AppResult
         .map(str::trim)
         .filter(|value| !value.is_empty())
         .map(ToOwned::to_owned)
+        .collect::<std::collections::HashSet<_>>()
+        .into_iter()
         .collect::<Vec<_>>();
+
+    let listing_ids_for_query = listing_ids.clone();
+    let assigned_user_ids_for_query = assigned_user_ids.clone();
+    let (listings, users) = tokio::try_join!(
+        async move {
+            if listing_ids_for_query.is_empty() {
+                Ok(Vec::new())
+            } else {
+                list_rows(
+                    pool,
+                    "listings",
+                    Some(&json_map(&[(
+                        "id",
+                        Value::Array(
+                            listing_ids_for_query
+                                .iter()
+                                .cloned()
+                                .map(Value::String)
+                                .collect(),
+                        ),
+                    )])),
+                    std::cmp::max(200, listing_ids_for_query.len() as i64),
+                    0,
+                    "created_at",
+                    false,
+                )
+                .await
+            }
+        },
+        async move {
+            if assigned_user_ids_for_query.is_empty() {
+                Ok(Vec::new())
+            } else {
+                list_rows(
+                    pool,
+                    "app_users",
+                    Some(&json_map(&[(
+                        "id",
+                        Value::Array(
+                            assigned_user_ids_for_query
+                                .iter()
+                                .cloned()
+                                .map(Value::String)
+                                .collect(),
+                        ),
+                    )])),
+                    std::cmp::max(200, assigned_user_ids_for_query.len() as i64),
+                    0,
+                    "created_at",
+                    false,
+                )
+                .await
+            }
+        }
+    )?;
+
+    let mut listing_context: std::collections::HashMap<String, (Option<String>, f64)> =
+        std::collections::HashMap::new();
+    for listing in listings {
+        let listing_id = value_str(&listing, "id");
+        if listing_id.is_empty() {
+            continue;
+        }
+        let title = listing
+            .as_object()
+            .and_then(|obj| obj.get("title"))
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(ToOwned::to_owned);
+        let monthly_recurring_total = number_from_value(
+            listing
+                .as_object()
+                .and_then(|obj| obj.get("monthly_recurring_total")),
+        )
+        .max(0.0);
+        listing_context.insert(listing_id, (title, monthly_recurring_total));
+    }
 
     let mut assigned_user_name: std::collections::HashMap<String, String> =
         std::collections::HashMap::new();
-    if !assigned_user_ids.is_empty() {
-        let users = list_rows(
-            pool,
-            "app_users",
-            Some(&json_map(&[(
-                "id",
-                Value::Array(
-                    assigned_user_ids
-                        .iter()
-                        .cloned()
-                        .map(Value::String)
-                        .collect(),
-                ),
-            )])),
-            std::cmp::max(200, assigned_user_ids.len() as i64),
-            0,
-            "created_at",
-            false,
-        )
-        .await?;
-        for user in users {
-            let user_id = value_str(&user, "id");
-            if user_id.is_empty() {
-                continue;
-            }
-            let preferred_name = user
-                .as_object()
-                .and_then(|obj| obj.get("full_name"))
-                .and_then(Value::as_str)
-                .map(str::trim)
-                .filter(|value| !value.is_empty())
-                .map(ToOwned::to_owned)
-                .or_else(|| {
-                    user.as_object()
-                        .and_then(|obj| obj.get("email"))
-                        .and_then(Value::as_str)
-                        .map(str::trim)
-                        .filter(|value| !value.is_empty())
-                        .map(ToOwned::to_owned)
-                })
-                .unwrap_or_else(|| user_id.clone());
-            assigned_user_name.insert(user_id, preferred_name);
+    for user in users {
+        let user_id = value_str(&user, "id");
+        if user_id.is_empty() {
+            continue;
         }
+        let preferred_name = user
+            .as_object()
+            .and_then(|obj| obj.get("full_name"))
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(ToOwned::to_owned)
+            .or_else(|| {
+                user.as_object()
+                    .and_then(|obj| obj.get("email"))
+                    .and_then(Value::as_str)
+                    .map(str::trim)
+                    .filter(|value| !value.is_empty())
+                    .map(ToOwned::to_owned)
+            })
+            .unwrap_or_else(|| user_id.clone());
+        assigned_user_name.insert(user_id, preferred_name);
     }
 
     let now = Utc::now().fixed_offset();

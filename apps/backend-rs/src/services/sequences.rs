@@ -32,10 +32,7 @@ pub async fn process_sequences(pool: &sqlx::PgPool) -> (u32, u32) {
         let enrollment_id = val_str(obj.get("id"));
         let sequence_id = val_str(obj.get("sequence_id"));
         let org_id = val_str(obj.get("organization_id"));
-        let current_step = obj
-            .get("current_step")
-            .and_then(Value::as_i64)
-            .unwrap_or(1) as i32;
+        let current_step = obj.get("current_step").and_then(Value::as_i64).unwrap_or(1) as i32;
         let recipient = val_str(obj.get("recipient"));
         let context: Map<String, Value> = obj
             .get("context")
@@ -49,13 +46,26 @@ pub async fn process_sequences(pool: &sqlx::PgPool) -> (u32, u32) {
 
         // Find the current step
         let mut step_filters = Map::new();
-        step_filters.insert("sequence_id".to_string(), Value::String(sequence_id.clone()));
+        step_filters.insert(
+            "sequence_id".to_string(),
+            Value::String(sequence_id.clone()),
+        );
         step_filters.insert(
             "step_order".to_string(),
             Value::Number(serde_json::Number::from(current_step)),
         );
 
-        let step = match list_rows(pool, "sequence_steps", Some(&step_filters), 1, 0, "step_order", true).await {
+        let step = match list_rows(
+            pool,
+            "sequence_steps",
+            Some(&step_filters),
+            1,
+            0,
+            "step_order",
+            true,
+        )
+        .await
+        {
             Ok(steps) => steps.into_iter().next(),
             Err(_) => None,
         };
@@ -81,11 +91,18 @@ pub async fn process_sequences(pool: &sqlx::PgPool) -> (u32, u32) {
         msg.insert("organization_id".to_string(), Value::String(org_id));
         msg.insert(
             "channel".to_string(),
-            Value::String(if channel.is_empty() { "whatsapp".to_string() } else { channel }),
+            Value::String(if channel.is_empty() {
+                "whatsapp".to_string()
+            } else {
+                channel
+            }),
         );
         msg.insert("recipient".to_string(), Value::String(recipient));
         msg.insert("status".to_string(), Value::String("queued".to_string()));
-        msg.insert("direction".to_string(), Value::String("outbound".to_string()));
+        msg.insert(
+            "direction".to_string(),
+            Value::String("outbound".to_string()),
+        );
 
         let mut payload = Map::new();
         payload.insert("body".to_string(), Value::String(body));
@@ -94,8 +111,15 @@ pub async fn process_sequences(pool: &sqlx::PgPool) -> (u32, u32) {
         }
         msg.insert("payload".to_string(), Value::Object(payload));
 
-        if let Some(template_id) = step_obj.get("template_id").and_then(Value::as_str).filter(|s| !s.is_empty()) {
-            msg.insert("template_id".to_string(), Value::String(template_id.to_string()));
+        if let Some(template_id) = step_obj
+            .get("template_id")
+            .and_then(Value::as_str)
+            .filter(|s| !s.is_empty())
+        {
+            msg.insert(
+                "template_id".to_string(),
+                Value::String(template_id.to_string()),
+            );
         }
 
         match create_row(pool, "message_logs", &msg).await {
@@ -118,20 +142,40 @@ pub async fn process_sequences(pool: &sqlx::PgPool) -> (u32, u32) {
             Value::Number(serde_json::Number::from(next_step)),
         );
 
-        let has_next = list_rows(pool, "sequence_steps", Some(&next_filters), 1, 0, "step_order", true)
-            .await
-            .map(|rows| !rows.is_empty())
-            .unwrap_or(false);
+        let has_next = list_rows(
+            pool,
+            "sequence_steps",
+            Some(&next_filters),
+            1,
+            0,
+            "step_order",
+            true,
+        )
+        .await
+        .map(|rows| !rows.is_empty())
+        .unwrap_or(false);
 
         let mut enrollment_patch = Map::new();
         if has_next {
             // Get the next step's delay_hours
-            let next_delay = list_rows(pool, "sequence_steps", Some(&next_filters), 1, 0, "step_order", true)
-                .await
-                .ok()
-                .and_then(|rows| rows.into_iter().next())
-                .and_then(|s| s.as_object().and_then(|o| o.get("delay_hours")).and_then(Value::as_i64))
-                .unwrap_or(0);
+            let next_delay = list_rows(
+                pool,
+                "sequence_steps",
+                Some(&next_filters),
+                1,
+                0,
+                "step_order",
+                true,
+            )
+            .await
+            .ok()
+            .and_then(|rows| rows.into_iter().next())
+            .and_then(|s| {
+                s.as_object()
+                    .and_then(|o| o.get("delay_hours"))
+                    .and_then(Value::as_i64)
+            })
+            .unwrap_or(0);
 
             let next_send = Utc::now() + chrono::Duration::hours(next_delay);
             enrollment_patch.insert(
@@ -146,7 +190,14 @@ pub async fn process_sequences(pool: &sqlx::PgPool) -> (u32, u32) {
             enrollment_patch.insert("status".to_string(), Value::String("completed".to_string()));
         }
 
-        let _ = update_row(pool, "sequence_enrollments", &enrollment_id, &enrollment_patch, "id").await;
+        let _ = update_row(
+            pool,
+            "sequence_enrollments",
+            &enrollment_id,
+            &enrollment_patch,
+            "id",
+        )
+        .await;
     }
 
     info!("Processed sequences: {sent} sent, {errors} errors");
@@ -169,11 +220,27 @@ pub async fn enroll_in_sequences(
 
     // Find active sequences matching this trigger
     let mut filters = Map::new();
-    filters.insert("organization_id".to_string(), Value::String(org_id.to_string()));
-    filters.insert("trigger_type".to_string(), Value::String(trigger_type.to_string()));
+    filters.insert(
+        "organization_id".to_string(),
+        Value::String(org_id.to_string()),
+    );
+    filters.insert(
+        "trigger_type".to_string(),
+        Value::String(trigger_type.to_string()),
+    );
     filters.insert("is_active".to_string(), Value::Bool(true));
 
-    let sequences = match list_rows(pool, "communication_sequences", Some(&filters), 20, 0, "created_at", true).await {
+    let sequences = match list_rows(
+        pool,
+        "communication_sequences",
+        Some(&filters),
+        20,
+        0,
+        "created_at",
+        true,
+    )
+    .await
+    {
         Ok(rows) => rows,
         Err(_) => return,
     };
@@ -190,26 +257,65 @@ pub async fn enroll_in_sequences(
 
         // Get the first step's delay
         let mut step_filters = Map::new();
-        step_filters.insert("sequence_id".to_string(), Value::String(sequence_id.to_string()));
-        step_filters.insert("step_order".to_string(), Value::Number(serde_json::Number::from(1)));
+        step_filters.insert(
+            "sequence_id".to_string(),
+            Value::String(sequence_id.to_string()),
+        );
+        step_filters.insert(
+            "step_order".to_string(),
+            Value::Number(serde_json::Number::from(1)),
+        );
 
-        let first_delay = list_rows(pool, "sequence_steps", Some(&step_filters), 1, 0, "step_order", true)
-            .await
-            .ok()
-            .and_then(|rows| rows.into_iter().next())
-            .and_then(|s| s.as_object().and_then(|o| o.get("delay_hours")).and_then(Value::as_i64))
-            .unwrap_or(0);
+        let first_delay = list_rows(
+            pool,
+            "sequence_steps",
+            Some(&step_filters),
+            1,
+            0,
+            "step_order",
+            true,
+        )
+        .await
+        .ok()
+        .and_then(|rows| rows.into_iter().next())
+        .and_then(|s| {
+            s.as_object()
+                .and_then(|o| o.get("delay_hours"))
+                .and_then(Value::as_i64)
+        })
+        .unwrap_or(0);
 
         let next_send = Utc::now() + chrono::Duration::hours(first_delay);
 
         let mut enrollment = Map::new();
-        enrollment.insert("sequence_id".to_string(), Value::String(sequence_id.to_string()));
-        enrollment.insert("organization_id".to_string(), Value::String(org_id.to_string()));
-        enrollment.insert("entity_type".to_string(), Value::String(entity_type.to_string()));
-        enrollment.insert("entity_id".to_string(), Value::String(entity_id.to_string()));
-        enrollment.insert("current_step".to_string(), Value::Number(serde_json::Number::from(1)));
-        enrollment.insert("next_send_at".to_string(), Value::String(next_send.to_rfc3339()));
-        enrollment.insert("recipient".to_string(), Value::String(recipient.to_string()));
+        enrollment.insert(
+            "sequence_id".to_string(),
+            Value::String(sequence_id.to_string()),
+        );
+        enrollment.insert(
+            "organization_id".to_string(),
+            Value::String(org_id.to_string()),
+        );
+        enrollment.insert(
+            "entity_type".to_string(),
+            Value::String(entity_type.to_string()),
+        );
+        enrollment.insert(
+            "entity_id".to_string(),
+            Value::String(entity_id.to_string()),
+        );
+        enrollment.insert(
+            "current_step".to_string(),
+            Value::Number(serde_json::Number::from(1)),
+        );
+        enrollment.insert(
+            "next_send_at".to_string(),
+            Value::String(next_send.to_rfc3339()),
+        );
+        enrollment.insert(
+            "recipient".to_string(),
+            Value::String(recipient.to_string()),
+        );
         enrollment.insert("context".to_string(), Value::Object(context.clone()));
 
         let _ = create_row(pool, "sequence_enrollments", &enrollment).await;

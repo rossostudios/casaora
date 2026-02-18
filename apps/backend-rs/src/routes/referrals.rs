@@ -40,9 +40,10 @@ struct RedeemInput {
 }
 
 fn db_pool(state: &AppState) -> AppResult<&sqlx::PgPool> {
-    state.db_pool.as_ref().ok_or_else(|| {
-        AppError::Dependency("Database not configured.".to_string())
-    })
+    state
+        .db_pool
+        .as_ref()
+        .ok_or_else(|| AppError::Dependency("Database not configured.".to_string()))
 }
 
 fn val_str(row: &Value, key: &str) -> String {
@@ -88,7 +89,16 @@ async fn get_my_code(
         "referrer_org_id".to_string(),
         Value::String(query.org_id.clone()),
     );
-    let rows = list_rows(pool, "referral_codes", Some(&filters), 1, 0, "created_at", false).await;
+    let rows = list_rows(
+        pool,
+        "referral_codes",
+        Some(&filters),
+        1,
+        0,
+        "created_at",
+        false,
+    )
+    .await;
 
     if let Ok(rows) = rows {
         if let Some(row) = rows.into_iter().next() {
@@ -103,10 +113,7 @@ async fn get_my_code(
         "referrer_org_id".to_string(),
         Value::String(query.org_id.clone()),
     );
-    record.insert(
-        "referrer_user_id".to_string(),
-        Value::String(user_id),
-    );
+    record.insert("referrer_user_id".to_string(), Value::String(user_id));
     record.insert("code".to_string(), Value::String(code));
     record.insert("max_uses".to_string(), json!(10));
     record.insert("times_used".to_string(), json!(0));
@@ -136,10 +143,7 @@ async fn generate_code(
         "referrer_org_id".to_string(),
         Value::String(payload.org_id.clone()),
     );
-    record.insert(
-        "referrer_user_id".to_string(),
-        Value::String(user_id),
-    );
+    record.insert("referrer_user_id".to_string(), Value::String(user_id));
     record.insert("code".to_string(), Value::String(code));
     record.insert("max_uses".to_string(), json!(10));
     record.insert("times_used".to_string(), json!(0));
@@ -150,7 +154,10 @@ async fn generate_code(
     record.insert("is_active".to_string(), Value::Bool(true));
 
     let created = create_row(pool, "referral_codes", &record).await?;
-    Ok((axum::http::StatusCode::CREATED, Json(json!({ "referral": created }))))
+    Ok((
+        axum::http::StatusCode::CREATED,
+        Json(json!({ "referral": created })),
+    ))
 }
 
 /// Validate a referral code (public, used during signup).
@@ -161,12 +168,23 @@ async fn validate_code(
     let pool = db_pool(&state)?;
 
     let mut filters = Map::new();
-    filters.insert("code".to_string(), Value::String(query.code.trim().to_uppercase()));
+    filters.insert(
+        "code".to_string(),
+        Value::String(query.code.trim().to_uppercase()),
+    );
     filters.insert("is_active".to_string(), Value::Bool(true));
 
-    let rows = list_rows(pool, "referral_codes", Some(&filters), 1, 0, "created_at", false)
-        .await
-        .unwrap_or_default();
+    let rows = list_rows(
+        pool,
+        "referral_codes",
+        Some(&filters),
+        1,
+        0,
+        "created_at",
+        false,
+    )
+    .await
+    .unwrap_or_default();
 
     if let Some(row) = rows.into_iter().next() {
         let times_used = row
@@ -181,7 +199,9 @@ async fn validate_code(
             .unwrap_or(10);
 
         if times_used >= max_uses {
-            return Ok(Json(json!({ "valid": false, "reason": "Code has reached maximum uses." })));
+            return Ok(Json(
+                json!({ "valid": false, "reason": "Code has reached maximum uses." }),
+            ));
         }
 
         Ok(Json(json!({
@@ -210,8 +230,16 @@ async fn redeem_code(
     filters.insert("code".to_string(), Value::String(code.clone()));
     filters.insert("is_active".to_string(), Value::Bool(true));
 
-    let rows = list_rows(pool, "referral_codes", Some(&filters), 1, 0, "created_at", false)
-        .await?;
+    let rows = list_rows(
+        pool,
+        "referral_codes",
+        Some(&filters),
+        1,
+        0,
+        "created_at",
+        false,
+    )
+    .await?;
     let referral = rows
         .into_iter()
         .next()
@@ -267,18 +295,12 @@ async fn redeem_code(
         "redeemed_by_org_id".to_string(),
         Value::String(payload.redeemed_by_org_id),
     );
-    redemption.insert(
-        "redeemed_by_user_id".to_string(),
-        Value::String(user_id),
-    );
+    redemption.insert("redeemed_by_user_id".to_string(), Value::String(user_id));
     redemption.insert(
         "reward_type".to_string(),
         Value::String(val_str(&referral, "reward_type")),
     );
-    redemption.insert(
-        "status".to_string(),
-        Value::String("pending".to_string()),
-    );
+    redemption.insert("status".to_string(), Value::String("pending".to_string()));
 
     let created = create_row(pool, "referral_redemptions", &redemption).await?;
 

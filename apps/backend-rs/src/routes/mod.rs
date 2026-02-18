@@ -1,9 +1,4 @@
-use axum::{
-    extract::State,
-    routing::get,
-    Json,
-    Router,
-};
+use axum::{extract::State, routing::get, Json, Router};
 use serde_json::{json, Value};
 
 use crate::state::AppState;
@@ -11,12 +6,17 @@ use crate::state::AppState;
 pub mod agent_chats;
 pub mod ai_agent;
 pub mod applications;
+pub mod approvals;
+pub mod booking;
 pub mod calendar;
 pub mod cancellation_policies;
 pub mod collections;
+pub mod contract_templates;
 pub mod demo;
+pub mod deposits;
 pub mod documents;
 pub mod expenses;
+pub mod guest_portal;
 pub mod guests;
 pub mod health;
 pub mod identity;
@@ -27,6 +27,7 @@ pub mod marketplace;
 pub mod messaging;
 pub mod notifications;
 pub mod organizations;
+pub mod owner_portal;
 pub mod owner_statements;
 pub mod payments;
 pub mod platform;
@@ -36,16 +37,10 @@ pub mod public_ical;
 pub mod referrals;
 pub mod reports;
 pub mod reservations;
+pub mod sequences;
 pub mod subscriptions;
 pub mod tasks;
 pub mod tenant;
-pub mod sequences;
-pub mod booking;
-pub mod contract_templates;
-pub mod deposits;
-pub mod owner_portal;
-pub mod guest_portal;
-pub mod approvals;
 pub mod workflows;
 
 async fn public_fx_rate(State(state): State<AppState>) -> Json<Value> {

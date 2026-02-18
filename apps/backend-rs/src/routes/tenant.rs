@@ -430,10 +430,7 @@ async fn tenant_submit_payment(
     // Update the collection with payment submission info
     let mut patch = Map::new();
     if let Some(ref method) = payload.payment_method {
-        patch.insert(
-            "payment_method".to_string(),
-            Value::String(method.clone()),
-        );
+        patch.insert("payment_method".to_string(), Value::String(method.clone()));
     }
     if let Some(ref reference) = payload.payment_reference {
         patch.insert(
@@ -457,7 +454,14 @@ async fn tenant_submit_payment(
     }
 
     let updated = if !patch.is_empty() {
-        update_row(pool, "collection_records", &path.collection_id, &patch, "id").await?
+        update_row(
+            pool,
+            "collection_records",
+            &path.collection_id,
+            &patch,
+            "id",
+        )
+        .await?
     } else {
         collection.clone()
     };
@@ -486,13 +490,20 @@ async fn tenant_submit_payment(
     // Find owner_admin members to notify
     if !org_id.is_empty() {
         let mut member_filters = Map::new();
-        member_filters.insert(
-            "organization_id".to_string(),
-            Value::String(org_id.clone()),
-        );
+        member_filters.insert("organization_id".to_string(), Value::String(org_id.clone()));
         member_filters.insert("role".to_string(), Value::String("owner_admin".to_string()));
 
-        if let Ok(members) = list_rows(pool, "organization_members", Some(&member_filters), 5, 0, "created_at", true).await {
+        if let Ok(members) = list_rows(
+            pool,
+            "organization_members",
+            Some(&member_filters),
+            5,
+            0,
+            "created_at",
+            true,
+        )
+        .await
+        {
             for member in &members {
                 let user_id = val_str(member, "user_id");
                 if user_id.is_empty() {
@@ -501,7 +512,10 @@ async fn tenant_submit_payment(
                 if let Ok(user) = get_row(pool, "app_users", &user_id, "id").await {
                     let owner_phone = val_str(&user, "phone_e164");
                     if !owner_phone.is_empty() {
-                        let ref_info = payload.payment_reference.as_deref().unwrap_or("sin referencia");
+                        let ref_info = payload
+                            .payment_reference
+                            .as_deref()
+                            .unwrap_or("sin referencia");
                         let body = format!(
                             "💰 Pago reportado\n\n\
                              {tenant_name} reportó un pago de {amount_display} (vencimiento: {due_date}).\n\
@@ -511,10 +525,7 @@ async fn tenant_submit_payment(
                         );
 
                         let mut msg = Map::new();
-                        msg.insert(
-                            "organization_id".to_string(),
-                            Value::String(org_id.clone()),
-                        );
+                        msg.insert("organization_id".to_string(), Value::String(org_id.clone()));
                         msg.insert("channel".to_string(), Value::String("whatsapp".to_string()));
                         msg.insert("recipient".to_string(), Value::String(owner_phone));
                         msg.insert("status".to_string(), Value::String("queued".to_string()));
@@ -633,7 +644,10 @@ async fn tenant_create_maintenance(
     let mut task = Map::new();
     task.insert("organization_id".to_string(), Value::String(org_id.clone()));
     if !property_id.is_empty() {
-        task.insert("property_id".to_string(), Value::String(property_id.clone()));
+        task.insert(
+            "property_id".to_string(),
+            Value::String(property_id.clone()),
+        );
     }
     if !unit_id.is_empty() {
         task.insert("unit_id".to_string(), Value::String(unit_id.clone()));
@@ -665,10 +679,7 @@ async fn tenant_create_maintenance(
     // Fire maintenance_submitted workflow trigger
     if !org_id.is_empty() {
         let mut ctx = serde_json::Map::new();
-        ctx.insert(
-            "maintenance_request_id".to_string(),
-            Value::String(mr_id),
-        );
+        ctx.insert("maintenance_request_id".to_string(), Value::String(mr_id));
         ctx.insert("property_id".to_string(), Value::String(property_id));
         ctx.insert("unit_id".to_string(), Value::String(unit_id));
         ctx.insert(
@@ -679,7 +690,10 @@ async fn tenant_create_maintenance(
             "tenant_phone_e164".to_string(),
             Value::String(val_str(&lease, "tenant_phone_e164")),
         );
-        ctx.insert("title".to_string(), Value::String(val_str(&created, "title")));
+        ctx.insert(
+            "title".to_string(),
+            Value::String(val_str(&created, "title")),
+        );
         fire_trigger(pool, &org_id, "maintenance_submitted", &ctx).await;
     }
 
@@ -699,10 +713,22 @@ async fn tenant_documents(
     // Fetch documents linked to this lease
     let mut filters = Map::new();
     filters.insert("organization_id".to_string(), Value::String(org_id));
-    filters.insert("entity_type".to_string(), Value::String("lease".to_string()));
+    filters.insert(
+        "entity_type".to_string(),
+        Value::String("lease".to_string()),
+    );
     filters.insert("entity_id".to_string(), Value::String(lease_id));
 
-    let rows = list_rows(pool, "documents", Some(&filters), 100, 0, "created_at", false).await?;
+    let rows = list_rows(
+        pool,
+        "documents",
+        Some(&filters),
+        100,
+        0,
+        "created_at",
+        false,
+    )
+    .await?;
 
     Ok(Json(json!({ "data": rows })))
 }
@@ -726,7 +752,16 @@ async fn tenant_messages(
     filters.insert("organization_id".to_string(), Value::String(org_id));
     filters.insert("recipient".to_string(), Value::String(tenant_phone));
 
-    let rows = list_rows(pool, "message_logs", Some(&filters), 200, 0, "created_at", false).await?;
+    let rows = list_rows(
+        pool,
+        "message_logs",
+        Some(&filters),
+        200,
+        0,
+        "created_at",
+        false,
+    )
+    .await?;
 
     Ok(Json(json!({ "data": rows })))
 }

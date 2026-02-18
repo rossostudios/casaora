@@ -1,10 +1,10 @@
+use axum::extract::Path;
 use axum::{
     extract::{Query, State},
     http::HeaderMap,
     response::IntoResponse,
     Json,
 };
-use axum::extract::Path;
 use chrono::{NaiveDate, Utc};
 use serde::Deserialize;
 use serde_json::{json, Map, Value};
@@ -31,7 +31,10 @@ pub fn router() -> axum::Router<AppState> {
             axum::routing::get(owner_statement_detail),
         )
         .route("/owner/properties", axum::routing::get(owner_properties))
-        .route("/owner/reservations", axum::routing::get(owner_reservations))
+        .route(
+            "/owner/reservations",
+            axum::routing::get(owner_reservations),
+        )
 }
 
 #[derive(Debug, Deserialize)]
@@ -60,9 +63,10 @@ fn default_limit() -> i64 {
 }
 
 fn db_pool(state: &AppState) -> AppResult<&sqlx::PgPool> {
-    state.db_pool.as_ref().ok_or_else(|| {
-        AppError::Dependency("Database is not configured.".to_string())
-    })
+    state
+        .db_pool
+        .as_ref()
+        .ok_or_else(|| AppError::Dependency("Database is not configured.".to_string()))
 }
 
 fn val_str(row: &Value, key: &str) -> String {
@@ -104,7 +108,16 @@ async fn request_access(
     let mut filters = Map::new();
     filters.insert("user_id".to_string(), Value::String(user_id.clone()));
     filters.insert("role".to_string(), Value::String("owner_admin".to_string()));
-    let memberships = list_rows(pool, "organization_members", Some(&filters), 10, 0, "created_at", false).await?;
+    let memberships = list_rows(
+        pool,
+        "organization_members",
+        Some(&filters),
+        10,
+        0,
+        "created_at",
+        false,
+    )
+    .await?;
 
     if memberships.is_empty() {
         return Err(AppError::Forbidden(
@@ -205,13 +218,40 @@ async fn owner_dashboard(
     // Count properties
     let mut prop_filters = Map::new();
     prop_filters.insert("organization_id".to_string(), Value::String(org_id.clone()));
-    let properties = list_rows(pool, "properties", Some(&prop_filters), 500, 0, "created_at", false).await?;
+    let properties = list_rows(
+        pool,
+        "properties",
+        Some(&prop_filters),
+        500,
+        0,
+        "created_at",
+        false,
+    )
+    .await?;
 
     // Count units
-    let units = list_rows(pool, "units", Some(&prop_filters), 500, 0, "created_at", false).await?;
+    let units = list_rows(
+        pool,
+        "units",
+        Some(&prop_filters),
+        500,
+        0,
+        "created_at",
+        false,
+    )
+    .await?;
 
     // Active leases
-    let leases = list_rows(pool, "leases", Some(&prop_filters), 500, 0, "created_at", false).await?;
+    let leases = list_rows(
+        pool,
+        "leases",
+        Some(&prop_filters),
+        500,
+        0,
+        "created_at",
+        false,
+    )
+    .await?;
     let active_leases: Vec<&Value> = leases
         .iter()
         .filter(|l| {
@@ -221,7 +261,16 @@ async fn owner_dashboard(
         .collect();
 
     // Active reservations
-    let reservations = list_rows(pool, "reservations", Some(&prop_filters), 500, 0, "created_at", false).await?;
+    let reservations = list_rows(
+        pool,
+        "reservations",
+        Some(&prop_filters),
+        500,
+        0,
+        "created_at",
+        false,
+    )
+    .await?;
     let active_reservations: Vec<&Value> = reservations
         .iter()
         .filter(|r| {
@@ -231,7 +280,16 @@ async fn owner_dashboard(
         .collect();
 
     // Revenue from collections (paid)
-    let collections = list_rows(pool, "collection_records", Some(&prop_filters), 2000, 0, "due_date", false).await?;
+    let collections = list_rows(
+        pool,
+        "collection_records",
+        Some(&prop_filters),
+        2000,
+        0,
+        "due_date",
+        false,
+    )
+    .await?;
     let total_collected: f64 = collections
         .iter()
         .filter(|c| val_str(c, "status") == "paid")
@@ -239,7 +297,16 @@ async fn owner_dashboard(
         .sum();
 
     // Pending owner statements
-    let statements = list_rows(pool, "owner_statements", Some(&prop_filters), 500, 0, "created_at", false).await?;
+    let statements = list_rows(
+        pool,
+        "owner_statements",
+        Some(&prop_filters),
+        500,
+        0,
+        "created_at",
+        false,
+    )
+    .await?;
     let pending_statements: Vec<&Value> = statements
         .iter()
         .filter(|s| {
@@ -257,13 +324,18 @@ async fn owner_dashboard(
     // Revenue by month (last 6 months)
     let today = Utc::now().date_naive();
     let six_months_ago = today - chrono::Duration::days(180);
-    let mut revenue_by_month: std::collections::BTreeMap<String, f64> = std::collections::BTreeMap::new();
+    let mut revenue_by_month: std::collections::BTreeMap<String, f64> =
+        std::collections::BTreeMap::new();
     for c in &collections {
         if val_str(c, "status") != "paid" {
             continue;
         }
         let paid_at = val_str(c, "paid_at");
-        let date_str = if paid_at.is_empty() { val_str(c, "due_date") } else { paid_at };
+        let date_str = if paid_at.is_empty() {
+            val_str(c, "due_date")
+        } else {
+            paid_at
+        };
         if date_str.is_empty() {
             continue;
         }
@@ -283,7 +355,8 @@ async fn owner_dashboard(
         .collect();
 
     // Revenue by property
-    let mut revenue_by_prop: std::collections::HashMap<String, f64> = std::collections::HashMap::new();
+    let mut revenue_by_prop: std::collections::HashMap<String, f64> =
+        std::collections::HashMap::new();
     for c in &collections {
         if val_str(c, "status") != "paid" {
             continue;
@@ -377,15 +450,25 @@ async fn owner_statement_detail(
     let statement = get_row(pool, "owner_statements", &path.statement_id, "id").await?;
     let stmt_org = val_str(&statement, "organization_id");
     if stmt_org != org_id {
-        return Err(AppError::Forbidden("Statement does not belong to this organization.".to_string()));
+        return Err(AppError::Forbidden(
+            "Statement does not belong to this organization.".to_string(),
+        ));
     }
 
     // Fetch collections for the statement period
     let mut coll_filters = Map::new();
     coll_filters.insert("organization_id".to_string(), Value::String(org_id.clone()));
-    let collections = list_rows(pool, "collection_records", Some(&coll_filters), 2000, 0, "due_date", true)
-        .await
-        .unwrap_or_default();
+    let collections = list_rows(
+        pool,
+        "collection_records",
+        Some(&coll_filters),
+        2000,
+        0,
+        "due_date",
+        true,
+    )
+    .await
+    .unwrap_or_default();
 
     // Filter to the statement period
     let period_start = val_str(&statement, "period_start");
@@ -405,9 +488,17 @@ async fn owner_statement_detail(
     // Fetch expenses for the period
     let mut exp_filters = Map::new();
     exp_filters.insert("organization_id".to_string(), Value::String(org_id));
-    let expenses = list_rows(pool, "expenses", Some(&exp_filters), 2000, 0, "expense_date", true)
-        .await
-        .unwrap_or_default();
+    let expenses = list_rows(
+        pool,
+        "expenses",
+        Some(&exp_filters),
+        2000,
+        0,
+        "expense_date",
+        true,
+    )
+    .await
+    .unwrap_or_default();
 
     let period_expenses: Vec<&Value> = if !period_start.is_empty() && !period_end.is_empty() {
         expenses

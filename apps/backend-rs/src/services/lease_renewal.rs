@@ -96,8 +96,15 @@ pub async fn run_lease_renewal_scan(
                      Tu administrador te enviará una oferta de renovación pronto.\n\
                      — Casaora"
                 );
-                queue_message(pool, &org_id_str, &tenant_phone, &body, &lease_id, "renewal_60d")
-                    .await;
+                queue_message(
+                    pool,
+                    &org_id_str,
+                    &tenant_phone,
+                    &body,
+                    &lease_id,
+                    "renewal_60d",
+                )
+                .await;
             }
 
             // Notify owner_admin about expiring lease
@@ -128,17 +135,22 @@ pub async fn run_lease_renewal_scan(
                      Por favor contacta a tu administrador sobre la renovación.\n\
                      — Casaora"
                 );
-                queue_message(pool, &org_id_str, &tenant_phone, &body, &lease_id, "renewal_30d")
-                    .await;
+                queue_message(
+                    pool,
+                    &org_id_str,
+                    &tenant_phone,
+                    &body,
+                    &lease_id,
+                    "renewal_30d",
+                )
+                .await;
             }
 
             result.reminders_sent_30d += 1;
         }
 
         // Mark expired offers (lease ended and renewal still pending/offered)
-        if ends_on < today
-            && (renewal_status == "pending" || renewal_status == "offered")
-        {
+        if ends_on < today && (renewal_status == "pending" || renewal_status == "offered") {
             let mut patch = Map::new();
             patch.insert(
                 "renewal_status".to_string(),
@@ -197,7 +209,9 @@ pub async fn send_renewal_offer(
     );
     patch.insert(
         "renewal_offered_rent".to_string(),
-        Value::Number(serde_json::Number::from_f64(new_rent).unwrap_or_else(|| serde_json::Number::from(0))),
+        Value::Number(
+            serde_json::Number::from_f64(new_rent).unwrap_or_else(|| serde_json::Number::from(0)),
+        ),
     );
     if let Some(n) = notes {
         patch.insert("renewal_notes".to_string(), Value::String(n.to_string()));
@@ -227,7 +241,15 @@ pub async fn send_renewal_offer(
              Acepta o responde a este mensaje para más información.\n\
              — Casaora"
         );
-        queue_message(pool, &org_id, &tenant_phone, &body, lease_id, "renewal_offer").await;
+        queue_message(
+            pool,
+            &org_id,
+            &tenant_phone,
+            &body,
+            lease_id,
+            "renewal_offer",
+        )
+        .await;
     }
 
     Ok(updated)
@@ -246,18 +268,9 @@ async fn queue_message(
         "organization_id".to_string(),
         Value::String(org_id.to_string()),
     );
-    msg.insert(
-        "channel".to_string(),
-        Value::String("whatsapp".to_string()),
-    );
-    msg.insert(
-        "recipient".to_string(),
-        Value::String(phone.to_string()),
-    );
-    msg.insert(
-        "status".to_string(),
-        Value::String("queued".to_string()),
-    );
+    msg.insert("channel".to_string(), Value::String("whatsapp".to_string()));
+    msg.insert("recipient".to_string(), Value::String(phone.to_string()));
+    msg.insert("status".to_string(), Value::String("queued".to_string()));
     msg.insert(
         "scheduled_at".to_string(),
         Value::String(Utc::now().to_rfc3339()),
@@ -265,10 +278,7 @@ async fn queue_message(
 
     let mut payload = Map::new();
     payload.insert("body".to_string(), Value::String(body.to_string()));
-    payload.insert(
-        "lease_id".to_string(),
-        Value::String(lease_id.to_string()),
-    );
+    payload.insert("lease_id".to_string(), Value::String(lease_id.to_string()));
     payload.insert(
         "reminder_type".to_string(),
         Value::String(reminder_type.to_string()),
@@ -278,7 +288,13 @@ async fn queue_message(
     let _ = create_row(pool, "message_logs", &msg).await;
 }
 
-async fn notify_owners(pool: &PgPool, org_id: &str, body: &str, lease_id: &str, reminder_type: &str) {
+async fn notify_owners(
+    pool: &PgPool,
+    org_id: &str,
+    body: &str,
+    lease_id: &str,
+    reminder_type: &str,
+) {
     let mut filters = Map::new();
     filters.insert(
         "organization_id".to_string(),
@@ -286,7 +302,17 @@ async fn notify_owners(pool: &PgPool, org_id: &str, body: &str, lease_id: &str, 
     );
     filters.insert("role".to_string(), Value::String("owner_admin".to_string()));
 
-    let members = match list_rows(pool, "organization_members", Some(&filters), 5, 0, "created_at", true).await {
+    let members = match list_rows(
+        pool,
+        "organization_members",
+        Some(&filters),
+        5,
+        0,
+        "created_at",
+        true,
+    )
+    .await
+    {
         Ok(m) => m,
         Err(_) => return,
     };
@@ -296,7 +322,9 @@ async fn notify_owners(pool: &PgPool, org_id: &str, body: &str, lease_id: &str, 
         if user_id.is_empty() {
             continue;
         }
-        if let Ok(user) = crate::repository::table_service::get_row(pool, "app_users", &user_id, "id").await {
+        if let Ok(user) =
+            crate::repository::table_service::get_row(pool, "app_users", &user_id, "id").await
+        {
             let phone = val_str(&user, "phone_e164");
             if !phone.is_empty() {
                 queue_message(pool, org_id, &phone, body, lease_id, reminder_type).await;

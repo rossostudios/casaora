@@ -17,13 +17,23 @@ pub enum AgentStreamEvent {
     #[serde(rename = "status")]
     Status { message: String },
     #[serde(rename = "tool_call")]
-    ToolCall { name: String, args: Map<String, Value> },
+    ToolCall {
+        name: String,
+        args: Map<String, Value>,
+    },
     #[serde(rename = "tool_result")]
-    ToolResult { name: String, preview: String, ok: bool },
+    ToolResult {
+        name: String,
+        preview: String,
+        ok: bool,
+    },
     #[serde(rename = "token")]
     Token { text: String },
     #[serde(rename = "done")]
-    Done { content: String, tool_trace: Vec<Value> },
+    Done {
+        content: String,
+        tool_trace: Vec<Value>,
+    },
     #[serde(rename = "error")]
     Error { message: String },
 }
@@ -347,9 +357,11 @@ pub async fn run_ai_agent_chat_streaming(
     tx: tokio::sync::mpsc::Sender<AgentStreamEvent>,
 ) -> AppResult<Map<String, Value>> {
     if !state.config.ai_agent_enabled {
-        let _ = tx.send(AgentStreamEvent::Error {
-            message: "AI agent is disabled in this environment.".to_string(),
-        }).await;
+        let _ = tx
+            .send(AgentStreamEvent::Error {
+                message: "AI agent is disabled in this environment.".to_string(),
+            })
+            .await;
         return Err(AppError::ServiceUnavailable(
             "AI agent is disabled in this environment.".to_string(),
         ));
@@ -396,9 +408,11 @@ pub async fn run_ai_agent_chat_streaming(
     let mut model_used = String::new();
     let tool_definitions = tool_definitions(params.allowed_tools);
 
-    let _ = tx.send(AgentStreamEvent::Status {
-        message: "Thinking...".to_string(),
-    }).await;
+    let _ = tx
+        .send(AgentStreamEvent::Status {
+            message: "Thinking...".to_string(),
+        })
+        .await;
 
     let max_steps = std::cmp::max(1, state.config.ai_agent_max_tool_steps);
     for _ in 0..max_steps {
@@ -457,10 +471,12 @@ pub async fn run_ai_agent_chat_streaming(
                 let raw_arguments = function_payload.get("arguments").cloned();
                 let mut arguments = Map::new();
 
-                let _ = tx.send(AgentStreamEvent::ToolCall {
-                    name: tool_name.clone(),
-                    args: arguments.clone(),
-                }).await;
+                let _ = tx
+                    .send(AgentStreamEvent::ToolCall {
+                        name: tool_name.clone(),
+                        args: arguments.clone(),
+                    })
+                    .await;
 
                 let tool_result = match parse_tool_arguments(raw_arguments) {
                     Ok(parsed) => {
@@ -497,11 +513,13 @@ pub async fn run_ai_agent_chat_streaming(
                     .and_then(Value::as_bool)
                     .unwrap_or(false);
 
-                let _ = tx.send(AgentStreamEvent::ToolResult {
-                    name: tool_name.clone(),
-                    preview: preview.clone(),
-                    ok,
-                }).await;
+                let _ = tx
+                    .send(AgentStreamEvent::ToolResult {
+                        name: tool_name.clone(),
+                        preview: preview.clone(),
+                        ok,
+                    })
+                    .await;
 
                 tool_trace.push(json!({
                     "tool": tool_name,
@@ -523,13 +541,17 @@ pub async fn run_ai_agent_chat_streaming(
         }
 
         if !assistant_text.is_empty() {
-            let _ = tx.send(AgentStreamEvent::Token {
-                text: assistant_text.clone(),
-            }).await;
-            let _ = tx.send(AgentStreamEvent::Done {
-                content: assistant_text.clone(),
-                tool_trace: tool_trace.clone(),
-            }).await;
+            let _ = tx
+                .send(AgentStreamEvent::Token {
+                    text: assistant_text.clone(),
+                })
+                .await;
+            let _ = tx
+                .send(AgentStreamEvent::Done {
+                    content: assistant_text.clone(),
+                    tool_trace: tool_trace.clone(),
+                })
+                .await;
             return Ok(build_agent_result(
                 assistant_text,
                 tool_trace,
@@ -566,13 +588,17 @@ pub async fn run_ai_agent_chat_streaming(
         final_text
     };
 
-    let _ = tx.send(AgentStreamEvent::Token {
-        text: reply.clone(),
-    }).await;
-    let _ = tx.send(AgentStreamEvent::Done {
-        content: reply.clone(),
-        tool_trace: tool_trace.clone(),
-    }).await;
+    let _ = tx
+        .send(AgentStreamEvent::Token {
+            text: reply.clone(),
+        })
+        .await;
+    let _ = tx
+        .send(AgentStreamEvent::Done {
+            content: reply.clone(),
+            tool_trace: tool_trace.clone(),
+        })
+        .await;
 
     Ok(build_agent_result(
         reply,
@@ -997,14 +1023,18 @@ async fn execute_tool(
             .await
         }
         "delegate_to_agent" => {
-            tool_delegate_to_agent(state, context.org_id, context.role, context.allow_mutations, context.confirm_write, args).await
+            tool_delegate_to_agent(
+                state,
+                context.org_id,
+                context.role,
+                context.allow_mutations,
+                context.confirm_write,
+                args,
+            )
+            .await
         }
-        "get_occupancy_forecast" => {
-            tool_get_occupancy_forecast(state, context.org_id, args).await
-        }
-        "get_anomaly_alerts" => {
-            tool_get_anomaly_alerts(state, context.org_id).await
-        }
+        "get_occupancy_forecast" => tool_get_occupancy_forecast(state, context.org_id, args).await,
+        "get_anomaly_alerts" => tool_get_anomaly_alerts(state, context.org_id).await,
         _ => Ok(json!({
             "ok": false,
             "error": format!("Unknown tool: {tool_name}"),
@@ -1159,7 +1189,7 @@ async fn maybe_create_approval(
     let _row = sqlx::query(
         "INSERT INTO agent_approvals (organization_id, agent_slug, tool_name, tool_args, status)
          VALUES ($1::uuid, 'system', $2, $3, 'pending')
-         RETURNING id"
+         RETURNING id",
     )
     .bind(org_id)
     .bind(tool_name)
@@ -1476,7 +1506,9 @@ async fn tool_delegate_to_agent(
     })?;
 
     let Some((slug, name, system_prompt, allowed_tools_json)) = agent_row else {
-        return Ok(json!({ "ok": false, "error": format!("Agent '{}' not found or inactive.", agent_slug) }));
+        return Ok(
+            json!({ "ok": false, "error": format!("Agent '{}' not found or inactive.", agent_slug) }),
+        );
     };
 
     // Prevent delegation to tools that include delegate_to_agent (no chaining)
@@ -1529,13 +1561,12 @@ async fn tool_get_occupancy_forecast(
     let pool = db_pool(state)?;
 
     // Get total units
-    let unit_count: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*)::bigint FROM units WHERE organization_id = $1::uuid"
-    )
-    .bind(org_id)
-    .fetch_one(pool)
-    .await
-    .unwrap_or(0);
+    let unit_count: i64 =
+        sqlx::query_scalar("SELECT COUNT(*)::bigint FROM units WHERE organization_id = $1::uuid")
+            .bind(org_id)
+            .fetch_one(pool)
+            .await
+            .unwrap_or(0);
 
     if unit_count == 0 {
         return Ok(json!({
@@ -1603,10 +1634,7 @@ async fn tool_get_occupancy_forecast(
     }))
 }
 
-async fn tool_get_anomaly_alerts(
-    state: &AppState,
-    org_id: &str,
-) -> AppResult<Value> {
+async fn tool_get_anomaly_alerts(state: &AppState, org_id: &str) -> AppResult<Value> {
     let pool = db_pool(state)?;
 
     let rows = sqlx::query(
@@ -1615,7 +1643,7 @@ async fn tool_get_anomaly_alerts(
          WHERE organization_id = $1::uuid
            AND is_dismissed = false
          ORDER BY detected_at DESC
-         LIMIT 50"
+         LIMIT 50",
     )
     .bind(org_id)
     .fetch_all(pool)

@@ -1,9 +1,4 @@
-use axum::{
-    extract::State,
-    http::HeaderMap,
-    response::IntoResponse,
-    Json,
-};
+use axum::{extract::State, http::HeaderMap, response::IntoResponse, Json};
 use chrono::Utc;
 use serde_json::{json, Map, Value};
 use sha1::Digest;
@@ -22,8 +17,14 @@ pub fn router() -> axum::Router<AppState> {
         )
         .route("/public/guest/verify", axum::routing::post(verify_token))
         .route("/guest/itinerary", axum::routing::get(guest_itinerary))
-        .route("/guest/messages", axum::routing::get(guest_messages).post(guest_send_message))
-        .route("/guest/checkin-info", axum::routing::get(guest_checkin_info))
+        .route(
+            "/guest/messages",
+            axum::routing::get(guest_messages).post(guest_send_message),
+        )
+        .route(
+            "/guest/checkin-info",
+            axum::routing::get(guest_checkin_info),
+        )
 }
 
 #[derive(Debug, serde::Deserialize)]
@@ -66,10 +67,18 @@ async fn request_access(
         let guest_id = val_str(&res, "guest_id");
         if !guest_id.is_empty() {
             let guest = get_row(pool, "guests", &guest_id, "id").await.ok();
-            let guest_email = guest.as_ref().map(|g| val_str(g, "email")).unwrap_or_default();
-            let guest_phone = guest.as_ref().map(|g| val_str(g, "phone_e164")).unwrap_or_default();
+            let guest_email = guest
+                .as_ref()
+                .map(|g| val_str(g, "email"))
+                .unwrap_or_default();
+            let guest_phone = guest
+                .as_ref()
+                .map(|g| val_str(g, "phone_e164"))
+                .unwrap_or_default();
 
-            let email_match = email.as_deref().map_or(false, |e| !e.is_empty() && e == guest_email);
+            let email_match = email
+                .as_deref()
+                .map_or(false, |e| !e.is_empty() && e == guest_email);
             let phone_match = phone.map_or(false, |p| !p.is_empty() && p == guest_phone);
 
             if !email_match && !phone_match {
@@ -88,11 +97,18 @@ async fn request_access(
         let guests = if let Some(ref e) = email {
             let mut f = Map::new();
             f.insert("email".to_string(), Value::String(e.clone()));
-            list_rows(pool, "guests", Some(&f), 10, 0, "created_at", false).await.unwrap_or_default()
+            list_rows(pool, "guests", Some(&f), 10, 0, "created_at", false)
+                .await
+                .unwrap_or_default()
         } else {
             let mut f = Map::new();
-            f.insert("phone_e164".to_string(), Value::String(phone.unwrap_or("").to_string()));
-            list_rows(pool, "guests", Some(&f), 10, 0, "created_at", false).await.unwrap_or_default()
+            f.insert(
+                "phone_e164".to_string(),
+                Value::String(phone.unwrap_or("").to_string()),
+            );
+            list_rows(pool, "guests", Some(&f), 10, 0, "created_at", false)
+                .await
+                .unwrap_or_default()
         };
 
         let mut found: Option<(Value, String)> = None;
@@ -103,7 +119,9 @@ async fn request_access(
             }
             let mut f = Map::new();
             f.insert("guest_id".to_string(), Value::String(guest_id.clone()));
-            if let Ok(reservations) = list_rows(pool, "reservations", Some(&f), 5, 0, "check_in_date", false).await {
+            if let Ok(reservations) =
+                list_rows(pool, "reservations", Some(&f), 5, 0, "check_in_date", false).await
+            {
                 if let Some(res) = reservations.into_iter().find(|r| {
                     let status = val_str(r, "status");
                     status == "confirmed" || status == "pending"
@@ -282,7 +300,16 @@ async fn guest_messages(
     filters.insert("organization_id".to_string(), Value::String(org_id));
     filters.insert("recipient".to_string(), Value::String(guest_phone));
 
-    let rows = list_rows(pool, "message_logs", Some(&filters), 200, 0, "created_at", true).await?;
+    let rows = list_rows(
+        pool,
+        "message_logs",
+        Some(&filters),
+        200,
+        0,
+        "created_at",
+        true,
+    )
+    .await?;
 
     Ok(Json(json!({ "data": rows })))
 }
@@ -308,7 +335,10 @@ async fn guest_send_message(
 
     let mut msg = Map::new();
     msg.insert("organization_id".to_string(), Value::String(org_id));
-    msg.insert("channel".to_string(), Value::String("guest_portal".to_string()));
+    msg.insert(
+        "channel".to_string(),
+        Value::String("guest_portal".to_string()),
+    );
     msg.insert(
         "recipient".to_string(),
         Value::String(if !guest_phone.is_empty() {
@@ -325,7 +355,10 @@ async fn guest_send_message(
 
     let mut payload_map = Map::new();
     payload_map.insert("body".to_string(), Value::String(body.to_string()));
-    payload_map.insert("direction".to_string(), Value::String("inbound".to_string()));
+    payload_map.insert(
+        "direction".to_string(),
+        Value::String("inbound".to_string()),
+    );
     payload_map.insert("sender_name".to_string(), Value::String(guest_name));
     payload_map.insert("guest_id".to_string(), Value::String(guest_id));
     payload_map.insert("reservation_id".to_string(), Value::String(reservation_id));

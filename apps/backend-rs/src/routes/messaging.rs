@@ -27,10 +27,7 @@ use crate::{
 
 pub fn router() -> axum::Router<AppState> {
     axum::Router::new()
-        .route(
-            "/message-logs",
-            axum::routing::get(list_message_logs),
-        )
+        .route("/message-logs", axum::routing::get(list_message_logs))
         .route(
             "/message-templates",
             axum::routing::get(list_templates).post(create_template),
@@ -52,10 +49,7 @@ pub fn router() -> axum::Router<AppState> {
             "/webhooks/whatsapp",
             axum::routing::post(whatsapp_webhook).get(whatsapp_webhook_verify),
         )
-        .route(
-            "/internal/sync-ical",
-            axum::routing::post(sync_ical),
-        )
+        .route("/internal/sync-ical", axum::routing::post(sync_ical))
         .route(
             "/internal/process-sequences",
             axum::routing::post(process_sequences_endpoint),
@@ -201,7 +195,10 @@ async fn send_message(
 
     let mut log = remove_nulls(serialize_to_map(&payload));
     log.insert("status".to_string(), Value::String("queued".to_string()));
-    log.insert("direction".to_string(), Value::String("outbound".to_string()));
+    log.insert(
+        "direction".to_string(),
+        Value::String("outbound".to_string()),
+    );
     if !log.contains_key("scheduled_at") {
         log.insert(
             "scheduled_at".to_string(),
@@ -319,19 +316,11 @@ async fn run_collection_cycle(
         .filter(|s| !s.is_empty())
         .map(ToOwned::to_owned);
 
-    let collection_result = run_daily_collection_cycle(
-        pool,
-        org_id.as_deref(),
-        &state.config.app_public_url,
-    )
-    .await;
+    let collection_result =
+        run_daily_collection_cycle(pool, org_id.as_deref(), &state.config.app_public_url).await;
 
-    let renewal_result = run_lease_renewal_scan(
-        pool,
-        org_id.as_deref(),
-        &state.config.app_public_url,
-    )
-    .await;
+    let renewal_result =
+        run_lease_renewal_scan(pool, org_id.as_deref(), &state.config.app_public_url).await;
 
     Ok(Json(json!({
         "collections": serde_json::to_value(&collection_result).unwrap_or_default(),
@@ -344,10 +333,7 @@ async fn run_collection_cycle(
 }
 
 /// Internal cron-compatible endpoint that syncs all iCal integrations.
-async fn sync_ical(
-    State(state): State<AppState>,
-    headers: HeaderMap,
-) -> AppResult<Json<Value>> {
+async fn sync_ical(State(state): State<AppState>, headers: HeaderMap) -> AppResult<Json<Value>> {
     let api_key = headers
         .get("x-api-key")
         .and_then(|v| v.to_str().ok())
@@ -418,18 +404,12 @@ async fn whatsapp_webhook(
                         .and_then(Value::as_array)
                     {
                         for msg in messages {
-                            let sender_phone = msg
-                                .get("from")
-                                .and_then(Value::as_str)
-                                .unwrap_or_default();
-                            let wa_msg_id = msg
-                                .get("id")
-                                .and_then(Value::as_str)
-                                .unwrap_or_default();
-                            let msg_type = msg
-                                .get("type")
-                                .and_then(Value::as_str)
-                                .unwrap_or("text");
+                            let sender_phone =
+                                msg.get("from").and_then(Value::as_str).unwrap_or_default();
+                            let wa_msg_id =
+                                msg.get("id").and_then(Value::as_str).unwrap_or_default();
+                            let msg_type =
+                                msg.get("type").and_then(Value::as_str).unwrap_or("text");
 
                             if sender_phone.is_empty() {
                                 continue;
@@ -604,10 +584,7 @@ async fn process_sequences_endpoint(
 async fn match_phone_to_org(pool: &sqlx::PgPool, phone: &str) -> Option<String> {
     // Check guests first
     let mut filters = serde_json::Map::new();
-    filters.insert(
-        "phone_e164".to_string(),
-        Value::String(phone.to_string()),
-    );
+    filters.insert("phone_e164".to_string(), Value::String(phone.to_string()));
     if let Ok(guests) = list_rows(pool, "guests", Some(&filters), 1, 0, "created_at", false).await {
         if let Some(guest) = guests.first() {
             let org_id = value_str(guest, "organization_id");
@@ -623,7 +600,17 @@ async fn match_phone_to_org(pool: &sqlx::PgPool, phone: &str) -> Option<String> 
         "tenant_phone_e164".to_string(),
         Value::String(phone.to_string()),
     );
-    if let Ok(leases) = list_rows(pool, "leases", Some(&lease_filters), 1, 0, "created_at", false).await {
+    if let Ok(leases) = list_rows(
+        pool,
+        "leases",
+        Some(&lease_filters),
+        1,
+        0,
+        "created_at",
+        false,
+    )
+    .await
+    {
         if let Some(lease) = leases.first() {
             let org_id = value_str(lease, "organization_id");
             if !org_id.is_empty() {

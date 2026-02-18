@@ -18,9 +18,17 @@ pub async fn check_plan_limit(
         Value::String(org_id.to_string()),
     );
 
-    let subs = list_rows(pool, "org_subscriptions", Some(&org_filter), 1, 0, "created_at", false)
-        .await
-        .unwrap_or_default();
+    let subs = list_rows(
+        pool,
+        "org_subscriptions",
+        Some(&org_filter),
+        1,
+        0,
+        "created_at",
+        false,
+    )
+    .await
+    .unwrap_or_default();
 
     let sub = match subs.into_iter().next() {
         Some(s) => s,
@@ -47,7 +55,12 @@ pub async fn check_plan_limit(
     let (limit_field, table, label_en, label_es) = match resource {
         PlanResource::Property => ("max_properties", "properties", "properties", "propiedades"),
         PlanResource::Unit => ("max_units", "units", "units", "unidades"),
-        PlanResource::User => ("max_users", "organization_members", "team members", "miembros del equipo"),
+        PlanResource::User => (
+            "max_users",
+            "organization_members",
+            "team members",
+            "miembros del equipo",
+        ),
     };
 
     let max = plan
@@ -61,9 +74,17 @@ pub async fn check_plan_limit(
         return Ok(());
     }
 
-    let current = list_rows(pool, table, Some(&org_filter), max as i64 + 1, 0, "id", true)
-        .await
-        .unwrap_or_default();
+    let current = list_rows(
+        pool,
+        table,
+        Some(&org_filter),
+        max as i64 + 1,
+        0,
+        "id",
+        true,
+    )
+    .await
+    .unwrap_or_default();
 
     if current.len() as i64 >= max {
         let plan_name = val_str(&plan, "name");

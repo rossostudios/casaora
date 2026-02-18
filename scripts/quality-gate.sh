@@ -18,6 +18,18 @@ echo "==> Admin checks"
   fi
 )
 
+if [[ -d "${ROOT_DIR}/apps/web" ]]; then
+  echo "==> Web site checks"
+  (
+    cd "${ROOT_DIR}/apps/web"
+    npm run lint
+    npm run typecheck
+    if [[ "${MODE}" == "full" ]]; then
+      npm run build
+    fi
+  )
+fi
+
 if [[ -d "${ROOT_DIR}/apps/backend-rs" ]]; then
   echo "==> Rust backend checks"
   (

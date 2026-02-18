@@ -375,18 +375,12 @@ async fn send_sms(
         .filter(|s| !s.is_empty())
         .ok_or_else(|| "TWILIO_PHONE_NUMBER not configured".to_string())?;
 
-    let url = format!(
-        "https://api.twilio.com/2010-04-01/Accounts/{account_sid}/Messages.json"
-    );
+    let url = format!("https://api.twilio.com/2010-04-01/Accounts/{account_sid}/Messages.json");
 
     let response = http_client
         .post(&url)
         .basic_auth(account_sid, Some(auth_token))
-        .form(&[
-            ("To", recipient),
-            ("From", from_number),
-            ("Body", body),
-        ])
+        .form(&[("To", recipient), ("From", from_number), ("Body", body)])
         .send()
         .await
         .map_err(|e| {
@@ -423,14 +417,20 @@ pub async fn create_inbound_message(
 ) -> Result<Value, String> {
     let mut msg = Map::new();
     if let Some(oid) = org_id {
-        msg.insert("organization_id".to_string(), Value::String(oid.to_string()));
+        msg.insert(
+            "organization_id".to_string(),
+            Value::String(oid.to_string()),
+        );
     }
     msg.insert("channel".to_string(), Value::String("whatsapp".to_string()));
     msg.insert(
         "recipient".to_string(),
         Value::String(sender_phone.to_string()),
     );
-    msg.insert("direction".to_string(), Value::String("inbound".to_string()));
+    msg.insert(
+        "direction".to_string(),
+        Value::String("inbound".to_string()),
+    );
     msg.insert("status".to_string(), Value::String("delivered".to_string()));
     msg.insert(
         "sent_at".to_string(),

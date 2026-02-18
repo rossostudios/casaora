@@ -423,14 +423,10 @@ async fn list_expense_rows(pool: &sqlx::PgPool, query: &ExpensesQuery) -> AppRes
     builder.push(" ORDER BY expense_date DESC LIMIT ");
     builder.push_bind(clamp_limit_in_range(query.limit, 1, 2000));
 
-    let rows = builder
-        .build()
-        .fetch_all(pool)
-        .await
-        .map_err(|error| {
-            tracing::error!(error = %error, "Database query failed");
-            AppError::Dependency("External service request failed.".to_string())
-        })?;
+    let rows = builder.build().fetch_all(pool).await.map_err(|error| {
+        tracing::error!(error = %error, "Database query failed");
+        AppError::Dependency("External service request failed.".to_string())
+    })?;
 
     Ok(rows
         .into_iter()

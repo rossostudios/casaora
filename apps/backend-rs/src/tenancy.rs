@@ -18,6 +18,18 @@ pub async fn get_org_membership(
     user_id: &str,
     org_id: &str,
 ) -> Result<Option<Value>, AppError> {
+    if let Some(cached) = state.org_membership_cache.get(user_id, org_id).await {
+        return Ok(cached);
+    }
+
+    // Dedup concurrent membership lookups for the same user/org tuple.
+    let lock = state.org_membership_cache.key_lock(user_id, org_id).await;
+    let _guard = lock.lock().await;
+
+    if let Some(cached) = state.org_membership_cache.get(user_id, org_id).await {
+        return Ok(cached);
+    }
+
     let pool = db_pool(state)?;
     let row = sqlx::query(
         "SELECT row_to_json(t) AS row
@@ -31,7 +43,13 @@ pub async fn get_org_membership(
     .await
     .map_err(|error| AppError::Dependency(format!("Supabase request failed: {error}")))?;
 
-    Ok(row.and_then(|value| value.try_get::<Option<Value>, _>("row").ok().flatten()))
+    let membership = row.and_then(|value| value.try_get::<Option<Value>, _>("row").ok().flatten());
+    state
+        .org_membership_cache
+        .put(user_id, org_id, membership.clone())
+        .await;
+
+    Ok(membership)
 }
 
 pub async fn assert_org_member(
@@ -177,6 +195,7 @@ pub async fn ensure_org_membership(
     .execute(pool)
     .await
     .map_err(|error| AppError::Dependency(format!("Supabase request failed: {error}")))?;
+    state.org_membership_cache.invalidate(user_id, org_id).await;
     Ok(())
 }
 

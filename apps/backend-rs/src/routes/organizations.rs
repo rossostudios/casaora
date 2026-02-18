@@ -11,12 +11,14 @@ use sqlx::{Postgres, QueryBuilder, Row};
 use crate::{
     auth::require_supabase_user,
     error::{AppError, AppResult},
-    repository::table_service::{create_row, create_row_tx, delete_row, get_row, list_rows, update_row},
+    repository::table_service::{
+        create_row, create_row_tx, delete_row, get_row, list_rows, update_row,
+    },
     schemas::{
-        clamp_limit, remove_nulls, serialize_to_map, validate_input,
-        AcceptOrganizationInviteInput, CreateOrganizationInput, CreateOrganizationInviteInput,
-        CreateOrganizationMemberInput, ListOrganizationsQuery, OrgInvitePath, OrgMemberPath,
-        OrgPath, UpdateOrganizationInput, UpdateOrganizationMemberInput,
+        clamp_limit, remove_nulls, serialize_to_map, validate_input, AcceptOrganizationInviteInput,
+        CreateOrganizationInput, CreateOrganizationInviteInput, CreateOrganizationMemberInput,
+        ListOrganizationsQuery, OrgInvitePath, OrgMemberPath, OrgPath, UpdateOrganizationInput,
+        UpdateOrganizationMemberInput,
     },
     services::{
         audit::write_audit_log,
@@ -99,7 +101,10 @@ async fn create_organization(
 
     // Use a single transaction so the org and membership are created atomically.
     // If either fails, both roll back — no orphaned orgs without memberships.
-    let mut tx = pool.begin().await.map_err(|e| AppError::Dependency(format!("txn begin: {e}")))?;
+    let mut tx = pool
+        .begin()
+        .await
+        .map_err(|e| AppError::Dependency(format!("txn begin: {e}")))?;
 
     let org = create_row_tx(&mut *tx, "organizations", &record).await?;
     let org_id = value_str(&org, "id");
@@ -118,7 +123,9 @@ async fn create_organization(
     .await
     .map_err(|e| AppError::Dependency(format!("membership insert: {e}")))?;
 
-    tx.commit().await.map_err(|e| AppError::Dependency(format!("txn commit: {e}")))?;
+    tx.commit()
+        .await
+        .map_err(|e| AppError::Dependency(format!("txn commit: {e}")))?;
 
     write_audit_log(
         state.db_pool.as_ref(),
@@ -274,9 +281,9 @@ async fn create_invite(
     .fetch_optional(pool)
     .await
     .map_err(|error| {
-            tracing::error!(error = %error, "Database query failed");
-            AppError::Dependency("External service request failed.".to_string())
-        })?;
+        tracing::error!(error = %error, "Database query failed");
+        AppError::Dependency("External service request failed.".to_string())
+    })?;
     if pending.is_some() {
         return Err(AppError::Conflict(
             "An invite is already pending for this email.".to_string(),
@@ -381,9 +388,9 @@ async fn accept_invite(
     .fetch_optional(pool)
     .await
     .map_err(|error| {
-            tracing::error!(error = %error, "Database query failed");
-            AppError::Dependency("External service request failed.".to_string())
-        })?;
+        tracing::error!(error = %error, "Database query failed");
+        AppError::Dependency("External service request failed.".to_string())
+    })?;
     let Some(invite) =
         invite_row.and_then(|row| row.try_get::<Option<Value>, _>("row").ok().flatten())
     else {
@@ -475,16 +482,14 @@ async fn list_members(
     assert_org_member(&state, &user.id, &path.org_id).await?;
     let pool = db_pool(&state)?;
 
-    let rows = sqlx::query(
-        "SELECT list_org_members_with_users($1::uuid) AS row",
-    )
-    .bind(&path.org_id)
-    .fetch_all(pool)
-    .await
-    .map_err(|error| {
-        tracing::error!(error = %error, "Database query failed");
-        AppError::Dependency("External service request failed.".to_string())
-    })?;
+    let rows = sqlx::query("SELECT list_org_members_with_users($1::uuid) AS row")
+        .bind(&path.org_id)
+        .fetch_all(pool)
+        .await
+        .map_err(|error| {
+            tracing::error!(error = %error, "Database query failed");
+            AppError::Dependency("External service request failed.".to_string())
+        })?;
 
     let data = rows
         .into_iter()

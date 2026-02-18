@@ -347,9 +347,9 @@ async fn set_default_template(
     .execute(pool)
     .await
     .map_err(|error| {
-            tracing::error!(error = %error, "Database query failed");
-            AppError::Dependency("External service request failed.".to_string())
-        })?;
+        tracing::error!(error = %error, "Database query failed");
+        AppError::Dependency("External service request failed.".to_string())
+    })?;
     Ok(())
 }
 

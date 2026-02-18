@@ -18,7 +18,10 @@ use crate::{
         DepositRefundInput, ReservationPath, ReservationStatusInput, ReservationsQuery,
         UpdateReservationInput,
     },
-    services::{audit::write_audit_log, enrichment::enrich_reservations, sequences::enroll_in_sequences, workflows::fire_trigger},
+    services::{
+        audit::write_audit_log, enrichment::enrich_reservations, sequences::enroll_in_sequences,
+        workflows::fire_trigger,
+    },
     state::AppState,
     tenancy::{assert_org_member, assert_org_role},
 };
@@ -364,7 +367,11 @@ async fn transition_status(
         }
 
         // Look up guest phone for sequences
-        let guest_id_str = ctx.get("guest_id").and_then(Value::as_str).unwrap_or_default().to_string();
+        let guest_id_str = ctx
+            .get("guest_id")
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .to_string();
         if !guest_id_str.is_empty() {
             if let Ok(guest) = get_row(pool, "guests", &guest_id_str, "id").await {
                 let phone = value_str(&guest, "phone_e164");
@@ -969,7 +976,10 @@ async fn send_guest_portal_link(
     let raw_token = uuid::Uuid::new_v4().to_string();
     let token_hash = {
         let digest = sha1::Sha1::digest(raw_token.as_bytes());
-        digest.iter().map(|b| format!("{b:02x}")).collect::<String>()
+        digest
+            .iter()
+            .map(|b| format!("{b:02x}"))
+            .collect::<String>()
     };
 
     let mut record = Map::new();

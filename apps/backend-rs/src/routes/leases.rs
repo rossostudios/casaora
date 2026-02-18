@@ -15,7 +15,10 @@ use crate::{
         clamp_limit_in_range, remove_nulls, serialize_to_map, CreateLeaseInput, LeasePath,
         LeasesQuery, UpdateLeaseInput,
     },
-    services::{audit::write_audit_log, lease_schedule::ensure_monthly_lease_schedule, sequences::enroll_in_sequences, workflows::fire_trigger},
+    services::{
+        audit::write_audit_log, lease_schedule::ensure_monthly_lease_schedule,
+        sequences::enroll_in_sequences, workflows::fire_trigger,
+    },
     state::AppState,
     tenancy::{assert_org_member, assert_org_role},
 };
@@ -465,60 +468,89 @@ async fn enrich_leases(pool: &sqlx::PgPool, rows: Vec<Value>) -> AppResult<Vec<V
     let unit_ids = extract_ids(&rows, "unit_id");
     let lease_ids = extract_ids(&rows, "id");
 
-    let mut property_name: std::collections::HashMap<String, String> =
-        std::collections::HashMap::new();
-    if !property_ids.is_empty() {
-        let properties = list_rows(
-            pool,
-            "properties",
-            Some(&json_map(&[(
-                "id",
-                Value::Array(property_ids.iter().cloned().map(Value::String).collect()),
-            )])),
-            std::cmp::max(200, property_ids.len() as i64),
-            0,
-            "created_at",
-            false,
-        )
-        .await?;
-        property_name = map_by_id_field(&properties, "name");
-    }
+    let property_ids_for_query = property_ids.clone();
+    let unit_ids_for_query = unit_ids.clone();
+    let lease_ids_for_query = lease_ids.clone();
+    let (properties, units, collections) = tokio::try_join!(
+        async move {
+            if property_ids_for_query.is_empty() {
+                Ok(Vec::new())
+            } else {
+                list_rows(
+                    pool,
+                    "properties",
+                    Some(&json_map(&[(
+                        "id",
+                        Value::Array(
+                            property_ids_for_query
+                                .iter()
+                                .cloned()
+                                .map(Value::String)
+                                .collect(),
+                        ),
+                    )])),
+                    std::cmp::max(200, property_ids_for_query.len() as i64),
+                    0,
+                    "created_at",
+                    false,
+                )
+                .await
+            }
+        },
+        async move {
+            if unit_ids_for_query.is_empty() {
+                Ok(Vec::new())
+            } else {
+                list_rows(
+                    pool,
+                    "units",
+                    Some(&json_map(&[(
+                        "id",
+                        Value::Array(
+                            unit_ids_for_query
+                                .iter()
+                                .cloned()
+                                .map(Value::String)
+                                .collect(),
+                        ),
+                    )])),
+                    std::cmp::max(200, unit_ids_for_query.len() as i64),
+                    0,
+                    "created_at",
+                    false,
+                )
+                .await
+            }
+        },
+        async move {
+            if lease_ids_for_query.is_empty() {
+                Ok(Vec::new())
+            } else {
+                list_rows(
+                    pool,
+                    "collection_records",
+                    Some(&json_map(&[(
+                        "lease_id",
+                        Value::Array(
+                            lease_ids_for_query
+                                .iter()
+                                .cloned()
+                                .map(Value::String)
+                                .collect(),
+                        ),
+                    )])),
+                    std::cmp::max(300, (lease_ids_for_query.len() as i64) * 12),
+                    0,
+                    "created_at",
+                    false,
+                )
+                .await
+            }
+        }
+    )?;
 
-    let mut unit_name: std::collections::HashMap<String, String> = std::collections::HashMap::new();
-    if !unit_ids.is_empty() {
-        let units = list_rows(
-            pool,
-            "units",
-            Some(&json_map(&[(
-                "id",
-                Value::Array(unit_ids.iter().cloned().map(Value::String).collect()),
-            )])),
-            std::cmp::max(200, unit_ids.len() as i64),
-            0,
-            "created_at",
-            false,
-        )
-        .await?;
-        unit_name = map_by_id_field(&units, "name");
-    }
-
-    let collections = if lease_ids.is_empty() {
-        Vec::new()
-    } else {
-        list_rows(
-            pool,
-            "collection_records",
-            Some(&json_map(&[(
-                "lease_id",
-                Value::Array(lease_ids.iter().cloned().map(Value::String).collect()),
-            )])),
-            std::cmp::max(300, (lease_ids.len() as i64) * 12),
-            0,
-            "created_at",
-            false,
-        )
-        .await?
-    };
+    let property_name = map_by_id_field(&properties, "name");
+    let unit_name = map_by_id_field(&units, "name");
 
     let mut collection_stats: std::collections::HashMap<String, LeaseCollectionStats> =
         std::collections::HashMap::new();
@@ -704,8 +736,8 @@ async fn send_renewal_offer(
     let org_id = value_str(&lease, "organization_id");
     assert_org_role(&state, &user_id, &org_id, &["owner_admin"]).await?;
 
-    let app_public_url = std::env::var("APP_PUBLIC_URL")
-        .unwrap_or_else(|_| "http://localhost:3000".to_string());
+    let app_public_url =
+        std::env::var("APP_PUBLIC_URL").unwrap_or_else(|_| "http://localhost:3000".to_string());
 
     let updated = crate::services::lease_renewal::send_renewal_offer(
         pool,
@@ -816,7 +848,10 @@ async fn accept_renewal(
     // Create the new renewal lease
     let mut new_lease = Map::new();
     new_lease.insert("organization_id".to_string(), Value::String(org_id.clone()));
-    new_lease.insert("parent_lease_id".to_string(), Value::String(path.lease_id.clone()));
+    new_lease.insert(
+        "parent_lease_id".to_string(),
+        Value::String(path.lease_id.clone()),
+    );
     new_lease.insert("is_renewal".to_string(), Value::Bool(true));
 
     // Copy over fields from original
@@ -840,11 +875,11 @@ async fn accept_renewal(
         }
     }
 
+    new_lease.insert("monthly_rent".to_string(), json!(offered_rent));
     new_lease.insert(
-        "monthly_rent".to_string(),
-        json!(offered_rent),
+        "lease_status".to_string(),
+        Value::String("active".to_string()),
     );
-    new_lease.insert("lease_status".to_string(), Value::String("active".to_string()));
     new_lease.insert("starts_on".to_string(), Value::String(new_starts_on));
     new_lease.insert("ends_on".to_string(), Value::String(new_ends_on));
     if let Some(notes) = &payload.notes {
@@ -879,7 +914,11 @@ async fn accept_renewal(
             &new_lease_id,
             &starts,
             None,
-            if ends.is_empty() { None } else { Some(ends.as_str()) },
+            if ends.is_empty() {
+                None
+            } else {
+                Some(ends.as_str())
+            },
             Some(duration_months),
             rent,
             &cur,

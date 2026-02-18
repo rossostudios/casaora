@@ -11,9 +11,8 @@ use crate::{
     error::{AppError, AppResult},
     repository::table_service::{create_row, delete_row, get_row, list_rows, update_row},
     schemas::{
-        clamp_limit, remove_nulls, serialize_to_map, ContractTemplatePath,
-        ContractTemplatesQuery, CreateContractTemplateInput, RenderContractInput,
-        UpdateContractTemplateInput,
+        clamp_limit, remove_nulls, serialize_to_map, ContractTemplatePath, ContractTemplatesQuery,
+        CreateContractTemplateInput, RenderContractInput, UpdateContractTemplateInput,
     },
     services::audit::write_audit_log,
     state::AppState,
@@ -39,9 +38,10 @@ pub fn router() -> axum::Router<AppState> {
 }
 
 fn db_pool(state: &AppState) -> AppResult<&sqlx::PgPool> {
-    state.db_pool.as_ref().ok_or_else(|| {
-        AppError::Dependency("Database is not configured.".to_string())
-    })
+    state
+        .db_pool
+        .as_ref()
+        .ok_or_else(|| AppError::Dependency("Database is not configured.".to_string()))
 }
 
 async fn list_templates(

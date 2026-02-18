@@ -1487,8 +1487,18 @@ async fn seed_demo(
         ("Alquiler mensual", "rent", "100", true),
         ("Comisión de servicio (10%)", "service_fee", "10", true),
         ("IVA (10% sobre alquiler)", "tax", "10", true),
-        ("Depósito de garantía (2 meses)", "security_deposit", "200", false),
-        ("Garantía inmobiliaria (1 mes)", "guarantee_fee", "100", false),
+        (
+            "Depósito de garantía (2 meses)",
+            "security_deposit",
+            "200",
+            false,
+        ),
+        (
+            "Garantía inmobiliaria (1 mes)",
+            "guarantee_fee",
+            "100",
+            false,
+        ),
     ];
 
     for (i, (label, fee_type, pct, is_recurring)) in fee_lines.iter().enumerate() {

@@ -44,10 +44,7 @@ pub fn router() -> axum::Router<AppState> {
             "/public/payment/{reference_code}/checkout",
             axum::routing::post(create_stripe_checkout),
         )
-        .route(
-            "/webhooks/stripe",
-            axum::routing::post(stripe_webhook),
-        )
+        .route("/webhooks/stripe", axum::routing::post(stripe_webhook))
 }
 
 async fn create_payment_link(
@@ -349,7 +346,10 @@ async fn create_stripe_checkout(
     let amount = record
         .as_object()
         .and_then(|obj| obj.get("amount"))
-        .and_then(|v| v.as_f64().or_else(|| v.as_str().and_then(|s| s.parse::<f64>().ok())))
+        .and_then(|v| {
+            v.as_f64()
+                .or_else(|| v.as_str().and_then(|s| s.parse::<f64>().ok()))
+        })
         .unwrap_or(0.0);
     let currency = value_str(&record, "currency");
     let tenant_name = value_str(&record, "tenant_name");
@@ -432,19 +432,20 @@ async fn stripe_webhook(
 
                 if !reference_code.is_empty() {
                     // Find the payment instruction
-                    if let Ok(instruction) =
-                        get_row(pool, "payment_instructions", reference_code, "reference_code")
-                            .await
+                    if let Ok(instruction) = get_row(
+                        pool,
+                        "payment_instructions",
+                        reference_code,
+                        "reference_code",
+                    )
+                    .await
                     {
                         let instruction_id = value_str(&instruction, "id");
                         let collection_id = value_str(&instruction, "collection_record_id");
 
                         // Mark payment_instructions as paid
                         let mut pi_patch = serde_json::Map::new();
-                        pi_patch.insert(
-                            "status".to_string(),
-                            Value::String("paid".to_string()),
-                        );
+                        pi_patch.insert("status".to_string(), Value::String("paid".to_string()));
                         let _ = update_row(
                             pool,
                             "payment_instructions",
@@ -457,10 +458,8 @@ async fn stripe_webhook(
                         // Mark collection_record as paid
                         if !collection_id.is_empty() {
                             let mut cr_patch = serde_json::Map::new();
-                            cr_patch.insert(
-                                "status".to_string(),
-                                Value::String("paid".to_string()),
-                            );
+                            cr_patch
+                                .insert("status".to_string(), Value::String("paid".to_string()));
                             cr_patch.insert(
                                 "paid_at".to_string(),
                                 Value::String(Utc::now().to_rfc3339()),
@@ -503,22 +502,13 @@ async fn stripe_webhook(
                                 "✅ Pago recibido\n\nTu pago de {amount_display} (ref: {reference_code}) ha sido procesado exitosamente.\n\n— Casaora"
                             );
                             let mut msg = serde_json::Map::new();
-                            msg.insert(
-                                "organization_id".to_string(),
-                                Value::String(org_id),
-                            );
+                            msg.insert("organization_id".to_string(), Value::String(org_id));
                             msg.insert(
                                 "channel".to_string(),
                                 Value::String("whatsapp".to_string()),
                             );
-                            msg.insert(
-                                "recipient".to_string(),
-                                Value::String(tenant_phone),
-                            );
-                            msg.insert(
-                                "status".to_string(),
-                                Value::String("queued".to_string()),
-                            );
+                            msg.insert("recipient".to_string(), Value::String(tenant_phone));
+                            msg.insert("status".to_string(), Value::String("queued".to_string()));
                             msg.insert(
                                 "direction".to_string(),
                                 Value::String("outbound".to_string()),

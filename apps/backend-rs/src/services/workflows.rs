@@ -251,7 +251,10 @@ async fn execute_send_whatsapp(
         Value::String(recipient.to_string()),
     );
     msg.insert("status".to_string(), Value::String("queued".to_string()));
-    msg.insert("direction".to_string(), Value::String("outbound".to_string()));
+    msg.insert(
+        "direction".to_string(),
+        Value::String("outbound".to_string()),
+    );
 
     let mut payload = Map::new();
     payload.insert("body".to_string(), Value::String(body));

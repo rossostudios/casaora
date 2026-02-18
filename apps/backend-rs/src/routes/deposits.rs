@@ -68,14 +68,21 @@ async fn get_deposit_status(
 
     let reservation = get_row(pool, "reservations", &path.reservation_id, "id").await?;
     let org_id = value_str(&reservation, "organization_id");
-    assert_org_role(&state, &user_id, &org_id, &["owner_admin", "operator", "accountant"]).await?;
+    assert_org_role(
+        &state,
+        &user_id,
+        &org_id,
+        &["owner_admin", "operator", "accountant"],
+    )
+    .await?;
 
     let events = crate::repository::table_service::list_rows(
         pool,
         "escrow_events",
-        Some(&json_map(&[
-            ("reservation_id", Value::String(path.reservation_id.clone())),
-        ])),
+        Some(&json_map(&[(
+            "reservation_id",
+            Value::String(path.reservation_id.clone()),
+        )])),
         100,
         0,
         "created_at",
@@ -112,9 +119,15 @@ async fn collect_deposit(
     }
 
     let mut patch = Map::new();
-    patch.insert("deposit_status".to_string(), Value::String("collected".to_string()));
+    patch.insert(
+        "deposit_status".to_string(),
+        Value::String("collected".to_string()),
+    );
     patch.insert("deposit_amount".to_string(), json!(payload.amount));
-    patch.insert("deposit_currency".to_string(), Value::String(payload.currency.clone()));
+    patch.insert(
+        "deposit_currency".to_string(),
+        Value::String(payload.currency.clone()),
+    );
 
     let updated = update_row(pool, "reservations", &payload.reservation_id, &patch, "id").await?;
 
@@ -168,12 +181,13 @@ async fn hold_deposit(
     }
 
     let mut patch = Map::new();
-    patch.insert("deposit_status".to_string(), Value::String("held".to_string()));
+    patch.insert(
+        "deposit_status".to_string(),
+        Value::String("held".to_string()),
+    );
     let updated = update_row(pool, "reservations", &payload.reservation_id, &patch, "id").await?;
 
-    let amount = reservation
-        .get("deposit_amount")
-        .and_then(Value::as_f64);
+    let amount = reservation.get("deposit_amount").and_then(Value::as_f64);
     let currency = value_str(&reservation, "deposit_currency");
 
     let event = insert_escrow_event(
@@ -182,7 +196,11 @@ async fn hold_deposit(
         &payload.reservation_id,
         "held",
         amount,
-        if currency.is_empty() { "PYG" } else { &currency },
+        if currency.is_empty() {
+            "PYG"
+        } else {
+            &currency
+        },
         payload.note.as_deref(),
         &user_id,
     )
@@ -226,7 +244,10 @@ async fn release_deposit(
     }
 
     let mut patch = Map::new();
-    patch.insert("deposit_status".to_string(), Value::String("released".to_string()));
+    patch.insert(
+        "deposit_status".to_string(),
+        Value::String("released".to_string()),
+    );
     let updated = update_row(pool, "reservations", &path.reservation_id, &patch, "id").await?;
 
     let amount = reservation.get("deposit_amount").and_then(Value::as_f64);
@@ -238,7 +259,11 @@ async fn release_deposit(
         &path.reservation_id,
         "released",
         amount,
-        if currency.is_empty() { "PYG" } else { &currency },
+        if currency.is_empty() {
+            "PYG"
+        } else {
+            &currency
+        },
         Some("Manual release by operator."),
         &user_id,
     )
@@ -282,7 +307,10 @@ async fn forfeit_deposit(
     }
 
     let mut patch = Map::new();
-    patch.insert("deposit_status".to_string(), Value::String("forfeited".to_string()));
+    patch.insert(
+        "deposit_status".to_string(),
+        Value::String("forfeited".to_string()),
+    );
     let updated = update_row(pool, "reservations", &path.reservation_id, &patch, "id").await?;
 
     let amount = reservation.get("deposit_amount").and_then(Value::as_f64);
@@ -294,7 +322,11 @@ async fn forfeit_deposit(
         &path.reservation_id,
         "forfeited",
         amount,
-        if currency.is_empty() { "PYG" } else { &currency },
+        if currency.is_empty() {
+            "PYG"
+        } else {
+            &currency
+        },
         Some("Deposit forfeited."),
         &user_id,
     )
@@ -330,9 +362,18 @@ async fn insert_escrow_event(
     performed_by: &str,
 ) -> AppResult<Value> {
     let mut payload = Map::new();
-    payload.insert("organization_id".to_string(), Value::String(org_id.to_string()));
-    payload.insert("reservation_id".to_string(), Value::String(reservation_id.to_string()));
-    payload.insert("event_type".to_string(), Value::String(event_type.to_string()));
+    payload.insert(
+        "organization_id".to_string(),
+        Value::String(org_id.to_string()),
+    );
+    payload.insert(
+        "reservation_id".to_string(),
+        Value::String(reservation_id.to_string()),
+    );
+    payload.insert(
+        "event_type".to_string(),
+        Value::String(event_type.to_string()),
+    );
     if let Some(amount) = amount {
         payload.insert("amount".to_string(), json!(amount));
     }
@@ -340,15 +381,15 @@ async fn insert_escrow_event(
     if let Some(note) = note {
         payload.insert("note".to_string(), Value::String(note.to_string()));
     }
-    payload.insert("performed_by".to_string(), Value::String(performed_by.to_string()));
+    payload.insert(
+        "performed_by".to_string(),
+        Value::String(performed_by.to_string()),
+    );
 
     create_row(pool, "escrow_events", &payload).await
 }
 
-pub async fn auto_release_deposit_on_checkout(
-    pool: &sqlx::PgPool,
-    reservation: &Value,
-) {
+pub async fn auto_release_deposit_on_checkout(pool: &sqlx::PgPool, reservation: &Value) {
     let deposit_status = reservation
         .as_object()
         .and_then(|obj| obj.get("deposit_status"))
@@ -375,7 +416,10 @@ pub async fn auto_release_deposit_on_checkout(
     }
 
     let mut patch = Map::new();
-    patch.insert("deposit_status".to_string(), Value::String("released".to_string()));
+    patch.insert(
+        "deposit_status".to_string(),
+        Value::String("released".to_string()),
+    );
     let _ = update_row(pool, "reservations", reservation_id, &patch, "id").await;
 
     let amount = reservation
@@ -389,15 +433,30 @@ pub async fn auto_release_deposit_on_checkout(
         .unwrap_or("PYG");
 
     let mut event = Map::new();
-    event.insert("organization_id".to_string(), Value::String(org_id.to_string()));
-    event.insert("reservation_id".to_string(), Value::String(reservation_id.to_string()));
-    event.insert("event_type".to_string(), Value::String("auto_released".to_string()));
+    event.insert(
+        "organization_id".to_string(),
+        Value::String(org_id.to_string()),
+    );
+    event.insert(
+        "reservation_id".to_string(),
+        Value::String(reservation_id.to_string()),
+    );
+    event.insert(
+        "event_type".to_string(),
+        Value::String("auto_released".to_string()),
+    );
     if let Some(amount) = amount {
         event.insert("amount".to_string(), json!(amount));
     }
     event.insert("currency".to_string(), Value::String(currency.to_string()));
-    event.insert("note".to_string(), Value::String("Auto-released on checkout.".to_string()));
-    event.insert("created_at".to_string(), Value::String(Utc::now().to_rfc3339()));
+    event.insert(
+        "note".to_string(),
+        Value::String("Auto-released on checkout.".to_string()),
+    );
+    event.insert(
+        "created_at".to_string(),
+        Value::String(Utc::now().to_rfc3339()),
+    );
     let _ = create_row(pool, "escrow_events", &event).await;
 }
 

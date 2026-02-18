@@ -545,13 +545,19 @@ async fn bulk_import_properties(
         if let Some(lat) = row.latitude {
             record.insert(
                 "latitude".to_string(),
-                Value::Number(serde_json::Number::from_f64(lat).unwrap_or_else(|| serde_json::Number::from(0))),
+                Value::Number(
+                    serde_json::Number::from_f64(lat)
+                        .unwrap_or_else(|| serde_json::Number::from(0)),
+                ),
             );
         }
         if let Some(lng) = row.longitude {
             record.insert(
                 "longitude".to_string(),
-                Value::Number(serde_json::Number::from_f64(lng).unwrap_or_else(|| serde_json::Number::from(0))),
+                Value::Number(
+                    serde_json::Number::from_f64(lng)
+                        .unwrap_or_else(|| serde_json::Number::from(0)),
+                ),
             );
         }
 

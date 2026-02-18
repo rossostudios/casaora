@@ -85,10 +85,7 @@ async fn get_booking_page(
 
     // Get published units via integrations (marketplace listings)
     let mut unit_filters = Map::new();
-    unit_filters.insert(
-        "organization_id".to_string(),
-        Value::String(org_id.clone()),
-    );
+    unit_filters.insert("organization_id".to_string(), Value::String(org_id.clone()));
     let units = list_rows(pool, "units", Some(&unit_filters), 100, 0, "name", true)
         .await
         .unwrap_or_default();
@@ -129,10 +126,7 @@ async fn check_availability(
 
     // Get reservations in the date range
     let mut res_filters = Map::new();
-    res_filters.insert(
-        "organization_id".to_string(),
-        Value::String(org_id.clone()),
-    );
+    res_filters.insert("organization_id".to_string(), Value::String(org_id.clone()));
     if let Some(unit_id) = &query.unit_id {
         res_filters.insert("unit_id".to_string(), Value::String(unit_id.clone()));
     }
@@ -158,8 +152,10 @@ async fn check_availability(
             if !active_statuses.contains(&status) {
                 return None;
             }
-            let ci = NaiveDate::parse_from_str(obj.get("check_in_date")?.as_str()?, "%Y-%m-%d").ok()?;
-            let co = NaiveDate::parse_from_str(obj.get("check_out_date")?.as_str()?, "%Y-%m-%d").ok()?;
+            let ci =
+                NaiveDate::parse_from_str(obj.get("check_in_date")?.as_str()?, "%Y-%m-%d").ok()?;
+            let co =
+                NaiveDate::parse_from_str(obj.get("check_out_date")?.as_str()?, "%Y-%m-%d").ok()?;
 
             // Check overlap
             if co <= start || ci >= end {
@@ -175,17 +171,18 @@ async fn check_availability(
 
     // Determine which units are available for the full range
     let mut unit_filters = Map::new();
-    unit_filters.insert(
-        "organization_id".to_string(),
-        Value::String(org_id),
-    );
+    unit_filters.insert("organization_id".to_string(), Value::String(org_id));
     let all_units = list_rows(pool, "units", Some(&unit_filters), 100, 0, "name", true)
         .await
         .unwrap_or_default();
 
     let blocked_unit_ids: std::collections::HashSet<String> = blocked_ranges
         .iter()
-        .filter_map(|r| r.get("unit_id").and_then(Value::as_str).map(ToOwned::to_owned))
+        .filter_map(|r| {
+            r.get("unit_id")
+                .and_then(Value::as_str)
+                .map(ToOwned::to_owned)
+        })
         .collect();
 
     let available_units: Vec<&Value> = all_units
@@ -243,17 +240,22 @@ async fn create_booking(
 
     // Check for overlapping active reservations
     let mut res_filters = Map::new();
-    res_filters.insert(
-        "organization_id".to_string(),
-        Value::String(org_id.clone()),
-    );
+    res_filters.insert("organization_id".to_string(), Value::String(org_id.clone()));
     res_filters.insert(
         "unit_id".to_string(),
         Value::String(payload.unit_id.clone()),
     );
-    let existing = list_rows(pool, "reservations", Some(&res_filters), 500, 0, "check_in_date", true)
-        .await
-        .unwrap_or_default();
+    let existing = list_rows(
+        pool,
+        "reservations",
+        Some(&res_filters),
+        500,
+        0,
+        "check_in_date",
+        true,
+    )
+    .await
+    .unwrap_or_default();
 
     let has_overlap = existing.iter().any(|r| {
         let obj = match r.as_object() {
@@ -289,10 +291,7 @@ async fn create_booking(
 
     // Create or find guest
     let mut guest_payload = Map::new();
-    guest_payload.insert(
-        "organization_id".to_string(),
-        Value::String(org_id.clone()),
-    );
+    guest_payload.insert("organization_id".to_string(), Value::String(org_id.clone()));
     guest_payload.insert(
         "full_name".to_string(),
         Value::String(payload.guest_full_name.clone()),
@@ -319,20 +318,11 @@ async fn create_booking(
 
     // Create reservation
     let mut reservation_payload = Map::new();
-    reservation_payload.insert(
-        "organization_id".to_string(),
-        Value::String(org_id.clone()),
-    );
+    reservation_payload.insert("organization_id".to_string(), Value::String(org_id.clone()));
     if !property_id.is_empty() {
-        reservation_payload.insert(
-            "property_id".to_string(),
-            Value::String(property_id),
-        );
+        reservation_payload.insert("property_id".to_string(), Value::String(property_id));
     }
-    reservation_payload.insert(
-        "unit_id".to_string(),
-        Value::String(payload.unit_id),
-    );
+    reservation_payload.insert("unit_id".to_string(), Value::String(payload.unit_id));
     reservation_payload.insert("guest_id".to_string(), Value::String(guest_id));
     let check_in_date_str = payload.check_in_date.clone();
     reservation_payload.insert(
@@ -343,10 +333,7 @@ async fn create_booking(
         "check_out_date".to_string(),
         Value::String(payload.check_out_date),
     );
-    reservation_payload.insert(
-        "status".to_string(),
-        Value::String("pending".to_string()),
-    );
+    reservation_payload.insert("status".to_string(), Value::String("pending".to_string()));
     reservation_payload.insert(
         "source".to_string(),
         Value::String("direct_booking".to_string()),
@@ -373,7 +360,10 @@ async fn create_booking(
     let deposit_amount = org
         .as_object()
         .and_then(|o| o.get("deposit_amount"))
-        .and_then(|v| v.as_f64().or_else(|| v.as_str().and_then(|s| s.parse::<f64>().ok())))
+        .and_then(|v| {
+            v.as_f64()
+                .or_else(|| v.as_str().and_then(|s| s.parse::<f64>().ok()))
+        })
         .unwrap_or(0.0);
 
     let mut payment_reference_code: Option<String> = None;
@@ -383,18 +373,30 @@ async fn create_booking(
         // Create a collection record for the deposit
         let mut coll = Map::new();
         coll.insert("organization_id".to_string(), Value::String(org_id.clone()));
-        coll.insert("reservation_id".to_string(), Value::String(reservation_id.clone()));
+        coll.insert(
+            "reservation_id".to_string(),
+            Value::String(reservation_id.clone()),
+        );
         coll.insert("amount".to_string(), json!(deposit_amount));
-        coll.insert("currency".to_string(), Value::String(
-            org.as_object()
-                .and_then(|o| o.get("default_currency"))
-                .and_then(Value::as_str)
-                .unwrap_or("PYG")
-                .to_string(),
-        ));
+        coll.insert(
+            "currency".to_string(),
+            Value::String(
+                org.as_object()
+                    .and_then(|o| o.get("default_currency"))
+                    .and_then(Value::as_str)
+                    .unwrap_or("PYG")
+                    .to_string(),
+            ),
+        );
         coll.insert("status".to_string(), Value::String("pending".to_string()));
-        coll.insert("label".to_string(), Value::String("Booking deposit".to_string()));
-        coll.insert("due_date".to_string(), Value::String(check_in_date_str.clone()));
+        coll.insert(
+            "label".to_string(),
+            Value::String("Booking deposit".to_string()),
+        );
+        coll.insert(
+            "due_date".to_string(),
+            Value::String(check_in_date_str.clone()),
+        );
         if let Ok(coll_row) = create_row(pool, "collection_records", &coll).await {
             let coll_id = val_str(&coll_row, "id");
 
@@ -403,9 +405,15 @@ async fn create_booking(
             let mut pi = Map::new();
             pi.insert("organization_id".to_string(), Value::String(org_id.clone()));
             pi.insert("collection_record_id".to_string(), Value::String(coll_id));
-            pi.insert("reference_code".to_string(), Value::String(ref_code.clone()));
+            pi.insert(
+                "reference_code".to_string(),
+                Value::String(ref_code.clone()),
+            );
             pi.insert("amount".to_string(), json!(deposit_amount));
-            pi.insert("currency".to_string(), coll.get("currency").cloned().unwrap_or(Value::Null));
+            pi.insert(
+                "currency".to_string(),
+                coll.get("currency").cloned().unwrap_or(Value::Null),
+            );
             pi.insert("status".to_string(), Value::String("pending".to_string()));
 
             if create_row(pool, "payment_instructions", &pi).await.is_ok() {
@@ -453,9 +461,17 @@ async fn calendar_grid(
     let mut res_filters = Map::new();
     res_filters.insert("organization_id".to_string(), Value::String(org_id.clone()));
     res_filters.insert("unit_id".to_string(), Value::String(query.unit_id.clone()));
-    let reservations = list_rows(pool, "reservations", Some(&res_filters), 500, 0, "check_in_date", true)
-        .await
-        .unwrap_or_default();
+    let reservations = list_rows(
+        pool,
+        "reservations",
+        Some(&res_filters),
+        500,
+        0,
+        "check_in_date",
+        true,
+    )
+    .await
+    .unwrap_or_default();
 
     let active_statuses = ["pending", "confirmed", "checked_in"];
 
@@ -468,8 +484,10 @@ async fn calendar_grid(
             if !active_statuses.contains(&status) {
                 return None;
             }
-            let ci = NaiveDate::parse_from_str(obj.get("check_in_date")?.as_str()?, "%Y-%m-%d").ok()?;
-            let co = NaiveDate::parse_from_str(obj.get("check_out_date")?.as_str()?, "%Y-%m-%d").ok()?;
+            let ci =
+                NaiveDate::parse_from_str(obj.get("check_in_date")?.as_str()?, "%Y-%m-%d").ok()?;
+            let co =
+                NaiveDate::parse_from_str(obj.get("check_out_date")?.as_str()?, "%Y-%m-%d").ok()?;
             if co <= grid_start || ci >= grid_end {
                 return None;
             }
@@ -481,15 +499,24 @@ async fn calendar_grid(
     let mut block_filters = Map::new();
     block_filters.insert("organization_id".to_string(), Value::String(org_id));
     block_filters.insert("unit_id".to_string(), Value::String(query.unit_id));
-    let blocks = list_rows(pool, "calendar_blocks", Some(&block_filters), 500, 0, "start_date", true)
-        .await
-        .unwrap_or_default();
+    let blocks = list_rows(
+        pool,
+        "calendar_blocks",
+        Some(&block_filters),
+        500,
+        0,
+        "start_date",
+        true,
+    )
+    .await
+    .unwrap_or_default();
 
     let blocked_ranges: Vec<(NaiveDate, NaiveDate)> = blocks
         .iter()
         .filter_map(|b| {
             let obj = b.as_object()?;
-            let sd = NaiveDate::parse_from_str(obj.get("start_date")?.as_str()?, "%Y-%m-%d").ok()?;
+            let sd =
+                NaiveDate::parse_from_str(obj.get("start_date")?.as_str()?, "%Y-%m-%d").ok()?;
             let ed = NaiveDate::parse_from_str(obj.get("end_date")?.as_str()?, "%Y-%m-%d").ok()?;
             if ed <= grid_start || sd >= grid_end {
                 return None;
@@ -505,9 +532,15 @@ async fn calendar_grid(
     while current < grid_end {
         let status = if current < today {
             "past"
-        } else if booked_ranges.iter().any(|(ci, co)| current >= *ci && current < *co) {
+        } else if booked_ranges
+            .iter()
+            .any(|(ci, co)| current >= *ci && current < *co)
+        {
             "booked"
-        } else if blocked_ranges.iter().any(|(sd, ed)| current >= *sd && current < *ed) {
+        } else if blocked_ranges
+            .iter()
+            .any(|(sd, ed)| current >= *sd && current < *ed)
+        {
             "blocked"
         } else {
             "available"

@@ -45,14 +45,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         );
     }
 
-    // Rate limiting: 100-request burst, refilling 10/s, keyed by peer IP.
-    let governor_config = GovernorConfigBuilder::default()
-        .per_second(10)
-        .burst_size(100)
-        .finish()
-        .expect("valid governor config");
-
-    let app = Router::new()
+    let mut app = Router::new()
         .nest(&state.config.api_prefix, routes::v1_router())
         .layer(DefaultBodyLimit::max(2 * 1024 * 1024)) // 2 MB
         .layer(TimeoutLayer::with_status_code(
@@ -63,8 +56,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .layer(TraceLayer::new_for_http())
         .layer(build_cors_layer(&state.config))
         .layer(from_fn_with_state(state.clone(), enforce_trusted_hosts))
-        .layer(GovernorLayer::new(governor_config))
         .with_state(state.clone());
+
+    if state.config.rate_limit_enabled {
+        let governor_config = GovernorConfigBuilder::default()
+            .per_second(state.config.rate_limit_per_second)
+            .burst_size(state.config.rate_limit_burst_size)
+            .finish()
+            .expect("valid governor config");
+        app = app.layer(GovernorLayer::new(governor_config));
+    } else {
+        tracing::warn!("Rate limiting middleware disabled");
+    }
 
     let socket_addr: SocketAddr = format!("{}:{}", state.config.host, state.config.port).parse()?;
     let listener = tokio::net::TcpListener::bind(socket_addr).await?;

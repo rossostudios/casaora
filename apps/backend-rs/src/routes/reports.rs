@@ -3,26 +3,23 @@ use axum::{
     http::HeaderMap,
     Json,
 };
-use chrono::{DateTime, Datelike, NaiveDate, Utc};
+use chrono::{Datelike, NaiveDate, Utc};
 use serde::Deserialize;
 use serde_json::{json, Map, Value};
 use sqlx::Row;
+use uuid::Uuid;
 
 use crate::{
     auth::require_user_id,
     error::{AppError, AppResult},
     repository::table_service::list_rows,
     schemas::{OwnerSummaryQuery, ReportsPeriodQuery},
-    services::{agent_chats, anomaly_detection, pricing::missing_required_fee_types},
+    services::{agent_chats, anomaly_detection},
     state::AppState,
     tenancy::assert_org_member,
 };
 
 const REPORTABLE_STATUSES: &[&str] = &["confirmed", "checked_in", "checked_out"];
-const ACTIVE_TASK_STATUSES: &[&str] = &["todo", "in_progress"];
-const TURNOVER_TASK_TYPES: &[&str] = &["check_in", "check_out", "cleaning", "inspection"];
-const UPCOMING_CHECK_IN_STATUSES: &[&str] = &["pending", "confirmed"];
-const UPCOMING_CHECK_OUT_STATUSES: &[&str] = &["confirmed", "checked_in"];
 
 pub fn router() -> axum::Router<AppState> {
     axum::Router::new()
@@ -43,18 +40,12 @@ pub fn router() -> axum::Router<AppState> {
             "/reports/finance-dashboard",
             axum::routing::get(finance_dashboard),
         )
-        .route(
-            "/reports/kpi-dashboard",
-            axum::routing::get(kpi_dashboard),
-        )
+        .route("/reports/kpi-dashboard", axum::routing::get(kpi_dashboard))
         .route(
             "/reports/occupancy-forecast",
             axum::routing::get(occupancy_forecast),
         )
-        .route(
-            "/reports/anomalies",
-            axum::routing::get(list_anomalies),
-        )
+        .route("/reports/anomalies", axum::routing::get(list_anomalies))
         .route(
             "/reports/anomalies/{id}/dismiss",
             axum::routing::post(dismiss_anomaly),
@@ -67,10 +58,7 @@ pub fn router() -> axum::Router<AppState> {
             "/reports/agent-performance",
             axum::routing::get(agent_performance),
         )
-        .route(
-            "/reports/revenue-trend",
-            axum::routing::get(revenue_trend),
-        )
+        .route("/reports/revenue-trend", axum::routing::get(revenue_trend))
 }
 
 async fn owner_summary_report(
@@ -85,121 +73,123 @@ async fn owner_summary_report(
     let period_start = parse_date(&query.from_date)?;
     let period_end = parse_date(&query.to_date)?;
     let total_days = nights(period_start, period_end);
+    let property_id = parse_optional_uuid(query.property_id.as_deref(), "property_id")?;
+    let unit_id = parse_optional_uuid(query.unit_id.as_deref(), "unit_id")?;
 
-    let mut units = list_rows(
-        pool,
-        "units",
-        Some(&json_map(&[(
-            "organization_id",
-            Value::String(query.org_id.clone()),
-        )])),
-        3000,
-        0,
-        "created_at",
-        false,
+    let owner_metrics_query = sqlx::query(
+        "WITH filtered_units AS (
+           SELECT u.id
+             FROM units u
+            WHERE u.organization_id = $1::uuid
+              AND ($2::uuid IS NULL OR u.property_id = $2::uuid)
+              AND ($3::uuid IS NULL OR u.id = $3::uuid)
+         ),
+         reservation_scope AS (
+           SELECT
+             r.check_in_date,
+             r.check_out_date,
+             r.total_amount
+           FROM reservations r
+           JOIN filtered_units u ON u.id = r.unit_id
+           WHERE r.organization_id = $1::uuid
+             AND r.status IN ('confirmed', 'checked_in', 'checked_out')
+             AND r.check_out_date > $4::date
+             AND r.check_in_date < $5::date
+         )
+         SELECT
+           (SELECT COUNT(*)::bigint FROM filtered_units) AS unit_count,
+           COALESCE(
+             SUM(
+               GREATEST(
+                 LEAST(rs.check_out_date, $5::date) - GREATEST(rs.check_in_date, $4::date),
+                 0
+               )
+             ),
+             0
+           )::bigint AS booked_nights,
+           COALESCE(SUM(rs.total_amount), 0)::double precision AS gross_revenue
+         FROM reservation_scope rs",
     )
-    .await?;
-    if let Some(property_id) = non_empty_opt(query.property_id.as_deref()) {
-        units.retain(|unit| value_str(unit, "property_id") == property_id);
-    }
-    if let Some(unit_id) = non_empty_opt(query.unit_id.as_deref()) {
-        units.retain(|unit| value_str(unit, "id") == unit_id);
-    }
+    .bind(&query.org_id)
+    .bind(property_id)
+    .bind(unit_id)
+    .bind(period_start)
+    .bind(period_end)
+    .fetch_one(pool);
 
-    let unit_count = std::cmp::max(units.len(), 1) as i64;
-    let available_nights = std::cmp::max(total_days * unit_count, 1) as f64;
-
-    let mut reservations = list_rows(
-        pool,
-        "reservations",
-        Some(&json_map(&[(
-            "organization_id",
-            Value::String(query.org_id.clone()),
-        )])),
-        6000,
-        0,
-        "created_at",
-        false,
+    let expense_metrics_query = sqlx::query(
+        "SELECT
+           COALESCE(
+             SUM(
+               CASE
+                 WHEN e.currency = 'PYG' THEN e.amount
+                 WHEN e.currency = 'USD' AND COALESCE(e.fx_rate_to_pyg, 0) > 0
+                   THEN e.amount * e.fx_rate_to_pyg
+                 ELSE 0
+               END
+             ),
+             0
+           )::double precision AS total_expenses,
+           COUNT(*) FILTER (
+             WHERE e.currency = 'USD'
+               AND (e.fx_rate_to_pyg IS NULL OR e.fx_rate_to_pyg <= 0)
+           )::bigint AS missing_fx_rate_to_pyg,
+           COUNT(*) FILTER (
+             WHERE e.currency NOT IN ('PYG', 'USD')
+           )::bigint AS unsupported_currency
+         FROM expenses e
+         WHERE e.organization_id = $1::uuid
+           AND e.expense_date >= $2::date
+           AND e.expense_date <= $3::date
+           AND (
+             ($5::uuid IS NOT NULL AND e.unit_id = $5::uuid)
+             OR ($5::uuid IS NULL AND $4::uuid IS NOT NULL AND e.property_id = $4::uuid)
+             OR ($5::uuid IS NULL AND $4::uuid IS NULL)
+           )",
     )
-    .await?;
-    if let Some(unit_id) = non_empty_opt(query.unit_id.as_deref()) {
-        reservations.retain(|item| value_str(item, "unit_id") == unit_id);
-    }
-    if query.property_id.is_some() {
-        let units_in_property = units
-            .iter()
-            .filter_map(Value::as_object)
-            .filter_map(|unit| unit.get("id"))
-            .filter_map(Value::as_str)
-            .map(ToOwned::to_owned)
-            .collect::<std::collections::HashSet<_>>();
-        reservations.retain(|item| {
-            item.as_object()
-                .and_then(|obj| obj.get("unit_id"))
-                .and_then(Value::as_str)
-                .is_some_and(|unit_id| units_in_property.contains(unit_id))
-        });
-    }
+    .bind(&query.org_id)
+    .bind(period_start)
+    .bind(period_end)
+    .bind(property_id)
+    .bind(unit_id)
+    .fetch_one(pool);
 
-    let mut booked_nights = 0_i64;
-    let mut gross_revenue = 0.0;
-    for reservation in reservations {
-        let status = value_str(&reservation, "status");
-        if !REPORTABLE_STATUSES.contains(&status.as_str()) {
-            continue;
-        }
+    let (owner_metrics, expense_metrics) =
+        tokio::try_join!(owner_metrics_query, expense_metrics_query).map_err(|error| {
+            tracing::error!(error = %error, "Failed to compute owner summary report");
+            AppError::Dependency("Failed to compute owner summary report.".to_string())
+        })?;
 
-        let check_in = parse_date(&value_str(&reservation, "check_in_date")).ok();
-        let check_out = parse_date(&value_str(&reservation, "check_out_date")).ok();
-        let (Some(check_in), Some(check_out)) = (check_in, check_out) else {
-            continue;
-        };
+    let raw_unit_count = owner_metrics.try_get::<i64, _>("unit_count").unwrap_or(0);
+    let booked_nights = owner_metrics
+        .try_get::<i64, _>("booked_nights")
+        .unwrap_or(0);
+    let gross_revenue = owner_metrics
+        .try_get::<f64, _>("gross_revenue")
+        .unwrap_or(0.0);
+    let total_expenses = expense_metrics
+        .try_get::<f64, _>("total_expenses")
+        .unwrap_or(0.0);
 
-        if check_out <= period_start || check_in >= period_end {
-            continue;
-        }
-        let overlap_start = std::cmp::max(check_in, period_start);
-        let overlap_end = std::cmp::min(check_out, period_end);
-        booked_nights += nights(overlap_start, overlap_end);
-        gross_revenue += number_from_value(reservation.get("total_amount"));
-    }
-
-    let mut expenses = list_rows(
-        pool,
-        "expenses",
-        Some(&json_map(&[(
-            "organization_id",
-            Value::String(query.org_id.clone()),
-        )])),
-        6000,
-        0,
-        "created_at",
-        false,
-    )
-    .await?;
-    if let Some(unit_id) = non_empty_opt(query.unit_id.as_deref()) {
-        expenses.retain(|item| value_str(item, "unit_id") == unit_id);
-    }
-    if let Some(property_id) = non_empty_opt(query.property_id.as_deref()) {
-        expenses.retain(|item| value_str(item, "property_id") == property_id);
-    }
-
-    let mut total_expenses = 0.0;
     let mut warnings: std::collections::HashMap<String, i64> = std::collections::HashMap::new();
-    for expense in expenses {
-        let Some(expense_date) = parse_date(&value_str(&expense, "expense_date")).ok() else {
-            continue;
-        };
-        if expense_date < period_start || expense_date > period_end {
-            continue;
-        }
-        let (amount_pyg, warning) = expense_amount_pyg(&expense);
-        total_expenses += amount_pyg;
-        if let Some(warning_key) = warning {
-            let next = warnings.get(&warning_key).copied().unwrap_or(0) + 1;
-            warnings.insert(warning_key, next);
-        }
+    let missing_fx_count = expense_metrics
+        .try_get::<i64, _>("missing_fx_rate_to_pyg")
+        .unwrap_or(0);
+    if missing_fx_count > 0 {
+        warnings.insert("missing_fx_rate_to_pyg".to_string(), missing_fx_count);
     }
+    let unsupported_currency_count = expense_metrics
+        .try_get::<i64, _>("unsupported_currency")
+        .unwrap_or(0);
+    if unsupported_currency_count > 0 {
+        warnings.insert(
+            "unsupported_currency".to_string(),
+            unsupported_currency_count,
+        );
+    }
+
+    let unit_count = std::cmp::max(raw_unit_count, 1);
+    let available_nights = std::cmp::max(total_days * unit_count, 1) as f64;
 
     let occupancy_rate = round4((booked_nights as f64) / available_nights);
     let net_payout = round2(gross_revenue - total_expenses);
@@ -227,76 +217,87 @@ async fn operations_summary_report(
 
     let period_start = parse_date(&query.from_date)?;
     let period_end = parse_date(&query.to_date)?;
-    let now_utc = Utc::now().date_naive();
+    let period_start_ts = start_of_day_utc(period_start);
+    let period_end_exclusive_ts = start_of_day_utc(period_end + chrono::Duration::days(1));
+    let now_utc = Utc::now();
 
-    let tasks = list_rows(
-        pool,
-        "tasks",
-        Some(&json_map(&[(
-            "organization_id",
-            Value::String(query.org_id.clone()),
-        )])),
-        20000,
-        0,
-        "created_at",
-        false,
+    let task_metrics = sqlx::query(
+        "SELECT
+           (
+             SELECT COUNT(*)::bigint
+               FROM tasks t
+              WHERE t.organization_id = $1::uuid
+                AND t.type IN ('check_in', 'check_out', 'cleaning', 'inspection')
+                AND t.due_at IS NOT NULL
+                AND t.due_at >= $2::timestamptz
+                AND t.due_at < $3::timestamptz
+           ) AS turnovers_due,
+           (
+             SELECT COUNT(*)::bigint
+               FROM tasks t
+              WHERE t.organization_id = $1::uuid
+                AND t.type IN ('check_in', 'check_out', 'cleaning', 'inspection')
+                AND t.due_at IS NOT NULL
+                AND t.due_at >= $2::timestamptz
+                AND t.due_at < $3::timestamptz
+                AND t.status = 'done'
+                AND t.completed_at IS NOT NULL
+                AND (
+                  (
+                    COALESCE(t.sla_due_at, t.due_at) IS NOT NULL
+                    AND t.completed_at <= COALESCE(t.sla_due_at, t.due_at)
+                  )
+                  OR COALESCE(t.sla_due_at, t.due_at) IS NULL
+                )
+           ) AS turnovers_completed_on_time,
+           (
+             SELECT COUNT(*)::bigint
+               FROM tasks t
+              WHERE t.organization_id = $1::uuid
+                AND t.status IN ('todo', 'in_progress')
+           ) AS open_tasks,
+           (
+             SELECT COUNT(*)::bigint
+               FROM tasks t
+              WHERE t.organization_id = $1::uuid
+                AND t.status IN ('todo', 'in_progress')
+                AND t.due_at IS NOT NULL
+                AND t.due_at < $4::timestamptz
+           ) AS overdue_tasks,
+           (
+             SELECT COUNT(*)::bigint
+               FROM tasks t
+              WHERE t.organization_id = $1::uuid
+                AND (
+                  t.sla_breached_at IS NOT NULL
+                  OR (
+                    t.status IN ('todo', 'in_progress')
+                    AND t.sla_due_at IS NOT NULL
+                    AND t.sla_due_at < $4::timestamptz
+                  )
+                )
+           ) AS sla_breached_tasks",
     )
-    .await?;
+    .bind(&query.org_id)
+    .bind(period_start_ts)
+    .bind(period_end_exclusive_ts)
+    .bind(now_utc)
+    .fetch_one(pool)
+    .await
+    .map_err(|error| {
+        tracing::error!(error = %error, "Failed to compute task operations summary");
+        AppError::Dependency("Failed to compute operations summary.".to_string())
+    })?;
 
-    let mut turnovers_due = 0_i64;
-    let mut turnovers_completed_on_time = 0_i64;
-    let mut open_tasks = 0_i64;
-    let mut overdue_tasks = 0_i64;
-    let mut sla_breached_tasks = 0_i64;
-
-    for task in tasks {
-        let task_type = value_str(&task, "type").to_ascii_lowercase();
-        let status = value_str(&task, "status").to_ascii_lowercase();
-
-        let due_at = datetime_or_none(task.get("due_at"));
-        let due_date = due_at.map(|value| value.date_naive());
-        let sla_due_at = datetime_or_none(task.get("sla_due_at"));
-        let completed_at = datetime_or_none(task.get("completed_at"));
-        let sla_breached_at = datetime_or_none(task.get("sla_breached_at"));
-
-        if ACTIVE_TASK_STATUSES.contains(&status.as_str()) {
-            open_tasks += 1;
-            if due_date.is_some_and(|due| due < now_utc) {
-                overdue_tasks += 1;
-            }
-        }
-
-        if sla_breached_at.is_some()
-            || (ACTIVE_TASK_STATUSES.contains(&status.as_str())
-                && sla_due_at.is_some_and(|value| value.date_naive() < now_utc))
-        {
-            sla_breached_tasks += 1;
-        }
-
-        if !TURNOVER_TASK_TYPES.contains(&task_type.as_str()) {
-            continue;
-        }
-        let Some(due_date) = due_date else {
-            continue;
-        };
-        if due_date < period_start || due_date > period_end {
-            continue;
-        }
-
-        turnovers_due += 1;
-        if status != "done" {
-            continue;
-        }
-
-        let reference_due = sla_due_at.or(due_at);
-        if reference_due
-            .zip(completed_at)
-            .is_some_and(|(due, completed)| completed <= due)
-            || (reference_due.is_none() && completed_at.is_some())
-        {
-            turnovers_completed_on_time += 1;
-        }
-    }
+    let turnovers_due = task_metrics.try_get::<i64, _>("turnovers_due").unwrap_or(0);
+    let turnovers_completed_on_time = task_metrics
+        .try_get::<i64, _>("turnovers_completed_on_time")
+        .unwrap_or(0);
+    let open_tasks = task_metrics.try_get::<i64, _>("open_tasks").unwrap_or(0);
+    let overdue_tasks = task_metrics.try_get::<i64, _>("overdue_tasks").unwrap_or(0);
+    let sla_breached_tasks = task_metrics
+        .try_get::<i64, _>("sla_breached_tasks")
+        .unwrap_or(0);
 
     let turnover_on_time_rate = if turnovers_due > 0 {
         round4((turnovers_completed_on_time as f64) / (turnovers_due as f64))
@@ -304,42 +305,35 @@ async fn operations_summary_report(
         0.0
     };
 
-    let reservations = list_rows(
-        pool,
-        "reservations",
-        Some(&json_map(&[(
-            "organization_id",
-            Value::String(query.org_id.clone()),
-        )])),
-        20000,
-        0,
-        "created_at",
-        false,
+    let reservation_metrics = sqlx::query(
+        "SELECT
+            COUNT(*) FILTER (
+              WHERE status IN ('pending', 'confirmed')
+                AND check_in_date BETWEEN $2::date AND $3::date
+            )::bigint AS reservations_upcoming_check_in,
+            COUNT(*) FILTER (
+              WHERE status IN ('confirmed', 'checked_in')
+                AND check_out_date BETWEEN $2::date AND $3::date
+            )::bigint AS reservations_upcoming_check_out
+          FROM reservations
+          WHERE organization_id = $1::uuid",
     )
-    .await?;
-    let mut reservations_upcoming_check_in = 0_i64;
-    let mut reservations_upcoming_check_out = 0_i64;
-    for reservation in reservations {
-        let status = value_str(&reservation, "status").to_ascii_lowercase();
+    .bind(&query.org_id)
+    .bind(period_start)
+    .bind(period_end)
+    .fetch_one(pool)
+    .await
+    .map_err(|error| {
+        tracing::error!(error = %error, "Failed to compute reservation operations summary");
+        AppError::Dependency("Failed to compute operations summary.".to_string())
+    })?;
 
-        if let Ok(check_in_date) = parse_date(&value_str(&reservation, "check_in_date")) {
-            if check_in_date >= period_start
-                && check_in_date <= period_end
-                && UPCOMING_CHECK_IN_STATUSES.contains(&status.as_str())
-            {
-                reservations_upcoming_check_in += 1;
-            }
-        }
-
-        if let Ok(check_out_date) = parse_date(&value_str(&reservation, "check_out_date")) {
-            if check_out_date >= period_start
-                && check_out_date <= period_end
-                && UPCOMING_CHECK_OUT_STATUSES.contains(&status.as_str())
-            {
-                reservations_upcoming_check_out += 1;
-            }
-        }
-    }
+    let reservations_upcoming_check_in = reservation_metrics
+        .try_get::<i64, _>("reservations_upcoming_check_in")
+        .unwrap_or(0);
+    let reservations_upcoming_check_out = reservation_metrics
+        .try_get::<i64, _>("reservations_upcoming_check_out")
+        .unwrap_or(0);
 
     Ok(Json(json!({
         "organization_id": query.org_id,
@@ -368,217 +362,174 @@ async fn transparency_summary_report(
     let period_start = parse_date(&query.from_date)?;
     let period_end = parse_date(&query.to_date)?;
 
-    let listings = list_rows(
-        pool,
-        "listings",
-        Some(&json_map(&[(
-            "organization_id",
-            Value::String(query.org_id.clone()),
-        )])),
-        6000,
-        0,
-        "created_at",
-        false,
+    let listing_metrics_query = sqlx::query(
+        "WITH published AS (
+           SELECT id
+             FROM listings
+            WHERE organization_id = $1::uuid
+              AND is_published = true
+         ),
+         line_presence AS (
+           SELECT
+             lf.listing_id,
+             BOOL_OR(lf.fee_type = 'monthly_rent') AS has_monthly_rent,
+             BOOL_OR(lf.fee_type = 'advance_rent') AS has_advance_rent,
+             BOOL_OR(lf.fee_type = 'service_fee_flat') AS has_service_fee_flat,
+             BOOL_OR(lf.fee_type = 'security_deposit') AS has_security_deposit,
+             BOOL_OR(lf.fee_type = 'guarantee_option_fee') AS has_guarantee_option_fee
+           FROM listing_fee_lines lf
+           JOIN published p ON p.id = lf.listing_id
+           GROUP BY lf.listing_id
+         )
+         SELECT
+           (SELECT COUNT(*)::bigint FROM published) AS published_count,
+           COUNT(*) FILTER (
+             WHERE COALESCE(lp.has_monthly_rent, false)
+               AND COALESCE(lp.has_advance_rent, false)
+               AND COALESCE(lp.has_service_fee_flat, false)
+               AND (
+                 COALESCE(lp.has_security_deposit, false)
+                 OR COALESCE(lp.has_guarantee_option_fee, false)
+               )
+           )::bigint AS transparent_count
+         FROM published p
+         LEFT JOIN line_presence lp ON lp.listing_id = p.id",
     )
-    .await?;
-    let listing_ids = listings
-        .iter()
-        .filter_map(Value::as_object)
-        .filter_map(|item| item.get("id"))
-        .filter_map(Value::as_str)
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .map(ToOwned::to_owned)
-        .collect::<Vec<_>>();
+    .bind(&query.org_id)
+    .fetch_one(pool);
 
-    let fee_filters = if listing_ids.is_empty() {
-        json_map(&[("organization_id", Value::String(query.org_id.clone()))])
-    } else {
-        json_map(&[(
-            "listing_id",
-            Value::Array(listing_ids.iter().cloned().map(Value::String).collect()),
-        )])
-    };
-
-    let fee_lines = list_rows(
-        pool,
-        "listing_fee_lines",
-        Some(&fee_filters),
-        if listing_ids.is_empty() {
-            1000
-        } else {
-            std::cmp::max(1000, (listing_ids.len() as i64) * 20)
-        },
-        0,
-        "sort_order",
-        true,
+    let application_metrics_query = sqlx::query(
+        "SELECT
+            COUNT(*) FILTER (
+              WHERE created_at::date BETWEEN $2::date AND $3::date
+            )::bigint AS applications_count,
+            COUNT(*) FILTER (
+              WHERE created_at::date BETWEEN $2::date AND $3::date
+                AND status IN ('qualified', 'visit_scheduled', 'offer_sent', 'contract_signed')
+            )::bigint AS qualified_count,
+            PERCENTILE_CONT(0.5) WITHIN GROUP (
+              ORDER BY EXTRACT(EPOCH FROM (first_response_at - created_at)) / 3600.0
+            ) FILTER (
+              WHERE created_at::date BETWEEN $2::date AND $3::date
+                AND first_response_at IS NOT NULL
+                AND first_response_at >= created_at
+            ) AS median_first_response_hours
+          FROM application_submissions
+          WHERE organization_id = $1::uuid",
     )
-    .await?;
+    .bind(&query.org_id)
+    .bind(period_start)
+    .bind(period_end)
+    .fetch_one(pool);
 
-    let mut lines_by_listing: std::collections::HashMap<String, Vec<Value>> =
-        std::collections::HashMap::new();
-    for line in fee_lines {
-        let listing_id = value_str(&line, "listing_id");
-        if listing_id.is_empty() {
-            continue;
-        }
-        lines_by_listing.entry(listing_id).or_default().push(line);
-    }
+    let collection_metrics_query = sqlx::query(
+        "SELECT
+            COUNT(*) FILTER (
+              WHERE due_date BETWEEN $2::date AND $3::date
+            )::bigint AS total_collections,
+            COUNT(*) FILTER (
+              WHERE due_date BETWEEN $2::date AND $3::date
+                AND status = 'paid'
+            )::bigint AS paid_collections,
+            COALESCE(
+              SUM(amount) FILTER (
+                WHERE due_date BETWEEN $2::date AND $3::date
+                  AND status = 'paid'
+              ),
+              0
+            )::double precision AS paid_amount
+          FROM collection_records
+          WHERE organization_id = $1::uuid",
+    )
+    .bind(&query.org_id)
+    .bind(period_start)
+    .bind(period_end)
+    .fetch_one(pool);
 
-    let mut published_count = 0_i64;
-    let mut transparent_count = 0_i64;
-    for listing in &listings {
-        if !bool_value(listing.get("is_published")) {
-            continue;
-        }
-        published_count += 1;
-        let listing_id = value_str(listing, "id");
-        let missing =
-            missing_required_fee_types(lines_by_listing.get(&listing_id).unwrap_or(&Vec::new()));
-        if missing.is_empty() {
-            transparent_count += 1;
-        }
-    }
+    let alert_metrics_query = sqlx::query(
+        "SELECT
+            COUNT(*) FILTER (
+              WHERE provider = 'alerting'
+                AND event_type = 'application_submit_failed'
+                AND received_at::date BETWEEN $2::date AND $3::date
+            )::bigint AS application_submit_failures,
+            COUNT(*) FILTER (
+              WHERE provider = 'alerting'
+                AND event_type = 'application_event_write_failed'
+                AND received_at::date BETWEEN $2::date AND $3::date
+            )::bigint AS application_event_write_failures
+          FROM integration_events
+          WHERE organization_id = $1::uuid",
+    )
+    .bind(&query.org_id)
+    .bind(period_start)
+    .bind(period_end)
+    .fetch_one(pool);
 
+    let (listing_metrics, application_metrics, collection_metrics, alert_metrics) =
+        tokio::try_join!(
+            listing_metrics_query,
+            application_metrics_query,
+            collection_metrics_query,
+            alert_metrics_query,
+        )
+        .map_err(|error| {
+            tracing::error!(error = %error, "Failed to compute transparency summary");
+            AppError::Dependency("Failed to compute transparency summary.".to_string())
+        })?;
+
+    let published_count = listing_metrics
+        .try_get::<i64, _>("published_count")
+        .unwrap_or(0);
+    let transparent_count = listing_metrics
+        .try_get::<i64, _>("transparent_count")
+        .unwrap_or(0);
     let transparent_listings_pct = if published_count > 0 {
         round4((transparent_count as f64) / (published_count as f64))
     } else {
         0.0
     };
 
-    let applications = list_rows(
-        pool,
-        "application_submissions",
-        Some(&json_map(&[(
-            "organization_id",
-            Value::String(query.org_id.clone()),
-        )])),
-        12000,
-        0,
-        "created_at",
-        false,
-    )
-    .await?;
-
-    let qualified_like_statuses = [
-        "qualified",
-        "visit_scheduled",
-        "offer_sent",
-        "contract_signed",
-    ]
-    .into_iter()
-    .collect::<std::collections::HashSet<_>>();
-    let mut in_period_apps: Vec<Value> = Vec::new();
-    let mut first_response_hours: Vec<f64> = Vec::new();
-    let mut qualified_count = 0_i64;
-    for application in applications {
-        let created_at = datetime_or_none(application.get("created_at"));
-        let Some(created_at) = created_at else {
-            continue;
-        };
-        let created_date = created_at.date_naive();
-        if created_date < period_start || created_date > period_end {
-            continue;
-        }
-        in_period_apps.push(application.clone());
-
-        let status = value_str(&application, "status");
-        if qualified_like_statuses.contains(status.as_str()) {
-            qualified_count += 1;
-        }
-
-        if let Some(first_response_at) = datetime_or_none(application.get("first_response_at")) {
-            let elapsed_hours =
-                ((first_response_at - created_at).num_milliseconds() as f64).max(0.0) / 3600000.0;
-            first_response_hours.push(elapsed_hours);
-        }
-    }
-
-    let applications_count = in_period_apps.len() as i64;
+    let applications_count = application_metrics
+        .try_get::<i64, _>("applications_count")
+        .unwrap_or(0);
+    let qualified_count = application_metrics
+        .try_get::<i64, _>("qualified_count")
+        .unwrap_or(0);
     let inquiry_to_qualified_rate = if applications_count > 0 {
         round4((qualified_count as f64) / (applications_count as f64))
     } else {
         0.0
     };
-    let median_first_response_hours = median(&first_response_hours).map(round2);
+    let median_first_response_hours = application_metrics
+        .try_get::<Option<f64>, _>("median_first_response_hours")
+        .ok()
+        .flatten()
+        .map(round2);
 
-    let collections = list_rows(
-        pool,
-        "collection_records",
-        Some(&json_map(&[(
-            "organization_id",
-            Value::String(query.org_id.clone()),
-        )])),
-        20000,
-        0,
-        "created_at",
-        false,
-    )
-    .await?;
-    let in_period_collections = collections
-        .into_iter()
-        .filter(|row| {
-            row.get("due_date")
-                .and_then(Value::as_str)
-                .and_then(|value| parse_date(value).ok())
-                .is_some_and(|due_date| due_date >= period_start && due_date <= period_end)
-        })
-        .collect::<Vec<_>>();
-
-    let total_collections = in_period_collections.len() as i64;
-    let paid_collections = in_period_collections
-        .iter()
-        .filter(|row| value_str(row, "status") == "paid")
-        .count() as i64;
+    let total_collections = collection_metrics
+        .try_get::<i64, _>("total_collections")
+        .unwrap_or(0);
+    let paid_collections = collection_metrics
+        .try_get::<i64, _>("paid_collections")
+        .unwrap_or(0);
+    let paid_amount = round2(
+        collection_metrics
+            .try_get::<f64, _>("paid_amount")
+            .unwrap_or(0.0),
+    );
     let collection_success_rate = if total_collections > 0 {
         round4((paid_collections as f64) / (total_collections as f64))
     } else {
         0.0
     };
-    let paid_amount = round2(
-        in_period_collections
-            .iter()
-            .filter(|row| value_str(row, "status") == "paid")
-            .map(|row| number_from_value(row.get("amount")))
-            .sum(),
-    );
 
-    let alert_events = list_rows(
-        pool,
-        "integration_events",
-        Some(&json_map(&[
-            ("organization_id", Value::String(query.org_id.clone())),
-            ("provider", Value::String("alerting".to_string())),
-        ])),
-        20000,
-        0,
-        "received_at",
-        false,
-    )
-    .await?;
-    let mut application_submit_failures = 0_i64;
-    let mut application_event_write_failures = 0_i64;
-    for event in alert_events {
-        let event_type = value_str(&event, "event_type");
-        if !matches!(
-            event_type.as_str(),
-            "application_submit_failed" | "application_event_write_failed"
-        ) {
-            continue;
-        }
-        let Some(received_at) = datetime_or_none(event.get("received_at")) else {
-            continue;
-        };
-        let received_date = received_at.date_naive();
-        if received_date < period_start || received_date > period_end {
-            continue;
-        }
-        if event_type == "application_submit_failed" {
-            application_submit_failures += 1;
-        } else {
-            application_event_write_failures += 1;
-        }
-    }
+    let application_submit_failures = alert_metrics
+        .try_get::<i64, _>("application_submit_failures")
+        .unwrap_or(0);
+    let application_event_write_failures = alert_metrics
+        .try_get::<i64, _>("application_event_write_failures")
+        .unwrap_or(0);
 
     let application_submit_attempts = applications_count + application_submit_failures;
     let application_submit_failure_rate = if application_submit_attempts > 0 {
@@ -619,182 +570,181 @@ async fn finance_dashboard(
     let pool = db_pool(&state)?;
 
     let end_date = parse_date(&query.to_date)?;
-    let months_back: u32 = 6;
 
-    // Build month boundaries
-    let mut month_boundaries: Vec<(NaiveDate, NaiveDate, String)> = Vec::new();
-    for i in 0..months_back {
-        let offset = months_back - 1 - i;
-        let (year, month) = {
-            let m = end_date.month() as i32 - offset as i32;
-            if m <= 0 {
-                (
-                    end_date.year() - 1 + (m - 1) / 12,
-                    ((m - 1) % 12 + 12) as u32 + 1,
-                )
-            } else {
-                (end_date.year(), m as u32)
-            }
-        };
-        let start = NaiveDate::from_ymd_opt(year, month, 1).unwrap_or(end_date);
-        let next_month = if month == 12 {
-            NaiveDate::from_ymd_opt(year + 1, 1, 1)
-        } else {
-            NaiveDate::from_ymd_opt(year, month + 1, 1)
-        }
-        .unwrap_or(end_date);
-        let label = format!("{:04}-{:02}", year, month);
-        month_boundaries.push((start, next_month, label));
-    }
-
-    let org_filter = json_map(&[("organization_id", Value::String(query.org_id.clone()))]);
-
-    // Fetch reservations
-    let reservations = list_rows(
-        pool,
-        "reservations",
-        Some(&org_filter),
-        10000,
-        0,
-        "created_at",
-        false,
+    let monthly_rows = sqlx::query(
+        "WITH months AS (
+           SELECT
+             gs::date AS month_start,
+             (gs + interval '1 month')::date AS month_end
+           FROM generate_series(
+             date_trunc('month', $2::date) - interval '5 months',
+             date_trunc('month', $2::date),
+             interval '1 month'
+           ) gs
+         ),
+         reservation_monthly AS (
+           SELECT
+             m.month_start,
+             COALESCE(SUM(r.total_amount), 0)::double precision AS reservation_revenue
+           FROM months m
+           LEFT JOIN reservations r
+             ON r.organization_id = $1::uuid
+            AND r.status IN ('confirmed', 'checked_in', 'checked_out')
+            AND r.check_out_date > m.month_start
+            AND r.check_in_date < m.month_end
+           GROUP BY m.month_start
+         ),
+         collection_monthly AS (
+           SELECT
+             m.month_start,
+             COALESCE(
+               SUM(c.amount) FILTER (WHERE c.status = 'paid'),
+               0
+             )::double precision AS paid_collection_revenue,
+             COUNT(c.id)::bigint AS collections_scheduled,
+             COUNT(c.id) FILTER (WHERE c.status = 'paid')::bigint AS collections_paid
+           FROM months m
+           LEFT JOIN collection_records c
+             ON c.organization_id = $1::uuid
+            AND c.due_date >= m.month_start
+            AND c.due_date < m.month_end
+           GROUP BY m.month_start
+         ),
+         expense_monthly AS (
+           SELECT
+             m.month_start,
+             COALESCE(
+               SUM(
+                 CASE
+                   WHEN e.currency = 'PYG' THEN e.amount
+                   WHEN e.currency = 'USD' AND COALESCE(e.fx_rate_to_pyg, 0) > 0
+                     THEN e.amount * e.fx_rate_to_pyg
+                   ELSE 0
+                 END
+               ),
+               0
+             )::double precision AS expense_total
+           FROM months m
+           LEFT JOIN expenses e
+             ON e.organization_id = $1::uuid
+            AND e.expense_date >= m.month_start
+            AND e.expense_date < m.month_end
+           GROUP BY m.month_start
+         )
+         SELECT
+           to_char(m.month_start, 'YYYY-MM') AS month,
+           (
+             COALESCE(r.reservation_revenue, 0)
+             + COALESCE(c.paid_collection_revenue, 0)
+           )::double precision AS revenue,
+           COALESCE(e.expense_total, 0)::double precision AS expenses,
+           COALESCE(c.collections_scheduled, 0)::bigint AS collections_scheduled,
+           COALESCE(c.collections_paid, 0)::bigint AS collections_paid
+         FROM months m
+         LEFT JOIN reservation_monthly r ON r.month_start = m.month_start
+         LEFT JOIN collection_monthly c ON c.month_start = m.month_start
+         LEFT JOIN expense_monthly e ON e.month_start = m.month_start
+         ORDER BY m.month_start",
     )
-    .await?;
+    .bind(&query.org_id)
+    .bind(end_date)
+    .fetch_all(pool)
+    .await
+    .map_err(|error| {
+        tracing::error!(error = %error, "Failed to compute finance monthly dashboard");
+        AppError::Dependency("Failed to compute finance dashboard.".to_string())
+    })?;
 
-    // Fetch expenses
-    let expenses = list_rows(
-        pool,
-        "expenses",
-        Some(&org_filter),
-        10000,
-        0,
-        "created_at",
-        false,
-    )
-    .await?;
-
-    // Fetch collections
-    let collections = list_rows(
-        pool,
-        "collection_records",
-        Some(&org_filter),
-        20000,
-        0,
-        "created_at",
-        false,
-    )
-    .await?;
-
-    // Compute monthly data
-    let mut monthly_data: Vec<Value> = Vec::new();
-    for (month_start, month_end, label) in &month_boundaries {
-        // Revenue from reservations
-        let mut month_revenue = 0.0;
-        for reservation in &reservations {
-            let status = value_str(reservation, "status");
-            if !REPORTABLE_STATUSES.contains(&status.as_str()) {
-                continue;
-            }
-            let check_in = parse_date(&value_str(reservation, "check_in_date")).ok();
-            let check_out = parse_date(&value_str(reservation, "check_out_date")).ok();
-            let (Some(ci), Some(co)) = (check_in, check_out) else {
-                continue;
-            };
-            if co <= *month_start || ci >= *month_end {
-                continue;
-            }
-            month_revenue += number_from_value(reservation.get("total_amount"));
-        }
-
-        // Revenue from collection records (for LTR)
-        for collection in &collections {
-            let status = value_str(collection, "status");
-            if status != "paid" {
-                continue;
-            }
-            if let Ok(due_date) = parse_date(&value_str(collection, "due_date")) {
-                if due_date >= *month_start && due_date < *month_end {
-                    month_revenue += number_from_value(collection.get("amount"));
-                }
-            }
-        }
-
-        // Expenses
-        let mut month_expenses = 0.0;
-        for expense in &expenses {
-            if let Ok(expense_date) = parse_date(&value_str(expense, "expense_date")) {
-                if expense_date >= *month_start && expense_date < *month_end {
-                    let (amount, _) = expense_amount_pyg(expense);
-                    month_expenses += amount;
-                }
-            }
-        }
-
-        // Collection rate for the month
-        let mut scheduled = 0_i64;
-        let mut paid = 0_i64;
-        for collection in &collections {
-            if let Ok(due_date) = parse_date(&value_str(collection, "due_date")) {
-                if due_date >= *month_start && due_date < *month_end {
-                    scheduled += 1;
-                    if value_str(collection, "status") == "paid" {
-                        paid += 1;
-                    }
-                }
-            }
-        }
-        let collection_rate = if scheduled > 0 {
-            round4(paid as f64 / scheduled as f64)
-        } else {
-            0.0
-        };
-
-        monthly_data.push(json!({
-            "month": label,
-            "revenue": round2(month_revenue),
-            "expenses": round2(month_expenses),
-            "net": round2(month_revenue - month_expenses),
-            "collections_scheduled": scheduled,
-            "collections_paid": paid,
-            "collection_rate": collection_rate,
-        }));
-    }
-
-    // Expense breakdown by category (full period)
-    let period_start = month_boundaries
-        .first()
-        .map(|(s, _, _)| *s)
-        .unwrap_or(end_date);
-    let mut category_totals: std::collections::HashMap<String, f64> =
-        std::collections::HashMap::new();
-    for expense in &expenses {
-        if let Ok(expense_date) = parse_date(&value_str(expense, "expense_date")) {
-            if expense_date >= period_start && expense_date <= end_date {
-                let (amount, _) = expense_amount_pyg(expense);
-                let category = value_str(expense, "category");
-                let cat = if category.is_empty() {
-                    "other".to_string()
-                } else {
-                    category
-                };
-                *category_totals.entry(cat).or_insert(0.0) += amount;
-            }
-        }
-    }
-    let expense_breakdown: Vec<Value> = category_totals
+    let monthly_data: Vec<Value> = monthly_rows
         .into_iter()
-        .map(|(category, total)| json!({ "category": category, "total": round2(total) }))
+        .map(|row| {
+            let revenue = row.try_get::<f64, _>("revenue").unwrap_or(0.0);
+            let expenses = row.try_get::<f64, _>("expenses").unwrap_or(0.0);
+            let scheduled = row.try_get::<i64, _>("collections_scheduled").unwrap_or(0);
+            let paid = row.try_get::<i64, _>("collections_paid").unwrap_or(0);
+            let collection_rate = if scheduled > 0 {
+                round4(paid as f64 / scheduled as f64)
+            } else {
+                0.0
+            };
+
+            json!({
+                "month": row.try_get::<String, _>("month").unwrap_or_default(),
+                "revenue": round2(revenue),
+                "expenses": round2(expenses),
+                "net": round2(revenue - expenses),
+                "collections_scheduled": scheduled,
+                "collections_paid": paid,
+                "collection_rate": collection_rate,
+            })
+        })
         .collect();
 
-    // Outstanding collections
-    let outstanding: Vec<Value> = collections
-        .iter()
-        .filter(|c| {
-            let status = value_str(c, "status");
-            status == "pending" || status == "overdue"
+    let expense_breakdown_rows = sqlx::query(
+        "WITH period AS (
+           SELECT
+             (date_trunc('month', $2::date) - interval '5 months')::date AS period_start,
+             $2::date AS period_end
+         )
+         SELECT
+           COALESCE(NULLIF(e.category::text, ''), 'other') AS category,
+           COALESCE(
+             SUM(
+               CASE
+                 WHEN e.currency = 'PYG' THEN e.amount
+                 WHEN e.currency = 'USD' AND COALESCE(e.fx_rate_to_pyg, 0) > 0
+                   THEN e.amount * e.fx_rate_to_pyg
+                 ELSE 0
+               END
+             ),
+             0
+           )::double precision AS total
+         FROM expenses e
+         CROSS JOIN period p
+         WHERE e.organization_id = $1::uuid
+           AND e.expense_date >= p.period_start
+           AND e.expense_date <= p.period_end
+         GROUP BY COALESCE(NULLIF(e.category::text, ''), 'other')
+         ORDER BY total DESC",
+    )
+    .bind(&query.org_id)
+    .bind(end_date)
+    .fetch_all(pool)
+    .await
+    .map_err(|error| {
+        tracing::error!(error = %error, "Failed to compute finance expense breakdown");
+        AppError::Dependency("Failed to compute finance dashboard.".to_string())
+    })?;
+
+    let expense_breakdown: Vec<Value> = expense_breakdown_rows
+        .into_iter()
+        .map(|row| {
+            json!({
+                "category": row.try_get::<String, _>("category").unwrap_or_else(|_| "other".to_string()),
+                "total": round2(row.try_get::<f64, _>("total").unwrap_or(0.0)),
+            })
         })
-        .take(20)
-        .cloned()
+        .collect();
+
+    let outstanding_rows = sqlx::query(
+        "SELECT row_to_json(c) AS row
+           FROM collection_records c
+          WHERE c.organization_id = $1::uuid
+            AND c.status IN ('pending', 'late')
+          ORDER BY c.created_at DESC
+          LIMIT 20",
+    )
+    .bind(&query.org_id)
+    .fetch_all(pool)
+    .await
+    .map_err(|error| {
+        tracing::error!(error = %error, "Failed to list outstanding collections");
+        AppError::Dependency("Failed to compute finance dashboard.".to_string())
+    })?;
+
+    let outstanding: Vec<Value> = outstanding_rows
+        .into_iter()
+        .filter_map(|row| row.try_get::<Option<Value>, _>("row").ok().flatten())
         .collect();
 
     Ok(Json(json!({
@@ -818,148 +768,176 @@ async fn kpi_dashboard(
 
     let period_start = parse_date(&query.from_date)?;
     let period_end = parse_date(&query.to_date)?;
+    let period_start_ts = start_of_day_utc(period_start);
+    let period_end_exclusive_ts = start_of_day_utc(period_end + chrono::Duration::days(1));
+    let today = Utc::now().date_naive();
+    let day_60 = today + chrono::Duration::days(60);
 
-    let org_filter = json_map(&[("organization_id", Value::String(query.org_id.clone()))]);
+    let collections_query = sqlx::query(
+        "SELECT
+            COUNT(*)::bigint AS total_collections,
+            COUNT(*) FILTER (WHERE status = 'paid')::bigint AS paid_collections,
+            COALESCE(SUM(amount) FILTER (WHERE status = 'paid'), 0)::double precision AS total_paid_amount,
+            AVG(
+              CASE
+                WHEN status = 'paid'
+                 AND paid_at IS NOT NULL
+                 AND paid_at::date > due_date
+                THEN (paid_at::date - due_date)::double precision
+                ELSE NULL
+              END
+            ) AS avg_days_late
+          FROM collection_records
+          WHERE organization_id = $1::uuid
+            AND due_date BETWEEN $2::date AND $3::date",
+    )
+    .bind(&query.org_id)
+    .bind(period_start)
+    .bind(period_end)
+    .fetch_one(pool);
 
-    // Fetch all needed data in parallel-ish style
-    let collections = list_rows(pool, "collection_records", Some(&org_filter), 20000, 0, "created_at", false).await?;
-    let units = list_rows(pool, "units", Some(&org_filter), 3000, 0, "created_at", false).await?;
-    let leases = list_rows(pool, "leases", Some(&org_filter), 5000, 0, "created_at", false).await?;
-    let tasks = list_rows(pool, "tasks", Some(&org_filter), 10000, 0, "created_at", false).await?;
+    let occupancy_query = sqlx::query(
+        "SELECT
+            (SELECT COUNT(*)::bigint
+               FROM units u
+              WHERE u.organization_id = $1::uuid) AS total_units,
+            (SELECT COUNT(*)::bigint
+               FROM leases l
+              WHERE l.organization_id = $1::uuid
+                AND l.lease_status IN ('active', 'delinquent')) AS active_leases,
+            (SELECT COUNT(*)::bigint
+               FROM leases l
+              WHERE l.organization_id = $1::uuid
+                AND l.lease_status = 'active'
+                AND l.ends_on BETWEEN $2::date AND $3::date) AS expiring_leases_60d",
+    )
+    .bind(&query.org_id)
+    .bind(today)
+    .bind(day_60)
+    .fetch_one(pool);
 
-    // ── Collection Rate ──
-    let in_period_collections: Vec<&Value> = collections
-        .iter()
-        .filter(|c| {
-            c.get("due_date")
-                .and_then(Value::as_str)
-                .and_then(|d| parse_date(d).ok())
-                .is_some_and(|d| d >= period_start && d <= period_end)
-        })
-        .collect();
-    let total_collections = in_period_collections.len() as i64;
-    let paid_collections = in_period_collections
-        .iter()
-        .filter(|c| value_str(c, "status") == "paid")
-        .count() as i64;
+    let maintenance_query = sqlx::query(
+        "SELECT
+            COUNT(*) FILTER (
+              WHERE type = 'maintenance'
+                AND status IN ('todo', 'in_progress')
+                AND (
+                  due_at IS NULL
+                  OR (due_at >= $2::timestamptz AND due_at < $3::timestamptz)
+                )
+            )::bigint AS open_maintenance_tasks,
+            AVG(
+              CASE
+                WHEN type = 'maintenance'
+                 AND status = 'done'
+                 AND completed_at IS NOT NULL
+                 AND completed_at >= created_at
+                 AND completed_at >= $2::timestamptz
+                 AND completed_at < $3::timestamptz
+                THEN EXTRACT(EPOCH FROM (completed_at - created_at)) / 3600.0
+                ELSE NULL
+              END
+            ) AS avg_maintenance_response_hours,
+            PERCENTILE_CONT(0.5) WITHIN GROUP (
+              ORDER BY EXTRACT(EPOCH FROM (completed_at - created_at)) / 3600.0
+            ) FILTER (
+              WHERE type = 'maintenance'
+                AND status = 'done'
+                AND completed_at IS NOT NULL
+                AND completed_at >= created_at
+                AND completed_at >= $2::timestamptz
+                AND completed_at < $3::timestamptz
+            ) AS median_maintenance_response_hours
+          FROM tasks
+          WHERE organization_id = $1::uuid
+            AND (
+              (
+                type = 'maintenance'
+                AND status IN ('todo', 'in_progress')
+                AND (
+                  due_at IS NULL
+                  OR (due_at >= $2::timestamptz AND due_at < $3::timestamptz)
+                )
+              )
+              OR (
+                type = 'maintenance'
+                AND status = 'done'
+                AND completed_at IS NOT NULL
+                AND completed_at >= created_at
+                AND completed_at >= $2::timestamptz
+                AND completed_at < $3::timestamptz
+              )
+            )",
+    )
+    .bind(&query.org_id)
+    .bind(period_start_ts)
+    .bind(period_end_exclusive_ts)
+    .fetch_one(pool);
+
+    let (collection_metrics, occupancy_metrics, maintenance_metrics) =
+        tokio::try_join!(collections_query, occupancy_query, maintenance_query).map_err(
+            |error| {
+                tracing::error!(error = %error, "Failed to compute KPI dashboard");
+                AppError::Dependency("Failed to compute KPI dashboard.".to_string())
+            },
+        )?;
+
+    let total_collections = collection_metrics
+        .try_get::<i64, _>("total_collections")
+        .unwrap_or(0);
+    let paid_collections = collection_metrics
+        .try_get::<i64, _>("paid_collections")
+        .unwrap_or(0);
+    let total_paid_amount = collection_metrics
+        .try_get::<f64, _>("total_paid_amount")
+        .unwrap_or(0.0);
+    let avg_days_late = round2(
+        collection_metrics
+            .try_get::<Option<f64>, _>("avg_days_late")
+            .ok()
+            .flatten()
+            .unwrap_or(0.0),
+    );
+
     let collection_rate = if total_collections > 0 {
         round4(paid_collections as f64 / total_collections as f64)
     } else {
         0.0
     };
 
-    // ── Average Days Late ──
-    let mut days_late_values: Vec<f64> = Vec::new();
-    for c in &in_period_collections {
-        let status = value_str(c, "status");
-        if status != "paid" {
-            continue;
-        }
-        let due_date = match c.get("due_date").and_then(Value::as_str).and_then(|d| parse_date(d).ok()) {
-            Some(d) => d,
-            None => continue,
-        };
-        let paid_at = c.get("paid_at").and_then(Value::as_str).and_then(|s| {
-            let trimmed = s.trim();
-            // Try date-only first, then datetime
-            parse_date(trimmed).ok().or_else(|| {
-                chrono::DateTime::parse_from_rfc3339(trimmed)
-                    .ok()
-                    .map(|dt| dt.date_naive())
-            })
-        });
-        if let Some(paid_date) = paid_at {
-            let days = (paid_date - due_date).num_days();
-            if days > 0 {
-                days_late_values.push(days as f64);
-            }
-        }
-    }
-    let avg_days_late = if days_late_values.is_empty() {
-        0.0
-    } else {
-        round2(days_late_values.iter().sum::<f64>() / days_late_values.len() as f64)
-    };
-
-    // ── Occupancy Rate (unit-months with active leases / total unit-months) ──
-    let total_units = units.len() as i64;
-    let active_leases = leases
-        .iter()
-        .filter(|l| {
-            let status = value_str(l, "lease_status");
-            status == "active" || status == "delinquent"
-        })
-        .count() as i64;
+    let total_units = occupancy_metrics
+        .try_get::<i64, _>("total_units")
+        .unwrap_or(0);
+    let active_leases = occupancy_metrics
+        .try_get::<i64, _>("active_leases")
+        .unwrap_or(0);
+    let expiring_leases = occupancy_metrics
+        .try_get::<i64, _>("expiring_leases_60d")
+        .unwrap_or(0);
     let occupancy_rate = if total_units > 0 {
         round4(std::cmp::min(active_leases, total_units) as f64 / total_units as f64)
     } else {
         0.0
     };
-
-    // ── Revenue Per Unit ──
-    let total_paid_amount: f64 = in_period_collections
-        .iter()
-        .filter(|c| value_str(c, "status") == "paid")
-        .map(|c| number_from_value(c.get("amount")))
-        .sum();
     let revenue_per_unit = if total_units > 0 {
         round2(total_paid_amount / total_units as f64)
     } else {
         0.0
     };
 
-    // ── Maintenance Response Time (avg hours from task creation to completion) ──
-    let mut response_hours: Vec<f64> = Vec::new();
-    for task in &tasks {
-        if value_str(task, "type") != "maintenance" {
-            continue;
-        }
-        if value_str(task, "status") != "done" {
-            continue;
-        }
-        let created = datetime_or_none(task.get("created_at"));
-        let completed = datetime_or_none(task.get("completed_at"));
-        if let (Some(c), Some(d)) = (created, completed) {
-            let hours = (d - c).num_hours() as f64;
-            if hours >= 0.0 {
-                response_hours.push(hours);
-            }
-        }
-    }
-    let avg_maintenance_response_hours = if response_hours.is_empty() {
-        None
-    } else {
-        Some(round2(
-            response_hours.iter().sum::<f64>() / response_hours.len() as f64,
-        ))
-    };
-    let median_maintenance_response_hours = median(&response_hours).map(round2);
-
-    // ── Expiring Leases (next 60 days) ──
-    let today = Utc::now().date_naive();
-    let day_60 = today + chrono::Duration::days(60);
-    let expiring_leases = leases
-        .iter()
-        .filter(|l| {
-            let status = value_str(l, "lease_status");
-            if status != "active" {
-                return false;
-            }
-            l.get("ends_on")
-                .and_then(Value::as_str)
-                .and_then(|d| parse_date(d).ok())
-                .is_some_and(|d| d >= today && d <= day_60)
-        })
-        .count() as i64;
-
-    // ── Open Maintenance Requests ──
-    let open_maintenance = tasks
-        .iter()
-        .filter(|t| {
-            value_str(t, "type") == "maintenance"
-                && ACTIVE_TASK_STATUSES.contains(&value_str(t, "status").as_str())
-        })
-        .count() as i64;
+    let open_maintenance = maintenance_metrics
+        .try_get::<i64, _>("open_maintenance_tasks")
+        .unwrap_or(0);
+    let avg_maintenance_response_hours = maintenance_metrics
+        .try_get::<Option<f64>, _>("avg_maintenance_response_hours")
+        .ok()
+        .flatten()
+        .map(round2);
+    let median_maintenance_response_hours = maintenance_metrics
+        .try_get::<Option<f64>, _>("median_maintenance_response_hours")
+        .ok()
+        .flatten()
+        .map(round2);
 
     Ok(Json(json!({
         "organization_id": query.org_id,
@@ -1011,13 +989,12 @@ async fn occupancy_forecast(
     let today = Utc::now().date_naive();
 
     // Total units
-    let unit_count: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*)::bigint FROM units WHERE organization_id = $1::uuid",
-    )
-    .bind(&query.org_id)
-    .fetch_one(pool)
-    .await
-    .unwrap_or(0);
+    let unit_count: i64 =
+        sqlx::query_scalar("SELECT COUNT(*)::bigint FROM units WHERE organization_id = $1::uuid")
+            .bind(&query.org_id)
+            .fetch_one(pool)
+            .await
+            .unwrap_or(0);
 
     if unit_count == 0 {
         return Ok(Json(json!({
@@ -1228,70 +1205,74 @@ async fn revenue_trend(
     assert_org_member(&state, &user_id, &query.org_id).await?;
     let pool = db_pool(&state)?;
 
-    let today = Utc::now().date_naive();
-    let org_filter = json_map(&[("organization_id", Value::String(query.org_id.clone()))]);
+    let end_date = parse_date(&query.to_date)?;
 
-    let reservations = list_rows(pool, "reservations", Some(&org_filter), 10000, 0, "created_at", false).await?;
-    let collections = list_rows(pool, "collection_records", Some(&org_filter), 20000, 0, "created_at", false).await?;
+    let monthly_rows = sqlx::query(
+        "WITH months AS (
+           SELECT
+             gs::date AS month_start,
+             (gs + interval '1 month')::date AS month_end
+           FROM generate_series(
+             date_trunc('month', $2::date) - interval '5 months',
+             date_trunc('month', $2::date),
+             interval '1 month'
+           ) gs
+         ),
+         reservation_monthly AS (
+           SELECT
+             m.month_start,
+             COALESCE(SUM(r.total_amount), 0)::double precision AS reservation_revenue
+           FROM months m
+           LEFT JOIN reservations r
+             ON r.organization_id = $1::uuid
+            AND r.status IN ('confirmed', 'checked_in', 'checked_out')
+            AND r.check_out_date > m.month_start
+            AND r.check_in_date < m.month_end
+           GROUP BY m.month_start
+         ),
+         collection_monthly AS (
+           SELECT
+             m.month_start,
+             COALESCE(
+               SUM(c.amount) FILTER (WHERE c.status = 'paid'),
+               0
+             )::double precision AS paid_collection_revenue
+           FROM months m
+           LEFT JOIN collection_records c
+             ON c.organization_id = $1::uuid
+            AND c.due_date >= m.month_start
+            AND c.due_date < m.month_end
+           GROUP BY m.month_start
+         )
+         SELECT
+           to_char(m.month_start, 'YYYY-MM') AS month,
+           (
+             COALESCE(r.reservation_revenue, 0)
+             + COALESCE(c.paid_collection_revenue, 0)
+           )::double precision AS revenue
+         FROM months m
+         LEFT JOIN reservation_monthly r ON r.month_start = m.month_start
+         LEFT JOIN collection_monthly c ON c.month_start = m.month_start
+         ORDER BY m.month_start",
+    )
+    .bind(&query.org_id)
+    .bind(end_date)
+    .fetch_all(pool)
+    .await
+    .map_err(|error| {
+        tracing::error!(error = %error, "Failed to compute revenue trend");
+        AppError::Dependency("Failed to compute revenue trend.".to_string())
+    })?;
 
-    let mut monthly_data: Vec<Value> = Vec::new();
-    for i in (0..6).rev() {
-        let offset = i;
-        let (year, month) = {
-            let m = today.month() as i32 - offset as i32;
-            if m <= 0 {
-                (
-                    today.year() - 1 + (m - 1) / 12,
-                    ((m - 1) % 12 + 12) as u32 + 1,
-                )
-            } else {
-                (today.year(), m as u32)
-            }
-        };
-
-        let month_start = NaiveDate::from_ymd_opt(year, month, 1).unwrap_or(today);
-        let month_end = if month == 12 {
-            NaiveDate::from_ymd_opt(year + 1, 1, 1)
-        } else {
-            NaiveDate::from_ymd_opt(year, month + 1, 1)
-        }
-        .unwrap_or(today);
-
-        let label = format!("{:04}-{:02}", year, month);
-
-        let mut month_revenue = 0.0;
-        for reservation in &reservations {
-            let status = value_str(reservation, "status");
-            if !REPORTABLE_STATUSES.contains(&status.as_str()) {
-                continue;
-            }
-            let ci = parse_date(&value_str(reservation, "check_in_date")).ok();
-            let co = parse_date(&value_str(reservation, "check_out_date")).ok();
-            let (Some(ci), Some(co)) = (ci, co) else {
-                continue;
-            };
-            if co <= month_start || ci >= month_end {
-                continue;
-            }
-            month_revenue += number_from_value(reservation.get("total_amount"));
-        }
-
-        for collection in &collections {
-            if value_str(collection, "status") != "paid" {
-                continue;
-            }
-            if let Ok(due_date) = parse_date(&value_str(collection, "due_date")) {
-                if due_date >= month_start && due_date < month_end {
-                    month_revenue += number_from_value(collection.get("amount"));
-                }
-            }
-        }
-
-        monthly_data.push(json!({
-            "month": label,
-            "revenue": round2(month_revenue),
-        }));
-    }
+    let monthly_data: Vec<Value> = monthly_rows
+        .into_iter()
+        .map(|row| {
+            json!({
+                "month": row.try_get::<String, _>("month").unwrap_or_default(),
+                "revenue": round2(row.try_get::<f64, _>("revenue").unwrap_or(0.0)),
+            })
+        })
+        .collect();
 
     Ok(Json(json!({
         "organization_id": query.org_id,
@@ -1304,37 +1285,21 @@ fn parse_date(value: &str) -> AppResult<NaiveDate> {
         .map_err(|_| AppError::BadRequest("Invalid ISO date.".to_string()))
 }
 
+fn start_of_day_utc(date: NaiveDate) -> chrono::DateTime<Utc> {
+    date.and_time(chrono::NaiveTime::MIN).and_utc()
+}
+
+fn parse_optional_uuid(value: Option<&str>, field: &str) -> AppResult<Option<Uuid>> {
+    let Some(raw) = non_empty_opt(value) else {
+        return Ok(None);
+    };
+    Uuid::parse_str(&raw)
+        .map(Some)
+        .map_err(|_| AppError::BadRequest(format!("Invalid {field}.")))
+}
+
 fn nights(start: NaiveDate, end: NaiveDate) -> i64 {
     (end - start).num_days().max(0)
-}
-
-fn datetime_or_none(value: Option<&Value>) -> Option<DateTime<chrono::FixedOffset>> {
-    let text = value
-        .and_then(Value::as_str)
-        .map(str::trim)
-        .filter(|item| !item.is_empty())?;
-    let mut normalized = text.to_string();
-    if normalized.ends_with('Z') {
-        normalized.truncate(normalized.len().saturating_sub(1));
-        normalized.push_str("+00:00");
-    }
-    DateTime::parse_from_rfc3339(&normalized).ok()
-}
-
-fn expense_amount_pyg(expense: &Value) -> (f64, Option<String>) {
-    let currency = value_str(expense, "currency").to_ascii_uppercase();
-    let amount = number_from_value(expense.get("amount"));
-    if currency == "PYG" {
-        return (amount, None);
-    }
-    if currency == "USD" {
-        let fx_rate = number_from_value(expense.get("fx_rate_to_pyg"));
-        if fx_rate <= 0.0 {
-            return (0.0, Some("missing_fx_rate_to_pyg".to_string()));
-        }
-        return (amount * fx_rate, None);
-    }
-    (0.0, Some(format!("unsupported_currency:{currency}")))
 }
 
 fn db_pool(state: &AppState) -> AppResult<&sqlx::PgPool> {
@@ -1360,42 +1325,6 @@ fn non_empty_opt(value: Option<&str>) -> Option<String> {
         .map(str::trim)
         .filter(|item| !item.is_empty())
         .map(ToOwned::to_owned)
-}
-
-fn number_from_value(value: Option<&Value>) -> f64 {
-    match value {
-        Some(Value::Number(number)) => number.as_f64().unwrap_or(0.0),
-        Some(Value::String(text)) => text.trim().parse::<f64>().unwrap_or(0.0),
-        _ => 0.0,
-    }
-}
-
-fn bool_value(value: Option<&Value>) -> bool {
-    match value {
-        Some(Value::Bool(flag)) => *flag,
-        Some(Value::String(text)) => {
-            let lower = text.trim().to_ascii_lowercase();
-            lower == "true" || lower == "1"
-        }
-        Some(Value::Number(number)) => number.as_i64().is_some_and(|value| value != 0),
-        _ => false,
-    }
-}
-
-fn median(values: &[f64]) -> Option<f64> {
-    if values.is_empty() {
-        return None;
-    }
-    let mut sorted = values.to_vec();
-    sorted.sort_by(|left, right| left.total_cmp(right));
-    let mid = sorted.len() / 2;
-    if sorted.len() % 2 == 1 {
-        return sorted.get(mid).copied();
-    }
-    sorted
-        .get(mid.saturating_sub(1))
-        .zip(sorted.get(mid))
-        .map(|(left, right)| (left + right) / 2.0)
 }
 
 fn json_map(entries: &[(&str, Value)]) -> Map<String, Value> {

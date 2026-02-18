@@ -361,6 +361,8 @@ async fn build_statement_breakdown(
 ) -> AppResult<StatementBreakdown> {
     let start = parse_date(period_start)?;
     let end = parse_date(period_end)?;
+    let start_iso = start.to_string();
+    let end_iso = end.to_string();
 
     let mut allowed_unit_ids: Option<std::collections::HashSet<String>> = None;
     if let Some(property_id) = property_id.map(str::trim).filter(|value| !value.is_empty()) {
@@ -392,116 +394,178 @@ async fn build_statement_breakdown(
         allowed_unit_ids = Some(ids);
     }
 
-    let mut reservations = list_rows(
-        pool,
-        "reservations",
-        Some(&json_map(&[(
+    let unit_scope = unit_id
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(ToOwned::to_owned);
+    let property_scope = property_id
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(ToOwned::to_owned);
+
+    let mut reservation_filters = json_map(&[
+        (
             "organization_id",
             Value::String(organization_id.to_string()),
-        )])),
-        5000,
-        0,
-        "created_at",
-        false,
-    )
-    .await?;
-    reservations.retain(|item| {
-        let status = item
-            .as_object()
-            .and_then(|obj| obj.get("status"))
-            .and_then(Value::as_str)
-            .map(str::trim)
-            .unwrap_or_default();
-        REPORTABLE_STATUSES.contains(&status)
-    });
-    if let Some(unit_id) = unit_id.map(str::trim).filter(|value| !value.is_empty()) {
-        reservations.retain(|item| {
-            item.as_object()
-                .and_then(|obj| obj.get("unit_id"))
-                .and_then(Value::as_str)
-                .is_some_and(|value| value == unit_id)
-        });
+        ),
+        ("check_out_date__gt", Value::String(start_iso.clone())),
+        ("check_in_date__lte", Value::String(end_iso.clone())),
+        (
+            "status",
+            Value::Array(
+                REPORTABLE_STATUSES
+                    .iter()
+                    .map(|status| Value::String((*status).to_string()))
+                    .collect(),
+            ),
+        ),
+    ]);
+    if let Some(unit_scope_id) = unit_scope.as_ref() {
+        reservation_filters.insert("unit_id".to_string(), Value::String(unit_scope_id.clone()));
     } else if let Some(allowed) = allowed_unit_ids.as_ref() {
-        reservations.retain(|item| {
-            item.as_object()
-                .and_then(|obj| obj.get("unit_id"))
-                .and_then(Value::as_str)
-                .is_some_and(|value| allowed.contains(value))
-        });
+        if !allowed.is_empty() {
+            reservation_filters.insert(
+                "unit_id".to_string(),
+                Value::Array(allowed.iter().cloned().map(Value::String).collect()),
+            );
+        }
     }
 
-    let mut expenses = list_rows(
-        pool,
-        "expenses",
-        Some(&json_map(&[(
-            "organization_id",
-            Value::String(organization_id.to_string()),
-        )])),
-        5000,
-        0,
-        "created_at",
-        false,
-    )
-    .await?;
-    if let Some(unit_id) = unit_id.map(str::trim).filter(|value| !value.is_empty()) {
-        expenses.retain(|item| {
-            item.as_object()
-                .and_then(|obj| obj.get("unit_id"))
-                .and_then(Value::as_str)
-                .is_some_and(|value| value == unit_id)
-        });
-    } else if let Some(property_id) = property_id.map(str::trim).filter(|value| !value.is_empty()) {
-        expenses.retain(|item| {
-            let item_property_id = item
-                .as_object()
-                .and_then(|obj| obj.get("property_id"))
-                .and_then(Value::as_str);
-            let item_unit_id = item
-                .as_object()
-                .and_then(|obj| obj.get("unit_id"))
-                .and_then(Value::as_str);
-            item_property_id.is_some_and(|value| value == property_id)
-                || allowed_unit_ids
-                    .as_ref()
-                    .zip(item_unit_id)
-                    .is_some_and(|(allowed, unit_value)| allowed.contains(unit_value))
-        });
+    let mut expense_base_filters = json_map(&[(
+        "organization_id",
+        Value::String(organization_id.to_string()),
+    )]);
+    expense_base_filters.insert(
+        "expense_date__gte".to_string(),
+        Value::String(start_iso.clone()),
+    );
+    expense_base_filters.insert(
+        "expense_date__lte".to_string(),
+        Value::String(end_iso.clone()),
+    );
+    if let Some(unit_scope_id) = unit_scope.as_ref() {
+        expense_base_filters.insert("unit_id".to_string(), Value::String(unit_scope_id.clone()));
+    } else if let Some(property_scope_id) = property_scope.as_ref() {
+        expense_base_filters.insert(
+            "property_id".to_string(),
+            Value::String(property_scope_id.clone()),
+        );
     }
 
-    let mut leases = list_rows(
-        pool,
-        "leases",
-        Some(&json_map(&[(
-            "organization_id",
-            Value::String(organization_id.to_string()),
-        )])),
-        6000,
-        0,
-        "created_at",
-        false,
-    )
-    .await?;
-    if let Some(unit_id) = unit_id.map(str::trim).filter(|value| !value.is_empty()) {
-        leases.retain(|item| {
-            item.as_object()
-                .and_then(|obj| obj.get("unit_id"))
-                .and_then(Value::as_str)
-                .is_some_and(|value| value == unit_id)
-        });
+    let mut lease_filters = json_map(&[(
+        "organization_id",
+        Value::String(organization_id.to_string()),
+    )]);
+    if let Some(unit_scope_id) = unit_scope.as_ref() {
+        lease_filters.insert("unit_id".to_string(), Value::String(unit_scope_id.clone()));
     } else if let Some(allowed) = allowed_unit_ids.as_ref() {
-        leases.retain(|item| {
-            item.as_object()
-                .and_then(|obj| obj.get("unit_id"))
-                .and_then(Value::as_str)
-                .is_some_and(|value| allowed.contains(value))
-        });
-    } else if let Some(property_id) = property_id.map(str::trim).filter(|value| !value.is_empty()) {
-        leases.retain(|item| {
-            item.as_object()
-                .and_then(|obj| obj.get("property_id"))
-                .and_then(Value::as_str)
-                .is_some_and(|value| value == property_id)
-        });
+        if !allowed.is_empty() {
+            lease_filters.insert(
+                "unit_id".to_string(),
+                Value::Array(allowed.iter().cloned().map(Value::String).collect()),
+            );
+        } else if let Some(property_scope_id) = property_scope.as_ref() {
+            lease_filters.insert(
+                "property_id".to_string(),
+                Value::String(property_scope_id.clone()),
+            );
+        }
+    } else if let Some(property_scope_id) = property_scope.as_ref() {
+        lease_filters.insert(
+            "property_id".to_string(),
+            Value::String(property_scope_id.clone()),
+        );
+    }
+
+    let (reservations, mut expenses, leases) = tokio::try_join!(
+        async {
+            list_rows(
+                pool,
+                "reservations",
+                Some(&reservation_filters),
+                5000,
+                0,
+                "check_in_date",
+                true,
+            )
+            .await
+        },
+        async {
+            list_rows(
+                pool,
+                "expenses",
+                Some(&expense_base_filters),
+                5000,
+                0,
+                "expense_date",
+                false,
+            )
+            .await
+        },
+        async {
+            list_rows(
+                pool,
+                "leases",
+                Some(&lease_filters),
+                6000,
+                0,
+                "created_at",
+                false,
+            )
+            .await
+        }
+    )?;
+
+    if unit_scope.is_none() {
+        if let (Some(property_scope_id), Some(allowed)) =
+            (property_scope.as_ref(), allowed_unit_ids.as_ref())
+        {
+            if !allowed.is_empty() {
+                let expense_unit_rows = list_rows(
+                    pool,
+                    "expenses",
+                    Some(&json_map(&[
+                        (
+                            "organization_id",
+                            Value::String(organization_id.to_string()),
+                        ),
+                        (
+                            "unit_id",
+                            Value::Array(allowed.iter().cloned().map(Value::String).collect()),
+                        ),
+                        ("expense_date__gte", Value::String(start_iso.clone())),
+                        ("expense_date__lte", Value::String(end_iso.clone())),
+                    ])),
+                    5000,
+                    0,
+                    "expense_date",
+                    false,
+                )
+                .await?;
+
+                let mut merged = std::collections::HashMap::new();
+                for row in expenses.drain(..).chain(expense_unit_rows.into_iter()) {
+                    let id = value_str(&row, "id");
+                    if id.is_empty() {
+                        continue;
+                    }
+                    let keep = row
+                        .as_object()
+                        .and_then(|obj| obj.get("property_id"))
+                        .and_then(Value::as_str)
+                        .is_some_and(|value| value == property_scope_id)
+                        || row
+                            .as_object()
+                            .and_then(|obj| obj.get("unit_id"))
+                            .and_then(Value::as_str)
+                            .is_some_and(|value| allowed.contains(value));
+                    if keep {
+                        merged.insert(id, row);
+                    }
+                }
+                expenses = merged.into_values().collect::<Vec<_>>();
+            }
+        }
     }
 
     let lease_index = leases
@@ -519,61 +583,80 @@ async fn build_statement_breakdown(
         .collect::<std::collections::HashMap<String, Value>>();
     let lease_ids = lease_index.keys().cloned().collect::<Vec<_>>();
 
-    let mut lease_charges = list_rows(
-        pool,
-        "lease_charges",
-        Some(&json_map(&[(
-            "organization_id",
-            Value::String(organization_id.to_string()),
-        )])),
-        15000,
-        0,
-        "created_at",
-        false,
-    )
-    .await?;
-    if !lease_ids.is_empty() {
-        let lease_set = lease_ids
-            .iter()
-            .cloned()
-            .collect::<std::collections::HashSet<_>>();
-        lease_charges.retain(|item| {
-            item.as_object()
-                .and_then(|obj| obj.get("lease_id"))
-                .and_then(Value::as_str)
-                .is_some_and(|lease_id| lease_set.contains(lease_id))
-        });
+    let (lease_charges, collections) = if lease_ids.is_empty() {
+        (Vec::new(), Vec::new())
     } else {
-        lease_charges.clear();
-    }
-
-    let mut collections = list_rows(
-        pool,
-        "collection_records",
-        Some(&json_map(&[(
-            "organization_id",
-            Value::String(organization_id.to_string()),
-        )])),
-        15000,
-        0,
-        "created_at",
-        false,
-    )
-    .await?;
-    if !lease_ids.is_empty() {
-        let lease_set = lease_ids
-            .iter()
-            .cloned()
-            .collect::<std::collections::HashSet<_>>();
-        collections.retain(|item| {
-            item.as_object()
-                .and_then(|obj| obj.get("lease_id"))
-                .and_then(Value::as_str)
-                .is_some_and(|lease_id| lease_set.contains(lease_id))
-        });
-    } else {
-        collections.clear();
-    }
+        let lease_ids_for_charges = lease_ids.clone();
+        let lease_ids_for_collections = lease_ids.clone();
+        tokio::try_join!(
+            async move {
+                list_rows(
+                    pool,
+                    "lease_charges",
+                    Some(&json_map(&[
+                        (
+                            "organization_id",
+                            Value::String(organization_id.to_string()),
+                        ),
+                        (
+                            "lease_id",
+                            Value::Array(
+                                lease_ids_for_charges
+                                    .iter()
+                                    .cloned()
+                                    .map(Value::String)
+                                    .collect(),
+                            ),
+                        ),
+                        (
+                            "charge_type",
+                            Value::Array(
+                                ["service_fee_flat", "admin_fee"]
+                                    .iter()
+                                    .map(|kind| Value::String((*kind).to_string()))
+                                    .collect(),
+                            ),
+                        ),
+                        ("charge_date__gte", Value::String(start_iso.clone())),
+                        ("charge_date__lte", Value::String(end_iso.clone())),
+                    ])),
+                    std::cmp::max(3000, (lease_ids_for_charges.len() as i64) * 12),
+                    0,
+                    "charge_date",
+                    false,
+                )
+                .await
+            },
+            async move {
+                list_rows(
+                    pool,
+                    "collection_records",
+                    Some(&json_map(&[
+                        (
+                            "organization_id",
+                            Value::String(organization_id.to_string()),
+                        ),
+                        (
+                            "lease_id",
+                            Value::Array(
+                                lease_ids_for_collections
+                                    .iter()
+                                    .cloned()
+                                    .map(Value::String)
+                                    .collect(),
+                            ),
+                        ),
+                        ("status", Value::String("paid".to_string())),
+                    ])),
+                    std::cmp::max(4000, (lease_ids_for_collections.len() as i64) * 24),
+                    0,
+                    "paid_at",
+                    false,
+                )
+                .await
+            }
+        )?
+    };
 
     let mut line_items: Vec<Value> = Vec::new();
     let mut expense_warnings: std::collections::HashMap<String, Vec<String>> =

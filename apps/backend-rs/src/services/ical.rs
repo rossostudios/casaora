@@ -191,14 +191,21 @@ fn json_map(entries: &[(&str, Value)]) -> Map<String, Value> {
 // ---------------------------------------------------------------------------
 
 /// Sync all active iCal integrations across all organizations.
-pub async fn sync_all_ical_integrations(
-    pool: &PgPool,
-    client: &Client,
-) -> Value {
+pub async fn sync_all_ical_integrations(pool: &PgPool, client: &Client) -> Value {
     let mut filters = Map::new();
     filters.insert("is_active".to_string(), Value::Bool(true));
 
-    let integrations = match list_rows(pool, "integrations", Some(&filters), 1000, 0, "created_at", true).await {
+    let integrations = match list_rows(
+        pool,
+        "integrations",
+        Some(&filters),
+        1000,
+        0,
+        "created_at",
+        true,
+    )
+    .await
+    {
         Ok(rows) => rows,
         Err(e) => {
             tracing::error!(error = %e, "Failed to fetch integrations for iCal sync");
@@ -225,10 +232,8 @@ pub async fn sync_all_ical_integrations(
             continue;
         }
 
-        let integration_id = string_value(
-            integration.as_object().and_then(|o| o.get("id")),
-        )
-        .unwrap_or_default();
+        let integration_id =
+            string_value(integration.as_object().and_then(|o| o.get("id"))).unwrap_or_default();
 
         match sync_listing_ical_reservations(pool, client, integration, "system").await {
             Ok(_result) => {
@@ -249,10 +254,7 @@ pub async fn sync_all_ical_integrations(
                     "last_ical_sync_at".to_string(),
                     Value::String(Utc::now().to_rfc3339()),
                 );
-                patch.insert(
-                    "ical_sync_error".to_string(),
-                    Value::String(error_msg),
-                );
+                patch.insert("ical_sync_error".to_string(), Value::String(error_msg));
                 let _ = update_row(pool, "integrations", &integration_id, &patch, "id").await;
                 failed += 1;
             }
@@ -472,10 +474,7 @@ async fn fetch_ical_text(client: &Client, url: &str) -> AppResult<String> {
         .get(url)
         .timeout(std::time::Duration::from_secs(20))
         .header("Accept", "text/calendar, text/plain;q=0.9, */*;q=0.1")
-        .header(
-            "User-Agent",
-            "Casaora/1.0 (+https://casaora.co)",
-        )
+        .header("User-Agent", "Casaora/1.0 (+https://casaora.co)")
         .send()
         .await
         .map_err(|e| {
@@ -513,8 +512,9 @@ pub async fn sync_listing_ical_reservations(
 
     let integration_id = string_value(obj.get("id"))
         .ok_or_else(|| AppError::BadRequest("Integration is missing id.".to_string()))?;
-    let org_id = string_value(obj.get("organization_id"))
-        .ok_or_else(|| AppError::BadRequest("Integration is missing organization_id.".to_string()))?;
+    let org_id = string_value(obj.get("organization_id")).ok_or_else(|| {
+        AppError::BadRequest("Integration is missing organization_id.".to_string())
+    })?;
     let unit_id = string_value(obj.get("unit_id"))
         .ok_or_else(|| AppError::BadRequest("Integration is missing unit_id.".to_string()))?;
     let ical_url = string_value(obj.get("ical_import_url")).ok_or_else(|| {
@@ -606,11 +606,19 @@ pub async fn sync_listing_ical_reservations(
             if string_value(existing_obj.get("unit_id")).as_deref() != Some(&unit_id) {
                 patch.insert("unit_id".to_string(), Value::String(unit_id.clone()));
             }
-            if string_value(existing_obj.get("integration_id")).as_deref() != Some(&integration_id) {
-                patch.insert("integration_id".to_string(), Value::String(integration_id.clone()));
+            if string_value(existing_obj.get("integration_id")).as_deref() != Some(&integration_id)
+            {
+                patch.insert(
+                    "integration_id".to_string(),
+                    Value::String(integration_id.clone()),
+                );
             }
-            if string_value(existing_obj.get("integration_id")).as_deref() != Some(&integration_id) {
-                patch.insert("integration_id".to_string(), Value::String(integration_id.clone()));
+            if string_value(existing_obj.get("integration_id")).as_deref() != Some(&integration_id)
+            {
+                patch.insert(
+                    "integration_id".to_string(),
+                    Value::String(integration_id.clone()),
+                );
             }
             if string_value(existing_obj.get("source")).as_deref() != Some("ical") {
                 patch.insert("source".to_string(), Value::String("ical".to_string()));

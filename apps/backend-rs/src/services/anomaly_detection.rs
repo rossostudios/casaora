@@ -10,9 +10,10 @@ use crate::{
 
 /// Run all anomaly detection checks for an organization and insert new alerts.
 pub async fn run_anomaly_scan(state: &AppState, org_id: &str) -> AppResult<Vec<Value>> {
-    let pool = state.db_pool.as_ref().ok_or_else(|| {
-        AppError::Dependency("Database not configured.".to_string())
-    })?;
+    let pool = state
+        .db_pool
+        .as_ref()
+        .ok_or_else(|| AppError::Dependency("Database not configured.".to_string()))?;
 
     let org_filter = {
         let mut map = serde_json::Map::new();
@@ -168,7 +169,12 @@ pub async fn run_anomaly_scan(state: &AppState, org_id: &str) -> AppResult<Vec<V
                 }
                 task.get("due_at")
                     .and_then(Value::as_str)
-                    .and_then(|s| chrono::DateTime::parse_from_rfc3339(s.trim().replace('Z', "+00:00").as_str()).ok())
+                    .and_then(|s| {
+                        chrono::DateTime::parse_from_rfc3339(
+                            s.trim().replace('Z', "+00:00").as_str(),
+                        )
+                        .ok()
+                    })
                     .is_some_and(|due| {
                         let days_overdue = (today - due.date_naive()).num_days();
                         days_overdue > 7
@@ -216,7 +222,12 @@ pub async fn run_anomaly_scan(state: &AppState, org_id: &str) -> AppResult<Vec<V
                 deposit
                     .get("created_at")
                     .and_then(Value::as_str)
-                    .and_then(|s| chrono::DateTime::parse_from_rfc3339(s.trim().replace('Z', "+00:00").as_str()).ok())
+                    .and_then(|s| {
+                        chrono::DateTime::parse_from_rfc3339(
+                            s.trim().replace('Z', "+00:00").as_str(),
+                        )
+                        .ok()
+                    })
                     .is_some_and(|created| (today - created.date_naive()).num_days() > 45)
             })
             .count();
@@ -228,7 +239,10 @@ pub async fn run_anomaly_scan(state: &AppState, org_id: &str) -> AppResult<Vec<V
                 "deposit_held_long",
                 "warning",
                 "Deposits held too long",
-                &format!("{} deposits have been in 'held' status for more than 45 days.", held_too_long),
+                &format!(
+                    "{} deposits have been in 'held' status for more than 45 days.",
+                    held_too_long
+                ),
                 Some("escrow_events"),
                 None,
             )
@@ -258,7 +272,7 @@ async fn insert_alert_if_new(
          WHERE organization_id = $1::uuid
            AND alert_type = $2
            AND detected_at > (now() - interval '7 days')
-           AND is_dismissed = false"
+           AND is_dismissed = false",
     )
     .bind(org_id)
     .bind(alert_type)

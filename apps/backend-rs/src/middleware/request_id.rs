@@ -30,9 +30,9 @@ pub async fn inject_request_id(request: Request, next: Next) -> Response {
 
     response.headers_mut().insert(
         "x-request-id",
-        request_id.parse().unwrap_or_else(|_| {
-            axum::http::HeaderValue::from_static("unknown")
-        }),
+        request_id
+            .parse()
+            .unwrap_or_else(|_| axum::http::HeaderValue::from_static("unknown")),
     );
 
     response

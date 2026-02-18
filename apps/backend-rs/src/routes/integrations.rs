@@ -14,7 +14,7 @@ use crate::{
     repository::table_service::{create_row, delete_row, get_row, list_rows, update_row},
     schemas::{
         clamp_limit, clamp_limit_in_range, remove_nulls, serialize_to_map, AuditLogPath,
-        AuditLogsQuery, CreateIntegrationInput, IntegrationEventsQuery, IntegrationEventPath,
+        AuditLogsQuery, CreateIntegrationInput, IntegrationEventPath, IntegrationEventsQuery,
         IntegrationPath, IntegrationsQuery, UpdateIntegrationInput,
     },
     services::{

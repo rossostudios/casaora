@@ -22,6 +22,12 @@ if (
 }
 
 type QueryValue = string | number | boolean | undefined | null;
+type NextRequestInit = RequestInit & {
+  next?: {
+    revalidate?: number;
+    tags?: string[];
+  };
+};
 
 export type OrganizationMembership = {
   id?: string;
@@ -50,15 +56,32 @@ export type OperationsSummary = {
   reservations_upcoming_check_out?: number;
 };
 const LIST_LIMIT_CAPS: Record<string, number> = {
+  "/applications": 250,
+  "/integration-events": 200,
+  "/leases": 300,
+  "/message-templates": 200,
+  "/owner-statements": 200,
   "/properties": 500,
   "/units": 500,
 };
+const DYNAMIC_LIST_LIMIT_CAPS: Array<{ pattern: RegExp; cap: number }> = [
+  { pattern: /^\/organizations\/[^/]+\/members$/, cap: 200 },
+];
 
 function applyListLimitCap(path: string, limit: number): number {
   const normalizedPath = path.split("?")[0] ?? path;
   const cap = LIST_LIMIT_CAPS[normalizedPath];
-  if (cap === undefined) return limit;
-  return Math.min(limit, cap);
+  if (cap !== undefined) {
+    return Math.min(limit, cap);
+  }
+
+  const dynamicCap = DYNAMIC_LIST_LIMIT_CAPS.find((entry) =>
+    entry.pattern.test(normalizedPath)
+  )?.cap;
+  if (dynamicCap !== undefined) {
+    return Math.min(limit, dynamicCap);
+  }
+  return limit;
 }
 
 function buildUrl(path: string, query?: Record<string, QueryValue>): string {
@@ -74,8 +97,15 @@ function buildUrl(path: string, query?: Record<string, QueryValue>): string {
 }
 
 let pendingTokenRequest: Promise<string | null> | null = null;
+let cachedAccessToken: { token: string | null; expiresAt: number } | null =
+  null;
 
 async function getAccessToken(): Promise<string | null> {
+  const now = Date.now();
+  if (cachedAccessToken && now < cachedAccessToken.expiresAt) {
+    return cachedAccessToken.token;
+  }
+
   // Dedup concurrent token requests so only one Supabase client/session
   // check runs at a time; others await its result.
   if (pendingTokenRequest) return pendingTokenRequest;
@@ -83,8 +113,14 @@ async function getAccessToken(): Promise<string | null> {
     try {
       const supabase = await createSupabaseServerClient();
       const { data } = await supabase.auth.getSession();
-      return data.session?.access_token ?? null;
+      const token = data.session?.access_token ?? null;
+      const expiresAt = data.session?.expires_at
+        ? Math.max(0, data.session.expires_at * 1000 - SERVER_TOKEN_SKEW_MS)
+        : now + SERVER_TOKEN_SKEW_MS;
+      cachedAccessToken = { token, expiresAt };
+      return token;
     } catch {
+      cachedAccessToken = null;
       return null;
     } finally {
       pendingTokenRequest = null;
@@ -95,20 +131,25 @@ async function getAccessToken(): Promise<string | null> {
 
 const TRANSIENT_STATUS_CODES = new Set([502, 503, 504]);
 const RETRY_DELAY_MS = 1000;
+const PUBLIC_CACHE_REVALIDATE_SECONDS = 120;
+const FX_CACHE_REVALIDATE_SECONDS = 900;
+const SERVER_TOKEN_SKEW_MS = 30_000;
 
 async function doFetch(
   path: string,
   url: string,
-  init?: RequestInit
+  init?: NextRequestInit,
+  options?: { includeAuth?: boolean }
 ): Promise<Response> {
   const controller = new AbortController();
   const timeoutHandle = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
+  const includeAuth = options?.includeAuth !== false;
   const signal =
     init?.signal && typeof AbortSignal.any === "function"
       ? AbortSignal.any([init.signal, controller.signal])
       : (init?.signal ?? controller.signal);
   try {
-    const token = await getAccessToken();
+    const token = includeAuth ? await getAccessToken() : null;
     return await fetch(url, {
       cache: "no-store",
       ...init,
@@ -134,15 +175,16 @@ async function doFetch(
   }
 }
 
-export async function fetchJson<T>(
+async function requestJson<T>(
   path: string,
   query?: Record<string, QueryValue>,
-  init?: RequestInit
+  init?: NextRequestInit,
+  options?: { includeAuth?: boolean }
 ): Promise<T> {
   const url = buildUrl(path, query);
   const method = (init?.method ?? "GET").toUpperCase();
 
-  let response = await doFetch(path, url, init);
+  let response = await doFetch(path, url, init, options);
 
   // Retry once on transient errors for safe (GET) requests
   if (
@@ -150,7 +192,7 @@ export async function fetchJson<T>(
     TRANSIENT_STATUS_CODES.has(response.status)
   ) {
     await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY_MS));
-    response = await doFetch(path, url, init);
+    response = await doFetch(path, url, init, options);
   }
 
   if (!response.ok) {
@@ -187,6 +229,22 @@ export async function fetchJson<T>(
   }
 
   return (await response.json()) as T;
+}
+
+export async function fetchJson<T>(
+  path: string,
+  query?: Record<string, QueryValue>,
+  init?: NextRequestInit
+): Promise<T> {
+  return requestJson(path, query, init, { includeAuth: true });
+}
+
+export async function fetchPublicJson<T>(
+  path: string,
+  query?: Record<string, QueryValue>,
+  init?: NextRequestInit
+): Promise<T> {
+  return requestJson(path, query, init, { includeAuth: false });
 }
 
 export function getApiBaseUrl(): string {
@@ -438,7 +496,7 @@ export function fetchPublicListings(params?: {
   orgId?: string;
   limit?: number;
 }): Promise<{ data?: Record<string, unknown>[] }> {
-  return fetchJson<{ data?: Record<string, unknown>[] }>(
+  return fetchPublicJson<{ data?: Record<string, unknown>[] }>(
     "/public/listings",
     {
       city: params?.city,
@@ -456,6 +514,10 @@ export function fetchPublicListings(params?: {
       min_bathrooms: params?.minBathrooms,
       org_id: params?.orgId,
       limit: params?.limit ?? 60,
+    },
+    {
+      cache: "force-cache",
+      next: { revalidate: PUBLIC_CACHE_REVALIDATE_SECONDS },
     }
   );
 }
@@ -463,15 +525,27 @@ export function fetchPublicListings(params?: {
 export function fetchPublicListing(
   slug: string
 ): Promise<Record<string, unknown>> {
-  return fetchJson<Record<string, unknown>>(
-    `/public/listings/${encodeURIComponent(slug)}`
+  return fetchPublicJson<Record<string, unknown>>(
+    `/public/listings/${encodeURIComponent(slug)}`,
+    undefined,
+    {
+      cache: "force-cache",
+      next: { revalidate: PUBLIC_CACHE_REVALIDATE_SECONDS },
+    }
   );
 }
 
 /** Fetch the cached USD→PYG exchange rate from the backend. */
 export async function fetchUsdPygRate(): Promise<number> {
   try {
-    const data = await fetchJson<{ usd_pyg: number }>("/public/fx/usd-pyg");
+    const data = await fetchPublicJson<{ usd_pyg: number }>(
+      "/public/fx/usd-pyg",
+      undefined,
+      {
+        cache: "force-cache",
+        next: { revalidate: FX_CACHE_REVALIDATE_SECONDS },
+      }
+    );
     if (data.usd_pyg && data.usd_pyg > 0) return data.usd_pyg;
   } catch {
     /* fall through to default */
@@ -482,8 +556,10 @@ export async function fetchUsdPygRate(): Promise<number> {
 export function fetchPublicPaymentInfo(
   referenceCode: string
 ): Promise<Record<string, unknown>> {
-  return fetchJson<Record<string, unknown>>(
-    `/public/payment/${encodeURIComponent(referenceCode)}`
+  return fetchPublicJson<Record<string, unknown>>(
+    `/public/payment/${encodeURIComponent(referenceCode)}`,
+    undefined,
+    { cache: "no-store" }
   );
 }
 

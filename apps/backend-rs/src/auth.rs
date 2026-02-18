@@ -112,12 +112,18 @@ async fn validate_jwt_with_jwks(state: &AppState, token: &str) -> Option<Supabas
 
     // Try with cached keys first
     let mut jwks = jwks_cache.get_jwks().await.ok()?;
-    let mut jwk = jwks.keys.iter().find(|k| k.common.key_id.as_deref() == Some(kid));
+    let mut jwk = jwks
+        .keys
+        .iter()
+        .find(|k| k.common.key_id.as_deref() == Some(kid));
 
     // If kid not found, refresh once (handles key rotation)
     if jwk.is_none() {
         jwks = jwks_cache.refresh().await.ok()?;
-        jwk = jwks.keys.iter().find(|k| k.common.key_id.as_deref() == Some(kid));
+        jwk = jwks
+            .keys
+            .iter()
+            .find(|k| k.common.key_id.as_deref() == Some(kid));
     }
 
     let jwk = jwk?;

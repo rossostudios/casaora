@@ -11,8 +11,11 @@ import { fetchList, getApiBaseUrl } from "@/lib/api";
 import { errorMessage, isOrgMembershipError } from "@/lib/errors";
 import { getActiveLocale } from "@/lib/i18n/server";
 import { getActiveOrgId } from "@/lib/org";
+import dynamic from "next/dynamic";
 
-import { LeasesManager } from "./leases-manager";
+const LeasesManager = dynamic(() =>
+  import("./leases-manager").then((m) => m.LeasesManager)
+);
 
 type PageProps = {
   searchParams: Promise<{ success?: string; error?: string }>;
@@ -61,9 +64,9 @@ export default async function LeasesModulePage({ searchParams }: PageProps) {
 
   try {
     const [leaseRows, propertyRows, unitRows] = await Promise.all([
-      fetchList("/leases", orgId, 500),
-      fetchList("/properties", orgId, 500),
-      fetchList("/units", orgId, 500),
+      fetchList("/leases", orgId, 300),
+      fetchList("/properties", orgId, 300),
+      fetchList("/units", orgId, 300),
     ]);
     leases = leaseRows as Record<string, unknown>[];
     properties = propertyRows as Record<string, unknown>[];

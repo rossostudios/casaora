@@ -73,10 +73,7 @@ async fn activate_upcoming_collections(
     result: &mut CollectionCycleResult,
 ) {
     let mut filters = Map::new();
-    filters.insert(
-        "status".to_string(),
-        Value::String("scheduled".to_string()),
-    );
+    filters.insert("status".to_string(), Value::String("scheduled".to_string()));
     if let Some(oid) = org_id {
         filters.insert(
             "organization_id".to_string(),
@@ -84,7 +81,17 @@ async fn activate_upcoming_collections(
         );
     }
 
-    let collections = match list_rows(pool, "collection_records", Some(&filters), 500, 0, "due_date", true).await {
+    let collections = match list_rows(
+        pool,
+        "collection_records",
+        Some(&filters),
+        500,
+        0,
+        "due_date",
+        true,
+    )
+    .await
+    {
         Ok(rows) => rows,
         Err(e) => {
             warn!("Failed to fetch scheduled collections: {e}");
@@ -136,7 +143,17 @@ async fn send_reminders(
         );
     }
 
-    let collections = match list_rows(pool, "collection_records", Some(&filters), 500, 0, "due_date", true).await {
+    let collections = match list_rows(
+        pool,
+        "collection_records",
+        Some(&filters),
+        500,
+        0,
+        "due_date",
+        true,
+    )
+    .await
+    {
         Ok(rows) => rows,
         Err(e) => {
             warn!("Failed to fetch pending collections: {e}");
@@ -180,7 +197,9 @@ async fn send_reminders(
         if lease_id.is_empty() {
             continue;
         }
-        let lease = match crate::repository::table_service::get_row(pool, "leases", &lease_id, "id").await {
+        let lease = match crate::repository::table_service::get_row(pool, "leases", &lease_id, "id")
+            .await
+        {
             Ok(l) => l,
             Err(_) => continue,
         };
@@ -232,10 +251,7 @@ async fn send_reminders(
             Value::String(org_id_val.clone()),
         );
         msg.insert("channel".to_string(), Value::String("whatsapp".to_string()));
-        msg.insert(
-            "recipient".to_string(),
-            Value::String(tenant_phone.clone()),
-        );
+        msg.insert("recipient".to_string(), Value::String(tenant_phone.clone()));
         msg.insert("status".to_string(), Value::String("queued".to_string()));
         msg.insert(
             "scheduled_at".to_string(),
@@ -280,7 +296,17 @@ async fn mark_late_collections(
         );
     }
 
-    let collections = match list_rows(pool, "collection_records", Some(&filters), 500, 0, "due_date", true).await {
+    let collections = match list_rows(
+        pool,
+        "collection_records",
+        Some(&filters),
+        500,
+        0,
+        "due_date",
+        true,
+    )
+    .await
+    {
         Ok(rows) => rows,
         Err(e) => {
             warn!("Failed to fetch overdue collections: {e}");
@@ -320,7 +346,9 @@ async fn mark_late_collections(
         }
 
         // Send late payment notice to tenant
-        let lease = match crate::repository::table_service::get_row(pool, "leases", &lease_id, "id").await {
+        let lease = match crate::repository::table_service::get_row(pool, "leases", &lease_id, "id")
+            .await
+        {
             Ok(l) => l,
             Err(_) => {
                 result.marked_late += 1;
@@ -348,10 +376,7 @@ async fn mark_late_collections(
             );
 
             let mut msg = Map::new();
-            msg.insert(
-                "organization_id".to_string(),
-                Value::String(org_id_val),
-            );
+            msg.insert("organization_id".to_string(), Value::String(org_id_val));
             msg.insert("channel".to_string(), Value::String("whatsapp".to_string()));
             msg.insert("recipient".to_string(), Value::String(tenant_phone));
             msg.insert("status".to_string(), Value::String("queued".to_string()));
@@ -395,7 +420,17 @@ async fn escalate_late_collections(
         );
     }
 
-    let collections = match list_rows(pool, "collection_records", Some(&filters), 500, 0, "due_date", true).await {
+    let collections = match list_rows(
+        pool,
+        "collection_records",
+        Some(&filters),
+        500,
+        0,
+        "due_date",
+        true,
+    )
+    .await
+    {
         Ok(rows) => rows,
         Err(e) => {
             warn!("Failed to fetch late collections for escalation: {e}");
@@ -426,7 +461,9 @@ async fn escalate_late_collections(
             continue;
         }
 
-        let lease = match crate::repository::table_service::get_row(pool, "leases", &lease_id, "id").await {
+        let lease = match crate::repository::table_service::get_row(pool, "leases", &lease_id, "id")
+            .await
+        {
             Ok(l) => l,
             Err(_) => continue,
         };
@@ -509,7 +546,9 @@ async fn escalate_late_collections(
             }
 
             // Fetch user's phone
-            if let Ok(user) = crate::repository::table_service::get_row(pool, "app_users", &user_id, "id").await {
+            if let Ok(user) =
+                crate::repository::table_service::get_row(pool, "app_users", &user_id, "id").await
+            {
                 let owner_phone = val_str(&user, "phone_e164");
                 if !owner_phone.is_empty() {
                     let body = format!(
@@ -551,11 +590,26 @@ async fn escalate_late_collections(
 }
 
 /// Check if a reminder of this type was already sent today for this collection.
-async fn already_sent_today(pool: &PgPool, collection_id: &str, reminder_type: &str, today_iso: &str) -> bool {
+async fn already_sent_today(
+    pool: &PgPool,
+    collection_id: &str,
+    reminder_type: &str,
+    today_iso: &str,
+) -> bool {
     let mut filters = Map::new();
     filters.insert("channel".to_string(), Value::String("whatsapp".to_string()));
 
-    let messages = match list_rows(pool, "message_logs", Some(&filters), 200, 0, "created_at", false).await {
+    let messages = match list_rows(
+        pool,
+        "message_logs",
+        Some(&filters),
+        200,
+        0,
+        "created_at",
+        false,
+    )
+    .await
+    {
         Ok(rows) => rows,
         Err(_) => return false,
     };
@@ -581,7 +635,10 @@ async fn already_sent_today(pool: &PgPool, collection_id: &str, reminder_type: &
 }
 
 /// Refresh lease status based on overdue collections.
-async fn refresh_lease_delinquent(pool: &PgPool, lease_id: &str) -> Result<(), crate::error::AppError> {
+async fn refresh_lease_delinquent(
+    pool: &PgPool,
+    lease_id: &str,
+) -> Result<(), crate::error::AppError> {
     let lease = crate::repository::table_service::get_row(pool, "leases", lease_id, "id").await?;
     let status = val_str(&lease, "lease_status");
     if status != "active" && status != "delinquent" {

@@ -510,10 +510,7 @@ pub async fn send_chat_message_streaming(
 }
 
 /// Get agent performance statistics for the last 30 days.
-pub async fn get_agent_performance_stats(
-    state: &AppState,
-    org_id: &str,
-) -> AppResult<Value> {
+pub async fn get_agent_performance_stats(state: &AppState, org_id: &str) -> AppResult<Value> {
     let pool = db_pool(state)?;
 
     // Total conversations

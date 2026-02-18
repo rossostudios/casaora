@@ -68,10 +68,10 @@ export default async function ApplicationsModulePage({
   try {
     const [applicationRows, memberRows, templateRows, alertRows] =
       await Promise.all([
-        fetchList("/applications", orgId, 500),
-        fetchList(`/organizations/${orgId}/members`, orgId, 300),
-        fetchList("/message-templates", orgId, 300),
-        fetchList("/integration-events", orgId, 200, {
+        fetchList("/applications", orgId, 250),
+        fetchList(`/organizations/${orgId}/members`, orgId, 150),
+        fetchList("/message-templates", orgId, 120),
+        fetchList("/integration-events", orgId, 100, {
           provider: "alerting",
           event_type: "application_submit_failed",
           status: "failed",

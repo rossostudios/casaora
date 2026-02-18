@@ -30,9 +30,17 @@ pub async fn generate_ai_reply(
         Value::String(org_id.to_string()),
     );
 
-    let guests = list_rows(pool, "guests", Some(&guest_filters), 1, 0, "created_at", false)
-        .await
-        .ok()?;
+    let guests = list_rows(
+        pool,
+        "guests",
+        Some(&guest_filters),
+        1,
+        0,
+        "created_at",
+        false,
+    )
+    .await
+    .ok()?;
 
     let guest = guests.first()?;
     let guest_name = guest
@@ -52,10 +60,7 @@ pub async fn generate_ai_reply(
         "organization_id".to_string(),
         Value::String(org_id.to_string()),
     );
-    res_filters.insert(
-        "guest_id".to_string(),
-        Value::String(guest_id.to_string()),
-    );
+    res_filters.insert("guest_id".to_string(), Value::String(guest_id.to_string()));
 
     let reservations = list_rows(
         pool,
@@ -94,9 +99,7 @@ pub async fn generate_ai_reply(
             .and_then(|o| o.get("status"))
             .and_then(Value::as_str)
             .unwrap_or("unknown");
-        format!(
-            "Active reservation: check-in {check_in}, check-out {check_out}, status: {status}"
-        )
+        format!("Active reservation: check-in {check_in}, check-out {check_out}, status: {status}")
     } else {
         "No active reservation found.".to_string()
     };
@@ -158,8 +161,15 @@ pub async fn generate_ai_reply(
 
     // Simple confidence heuristic: if reply contains forwarding language, low confidence
     let forward_phrases = [
-        "forward", "team", "manager", "get back to you", "check with",
-        "reenviar", "equipo", "gerente", "le responderemos",
+        "forward",
+        "team",
+        "manager",
+        "get back to you",
+        "check with",
+        "reenviar",
+        "equipo",
+        "gerente",
+        "le responderemos",
     ];
     let is_forwarding = forward_phrases
         .iter()
@@ -197,18 +207,15 @@ pub async fn queue_ai_reply(
         Value::String(recipient.to_string()),
     );
     msg.insert("status".to_string(), Value::String(status.to_string()));
-    msg.insert("direction".to_string(), Value::String("outbound".to_string()));
+    msg.insert(
+        "direction".to_string(),
+        Value::String("outbound".to_string()),
+    );
 
     let mut payload = Map::new();
     payload.insert("body".to_string(), Value::String(body.to_string()));
-    payload.insert(
-        "ai_generated".to_string(),
-        Value::Bool(true),
-    );
-    payload.insert(
-        "ai_confidence".to_string(),
-        json!(confidence),
-    );
+    payload.insert("ai_generated".to_string(), Value::Bool(true));
+    payload.insert("ai_confidence".to_string(), json!(confidence));
     msg.insert("payload".to_string(), Value::Object(payload));
 
     let _ = create_row(pool, "message_logs", &msg).await;

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import Script from "next/script";
-import { Suspense } from "react";
+import { Suspense, cache } from "react";
 
 import { ListingGalleryLightbox } from "@/components/marketplace/listing-gallery-lightbox";
 import { ListingInquiryForm } from "@/components/marketplace/listing-inquiry-form";
@@ -26,9 +26,25 @@ type MarketplaceListingPageProps = {
   params: Promise<{ slug: string }>;
 };
 
-async function resolveListing(slug: string): Promise<Record<string, unknown>> {
+const resolveListing = cache(
+  async (slug: string): Promise<Record<string, unknown>> => {
+    try {
+      return await fetchPublicListing(slug);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      if (message.includes("(404)")) {
+        notFound();
+      }
+      throw err;
+    }
+  }
+);
+
+async function resolveListingForMetadata(
+  slug: string
+): Promise<Record<string, unknown>> {
   try {
-    return await fetchPublicListing(slug);
+    return await resolveListing(slug);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     if (message.includes("(404)")) {
@@ -45,7 +61,7 @@ export async function generateMetadata({
   const { slug } = await params;
 
   try {
-    const listing = await resolveListing(slug);
+    const listing = await resolveListingForMetadata(slug);
     const vm = toMarketplaceListingViewModel({ listing, locale });
 
     const title = `${vm.title} | Casaora`;

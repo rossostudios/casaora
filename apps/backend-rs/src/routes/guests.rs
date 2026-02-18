@@ -176,7 +176,8 @@ struct SubmitVerificationInput {
 #[derive(Debug, serde::Deserialize)]
 struct ReviewVerificationInput {
     verification_status: String, // "verified" or "rejected"
-    notes: Option<String>,
+    #[serde(rename = "notes")]
+    _notes: Option<String>,
 }
 
 /// Admin submits verification documents on behalf of a guest.
@@ -237,7 +238,10 @@ async fn review_verification(
     let org_id = value_str(&record, "organization_id");
     assert_org_role(&state, &user_id, &org_id, &["owner_admin"]).await?;
 
-    if !matches!(payload.verification_status.as_str(), "verified" | "rejected") {
+    if !matches!(
+        payload.verification_status.as_str(),
+        "verified" | "rejected"
+    ) {
         return Err(AppError::BadRequest(
             "verification_status must be 'verified' or 'rejected'.".to_string(),
         ));

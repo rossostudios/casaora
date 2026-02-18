@@ -143,7 +143,13 @@ async fn create_sequence(
     Json(payload): Json<CreateSequenceInput>,
 ) -> AppResult<impl IntoResponse> {
     let user_id = require_user_id(&state, &headers).await?;
-    assert_org_role(&state, &user_id, &payload.organization_id, &["owner_admin", "operator"]).await?;
+    assert_org_role(
+        &state,
+        &user_id,
+        &payload.organization_id,
+        &["owner_admin", "operator"],
+    )
+    .await?;
     let pool = db_pool(&state)?;
 
     let mut record = Map::new();
@@ -182,8 +188,16 @@ async fn get_sequence(
         "sequence_id".to_string(),
         Value::String(path.sequence_id.clone()),
     );
-    let steps = list_rows(pool, "sequence_steps", Some(&step_filters), 50, 0, "step_order", true)
-        .await?;
+    let steps = list_rows(
+        pool,
+        "sequence_steps",
+        Some(&step_filters),
+        50,
+        0,
+        "step_order",
+        true,
+    )
+    .await?;
 
     let mut result = record.as_object().cloned().unwrap_or_default();
     result.insert("steps".to_string(), Value::Array(steps));
@@ -215,7 +229,14 @@ async fn update_sequence(
         patch.insert("is_active".to_string(), Value::Bool(active));
     }
 
-    let updated = update_row(pool, "communication_sequences", &path.sequence_id, &patch, "id").await?;
+    let updated = update_row(
+        pool,
+        "communication_sequences",
+        &path.sequence_id,
+        &patch,
+        "id",
+    )
+    .await?;
     Ok(Json(updated))
 }
 
@@ -252,7 +273,16 @@ async fn list_steps(
         "sequence_id".to_string(),
         Value::String(path.sequence_id.clone()),
     );
-    let rows = list_rows(pool, "sequence_steps", Some(&filters), 50, 0, "step_order", true).await?;
+    let rows = list_rows(
+        pool,
+        "sequence_steps",
+        Some(&filters),
+        50,
+        0,
+        "step_order",
+        true,
+    )
+    .await?;
 
     Ok(Json(json!({ "data": rows })))
 }
@@ -316,10 +346,16 @@ async fn update_step(
 
     let mut patch = Map::new();
     if let Some(order) = payload.step_order {
-        patch.insert("step_order".to_string(), Value::Number(serde_json::Number::from(order)));
+        patch.insert(
+            "step_order".to_string(),
+            Value::Number(serde_json::Number::from(order)),
+        );
     }
     if let Some(delay) = payload.delay_hours {
-        patch.insert("delay_hours".to_string(), Value::Number(serde_json::Number::from(delay)));
+        patch.insert(
+            "delay_hours".to_string(),
+            Value::Number(serde_json::Number::from(delay)),
+        );
     }
     if let Some(channel) = payload.channel {
         patch.insert("channel".to_string(), Value::String(channel));
@@ -371,7 +407,10 @@ async fn list_enrollments(
         Value::String(query.org_id.clone()),
     );
     if let Some(entity_type) = query.entity_type.as_deref().filter(|s| !s.is_empty()) {
-        filters.insert("entity_type".to_string(), Value::String(entity_type.to_string()));
+        filters.insert(
+            "entity_type".to_string(),
+            Value::String(entity_type.to_string()),
+        );
     }
     if let Some(status) = query.status.as_deref().filter(|s| !s.is_empty()) {
         filters.insert("status".to_string(), Value::String(status.to_string()));

@@ -16,8 +16,11 @@ import { errorMessage, isOrgMembershipError } from "@/lib/errors";
 import { getActiveLocale } from "@/lib/i18n/server";
 import { getActiveOrgId } from "@/lib/org";
 import { cn } from "@/lib/utils";
+import dynamic from "next/dynamic";
 
-import { StatementsManager } from "./statements-manager";
+const StatementsManager = dynamic(() =>
+  import("./statements-manager").then((m) => m.StatementsManager)
+);
 
 type PageProps = {
   searchParams: Promise<{ success?: string; error?: string }>;
@@ -67,9 +70,9 @@ export default async function OwnerStatementsModulePage({
 
   try {
     const [statementRows, propertyRows, unitRows] = await Promise.all([
-      fetchList("/owner-statements", orgId, 500),
-      fetchList("/properties", orgId, 500),
-      fetchList("/units", orgId, 500),
+      fetchList("/owner-statements", orgId, 200),
+      fetchList("/properties", orgId, 300),
+      fetchList("/units", orgId, 300),
     ]);
     statements = statementRows as Record<string, unknown>[];
     properties = propertyRows as Record<string, unknown>[];

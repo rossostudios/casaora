@@ -92,6 +92,7 @@ pub async fn create_stripe_checkout_session(
 
 /// Verify a Stripe webhook signature (simplified — uses raw body + timing-safe compare).
 /// In production, use the `stripe` crate or a proper HMAC-SHA256 verification.
+#[allow(dead_code)]
 pub fn verify_stripe_signature(
     _payload: &str,
     _signature_header: &str,

@@ -7,6 +7,7 @@ use axum::{
 use chrono::{NaiveDate, Utc};
 use serde::Deserialize;
 use serde_json::{json, Map, Value};
+use sqlx::{Postgres, QueryBuilder, Row};
 
 use crate::{
     auth::require_user_id,
@@ -14,8 +15,8 @@ use crate::{
     repository::table_service::{count_rows, create_row, get_row, list_rows, update_row},
     schemas::{
         clamp_limit_in_range, validate_input, CreateListingInput, ListingPath, ListingsQuery,
-        MarketplaceInquiryInput, PublicListingApplicationInput, PublicListingsQuery,
-        PublicListingSlugPath, SlugAvailableQuery, UpdateListingInput,
+        MarketplaceInquiryInput, PublicListingApplicationInput, PublicListingSlugPath,
+        PublicListingsQuery, SlugAvailableQuery, UpdateListingInput,
     },
     services::{
         alerting::write_alert_event,
@@ -54,10 +55,7 @@ pub fn router() -> axum::Router<AppState> {
             "/listings/{listing_id}/publish",
             axum::routing::post(publish_listing),
         )
-        .route(
-            "/public/listings",
-            axum::routing::get(list_public_listings),
-        )
+        .route("/public/listings", axum::routing::get(list_public_listings))
         .route(
             "/public/listings/{slug}",
             axum::routing::get(get_public_listing),
@@ -129,22 +127,28 @@ async fn list_listings(
     let per_page = query.per_page.clamp(1, 100);
     let offset = (page - 1) * per_page;
 
-    let sort_by = non_empty_opt(Some(query.sort_by.as_str()))
-        .unwrap_or_else(|| "created_at".to_string());
-    let ascending = query.sort_order.to_ascii_lowercase() == "asc";
+    let sort_by =
+        non_empty_opt(Some(query.sort_by.as_str())).unwrap_or_else(|| "created_at".to_string());
+    let ascending = query.sort_order.eq_ignore_ascii_case("asc");
 
-    let total = count_rows(pool, "listings", Some(&filters)).await?;
-
-    let mut rows = list_rows(
-        pool,
-        "listings",
-        Some(&filters),
-        per_page,
-        offset,
-        &sort_by,
-        ascending,
-    )
-    .await?;
+    let filters_for_total = filters.clone();
+    let filters_for_rows = filters;
+    let sort_by_for_rows = sort_by.clone();
+    let (total, mut rows) = tokio::try_join!(
+        async move { count_rows(pool, "listings", Some(&filters_for_total)).await },
+        async move {
+            list_rows(
+                pool,
+                "listings",
+                Some(&filters_for_rows),
+                per_page,
+                offset,
+                &sort_by_for_rows,
+                ascending,
+            )
+            .await
+        }
+    )?;
 
     // Post-hoc text search filter
     if let Some(q) = non_empty_opt(query.q.as_deref()) {
@@ -309,13 +313,8 @@ async fn create_listing(
             source_lines = template_lines(pool, &payload.organization_id, &template_id).await?;
         }
     }
-    let created_lines = replace_fee_lines(
-        pool,
-        &payload.organization_id,
-        &listing_id,
-        &source_lines,
-    )
-    .await?;
+    let created_lines =
+        replace_fee_lines(pool, &payload.organization_id, &listing_id, &source_lines).await?;
 
     let mut audit_after = created.as_object().cloned().unwrap_or_default();
     audit_after.insert("fee_lines".to_string(), Value::Array(created_lines));
@@ -330,6 +329,7 @@ async fn create_listing(
         Some(Value::Object(audit_after)),
     )
     .await;
+    state.public_listings_cache.clear().await;
 
     let mut rows = attach_fee_lines(pool, vec![created]).await?;
     let item = rows.pop().unwrap_or_else(|| Value::Object(Map::new()));
@@ -344,13 +344,7 @@ async fn get_listing(
     let user_id = require_user_id(&state, &headers).await?;
     let pool = db_pool(&state)?;
 
-    let record = get_row(
-        pool,
-        "listings",
-        &path.listing_id,
-        "id",
-    )
-    .await?;
+    let record = get_row(pool, "listings", &path.listing_id, "id").await?;
     let org_id = value_str(&record, "organization_id");
     assert_org_member(&state, &user_id, &org_id).await?;
 
@@ -369,13 +363,7 @@ async fn update_listing(
     let user_id = require_user_id(&state, &headers).await?;
     let pool = db_pool(&state)?;
 
-    let record = get_row(
-        pool,
-        "listings",
-        &path.listing_id,
-        "id",
-    )
-    .await?;
+    let record = get_row(pool, "listings", &path.listing_id, "id").await?;
     let org_id = value_str(&record, "organization_id");
     assert_org_role(&state, &user_id, &org_id, MARKETPLACE_EDIT_ROLES).await?;
 
@@ -466,14 +454,7 @@ async fn update_listing(
 
     let mut updated = record.clone();
     if !patch.is_empty() {
-        updated = update_row(
-            pool,
-            "listings",
-            &path.listing_id,
-            &patch,
-            "id",
-        )
-        .await?;
+        updated = update_row(pool, "listings", &path.listing_id, &patch, "id").await?;
     }
 
     if let Some(fee_lines) = payload.fee_lines.as_ref() {
@@ -499,6 +480,7 @@ async fn update_listing(
         Some(updated.clone()),
     )
     .await;
+    state.public_listings_cache.clear().await;
 
     if bool_value(updated.get("is_published")) {
         sync_linked_listing(pool, &updated, true).await;
@@ -518,13 +500,7 @@ async fn publish_listing(
     let user_id = require_user_id(&state, &headers).await?;
     let pool = db_pool(&state)?;
 
-    let record = get_row(
-        pool,
-        "listings",
-        &path.listing_id,
-        "id",
-    )
-    .await?;
+    let record = get_row(pool, "listings", &path.listing_id, "id").await?;
     let org_id = value_str(&record, "organization_id");
     assert_org_role(&state, &user_id, &org_id, MARKETPLACE_EDIT_ROLES).await?;
 
@@ -534,14 +510,7 @@ async fn publish_listing(
         ("is_published", Value::Bool(true)),
         ("published_at", Value::String(Utc::now().to_rfc3339())),
     ]);
-    let updated = update_row(
-        pool,
-        "listings",
-        &path.listing_id,
-        &patch,
-        "id",
-    )
-    .await?;
+    let updated = update_row(pool, "listings", &path.listing_id, &patch, "id").await?;
 
     sync_linked_listing(pool, &updated, true).await;
 
@@ -556,6 +525,7 @@ async fn publish_listing(
         Some(updated.clone()),
     )
     .await;
+    state.public_listings_cache.clear().await;
 
     let mut rows = attach_fee_lines(pool, vec![updated]).await?;
     Ok(Json(
@@ -568,97 +538,131 @@ async fn list_public_listings(
     Query(query): Query<PublicListingsQuery>,
 ) -> AppResult<Json<Value>> {
     ensure_marketplace_public_enabled(&state)?;
+    let cache_key = public_listings_cache_key(&query);
+    if let Some(cached) = state.public_listings_cache.get(&cache_key).await {
+        return Ok(Json(cached));
+    }
+
+    let key_lock = state.public_listings_cache.key_lock(&cache_key).await;
+    let _guard = key_lock.lock().await;
+
+    if let Some(cached) = state.public_listings_cache.get(&cache_key).await {
+        return Ok(Json(cached));
+    }
+
     let pool = db_pool(&state)?;
-
-    let mut filters = Map::new();
-    filters.insert("is_published".to_string(), Value::Bool(true));
-    if let Some(org_id) = non_empty_opt(query.org_id.as_deref()) {
-        filters.insert("organization_id".to_string(), Value::String(org_id));
-    }
-
-    let mut rows = list_rows(
-        pool,
-        "listings",
-        Some(&filters),
-        clamp_limit_in_range(query.limit, 1, 200),
-        0,
-        "published_at",
-        false,
-    )
-    .await?;
-    rows = attach_fee_lines(pool, rows).await?;
-
-    if let Some(city) = non_empty_opt(query.city.as_deref()) {
-        let expected = city.to_ascii_lowercase();
-        rows.retain(|row| value_str(row, "city").to_ascii_lowercase() == expected);
-    }
-    if let Some(neighborhood) = non_empty_opt(query.neighborhood.as_deref()) {
-        let expected = neighborhood.to_ascii_lowercase();
-        rows.retain(|row| {
-            value_str(row, "neighborhood")
-                .to_ascii_lowercase()
-                .contains(&expected)
-        });
-    }
-    if let Some(q) = non_empty_opt(query.q.as_deref()) {
-        let needle = q.to_ascii_lowercase();
-        rows.retain(|row| {
-            value_str(row, "title")
-                .to_ascii_lowercase()
-                .contains(&needle)
-                || value_str(row, "summary")
-                    .to_ascii_lowercase()
-                    .contains(&needle)
-                || value_str(row, "neighborhood")
-                    .to_ascii_lowercase()
-                    .contains(&needle)
-                || value_str(row, "description")
-                    .to_ascii_lowercase()
-                    .contains(&needle)
-        });
-    }
-    if let Some(property_type) = non_empty_opt(query.property_type.as_deref()) {
-        let expected = property_type.to_ascii_lowercase();
-        rows.retain(|row| value_str(row, "property_type").to_ascii_lowercase() == expected);
-    }
-    if let Some(furnished) = query.furnished {
-        rows.retain(|row| bool_value(row.get("furnished")) == furnished);
-    }
-    if let Some(pet_policy) = non_empty_opt(query.pet_policy.as_deref()) {
-        let expected = pet_policy.to_ascii_lowercase();
-        rows.retain(|row| {
-            value_str(row, "pet_policy")
-                .to_ascii_lowercase()
-                .contains(&expected)
-        });
-    }
-    if let Some(min_parking) = query.min_parking {
-        rows.retain(|row| integer_value(row.get("parking_spaces")) >= min_parking as i64);
-    }
-    if let Some(min_monthly) = query.min_monthly {
-        rows.retain(|row| number_value(row.get("monthly_recurring_total")) >= min_monthly);
-    }
-    if let Some(max_monthly) = query.max_monthly {
-        rows.retain(|row| number_value(row.get("monthly_recurring_total")) <= max_monthly);
-    }
-    if let Some(min_move_in) = query.min_move_in {
-        rows.retain(|row| number_value(row.get("total_move_in")) >= min_move_in);
-    }
-    if let Some(max_move_in) = query.max_move_in {
-        rows.retain(|row| number_value(row.get("total_move_in")) <= max_move_in);
-    }
-    if let Some(min_bedrooms) = query.min_bedrooms {
-        rows.retain(|row| integer_value(row.get("bedrooms")) >= min_bedrooms as i64);
-    }
-    if let Some(min_bathrooms) = query.min_bathrooms {
-        rows.retain(|row| number_value(row.get("bathrooms")) >= min_bathrooms);
-    }
+    let rows = list_public_listing_rows(pool, &query).await?;
 
     let shaped = rows
         .iter()
         .map(|row| public_shape(&state, row))
         .collect::<Vec<_>>();
-    Ok(Json(json!({ "data": shaped })))
+    let response = json!({ "data": shaped });
+    state
+        .public_listings_cache
+        .put(cache_key, response.clone())
+        .await;
+    Ok(Json(response))
+}
+
+async fn list_public_listing_rows(
+    pool: &sqlx::PgPool,
+    query: &PublicListingsQuery,
+) -> AppResult<Vec<Value>> {
+    let mut builder = QueryBuilder::<Postgres>::new(
+        "SELECT row_to_json(t) AS row FROM listings t WHERE t.is_published = true",
+    );
+
+    if let Some(org_id) = non_empty_opt(query.org_id.as_deref()) {
+        let parsed = uuid::Uuid::parse_str(&org_id)
+            .map_err(|_| AppError::BadRequest("Invalid org_id format.".to_string()))?;
+        builder.push(" AND t.organization_id = ").push_bind(parsed);
+    }
+    if let Some(city) = non_empty_opt(query.city.as_deref()) {
+        builder
+            .push(" AND lower(t.city) = ")
+            .push_bind(city.to_ascii_lowercase());
+    }
+    if let Some(neighborhood) = non_empty_opt(query.neighborhood.as_deref()) {
+        builder
+            .push(" AND lower(coalesce(t.neighborhood, '')) LIKE ")
+            .push_bind(format!("%{}%", neighborhood.to_ascii_lowercase()));
+    }
+    if let Some(q) = non_empty_opt(query.q.as_deref()) {
+        let needle = format!("%{}%", q.to_ascii_lowercase());
+        builder
+            .push(" AND (lower(coalesce(t.title, '')) LIKE ")
+            .push_bind(needle.clone())
+            .push(" OR lower(coalesce(t.summary, '')) LIKE ")
+            .push_bind(needle.clone())
+            .push(" OR lower(coalesce(t.neighborhood, '')) LIKE ")
+            .push_bind(needle.clone())
+            .push(" OR lower(coalesce(t.description, '')) LIKE ")
+            .push_bind(needle)
+            .push(")");
+    }
+    if let Some(property_type) = non_empty_opt(query.property_type.as_deref()) {
+        builder
+            .push(" AND lower(coalesce(t.property_type, '')) = ")
+            .push_bind(property_type.to_ascii_lowercase());
+    }
+    if let Some(furnished) = query.furnished {
+        builder.push(" AND t.furnished = ").push_bind(furnished);
+    }
+    if let Some(pet_policy) = non_empty_opt(query.pet_policy.as_deref()) {
+        builder
+            .push(" AND lower(coalesce(t.pet_policy, '')) LIKE ")
+            .push_bind(format!("%{}%", pet_policy.to_ascii_lowercase()));
+    }
+    if let Some(min_parking) = query.min_parking {
+        builder
+            .push(" AND coalesce(t.parking_spaces, 0) >= ")
+            .push_bind(min_parking);
+    }
+    if let Some(min_bedrooms) = query.min_bedrooms {
+        builder
+            .push(" AND coalesce(t.bedrooms, 0) >= ")
+            .push_bind(min_bedrooms);
+    }
+    if let Some(min_bathrooms) = query.min_bathrooms {
+        builder
+            .push(" AND coalesce(t.bathrooms, 0) >= ")
+            .push_bind(min_bathrooms);
+    }
+    if let Some(min_monthly) = query.min_monthly {
+        builder
+            .push(" AND coalesce(t.monthly_recurring_total, 0) >= ")
+            .push_bind(min_monthly);
+    }
+    if let Some(max_monthly) = query.max_monthly {
+        builder
+            .push(" AND coalesce(t.monthly_recurring_total, 0) <= ")
+            .push_bind(max_monthly);
+    }
+    if let Some(min_move_in) = query.min_move_in {
+        builder
+            .push(" AND coalesce(t.total_move_in, 0) >= ")
+            .push_bind(min_move_in);
+    }
+    if let Some(max_move_in) = query.max_move_in {
+        builder
+            .push(" AND coalesce(t.total_move_in, 0) <= ")
+            .push_bind(max_move_in);
+    }
+
+    builder
+        .push(" ORDER BY t.published_at DESC NULLS LAST, t.created_at DESC LIMIT ")
+        .push_bind(clamp_limit_in_range(query.limit, 1, 200));
+
+    let rows = builder.build().fetch_all(pool).await.map_err(|err| {
+        tracing::error!(db_error = %err, "Failed listing query");
+        AppError::Dependency("Database operation failed.".to_string())
+    })?;
+
+    Ok(rows
+        .into_iter()
+        .filter_map(|row| row.try_get::<Option<Value>, _>("row").ok().flatten())
+        .collect())
 }
 
 async fn get_public_listing(
@@ -682,9 +686,7 @@ async fn get_public_listing(
     )
     .await?;
     if rows.is_empty() {
-        return Err(AppError::NotFound(
-            "Public listing not found.".to_string(),
-        ));
+        return Err(AppError::NotFound("Public listing not found.".to_string()));
     }
 
     let mut attached = attach_fee_lines(pool, rows).await?;
@@ -755,9 +757,17 @@ async fn listing_availability(
     let mut res_filters = Map::new();
     res_filters.insert("organization_id".to_string(), Value::String(org_id.clone()));
     res_filters.insert("unit_id".to_string(), Value::String(unit_id.clone()));
-    let reservations = list_rows(pool, "reservations", Some(&res_filters), 500, 0, "check_in_date", true)
-        .await
-        .unwrap_or_default();
+    let reservations = list_rows(
+        pool,
+        "reservations",
+        Some(&res_filters),
+        500,
+        0,
+        "check_in_date",
+        true,
+    )
+    .await
+    .unwrap_or_default();
 
     let active_statuses = ["pending", "confirmed", "checked_in"];
     let booked_ranges: Vec<(NaiveDate, NaiveDate)> = reservations
@@ -768,8 +778,10 @@ async fn listing_availability(
             if !active_statuses.contains(&status) {
                 return None;
             }
-            let ci = NaiveDate::parse_from_str(obj.get("check_in_date")?.as_str()?, "%Y-%m-%d").ok()?;
-            let co = NaiveDate::parse_from_str(obj.get("check_out_date")?.as_str()?, "%Y-%m-%d").ok()?;
+            let ci =
+                NaiveDate::parse_from_str(obj.get("check_in_date")?.as_str()?, "%Y-%m-%d").ok()?;
+            let co =
+                NaiveDate::parse_from_str(obj.get("check_out_date")?.as_str()?, "%Y-%m-%d").ok()?;
             if co <= grid_start || ci >= grid_end {
                 return None;
             }
@@ -781,15 +793,24 @@ async fn listing_availability(
     let mut block_filters = Map::new();
     block_filters.insert("organization_id".to_string(), Value::String(org_id));
     block_filters.insert("unit_id".to_string(), Value::String(unit_id));
-    let blocks = list_rows(pool, "calendar_blocks", Some(&block_filters), 500, 0, "start_date", true)
-        .await
-        .unwrap_or_default();
+    let blocks = list_rows(
+        pool,
+        "calendar_blocks",
+        Some(&block_filters),
+        500,
+        0,
+        "start_date",
+        true,
+    )
+    .await
+    .unwrap_or_default();
 
     let blocked_ranges: Vec<(NaiveDate, NaiveDate)> = blocks
         .iter()
         .filter_map(|b| {
             let obj = b.as_object()?;
-            let sd = NaiveDate::parse_from_str(obj.get("start_date")?.as_str()?, "%Y-%m-%d").ok()?;
+            let sd =
+                NaiveDate::parse_from_str(obj.get("start_date")?.as_str()?, "%Y-%m-%d").ok()?;
             let ed = NaiveDate::parse_from_str(obj.get("end_date")?.as_str()?, "%Y-%m-%d").ok()?;
             if ed <= grid_start || sd >= grid_end {
                 return None;
@@ -804,9 +825,15 @@ async fn listing_availability(
     while current < grid_end {
         let status = if current < today {
             "past"
-        } else if booked_ranges.iter().any(|(ci, co)| current >= *ci && current < *co) {
+        } else if booked_ranges
+            .iter()
+            .any(|(ci, co)| current >= *ci && current < *co)
+        {
             "booked"
-        } else if blocked_ranges.iter().any(|(sd, ed)| current >= *sd && current < *ed) {
+        } else if blocked_ranges
+            .iter()
+            .any(|(sd, ed)| current >= *sd && current < *ed)
+        {
             "blocked"
         } else {
             "available"
@@ -847,9 +874,7 @@ async fn start_public_listing_application(
     )
     .await?;
     if rows.is_empty() {
-        return Err(AppError::NotFound(
-            "Public listing not found.".to_string(),
-        ));
+        return Err(AppError::NotFound("Public listing not found.".to_string()));
     }
     let listing = rows
         .first()
@@ -891,9 +916,7 @@ async fn track_public_listing_whatsapp_contact(
     )
     .await?;
     if rows.is_empty() {
-        return Err(AppError::NotFound(
-            "Public listing not found.".to_string(),
-        ));
+        return Err(AppError::NotFound("Public listing not found.".to_string()));
     }
     let listing = rows
         .first()
@@ -925,9 +948,7 @@ async fn submit_public_listing_application(
     ensure_marketplace_public_enabled(&state)?;
     let pool = db_pool(&state)?;
 
-    let listing = if let Some(listing_id) =
-        non_empty_opt(payload.listing_id.as_deref())
-    {
+    let listing = if let Some(listing_id) = non_empty_opt(payload.listing_id.as_deref()) {
         Some(get_row(pool, "listings", &listing_id, "id").await?)
     } else if let Some(slug) = non_empty_opt(payload.listing_slug.as_deref()) {
         let rows = list_rows(
@@ -1094,9 +1115,7 @@ async fn submit_inquiry(
     )
     .await?;
     if rows.is_empty() {
-        return Err(AppError::NotFound(
-            "Public listing not found.".to_string(),
-        ));
+        return Err(AppError::NotFound("Public listing not found.".to_string()));
     }
     let listing = rows
         .first()
@@ -1125,15 +1144,9 @@ async fn submit_inquiry(
         Value::String(payload.email.clone()),
     );
     if let Some(phone) = &payload.phone_e164 {
-        msg_payload.insert(
-            "sender_phone".to_string(),
-            Value::String(phone.clone()),
-        );
+        msg_payload.insert("sender_phone".to_string(), Value::String(phone.clone()));
     }
-    msg_payload.insert(
-        "listing_slug".to_string(),
-        Value::String(path.slug.clone()),
-    );
+    msg_payload.insert("listing_slug".to_string(), Value::String(path.slug.clone()));
     msg_payload.insert(
         "listing_id".to_string(),
         listing.get("id").cloned().unwrap_or(Value::Null),
@@ -1153,10 +1166,7 @@ async fn submit_inquiry(
         "direction".to_string(),
         Value::String("inbound".to_string()),
     );
-    log.insert(
-        "status".to_string(),
-        Value::String("delivered".to_string()),
-    );
+    log.insert("status".to_string(), Value::String("delivered".to_string()));
     log.insert(
         "sent_at".to_string(),
         Value::String(Utc::now().to_rfc3339()),
@@ -1219,9 +1229,10 @@ async fn list_saved_searches(
     let rows = list_rows(
         pool,
         "saved_searches",
-        Some(&json_map(&[
-            ("visitor_id", Value::String(visitor_id.to_string())),
-        ])),
+        Some(&json_map(&[(
+            "visitor_id",
+            Value::String(visitor_id.to_string()),
+        )])),
         50,
         0,
         "created_at",
@@ -1368,10 +1379,7 @@ async fn replace_fee_lines(
         };
         let payload = json_map(&[
             ("organization_id", Value::String(org_id.to_string())),
-            (
-                "listing_id",
-                Value::String(listing_id.to_string()),
-            ),
+            ("listing_id", Value::String(listing_id.to_string())),
             (
                 "fee_type",
                 obj.get("fee_type").cloned().unwrap_or(Value::Null),
@@ -1395,6 +1403,17 @@ async fn replace_fee_lines(
         let created = create_row(pool, "listing_fee_lines", &payload).await?;
         created_lines.push(created);
     }
+
+    let totals = compute_pricing_totals(&created_lines);
+    let pricing_patch = json_map(&[
+        ("total_move_in", json!(totals.total_move_in)),
+        (
+            "monthly_recurring_total",
+            json!(totals.monthly_recurring_total),
+        ),
+    ]);
+    let _ = update_row(pool, "listings", listing_id, &pricing_patch, "id").await?;
+
     Ok(created_lines)
 }
 
@@ -1465,24 +1484,112 @@ async fn attach_fee_lines(pool: &sqlx::PgPool, rows: Vec<Value>) -> AppResult<Ve
         .map(str::trim)
         .filter(|value| !value.is_empty())
         .map(ToOwned::to_owned)
+        .collect::<std::collections::HashSet<_>>()
+        .into_iter()
         .collect::<Vec<_>>();
     if row_ids.is_empty() {
         return Ok(rows);
     }
 
-    let fee_lines = list_rows(
-        pool,
-        "listing_fee_lines",
-        Some(&json_map(&[(
-            "listing_id",
-            Value::Array(row_ids.iter().cloned().map(Value::String).collect()),
-        )])),
-        std::cmp::max(200, (row_ids.len() as i64) * 20),
-        0,
-        "sort_order",
-        true,
-    )
-    .await?;
+    let unit_ids = rows
+        .iter()
+        .filter_map(Value::as_object)
+        .filter_map(|row| row.get("unit_id"))
+        .filter_map(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(ToOwned::to_owned)
+        .collect::<std::collections::HashSet<_>>()
+        .into_iter()
+        .collect::<Vec<_>>();
+    let property_ids = rows
+        .iter()
+        .filter_map(Value::as_object)
+        .filter_map(|row| row.get("property_id"))
+        .filter_map(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(ToOwned::to_owned)
+        .collect::<std::collections::HashSet<_>>()
+        .into_iter()
+        .collect::<Vec<_>>();
+
+    let row_ids_for_query = row_ids.clone();
+    let unit_ids_for_query = unit_ids.clone();
+    let property_ids_for_query = property_ids.clone();
+    let (fee_lines, units, properties) = tokio::try_join!(
+        async move {
+            list_rows(
+                pool,
+                "listing_fee_lines",
+                Some(&json_map(&[(
+                    "listing_id",
+                    Value::Array(
+                        row_ids_for_query
+                            .iter()
+                            .cloned()
+                            .map(Value::String)
+                            .collect(),
+                    ),
+                )])),
+                std::cmp::max(200, (row_ids_for_query.len() as i64) * 20),
+                0,
+                "sort_order",
+                true,
+            )
+            .await
+        },
+        async move {
+            if unit_ids_for_query.is_empty() {
+                Ok(Vec::new())
+            } else {
+                list_rows(
+                    pool,
+                    "units",
+                    Some(&json_map(&[(
+                        "id",
+                        Value::Array(
+                            unit_ids_for_query
+                                .iter()
+                                .cloned()
+                                .map(Value::String)
+                                .collect(),
+                        ),
+                    )])),
+                    std::cmp::max(200, unit_ids_for_query.len() as i64),
+                    0,
+                    "created_at",
+                    false,
+                )
+                .await
+            }
+        },
+        async move {
+            if property_ids_for_query.is_empty() {
+                Ok(Vec::new())
+            } else {
+                list_rows(
+                    pool,
+                    "properties",
+                    Some(&json_map(&[(
+                        "id",
+                        Value::Array(
+                            property_ids_for_query
+                                .iter()
+                                .cloned()
+                                .map(Value::String)
+                                .collect(),
+                        ),
+                    )])),
+                    std::cmp::max(200, property_ids_for_query.len() as i64),
+                    0,
+                    "created_at",
+                    false,
+                )
+                .await
+            }
+        }
+    )?;
 
     let mut grouped: std::collections::HashMap<String, Vec<Value>> =
         std::collections::HashMap::new();
@@ -1494,72 +1601,23 @@ async fn attach_fee_lines(pool: &sqlx::PgPool, rows: Vec<Value>) -> AppResult<Ve
         grouped.entry(key).or_default().push(line);
     }
 
-    let unit_ids = rows
-        .iter()
-        .filter_map(Value::as_object)
-        .filter_map(|row| row.get("unit_id"))
-        .filter_map(Value::as_str)
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .map(ToOwned::to_owned)
-        .collect::<Vec<_>>();
-    let property_ids = rows
-        .iter()
-        .filter_map(Value::as_object)
-        .filter_map(|row| row.get("property_id"))
-        .filter_map(Value::as_str)
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .map(ToOwned::to_owned)
-        .collect::<Vec<_>>();
-
     let mut unit_name: std::collections::HashMap<String, String> = std::collections::HashMap::new();
-    if !unit_ids.is_empty() {
-        let units = list_rows(
-            pool,
-            "units",
-            Some(&json_map(&[(
-                "id",
-                Value::Array(unit_ids.iter().cloned().map(Value::String).collect()),
-            )])),
-            std::cmp::max(200, unit_ids.len() as i64),
-            0,
-            "created_at",
-            false,
-        )
-        .await?;
-        for unit in units {
-            let id = value_str(&unit, "id");
-            if id.is_empty() {
-                continue;
-            }
-            unit_name.insert(id, value_str(&unit, "name"));
+    for unit in units {
+        let id = value_str(&unit, "id");
+        if id.is_empty() {
+            continue;
         }
+        unit_name.insert(id, value_str(&unit, "name"));
     }
 
     let mut property_name: std::collections::HashMap<String, String> =
         std::collections::HashMap::new();
-    if !property_ids.is_empty() {
-        let properties = list_rows(
-            pool,
-            "properties",
-            Some(&json_map(&[(
-                "id",
-                Value::Array(property_ids.iter().cloned().map(Value::String).collect()),
-            )])),
-            std::cmp::max(200, property_ids.len() as i64),
-            0,
-            "created_at",
-            false,
-        )
-        .await?;
-        for property in properties {
-            let id = value_str(&property, "id");
-            if id.is_empty() {
-                continue;
-            }
-            property_name.insert(id, value_str(&property, "name"));
+    for property in properties {
+        let id = value_str(&property, "id");
+        if id.is_empty() {
+            continue;
         }
+        property_name.insert(id, value_str(&property, "name"));
     }
 
     let mut attached = Vec::with_capacity(rows.len());
@@ -1630,9 +1688,7 @@ async fn attach_fee_lines(pool: &sqlx::PgPool, rows: Vec<Value>) -> AppResult<Ve
 async fn assert_publishable(state: &AppState, pool: &sqlx::PgPool, row: &Value) -> AppResult<()> {
     let row_id = value_str(row, "id");
     if row_id.is_empty() {
-        return Err(AppError::BadRequest(
-            "Invalid listing id.".to_string(),
-        ));
+        return Err(AppError::BadRequest("Invalid listing id.".to_string()));
     }
 
     let row_obj = row.as_object().cloned().unwrap_or_default();
@@ -1646,10 +1702,7 @@ async fn assert_publishable(state: &AppState, pool: &sqlx::PgPool, row: &Value) 
     let lines = list_rows(
         pool,
         "listing_fee_lines",
-        Some(&json_map(&[(
-            "listing_id",
-            Value::String(row_id),
-        )])),
+        Some(&json_map(&[("listing_id", Value::String(row_id))])),
         300,
         0,
         "sort_order",
@@ -1735,6 +1788,10 @@ fn public_shape(state: &AppState, row: &Value) -> Value {
         "fee_breakdown_complete": bool_value(row.get("fee_breakdown_complete")),
         "missing_required_fee_lines": row.get("missing_required_fee_lines").cloned().unwrap_or_else(|| Value::Array(Vec::new())),
     })
+}
+
+fn public_listings_cache_key(query: &PublicListingsQuery) -> String {
+    serde_json::to_string(query).unwrap_or_else(|_| "default".to_string())
 }
 
 fn sanitize_listing_payload(
@@ -1964,26 +2021,10 @@ fn bool_value(value: Option<&Value>) -> bool {
     }
 }
 
-fn integer_value(value: Option<&Value>) -> i64 {
-    match value {
-        Some(Value::Number(number)) => number.as_i64().unwrap_or(0),
-        Some(Value::String(text)) => text.trim().parse::<i64>().unwrap_or(0),
-        _ => 0,
-    }
-}
-
 fn integer_strict_value(value: &Value) -> Option<i64> {
     match value {
         Value::Number(number) => number.as_i64(),
         _ => None,
-    }
-}
-
-fn number_value(value: Option<&Value>) -> f64 {
-    match value {
-        Some(Value::Number(number)) => number.as_f64().unwrap_or(0.0),
-        Some(Value::String(text)) => text.trim().parse::<f64>().unwrap_or(0.0),
-        _ => 0.0,
     }
 }
 

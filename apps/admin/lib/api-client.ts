@@ -76,6 +76,41 @@ import { createBrowserClient } from "@supabase/ssr";
 
 const AUTHED_API_BASE =
   process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000/v1";
+const CLIENT_TOKEN_SKEW_MS = 30_000;
+
+type BrowserSupabaseClient = ReturnType<typeof createBrowserClient>;
+
+let browserSupabaseClient: BrowserSupabaseClient | null = null;
+let cachedClientToken: { token: string | null; expiresAt: number } | null = null;
+
+function getBrowserSupabaseClient(): BrowserSupabaseClient {
+  if (!browserSupabaseClient) {
+    browserSupabaseClient = createBrowserClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    );
+  }
+  return browserSupabaseClient;
+}
+
+async function getClientAccessToken(): Promise<string | null> {
+  const now = Date.now();
+  if (cachedClientToken && now < cachedClientToken.expiresAt) {
+    return cachedClientToken.token;
+  }
+
+  const supabase = getBrowserSupabaseClient();
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+
+  const token = session?.access_token ?? null;
+  const expiresAtMs = session?.expires_at
+    ? Math.max(0, session.expires_at * 1000 - CLIENT_TOKEN_SKEW_MS)
+    : now + CLIENT_TOKEN_SKEW_MS;
+  cachedClientToken = { token, expiresAt: expiresAtMs };
+  return token;
+}
 
 /**
  * Client-side fetch that automatically attaches the Supabase JWT.
@@ -85,14 +120,7 @@ export async function authedFetch<T>(
   path: string,
   init?: RequestInit
 ): Promise<T> {
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  );
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-  const token = session?.access_token;
+  const token = await getClientAccessToken();
 
   const res = await fetch(`${AUTHED_API_BASE}${path}`, {
     ...init,
