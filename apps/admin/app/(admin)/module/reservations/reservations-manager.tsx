@@ -2,6 +2,8 @@
 
 import {
   Calendar02Icon,
+  Calendar03Icon,
+  Globe02Icon,
   Home01Icon,
   LeftToRightListBulletIcon,
   Login03Icon,
@@ -10,15 +12,18 @@ import {
   PlusSignIcon,
 } from "@hugeicons/core-free-icons";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { CartesianGrid, Line, LineChart, XAxis, YAxis } from "recharts";
 
 import {
+  bulkTransitionReservationStatusAction,
   createCalendarBlockAction,
   createReservationAction,
   deleteCalendarBlockAction,
   transitionReservationStatusAction,
 } from "@/app/(admin)/module/reservations/actions";
+import { ReservationsExportButton } from "@/components/reservations/reservations-export-button";
+import { MonthlyCalendar } from "@/app/(admin)/module/reservations/monthly-calendar";
 import { WeeklyCalendar } from "@/app/(admin)/module/reservations/weekly-calendar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -47,7 +52,13 @@ import {
   TableCell,
   TableRow,
 } from "@/components/ui/table";
+import { useNewBookingToast } from "@/lib/features/reservations/use-new-booking-toast";
 import { formatCurrency } from "@/lib/format";
+import {
+  type ReservationSavedView,
+  getAllViews,
+  PRESET_VIEWS_ES,
+} from "@/lib/features/reservations/saved-views";
 import { useActiveLocale } from "@/lib/i18n/client";
 import type { ColumnDef } from "@tanstack/react-table";
 
@@ -82,6 +93,9 @@ type ReservationRow = {
   integration_id?: string | null;
   integration_name?: string | null;
   channel_name?: string | null;
+
+  source?: string | null;
+  listing_public_slug?: string | null;
 };
 
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -226,7 +240,7 @@ export function ReservationsManager({
   units,
 }: {
   blocks: Record<string, unknown>[];
-  defaultView?: "list" | "calendar";
+  defaultView?: "list" | "calendar" | "month";
   orgId: string;
   reservations: Record<string, unknown>[];
   units: Record<string, unknown>[];
@@ -235,9 +249,13 @@ export function ReservationsManager({
   const isEn = locale === "en-US";
   const router = useRouter();
 
+  useNewBookingToast({ enabled: true, isEn });
+
   const [open, setOpen] = useState(false);
   const [blockSheetOpen, setBlockSheetOpen] = useState(false);
-  const [viewMode, setViewMode] = useState<"list" | "calendar">(defaultView);
+  const [selectedRows, setSelectedRows] = useState<DataTableRow[]>([]);
+  const [bulkActionPending, setBulkActionPending] = useState(false);
+  const [viewMode, setViewMode] = useState<"list" | "calendar" | "month">(defaultView);
 
   // Listen for header button custom event
   useEffect(() => {
@@ -249,9 +267,22 @@ export function ReservationsManager({
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("all");
   const [unitId, setUnitId] = useState("all");
+  const [sourceFilter, setSourceFilter] = useState("all");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [quickFilter, setQuickFilter] = useState<QuickFilter>("all");
+
+  const [activeViewId, setActiveViewId] = useState("all");
+
+  const savedViews = useMemo(() => getAllViews(), []);
+
+  const applySavedView = (view: ReservationSavedView) => {
+    setActiveViewId(view.id);
+    setStatus(view.statusFilter);
+    setSourceFilter(view.sourceFilter);
+    setUnitId(view.unitId);
+    setQuickFilter(view.quickFilter as QuickFilter);
+  };
 
   const today = useMemo(() => new Date().toISOString().slice(0, 10), []);
 
@@ -304,6 +335,9 @@ export function ReservationsManager({
         total_amount: asNumber(row.total_amount) ?? null,
         amount_paid: asNumber(row.amount_paid) ?? null,
         currency: asString(row.currency).trim() || null,
+
+        source: asString(row.source).trim() || null,
+        listing_public_slug: asString(row.listing_public_slug).trim() || null,
       } satisfies DataTableRow;
     });
   }, [reservations]);
@@ -313,6 +347,7 @@ export function ReservationsManager({
     let arrivalsToday = 0;
     let departuresToday = 0;
     let inHouse = 0;
+    let marketplace = 0;
 
     for (const row of allRows) {
       const s = asString(row.status).toLowerCase();
@@ -328,9 +363,12 @@ export function ReservationsManager({
       if (s === "checked_in") {
         inHouse++;
       }
+      if (asString(row.source).toLowerCase() === "direct_booking") {
+        marketplace++;
+      }
     }
 
-    return { arrivalsToday, departuresToday, inHouse };
+    return { arrivalsToday, departuresToday, inHouse, marketplace };
   }, [allRows, today]);
 
   const filteredRows = useMemo(() => {
@@ -369,6 +407,13 @@ export function ReservationsManager({
         return false;
       }
 
+      if (sourceFilter !== "all") {
+        const rowSource = asString(row.source).trim().toLowerCase();
+        if (sourceFilter === "direct_booking" && rowSource !== "direct_booking") return false;
+        if (sourceFilter === "manual" && rowSource !== "manual" && rowSource !== "") return false;
+        if (sourceFilter === "external" && rowSource !== "external") return false;
+      }
+
       const start = asString(row.check_in_date).trim();
       const end = asString(row.check_out_date).trim();
       if (!overlapsRange({ start, end, from, to })) {
@@ -385,6 +430,7 @@ export function ReservationsManager({
         row.integration_name,
         row.channel_name,
         row.status,
+        row.source,
       ]
         .map((value) => asString(value).trim().toLowerCase())
         .filter(Boolean)
@@ -392,7 +438,7 @@ export function ReservationsManager({
 
       return haystack.includes(needle);
     });
-  }, [allRows, from, query, quickFilter, status, to, today, unitId]);
+  }, [allRows, from, query, quickFilter, sourceFilter, status, to, today, unitId]);
 
   // Period revenue from filtered rows
   const periodRevenue = useMemo(() => {
@@ -503,6 +549,33 @@ export function ReservationsManager({
               variant="outline"
             >
               {display}
+            </Badge>
+          );
+        },
+      },
+      {
+        id: "source",
+        header: isEn ? "Source" : "Origen",
+        size: 110,
+        cell: ({ row }) => {
+          const source = asString(row.original.source).trim().toLowerCase();
+          if (!source || source === "manual") {
+            return (
+              <Badge className="bg-muted text-muted-foreground border-0 px-1.5 py-0 text-[10px]">
+                Manual
+              </Badge>
+            );
+          }
+          if (source === "direct_booking") {
+            return (
+              <Badge className="bg-primary/10 text-primary border-0 px-1.5 py-0 text-[10px]">
+                Marketplace
+              </Badge>
+            );
+          }
+          return (
+            <Badge className="px-1.5 py-0 text-[10px]" variant="outline">
+              {source}
             </Badge>
           );
         },
@@ -633,26 +706,28 @@ export function ReservationsManager({
     }
   };
 
+  const handleBulkAction = useCallback(
+    async (targetStatus: string) => {
+      const ids = selectedRows.map((r) => asString(r.id).trim()).filter(Boolean);
+      if (ids.length === 0) return;
+      setBulkActionPending(true);
+      try {
+        await bulkTransitionReservationStatusAction(ids, targetStatus);
+        setSelectedRows([]);
+        router.refresh();
+      } finally {
+        setBulkActionPending(false);
+      }
+    },
+    [selectedRows, router],
+  );
+
   const applyQuickFilter = (filter: QuickFilter) => {
     setQuickFilter(filter);
     if (filter !== "all") {
       setStatus("all");
     }
   };
-
-  const quickFilterTabs: { key: QuickFilter; label: string }[] = [
-    { key: "all", label: isEn ? "All" : "Todas" },
-    {
-      key: "arrivals_today",
-      label: isEn ? "Arrivals Today" : "Llegadas hoy",
-    },
-    {
-      key: "departures_today",
-      label: isEn ? "Departures Today" : "Salidas hoy",
-    },
-    { key: "in_house", label: isEn ? "In-House" : "In-house" },
-    { key: "pending", label: isEn ? "Pending" : "Pendientes" },
-  ];
 
   // Footer row for total amount sum
   const footerRow = useMemo(() => {
@@ -671,7 +746,7 @@ export function ReservationsManager({
   return (
     <div className="space-y-4">
       {/* KPI Stat Cards */}
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
         <StatCard
           icon={Login03Icon}
           label={isEn ? "Today's Arrivals" : "Llegadas hoy"}
@@ -688,6 +763,11 @@ export function ReservationsManager({
           value={String(kpiStats.inHouse)}
         />
         <StatCard
+          icon={Globe02Icon}
+          label="Marketplace"
+          value={String(kpiStats.marketplace)}
+        />
+        <StatCard
           helper={`${total} ${isEn ? "filtered records" : "registros filtrados"}`}
           icon={Money01Icon}
           label={isEn ? "Period Revenue" : "Ingresos del periodo"}
@@ -699,17 +779,19 @@ export function ReservationsManager({
         />
       </div>
 
-      {/* Quick-filter tabs + view toggle */}
+      {/* Saved views + view toggle */}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap gap-1.5">
-          {quickFilterTabs.map((tab) => (
+          {savedViews.map((view) => (
             <Button
-              key={tab.key}
-              onClick={() => applyQuickFilter(tab.key)}
+              key={view.id}
+              onClick={() => applySavedView(view)}
               size="sm"
-              variant={quickFilter === tab.key ? "secondary" : "ghost"}
+              variant={activeViewId === view.id ? "secondary" : "ghost"}
             >
-              {tab.label}
+              {!isEn && view.preset
+                ? PRESET_VIEWS_ES[view.id] ?? view.name
+                : view.name}
             </Button>
           ))}
         </div>
@@ -731,6 +813,14 @@ export function ReservationsManager({
           >
             <Icon icon={Calendar02Icon} size={14} />
           </Button>
+          <Button
+            className="h-8 w-8 rounded-lg p-0 transition-all"
+            onClick={() => setViewMode("month")}
+            size="sm"
+            variant={viewMode === "month" ? "secondary" : "ghost"}
+          >
+            <Icon icon={Calendar03Icon} size={14} />
+          </Button>
         </div>
       </div>
 
@@ -738,7 +828,7 @@ export function ReservationsManager({
         <>
           {/* Filters */}
           <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-            <div className="grid w-full gap-2 md:grid-cols-4">
+            <div className="grid w-full gap-2 md:grid-cols-5">
               <label className="space-y-1">
                 <span className="block font-medium text-muted-foreground text-xs">
                   {isEn ? "Search" : "Buscar"}
@@ -800,6 +890,21 @@ export function ReservationsManager({
                 </Select>
               </label>
 
+              <label className="space-y-1">
+                <span className="block font-medium text-muted-foreground text-xs">
+                  {isEn ? "Source" : "Origen"}
+                </span>
+                <Select
+                  onChange={(event) => setSourceFilter(event.target.value)}
+                  value={sourceFilter}
+                >
+                  <option value="all">{isEn ? "All sources" : "Todos"}</option>
+                  <option value="manual">Manual</option>
+                  <option value="direct_booking">Marketplace</option>
+                  <option value="external">{isEn ? "External" : "Externo"}</option>
+                </Select>
+              </label>
+
               <div className="grid grid-cols-2 gap-2">
                 <label className="space-y-1">
                   <span className="block font-medium text-muted-foreground text-xs">
@@ -830,6 +935,18 @@ export function ReservationsManager({
               <div className="text-muted-foreground text-sm">
                 {total} {isEn ? "records" : "registros"}
               </div>
+              <ReservationsExportButton
+                format="csv"
+                isEn={isEn}
+                locale={locale}
+                rows={filteredRows as Parameters<typeof ReservationsExportButton>[0]["rows"]}
+              />
+              <ReservationsExportButton
+                format="pdf"
+                isEn={isEn}
+                locale={locale}
+                rows={filteredRows as Parameters<typeof ReservationsExportButton>[0]["rows"]}
+              />
             </div>
           </div>
 
@@ -908,13 +1025,49 @@ export function ReservationsManager({
             </section>
           </Collapsible>
 
+          {selectedRows.length > 0 ? (
+            <div className="sticky bottom-0 z-20 flex items-center justify-between gap-3 rounded-xl border border-border bg-card p-3 shadow-lg">
+              <span className="text-sm font-medium">
+                {selectedRows.length} {isEn ? "selected" : "seleccionados"}
+              </span>
+              <div className="flex items-center gap-2">
+                <Button
+                  disabled={bulkActionPending}
+                  onClick={() => handleBulkAction("confirmed")}
+                  size="sm"
+                  variant="outline"
+                >
+                  {isEn ? "Confirm All" : "Confirmar todos"}
+                </Button>
+                <Button
+                  disabled={bulkActionPending}
+                  onClick={() => handleBulkAction("cancelled")}
+                  size="sm"
+                  variant="outline"
+                >
+                  {isEn ? "Cancel All" : "Cancelar todos"}
+                </Button>
+                <Button
+                  onClick={() => setSelectedRows([])}
+                  size="sm"
+                  variant="ghost"
+                >
+                  {isEn ? "Clear" : "Limpiar"}
+                </Button>
+              </div>
+            </div>
+          ) : null}
+
           <NotionDataTable
             columns={reservationColumns}
             data={filteredRows}
+            enableSelection
+            getRowId={(row) => asString(row.id)}
+            onSelectionChange={setSelectedRows}
             footer={
               footerRow ? (
                 <TableRow>
-                  <TableCell className="py-2 font-semibold text-xs" colSpan={8}>
+                  <TableCell className="py-2 font-semibold text-xs" colSpan={9}>
                     {isEn ? "Total" : "Total"}
                   </TableCell>
                   <TableCell className="py-2 text-right font-semibold tabular-nums text-xs">
@@ -930,9 +1083,11 @@ export function ReservationsManager({
             rowActionsHeader={isEn ? "Actions" : "Acciones"}
           />
         </>
-      ) : (
+      ) : null}
+
+      {viewMode === "calendar" ? (
         <>
-          {/* Calendar view */}
+          {/* Weekly calendar view */}
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2">
               {unitId !== "all" ? (
@@ -970,7 +1125,49 @@ export function ReservationsManager({
             units={unitOptions}
           />
         </>
-      )}
+      ) : null}
+
+      {viewMode === "month" ? (
+        <>
+          {/* Monthly calendar view */}
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              {unitId !== "all" ? (
+                <span className="text-muted-foreground text-sm">
+                  {isEn ? "Filtered by unit" : "Filtrado por unidad"}
+                </span>
+              ) : null}
+            </div>
+            <Button
+              onClick={() => setBlockSheetOpen(true)}
+              size="sm"
+              type="button"
+              variant="secondary"
+            >
+              <Icon icon={PlusSignIcon} size={14} />
+              {isEn ? "New block" : "Nuevo bloqueo"}
+            </Button>
+          </div>
+
+          <MonthlyCalendar
+            blocks={
+              unitId !== "all"
+                ? blocks.filter(
+                    (b) => asString((b as Record<string, unknown>).unit_id).trim() === unitId
+                  )
+                : blocks
+            }
+            isEn={isEn}
+            locale={locale}
+            reservations={
+              unitId !== "all"
+                ? filteredRows.map((r) => r as unknown as Record<string, unknown>)
+                : reservations
+            }
+            units={unitOptions}
+          />
+        </>
+      ) : null}
 
       <Sheet
         description={

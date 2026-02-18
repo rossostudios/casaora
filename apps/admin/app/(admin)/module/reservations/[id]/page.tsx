@@ -19,7 +19,7 @@ import {
 } from "@/components/ui/card";
 import { CopyButton } from "@/components/ui/copy-button";
 import { SendGuestPortalLink } from "@/components/reservations/send-guest-portal-link";
-import { fetchJson } from "@/lib/api";
+import { fetchJson, fetchList } from "@/lib/api";
 import { errorMessage, isOrgMembershipError } from "@/lib/errors";
 import {
   toGuestSummary,
@@ -43,11 +43,11 @@ type PageProps = {
 };
 
 type FetchResult =
-  | { kind: "ok"; reservation: ReservationDetail; guest: GuestSummary | null }
+  | { kind: "ok"; reservation: ReservationDetail; guest: GuestSummary | null; listingSlug: string | null }
   | { kind: "not_found" }
   | { kind: "error"; message: string; membershipError?: boolean };
 
-async function loadReservation(id: string): Promise<FetchResult> {
+async function loadReservation(id: string, orgId: string): Promise<FetchResult> {
   try {
     const raw = await fetchJson<Record<string, unknown>>(
       `/reservations/${encodeURIComponent(id)}`
@@ -66,7 +66,24 @@ async function loadReservation(id: string): Promise<FetchResult> {
       }
     }
 
-    return { kind: "ok", reservation, guest };
+    let listingSlug: string | null = null;
+    if (reservation.unit_id) {
+      try {
+        const listings = await fetchList("/listings", orgId, 1, {
+          unit_id: reservation.unit_id,
+          is_published: true,
+        });
+        const first = listings[0] as Record<string, unknown> | undefined;
+        const slug = first?.public_slug;
+        if (typeof slug === "string" && slug.trim()) {
+          listingSlug = slug.trim();
+        }
+      } catch {
+        // Listing lookup is best-effort
+      }
+    }
+
+    return { kind: "ok", reservation, guest, listingSlug };
   } catch (err) {
     const message = errorMessage(err);
     if (message.includes("404")) {
@@ -83,8 +100,9 @@ export default async function ReservationDetailPage({ params }: PageProps) {
   const { id } = await params;
   const locale = await getActiveLocale();
   const isEn = locale === "en-US";
+  const activeOrgId = await getActiveOrgId();
 
-  const result = await loadReservation(id);
+  const result = await loadReservation(id, activeOrgId ?? "");
 
   if (result.kind === "not_found") {
     notFound();
@@ -92,7 +110,6 @@ export default async function ReservationDetailPage({ params }: PageProps) {
 
   if (result.kind === "error") {
     if (result.membershipError) {
-      const activeOrgId = await getActiveOrgId();
       return (
         <OrgAccessChanged
           description={
@@ -127,7 +144,7 @@ export default async function ReservationDetailPage({ params }: PageProps) {
     );
   }
 
-  const { reservation: r, guest } = result;
+  const { reservation: r, guest, listingSlug } = result;
   const href = `/module/reservations/${r.id}`;
 
   return (
@@ -201,6 +218,33 @@ export default async function ReservationDetailPage({ params }: PageProps) {
                 isEn={isEn}
                 reservationId={r.id}
               />
+              {listingSlug ? (
+                <Link
+                  className={cn(
+                    buttonVariants({ variant: "outline", size: "sm" }),
+                    "w-full justify-start"
+                  )}
+                  href={`/marketplace/${listingSlug}`}
+                  target="_blank"
+                >
+                  {isEn ? "View on Marketplace" : "Ver en Marketplace"}
+                </Link>
+              ) : null}
+              {listingSlug ? (
+                <a
+                  className={cn(
+                    buttonVariants({ variant: "outline", size: "sm" }),
+                    "w-full justify-start"
+                  )}
+                  href={`https://wa.me/?text=${encodeURIComponent(
+                    `${isEn ? "Check out this listing on Casaora" : "Mira este alojamiento en Casaora"}: ${process.env.NEXT_PUBLIC_SITE_URL ?? "https://casaora.co"}/marketplace/${listingSlug}`
+                  )}`}
+                  rel="noopener noreferrer"
+                  target="_blank"
+                >
+                  {isEn ? "Share via WhatsApp" : "Compartir por WhatsApp"}
+                </a>
+              ) : null}
             </CardContent>
           </Card>
 

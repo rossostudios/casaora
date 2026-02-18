@@ -1059,6 +1059,7 @@ pub struct ListingsQuery {
     pub org_id: String,
     pub is_published: Option<bool>,
     pub integration_id: Option<String>,
+    pub unit_id: Option<String>,
     pub status: Option<String>,
     pub q: Option<String>,
     #[serde(default = "default_page")]

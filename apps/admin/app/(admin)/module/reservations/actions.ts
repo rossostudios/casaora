@@ -160,3 +160,26 @@ export async function transitionReservationStatusAction(formData: FormData) {
     redirect(reservationsUrl({ error: message.slice(0, 240) }));
   }
 }
+
+export async function bulkTransitionReservationStatusAction(
+  reservationIds: string[],
+  status: string,
+): Promise<{ success: number; failed: number }> {
+  let success = 0;
+  let failed = 0;
+
+  for (const id of reservationIds) {
+    try {
+      await postJson(
+        `/reservations/${encodeURIComponent(id)}/status`,
+        { status },
+      );
+      success++;
+    } catch {
+      failed++;
+    }
+  }
+
+  revalidatePath("/module/reservations");
+  return { success, failed };
+}

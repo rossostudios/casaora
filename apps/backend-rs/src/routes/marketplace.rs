@@ -121,6 +121,9 @@ async fn list_listings(
     if let Some(integration_id) = non_empty_opt(query.integration_id.as_deref()) {
         filters.insert("integration_id".to_string(), Value::String(integration_id));
     }
+    if let Some(unit_id) = non_empty_opt(query.unit_id.as_deref()) {
+        filters.insert("unit_id".to_string(), Value::String(unit_id));
+    }
 
     let page = query.page.max(1);
     let per_page = query.per_page.clamp(1, 100);

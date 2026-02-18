@@ -239,6 +239,48 @@ pub async fn enrich_reservations(
         integration_kind = map_by_id_string_field(&integrations, "channel_name");
     }
 
+    // Lookup published listings by unit_id to inject listing_public_slug
+    let mut listing_slug_by_unit: std::collections::HashMap<String, String> =
+        std::collections::HashMap::new();
+    if !unit_ids.is_empty() {
+        let mut listing_filters = Map::new();
+        listing_filters.insert(
+            "organization_id".to_string(),
+            Value::String(org_id.to_string()),
+        );
+        listing_filters.insert("is_published".to_string(), Value::Bool(true));
+        listing_filters.insert(
+            "unit_id".to_string(),
+            Value::Array(
+                unit_ids
+                    .iter()
+                    .map(|id| Value::String(id.clone()))
+                    .collect(),
+            ),
+        );
+        if let Ok(listings) = list_rows(
+            pool,
+            "listings",
+            Some(&listing_filters),
+            5000,
+            0,
+            "created_at",
+            false,
+        )
+        .await
+        {
+            for listing in &listings {
+                if let Some(obj) = listing.as_object() {
+                    let uid = value_string(obj.get("unit_id")).unwrap_or_default();
+                    let slug = value_string(obj.get("public_slug")).unwrap_or_default();
+                    if !uid.is_empty() && !slug.is_empty() {
+                        listing_slug_by_unit.entry(uid).or_insert(slug);
+                    }
+                }
+            }
+        }
+    }
+
     let reservation_ids = extract_ids(&reservations, "id");
     let reservation_lookup = reservations
         .iter()
@@ -314,6 +356,10 @@ pub async fn enrich_reservations(
                 obj.insert(
                     "unit_name".to_string(),
                     optional_string_value(unit_name.get(&unit_id).cloned()),
+                );
+                obj.insert(
+                    "listing_public_slug".to_string(),
+                    optional_string_value(listing_slug_by_unit.get(&unit_id).cloned()),
                 );
                 if let Some(property_id) = unit_property.get(&unit_id) {
                     obj.insert(

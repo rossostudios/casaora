@@ -8,12 +8,14 @@ import {
   getPaginationRowModel,
   getSortedRowModel,
   type PaginationState,
+  type RowSelectionState,
   type SortingState,
   useReactTable,
 } from "@tanstack/react-table";
-import { type ReactNode, useMemo, useState } from "react";
+import { type ReactNode, useCallback, useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import {
   Table,
@@ -37,6 +39,9 @@ type NotionDataTableProps<TRow> = {
   defaultPageSize?: number;
   isEn?: boolean;
   onRowClick?: (row: TRow) => void;
+  enableSelection?: boolean;
+  onSelectionChange?: (selectedRows: TRow[]) => void;
+  getRowId?: (row: TRow) => string;
 };
 
 export function NotionDataTable<TRow>({
@@ -50,19 +55,70 @@ export function NotionDataTable<TRow>({
   defaultPageSize = 50,
   isEn = true,
   onRowClick,
+  enableSelection = false,
+  onSelectionChange,
+  getRowId,
 }: NotionDataTableProps<TRow>) {
   const [sorting, setSorting] = useState<SortingState>([]);
   const [globalFilter, setGlobalFilter] = useState("");
+  const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
   const [pagination, setPagination] = useState<PaginationState>({
     pageIndex: 0,
     pageSize: defaultPageSize,
   });
 
+  const handleRowSelectionChange = useCallback(
+    (updater: RowSelectionState | ((prev: RowSelectionState) => RowSelectionState)) => {
+      setRowSelection((prev) => {
+        const next = typeof updater === "function" ? updater(prev) : updater;
+        if (onSelectionChange) {
+          const selectedIndices = Object.keys(next).filter((k) => next[k]);
+          const selectedRows = selectedIndices
+            .map((idx) => data[Number(idx)])
+            .filter((row): row is TRow => row != null);
+          onSelectionChange(selectedRows);
+        }
+        return next;
+      });
+    },
+    [data, onSelectionChange],
+  );
+
   const columns = useMemo(() => {
-    if (!renderRowActions) return columnsProp;
-    return [
-      ...columnsProp,
-      {
+    const cols: ColumnDef<TRow, unknown>[] = [];
+
+    if (enableSelection) {
+      cols.push({
+        id: "__select",
+        size: 40,
+        minSize: 40,
+        enableSorting: false,
+        enableResizing: false,
+        header: ({ table: t }) => (
+          <div data-row-click="ignore">
+            <Checkbox
+              checked={t.getIsAllPageRowsSelected()}
+              onCheckedChange={(checked) =>
+                t.toggleAllPageRowsSelected(!!checked)
+              }
+            />
+          </div>
+        ),
+        cell: ({ row }) => (
+          <div data-row-click="ignore">
+            <Checkbox
+              checked={row.getIsSelected()}
+              onCheckedChange={(checked) => row.toggleSelected(!!checked)}
+            />
+          </div>
+        ),
+      } satisfies ColumnDef<TRow, unknown>);
+    }
+
+    cols.push(...columnsProp);
+
+    if (renderRowActions) {
+      cols.push({
         id: "__actions",
         header: rowActionsHeader ?? "",
         size: 120,
@@ -74,18 +130,25 @@ export function NotionDataTable<TRow>({
             {renderRowActions(row.original)}
           </div>
         ),
-      } satisfies ColumnDef<TRow, unknown>,
-    ];
-  }, [columnsProp, renderRowActions, rowActionsHeader]);
+      });
+    }
 
-  const table = useReactTable({
+    return cols;
+  }, [columnsProp, enableSelection, renderRowActions, rowActionsHeader]);
+
+  const table = useReactTable<TRow>({
     data,
     columns,
     columnResizeMode: "onChange",
-    state: { sorting, globalFilter, pagination },
+    state: enableSelection
+      ? { sorting, globalFilter, pagination, rowSelection }
+      : { sorting, globalFilter, pagination },
     onSortingChange: setSorting,
     onGlobalFilterChange: setGlobalFilter,
     onPaginationChange: setPagination,
+    onRowSelectionChange: enableSelection ? handleRowSelectionChange : undefined,
+    enableRowSelection: enableSelection,
+    getRowId: getRowId ? (row: TRow) => getRowId(row) : undefined,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
@@ -120,7 +183,7 @@ export function NotionDataTable<TRow>({
       )}
 
       <div className="overflow-x-auto rounded-md border">
-        <Table className="table-fixed" style={{ width: table.getTotalSize() }}>
+        <Table className="table-fixed w-full" style={{ minWidth: table.getTotalSize() }}>
           <TableHeader>
             {table.getHeaderGroups().map((hg) => (
               <TableRow key={hg.id}>

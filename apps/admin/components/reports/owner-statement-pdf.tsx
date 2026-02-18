@@ -7,6 +7,8 @@ import { Spinner } from "@/components/ui/spinner";
 type OwnerStatementPdfProps = {
   reportData: Record<string, unknown>;
   orgName: string;
+  orgRuc?: string | null;
+  orgQrImageUrl?: string | null;
   periodLabel: string;
   locale: string;
   isEn: boolean;
@@ -32,6 +34,8 @@ function pct(value: unknown): string {
 export function OwnerStatementPdfButton({
   reportData,
   orgName,
+  orgRuc,
+  orgQrImageUrl,
   periodLabel,
   locale,
   isEn,
@@ -62,6 +66,10 @@ export function OwnerStatementPdfButton({
       doc.setTextColor(100);
       doc.text(orgName, margin, y);
       y += 5;
+      if (orgRuc) {
+        doc.text(`RUC: ${orgRuc}`, margin, y);
+        y += 5;
+      }
       doc.text(periodLabel, margin, y);
       y += 3;
 
@@ -144,6 +152,37 @@ export function OwnerStatementPdfButton({
             columnStyles: { 1: { halign: "right" } },
             margin: { left: margin, right: margin },
           });
+        }
+      }
+
+      // QR code image (if available)
+      if (orgQrImageUrl) {
+        try {
+          const response = await fetch(orgQrImageUrl);
+          const blob = await response.blob();
+          const reader = new FileReader();
+          const dataUrl = await new Promise<string>((resolve) => {
+            reader.onloadend = () => resolve(reader.result as string);
+            reader.readAsDataURL(blob);
+          });
+          const qrSize = 30;
+          const pageHeight = doc.internal.pageSize.getHeight();
+          if (y + qrSize + 20 > pageHeight) {
+            doc.addPage();
+            y = 20;
+          }
+          doc.addImage(dataUrl, "PNG", margin, y, qrSize, qrSize);
+          doc.setFontSize(8);
+          doc.setFont("helvetica", "normal");
+          doc.setTextColor(100);
+          doc.text(
+            isEn ? "Scan to verify" : "Escanear para verificar",
+            margin + qrSize + 4,
+            y + qrSize / 2,
+          );
+          y += qrSize + 10;
+        } catch {
+          // QR image fetch failed — skip silently
         }
       }
 
