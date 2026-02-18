@@ -1,7 +1,8 @@
 "use client";
 
 import { usePathname, useSearchParams } from "next/navigation";
-import { type ReactNode, useCallback, useEffect, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
+import type { PanelImperativeHandle } from "react-resizable-panels";
 import { AppFooter } from "@/components/shell/app-footer";
 import { CommandPalette } from "@/components/shell/command-palette";
 import { ShortcutsHelp } from "@/components/shell/shortcuts-help";
@@ -138,6 +139,8 @@ function AdminShellV2({
   const pathname = usePathname();
   const [viewportMode, setViewportMode] = useState<ViewportMode>("desktop");
   const [isMobileDrawerOpen, setIsMobileDrawerOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const sidebarPanelRef = useRef<PanelImperativeHandle | null>(null);
   const { overlays } = useShellHotkeys(locale);
 
   useEffect(() => {
@@ -177,12 +180,23 @@ function AdminShellV2({
     return () => window.clearTimeout(handle);
   }, [isMobileDrawerOpen, pathname, viewportMode]);
 
-  const showNavToggle = viewportMode !== "desktop";
-  const isNavOpen = isMobileDrawerOpen;
   const isDesktop = viewportMode === "desktop";
+  const showNavToggle = true;
+  const isNavOpen = isDesktop ? !sidebarCollapsed : isMobileDrawerOpen;
 
   const onNavToggle = () => {
-    setIsMobileDrawerOpen((open) => !open);
+    if (isDesktop) {
+      const panel = sidebarPanelRef.current;
+      if (panel) {
+        if (sidebarCollapsed) {
+          panel.expand();
+        } else {
+          panel.collapse();
+        }
+      }
+    } else {
+      setIsMobileDrawerOpen((open) => !open);
+    }
   };
 
   const searchParams = useSearchParams();
@@ -228,7 +242,7 @@ function AdminShellV2({
           "h-full min-h-0 w-full overflow-hidden",
           shellSurfaceClass
         )}
-        data-nav-open={false}
+        data-nav-open={!sidebarCollapsed}
         data-shell-mode={viewportMode}
       >
         <ResizablePanelGroup
@@ -237,9 +251,13 @@ function AdminShellV2({
         >
           <ResizablePanel
             className="min-h-0 overflow-hidden"
-            defaultSize="20%"
-            maxSize="40%"
-            minSize="14%"
+            collapsedSize={0}
+            collapsible
+            defaultSize={20}
+            maxSize={40}
+            minSize={14}
+            onResize={(size) => setSidebarCollapsed(size.asPercentage === 0)}
+            panelRef={sidebarPanelRef}
           >
             <SidebarNew
               isMobileDrawerOpen={false}
@@ -254,7 +272,7 @@ function AdminShellV2({
           <ResizableHandle withHandle />
           <ResizablePanel
             className="min-h-0 min-w-0 overflow-hidden"
-            minSize="50%"
+            minSize={50}
           >
             {contentColumn}
           </ResizablePanel>

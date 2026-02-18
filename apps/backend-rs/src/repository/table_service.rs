@@ -45,6 +45,9 @@ const ALLOWED_TABLES: &[&str] = &[
     "subscription_plans",
     "org_subscriptions",
     "platform_admins",
+    "communication_sequences",
+    "sequence_steps",
+    "sequence_enrollments",
 ];
 
 pub async fn list_rows(
