@@ -6,6 +6,7 @@ use tracing::{info, warn};
 use crate::{
     config::AppConfig,
     repository::table_service::{create_row, get_row, list_rows, update_row},
+    services::notification_center::{emit_event, EmitNotificationEventInput},
 };
 
 /// Process all queued messages — poll `message_logs` where status = 'queued',
@@ -115,8 +116,58 @@ pub async fn process_queued_messages(
                 patch.insert("error_message".to_string(), Value::String(err_msg));
                 patch.insert(
                     "retry_count".to_string(),
-                    Value::Number(serde_json::Number::from((current_retry + 1) as i64)),
+                    Value::Number(serde_json::Number::from(current_retry + 1)),
                 );
+
+                if current_retry == 0 {
+                    let organization_id = val_str(&msg, "organization_id");
+                    if !organization_id.is_empty() {
+                        let mut event_payload = Map::new();
+                        event_payload
+                            .insert("message_log_id".to_string(), Value::String(id.clone()));
+                        event_payload.insert("channel".to_string(), Value::String(channel.clone()));
+                        event_payload
+                            .insert("recipient".to_string(), Value::String(recipient.clone()));
+                        event_payload.insert(
+                            "recipient_phone".to_string(),
+                            Value::String(recipient.clone()),
+                        );
+                        event_payload.insert(
+                            "error_message".to_string(),
+                            Value::String(
+                                patch
+                                    .get("error_message")
+                                    .and_then(Value::as_str)
+                                    .unwrap_or("Message send failed")
+                                    .to_string(),
+                            ),
+                        );
+
+                        let _ = emit_event(
+                            pool,
+                            EmitNotificationEventInput {
+                                organization_id,
+                                event_type: "message_send_failed".to_string(),
+                                category: "messaging".to_string(),
+                                severity: "critical".to_string(),
+                                title: "Fallo de envío de mensaje".to_string(),
+                                body: format!(
+                                    "No se pudo enviar un mensaje por {} a {}.",
+                                    channel, recipient
+                                ),
+                                link_path: Some("/module/messaging".to_string()),
+                                source_table: Some("message_logs".to_string()),
+                                source_id: Some(id.clone()),
+                                actor_user_id: None,
+                                payload: event_payload,
+                                dedupe_key: Some(format!("message_send_failed:{id}")),
+                                occurred_at: None,
+                                fallback_roles: vec![],
+                            },
+                        )
+                        .await;
+                    }
+                }
                 failed += 1;
             }
         }

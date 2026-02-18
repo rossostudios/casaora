@@ -25,6 +25,7 @@ pub mod leases;
 pub mod maintenance;
 pub mod marketplace;
 pub mod messaging;
+pub mod notification_center;
 pub mod notifications;
 pub mod organizations;
 pub mod owner_portal;
@@ -68,6 +69,7 @@ pub fn v1_router() -> Router<AppState> {
         .merge(applications::router())
         .merge(pricing::router())
         .merge(messaging::router())
+        .merge(notification_center::router())
         .merge(payments::router())
         .merge(notifications::router())
         .merge(maintenance::router())

@@ -77,7 +77,7 @@ export function PortfolioSidebar({
           {isEn ? "Portfolio Summary" : "Resumen del Portafolio"}
         </h3>
 
-        <Card className="group relative overflow-hidden border-0 bg-[#1e2b61] text-white shadow-xl">
+        <Card className="group relative overflow-hidden border-0 bg-casaora-gradient text-white shadow-casaora">
           <div className="absolute right-0 top-0 p-4 opacity-5 transition-transform group-hover:-translate-y-2 group-hover:translate-x-2">
             <Icon icon={ChartIcon} size={140} />
           </div>

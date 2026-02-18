@@ -4,7 +4,7 @@ use axum::{
     Json,
 };
 use chrono::{Datelike, NaiveDate, Utc};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Map, Value};
 use sqlx::Row;
 use uuid::Uuid;
@@ -68,13 +68,24 @@ async fn owner_summary_report(
 ) -> AppResult<Json<Value>> {
     let user_id = require_user_id(&state, &headers).await?;
     assert_org_member(&state, &user_id, &query.org_id).await?;
-    let pool = db_pool(&state)?;
 
     let period_start = parse_date(&query.from_date)?;
     let period_end = parse_date(&query.to_date)?;
     let total_days = nights(period_start, period_end);
     let property_id = parse_optional_uuid(query.property_id.as_deref(), "property_id")?;
     let unit_id = parse_optional_uuid(query.unit_id.as_deref(), "unit_id")?;
+
+    let cache_key = report_cache_key("owner_summary", &query);
+    if let Some(cached) = state.report_response_cache.get(&cache_key).await {
+        return Ok(Json(cached));
+    }
+    let key_lock = state.report_response_cache.key_lock(&cache_key).await;
+    let _guard = key_lock.lock().await;
+    if let Some(cached) = state.report_response_cache.get(&cache_key).await {
+        return Ok(Json(cached));
+    }
+
+    let pool = db_pool(&state)?;
 
     let owner_metrics_query = sqlx::query(
         "WITH filtered_units AS (
@@ -194,7 +205,7 @@ async fn owner_summary_report(
     let occupancy_rate = round4((booked_nights as f64) / available_nights);
     let net_payout = round2(gross_revenue - total_expenses);
 
-    Ok(Json(json!({
+    let response = json!({
         "organization_id": query.org_id,
         "from": query.from_date,
         "to": query.to_date,
@@ -203,7 +214,13 @@ async fn owner_summary_report(
         "expenses": round2(total_expenses),
         "net_payout": net_payout,
         "expense_warnings": warnings,
-    })))
+    });
+
+    state
+        .report_response_cache
+        .put(cache_key, response.clone())
+        .await;
+    Ok(Json(response))
 }
 
 async fn operations_summary_report(
@@ -213,7 +230,6 @@ async fn operations_summary_report(
 ) -> AppResult<Json<Value>> {
     let user_id = require_user_id(&state, &headers).await?;
     assert_org_member(&state, &user_id, &query.org_id).await?;
-    let pool = db_pool(&state)?;
 
     let period_start = parse_date(&query.from_date)?;
     let period_end = parse_date(&query.to_date)?;
@@ -221,62 +237,56 @@ async fn operations_summary_report(
     let period_end_exclusive_ts = start_of_day_utc(period_end + chrono::Duration::days(1));
     let now_utc = Utc::now();
 
+    let cache_key = report_cache_key("operations_summary", &query);
+    if let Some(cached) = state.report_response_cache.get(&cache_key).await {
+        return Ok(Json(cached));
+    }
+    let key_lock = state.report_response_cache.key_lock(&cache_key).await;
+    let _guard = key_lock.lock().await;
+    if let Some(cached) = state.report_response_cache.get(&cache_key).await {
+        return Ok(Json(cached));
+    }
+
+    let pool = db_pool(&state)?;
+
     let task_metrics = sqlx::query(
         "SELECT
-           (
-             SELECT COUNT(*)::bigint
-               FROM tasks t
-              WHERE t.organization_id = $1::uuid
-                AND t.type IN ('check_in', 'check_out', 'cleaning', 'inspection')
-                AND t.due_at IS NOT NULL
-                AND t.due_at >= $2::timestamptz
-                AND t.due_at < $3::timestamptz
-           ) AS turnovers_due,
-           (
-             SELECT COUNT(*)::bigint
-               FROM tasks t
-              WHERE t.organization_id = $1::uuid
-                AND t.type IN ('check_in', 'check_out', 'cleaning', 'inspection')
-                AND t.due_at IS NOT NULL
-                AND t.due_at >= $2::timestamptz
-                AND t.due_at < $3::timestamptz
-                AND t.status = 'done'
-                AND t.completed_at IS NOT NULL
-                AND (
-                  (
-                    COALESCE(t.sla_due_at, t.due_at) IS NOT NULL
-                    AND t.completed_at <= COALESCE(t.sla_due_at, t.due_at)
-                  )
-                  OR COALESCE(t.sla_due_at, t.due_at) IS NULL
+           COUNT(*) FILTER (
+             WHERE type IN ('check_in', 'check_out', 'cleaning', 'inspection')
+               AND due_at IS NOT NULL
+               AND due_at >= $2::timestamptz
+               AND due_at < $3::timestamptz
+           )::bigint AS turnovers_due,
+           COUNT(*) FILTER (
+             WHERE type IN ('check_in', 'check_out', 'cleaning', 'inspection')
+               AND due_at IS NOT NULL
+               AND due_at >= $2::timestamptz
+               AND due_at < $3::timestamptz
+               AND status = 'done'
+               AND completed_at IS NOT NULL
+               AND (
+                 COALESCE(sla_due_at, due_at) IS NULL
+                 OR completed_at <= COALESCE(sla_due_at, due_at)
+               )
+           )::bigint AS turnovers_completed_on_time,
+           COUNT(*) FILTER (
+             WHERE status IN ('todo', 'in_progress')
+           )::bigint AS open_tasks,
+           COUNT(*) FILTER (
+             WHERE status IN ('todo', 'in_progress')
+               AND due_at IS NOT NULL
+               AND due_at < $4::timestamptz
+           )::bigint AS overdue_tasks,
+           COUNT(*) FILTER (
+             WHERE sla_breached_at IS NOT NULL
+                OR (
+                  status IN ('todo', 'in_progress')
+                  AND sla_due_at IS NOT NULL
+                  AND sla_due_at < $4::timestamptz
                 )
-           ) AS turnovers_completed_on_time,
-           (
-             SELECT COUNT(*)::bigint
-               FROM tasks t
-              WHERE t.organization_id = $1::uuid
-                AND t.status IN ('todo', 'in_progress')
-           ) AS open_tasks,
-           (
-             SELECT COUNT(*)::bigint
-               FROM tasks t
-              WHERE t.organization_id = $1::uuid
-                AND t.status IN ('todo', 'in_progress')
-                AND t.due_at IS NOT NULL
-                AND t.due_at < $4::timestamptz
-           ) AS overdue_tasks,
-           (
-             SELECT COUNT(*)::bigint
-               FROM tasks t
-              WHERE t.organization_id = $1::uuid
-                AND (
-                  t.sla_breached_at IS NOT NULL
-                  OR (
-                    t.status IN ('todo', 'in_progress')
-                    AND t.sla_due_at IS NOT NULL
-                    AND t.sla_due_at < $4::timestamptz
-                  )
-                )
-           ) AS sla_breached_tasks",
+           )::bigint AS sla_breached_tasks
+         FROM tasks
+         WHERE organization_id = $1::uuid",
     )
     .bind(&query.org_id)
     .bind(period_start_ts)
@@ -335,7 +345,7 @@ async fn operations_summary_report(
         .try_get::<i64, _>("reservations_upcoming_check_out")
         .unwrap_or(0);
 
-    Ok(Json(json!({
+    let response = json!({
         "organization_id": query.org_id,
         "from": query.from_date,
         "to": query.to_date,
@@ -347,7 +357,13 @@ async fn operations_summary_report(
         "sla_breached_tasks": sla_breached_tasks,
         "reservations_upcoming_check_in": reservations_upcoming_check_in,
         "reservations_upcoming_check_out": reservations_upcoming_check_out,
-    })))
+    });
+
+    state
+        .report_response_cache
+        .put(cache_key, response.clone())
+        .await;
+    Ok(Json(response))
 }
 
 async fn transparency_summary_report(
@@ -764,7 +780,6 @@ async fn kpi_dashboard(
 ) -> AppResult<Json<Value>> {
     let user_id = require_user_id(&state, &headers).await?;
     assert_org_member(&state, &user_id, &query.org_id).await?;
-    let pool = db_pool(&state)?;
 
     let period_start = parse_date(&query.from_date)?;
     let period_end = parse_date(&query.to_date)?;
@@ -772,6 +787,18 @@ async fn kpi_dashboard(
     let period_end_exclusive_ts = start_of_day_utc(period_end + chrono::Duration::days(1));
     let today = Utc::now().date_naive();
     let day_60 = today + chrono::Duration::days(60);
+
+    let cache_key = report_cache_key("kpi_dashboard", &query);
+    if let Some(cached) = state.report_response_cache.get(&cache_key).await {
+        return Ok(Json(cached));
+    }
+    let key_lock = state.report_response_cache.key_lock(&cache_key).await;
+    let _guard = key_lock.lock().await;
+    if let Some(cached) = state.report_response_cache.get(&cache_key).await {
+        return Ok(Json(cached));
+    }
+
+    let pool = db_pool(&state)?;
 
     let collections_query = sqlx::query(
         "SELECT
@@ -939,7 +966,7 @@ async fn kpi_dashboard(
         .flatten()
         .map(round2);
 
-    Ok(Json(json!({
+    let response = json!({
         "organization_id": query.org_id,
         "from": query.from_date,
         "to": query.to_date,
@@ -956,7 +983,13 @@ async fn kpi_dashboard(
         "median_maintenance_response_hours": median_maintenance_response_hours,
         "open_maintenance_tasks": open_maintenance,
         "expiring_leases_60d": expiring_leases,
-    })))
+    });
+
+    state
+        .report_response_cache
+        .put(cache_key, response.clone())
+        .await;
+    Ok(Json(response))
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -1278,6 +1311,11 @@ async fn revenue_trend(
         "organization_id": query.org_id,
         "months": monthly_data,
     })))
+}
+
+fn report_cache_key<T: Serialize>(report_name: &str, query: &T) -> String {
+    let suffix = serde_json::to_string(query).unwrap_or_else(|_| "invalid_query".to_string());
+    format!("{report_name}:{suffix}")
 }
 
 fn parse_date(value: &str) -> AppResult<NaiveDate> {

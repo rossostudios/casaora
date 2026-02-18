@@ -21,6 +21,7 @@ import {
   MailOpen01Icon,
   MailReply01Icon,
   Message01Icon,
+  Notification03Icon,
   RepeatIcon,
   Search01Icon,
   Settings03Icon,
@@ -77,6 +78,7 @@ const MODULE_ICONS: Record<string, IconSvgElement> = {
   collections: Invoice01Icon,
   "transparency-summary": ChartIcon,
   messaging: Message01Icon,
+  notifications: Notification03Icon,
   "integration-events": WebhookIcon,
   "audit-logs": AuditIcon,
   reports: ChartIcon,
@@ -255,7 +257,14 @@ const SECTIONS: SectionDef[] = [
       "es-PY": "Operaciones",
       "en-US": "Operations",
     },
-    moduleSlugs: ["tasks", "maintenance", "guests", "notification-rules", "sequences"],
+    moduleSlugs: [
+      "tasks",
+      "maintenance",
+      "guests",
+      "notifications",
+      "notification-rules",
+      "sequences",
+    ],
     roles: ["owner_admin", "operator", "cleaner"],
   },
   {
@@ -872,7 +881,7 @@ function SidebarContent({
                 <ShortcutKbd keys={["⌘", "K"]} />
               </TooltipContent>
             </Tooltip>
-            <NotificationBell locale={locale} />
+            <NotificationBell locale={locale} orgId={orgId} />
           </div>
         </div>
       </div>

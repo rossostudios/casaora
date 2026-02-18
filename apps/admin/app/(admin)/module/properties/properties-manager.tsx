@@ -148,7 +148,7 @@ export function PropertiesManager({
 
       <aside
         className={cn(
-          "z-10 shrink-0 border-border/50 border-l bg-sidebar/20 backdrop-blur-md transition-all duration-300 ease-in-out",
+          "z-10 shrink-0 border-border/30 border-l bg-muted/30 backdrop-blur-md transition-all duration-300 ease-in-out",
           isSidebarOpen ? "w-[360px]" : "w-0 overflow-hidden border-l-0"
         )}
       >

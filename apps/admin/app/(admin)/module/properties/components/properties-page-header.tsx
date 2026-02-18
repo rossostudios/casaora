@@ -56,7 +56,7 @@ export function PropertiesPageHeader({
           </Button>
         ) : null}
         <Button
-          className="h-9 rounded-xl bg-[#1e2b61] px-4 font-semibold text-white transition-all hover:bg-[#1e2b61]/90"
+          className="h-9 rounded-xl bg-primary px-4 font-semibold text-white transition-all hover:bg-primary/90"
           onClick={onOpenCreate}
           type="button"
         >

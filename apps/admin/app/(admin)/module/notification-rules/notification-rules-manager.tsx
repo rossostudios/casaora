@@ -17,6 +17,7 @@ import { NotionDataTable } from "@/components/ui/notion-data-table";
 import { Select } from "@/components/ui/select";
 import { Sheet } from "@/components/ui/sheet";
 import { StatusBadge } from "@/components/ui/status-badge";
+import type { NotificationRuleMetadataResponse } from "@/lib/api";
 import { useActiveLocale } from "@/lib/i18n/client";
 import { humanizeKey } from "@/lib/format";
 
@@ -39,28 +40,16 @@ function asOptionalString(value: unknown): string | null {
   return text || null;
 }
 
-const TRIGGER_EVENTS = [
-  "rent_due_3d",
-  "rent_due_1d",
-  "rent_overdue_1d",
-  "rent_overdue_7d",
-  "reservation_confirmed",
-  "check_in_reminder",
-  "check_out_reminder",
-  "maintenance_created",
-  "lease_expiring_30d",
-] as const;
-
-const CHANNELS = ["whatsapp", "email", "sms"] as const;
-
 export function NotificationRulesManager({
   orgId,
   rules,
   templates,
+  metadata,
 }: {
   orgId: string;
   rules: Record<string, unknown>[];
   templates: Record<string, unknown>[];
+  metadata: NotificationRuleMetadataResponse;
 }) {
   const locale = useActiveLocale();
   const isEn = locale === "en-US";
@@ -85,6 +74,36 @@ export function NotificationRulesManager({
     }
     return map;
   }, [templateOptions]);
+
+  const triggerOptions = useMemo(() => {
+    const triggers = Array.isArray(metadata.triggers) ? metadata.triggers : [];
+    if (triggers.length > 0) {
+      return triggers.map((trigger) => ({
+        value: trigger.value,
+        label: isEn
+          ? trigger.label_en || humanizeKey(trigger.value)
+          : trigger.label_es || trigger.label_en || humanizeKey(trigger.value),
+      }));
+    }
+
+    const fallback = Array.from(
+      new Set(
+        rules
+          .map((rule) => asString(rule.trigger_event).trim())
+          .filter(Boolean)
+      )
+    );
+    return fallback.map((value) => ({
+      value,
+      label: humanizeKey(value),
+    }));
+  }, [isEn, metadata.triggers, rules]);
+
+  const channelOptions = useMemo(() => {
+    const channels = Array.isArray(metadata.channels) ? metadata.channels : [];
+    if (channels.length === 0) return ["whatsapp", "email", "sms"];
+    return channels;
+  }, [metadata.channels]);
 
   const rows = useMemo<RuleRow[]>(() => {
     return rules
@@ -234,9 +253,9 @@ export function NotificationRulesManager({
               <option disabled value="">
                 {isEn ? "Select an event" : "Selecciona un evento"}
               </option>
-              {TRIGGER_EVENTS.map((event) => (
-                <option key={event} value={event}>
-                  {humanizeKey(event)}
+              {triggerOptions.map((event) => (
+                <option key={event.value} value={event.value}>
+                  {event.label}
                 </option>
               ))}
             </Select>
@@ -247,7 +266,7 @@ export function NotificationRulesManager({
               {isEn ? "Channel" : "Canal"}
             </span>
             <Select defaultValue="whatsapp" name="channel">
-              {CHANNELS.map((ch) => (
+              {channelOptions.map((ch) => (
                 <option key={ch} value={ch}>
                   {ch}
                 </option>

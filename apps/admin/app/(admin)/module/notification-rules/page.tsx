@@ -8,7 +8,12 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { fetchList, getApiBaseUrl } from "@/lib/api";
+import {
+  fetchList,
+  fetchNotificationRulesMetadata,
+  getApiBaseUrl,
+  type NotificationRuleMetadataResponse,
+} from "@/lib/api";
 import { errorMessage, isOrgMembershipError } from "@/lib/errors";
 import { getActiveLocale } from "@/lib/i18n/server";
 import { getActiveOrgId } from "@/lib/org";
@@ -56,14 +61,20 @@ export default async function NotificationRulesPage({
 
   let rules: Record<string, unknown>[] = [];
   let templates: Record<string, unknown>[] = [];
+  let metadata: NotificationRuleMetadataResponse = {
+    channels: ["whatsapp", "email", "sms"],
+    triggers: [],
+  };
 
   try {
-    const [ruleRows, templateRows] = await Promise.all([
+    const [ruleRows, templateRows, metadataRows] = await Promise.all([
       fetchList("/notification-rules", orgId, 200),
       fetchList("/message-templates", orgId, 200),
+      fetchNotificationRulesMetadata(orgId),
     ]);
     rules = ruleRows as Record<string, unknown>[];
     templates = templateRows as Record<string, unknown>[];
+    metadata = metadataRows;
   } catch (err) {
     const message = errorMessage(err);
     if (isOrgMembershipError(message)) {
@@ -140,6 +151,7 @@ export default async function NotificationRulesPage({
             orgId={orgId}
             rules={rules}
             templates={templates}
+            metadata={metadata}
           />
         </CardContent>
       </Card>

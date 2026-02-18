@@ -55,6 +55,45 @@ export type OperationsSummary = {
   reservations_upcoming_check_in?: number;
   reservations_upcoming_check_out?: number;
 };
+
+export type NotificationListItem = {
+  id: string;
+  event_id: string;
+  event_type: string;
+  category: string;
+  severity: string;
+  title: string;
+  body: string;
+  link_path?: string | null;
+  source_table?: string | null;
+  source_id?: string | null;
+  payload?: Record<string, unknown>;
+  read_at?: string | null;
+  created_at?: string | null;
+  occurred_at?: string | null;
+};
+
+export type NotificationListResponse = {
+  data: NotificationListItem[];
+  next_cursor?: string | null;
+};
+
+export type UnreadCountResponse = {
+  unread: number;
+};
+
+export type NotificationRuleMetadataTrigger = {
+  value: string;
+  label_en: string;
+  label_es: string;
+  mode: string;
+};
+
+export type NotificationRuleMetadataResponse = {
+  channels: string[];
+  triggers: NotificationRuleMetadataTrigger[];
+};
+
 const LIST_LIMIT_CAPS: Record<string, number> = {
   "/applications": 250,
   "/integration-events": 200,
@@ -264,6 +303,43 @@ export async function fetchList(
     ...(extraQuery ?? {}),
   });
   return data.data ?? [];
+}
+
+export function fetchNotifications(
+  orgId: string,
+  params?: {
+    limit?: number;
+    cursor?: string;
+    status?: "all" | "read" | "unread";
+    category?: string;
+  }
+): Promise<NotificationListResponse> {
+  return fetchJson<NotificationListResponse>("/notifications", {
+    org_id: orgId,
+    limit: params?.limit ?? 50,
+    cursor: params?.cursor,
+    status: params?.status ?? "all",
+    category: params?.category,
+  });
+}
+
+export function fetchNotificationUnreadCount(
+  orgId: string
+): Promise<UnreadCountResponse> {
+  return fetchJson<UnreadCountResponse>("/notifications/unread-count", {
+    org_id: orgId,
+  });
+}
+
+export function fetchNotificationRulesMetadata(
+  orgId: string
+): Promise<NotificationRuleMetadataResponse> {
+  return fetchJson<NotificationRuleMetadataResponse>(
+    "/notification-rules/metadata",
+    {
+      org_id: orgId,
+    }
+  );
 }
 
 export async function fetchOrganizations(limit = 50): Promise<unknown[]> {

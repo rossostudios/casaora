@@ -1287,6 +1287,31 @@ pub struct NotificationRulePath {
     pub rule_id: String,
 }
 
+#[derive(Debug, Clone, Deserialize, serde::Serialize)]
+pub struct NotificationRulesMetadataQuery {
+    pub org_id: String,
+}
+
+#[derive(Debug, Clone, Deserialize, serde::Serialize)]
+pub struct NotificationsQuery {
+    pub org_id: String,
+    pub status: Option<String>,
+    pub category: Option<String>,
+    pub cursor: Option<String>,
+    #[serde(default = "default_limit_200")]
+    pub limit: i64,
+}
+
+#[derive(Debug, Clone, Deserialize, serde::Serialize)]
+pub struct NotificationPath {
+    pub notification_id: String,
+}
+
+#[derive(Debug, Clone, Deserialize, serde::Serialize)]
+pub struct ReadAllNotificationsInput {
+    pub org_id: String,
+}
+
 pub fn clamp_limit_in_range(limit: i64, minimum: i64, maximum: i64) -> i64 {
     limit.clamp(minimum, maximum)
 }

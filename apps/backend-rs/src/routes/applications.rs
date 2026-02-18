@@ -15,8 +15,11 @@ use crate::{
         ConvertApplicationToLeaseInput,
     },
     services::{
-        analytics::write_analytics_event, audit::write_audit_log,
-        lease_schedule::ensure_monthly_lease_schedule, pricing::lease_financials_from_lines,
+        analytics::write_analytics_event,
+        audit::write_audit_log,
+        lease_schedule::ensure_monthly_lease_schedule,
+        notification_center::{emit_event, EmitNotificationEventInput},
+        pricing::lease_financials_from_lines,
     },
     state::AppState,
     tenancy::{assert_org_member, assert_org_role},
@@ -216,6 +219,7 @@ async fn update_application_status(
         ]),
     )
     .await?;
+    let event_id = value_str(&event, "id");
 
     write_audit_log(
         state.db_pool.as_ref(),
@@ -241,6 +245,60 @@ async fn update_application_status(
         )
         .await;
     }
+
+    let mut event_payload = Map::new();
+    event_payload.insert(
+        "application_id".to_string(),
+        Value::String(path.application_id.clone()),
+    );
+    event_payload.insert("from".to_string(), Value::String(current_status.clone()));
+    event_payload.insert("to".to_string(), Value::String(next.clone()));
+    if let Some(assigned_user_id) = payload
+        .assigned_user_id
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        event_payload.insert(
+            "assigned_user_id".to_string(),
+            Value::String(assigned_user_id.to_string()),
+        );
+    }
+    if !event_id.is_empty() {
+        event_payload.insert(
+            "application_event_id".to_string(),
+            Value::String(event_id.clone()),
+        );
+    }
+
+    let _ = emit_event(
+        pool,
+        EmitNotificationEventInput {
+            organization_id: org_id.clone(),
+            event_type: "application_status_changed".to_string(),
+            category: "applications".to_string(),
+            severity: "info".to_string(),
+            title: "Aplicación actualizada".to_string(),
+            body: format!("Estado cambiado: {current_status} → {next}"),
+            link_path: Some("/module/applications".to_string()),
+            source_table: Some("application_submissions".to_string()),
+            source_id: Some(path.application_id.clone()),
+            actor_user_id: Some(user_id.clone()),
+            payload: event_payload,
+            dedupe_key: Some(format!(
+                "application_status_changed:{}:{}",
+                path.application_id,
+                if event_id.is_empty() {
+                    Utc::now().timestamp().to_string()
+                } else {
+                    event_id.clone()
+                }
+            )),
+            occurred_at: None,
+            fallback_roles: vec![],
+        },
+    )
+    .await;
 
     let mut enriched = enrich_applications(pool, vec![updated]).await?;
     let mut item = enriched.pop().unwrap_or_else(|| Value::Object(Map::new()));

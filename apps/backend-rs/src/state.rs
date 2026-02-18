@@ -70,6 +70,7 @@ pub struct AppState {
     pub jwks_cache: Option<JwksCache>,
     pub org_membership_cache: OrgMembershipCache,
     pub public_listings_cache: PublicListingsCache,
+    pub report_response_cache: ReportResponseCache,
 }
 
 impl AppState {
@@ -95,6 +96,10 @@ impl AppState {
             config.public_listings_cache_ttl_seconds,
             config.public_listings_cache_max_entries,
         );
+        let report_response_cache = ReportResponseCache::new(
+            config.report_response_cache_ttl_seconds,
+            config.report_response_cache_max_entries,
+        );
 
         Ok(Self {
             config: Arc::new(config),
@@ -103,6 +108,7 @@ impl AppState {
             jwks_cache,
             org_membership_cache,
             public_listings_cache,
+            report_response_cache,
         })
     }
 }
@@ -131,6 +137,20 @@ pub struct PublicListingsCache {
 
 #[derive(Clone)]
 struct CachedPublicListings {
+    value: Value,
+    expires_at: Instant,
+}
+
+#[derive(Clone)]
+pub struct ReportResponseCache {
+    ttl: Duration,
+    max_entries: usize,
+    entries: Arc<RwLock<HashMap<String, CachedReportResponse>>>,
+    key_locks: Arc<Mutex<HashMap<String, Arc<Mutex<()>>>>>,
+}
+
+#[derive(Clone)]
+struct CachedReportResponse {
     value: Value,
     expires_at: Instant,
 }
@@ -252,6 +272,64 @@ impl PublicListingsCache {
 
     pub async fn clear(&self) {
         self.entries.write().await.clear();
+    }
+
+    pub async fn key_lock(&self, key: &str) -> Arc<Mutex<()>> {
+        let mut locks = self.key_locks.lock().await;
+        if locks.len() >= self.max_entries {
+            locks.clear();
+        }
+        locks
+            .entry(key.to_string())
+            .or_insert_with(|| Arc::new(Mutex::new(())))
+            .clone()
+    }
+}
+
+impl ReportResponseCache {
+    pub fn new(ttl_seconds: u64, max_entries: usize) -> Self {
+        Self {
+            ttl: Duration::from_secs(ttl_seconds.max(1)),
+            max_entries: max_entries.max(100),
+            entries: Arc::new(RwLock::new(HashMap::new())),
+            key_locks: Arc::new(Mutex::new(HashMap::new())),
+        }
+    }
+
+    pub async fn get(&self, key: &str) -> Option<Value> {
+        let now = Instant::now();
+        let entry = {
+            let entries = self.entries.read().await;
+            entries.get(key).cloned()
+        };
+
+        match entry {
+            Some(cached) if cached.expires_at > now => Some(cached.value),
+            Some(_) => {
+                self.entries.write().await.remove(key);
+                None
+            }
+            None => None,
+        }
+    }
+
+    pub async fn put(&self, key: String, value: Value) {
+        let mut entries = self.entries.write().await;
+        if entries.len() >= self.max_entries {
+            let now = Instant::now();
+            entries.retain(|_, cached| cached.expires_at > now);
+            if entries.len() >= self.max_entries {
+                entries.clear();
+            }
+        }
+
+        entries.insert(
+            key,
+            CachedReportResponse {
+                value,
+                expires_at: Instant::now() + self.ttl,
+            },
+        );
     }
 
     pub async fn key_lock(&self, key: &str) -> Arc<Mutex<()>> {

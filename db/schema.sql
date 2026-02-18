@@ -146,7 +146,18 @@ CREATE TYPE notification_trigger_event AS ENUM (
   'task_assigned',
   'lease_expiring_30d',
   'maintenance_submitted',
-  'payment_confirmed'
+  'payment_confirmed',
+  'maintenance_acknowledged',
+  'maintenance_scheduled',
+  'maintenance_completed',
+  'lease_expiring_60d',
+  'lease_renewal_offered',
+  'lease_renewal_accepted',
+  'collection_overdue',
+  'collection_escalated',
+  'guest_message_received',
+  'message_send_failed',
+  'application_status_changed'
 );
 
 CREATE TYPE fee_line_type AS ENUM (
@@ -842,12 +853,16 @@ CREATE TABLE message_logs (
   sent_at timestamptz,
   error_message text,
   provider_response jsonb,
+  direction text NOT NULL DEFAULT 'outbound'
+    CHECK (direction IN ('inbound', 'outbound')),
+  retry_count integer NOT NULL DEFAULT 0,
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now()
 );
 
 CREATE INDEX idx_message_logs_org_status ON message_logs(organization_id, status, created_at);
 CREATE INDEX idx_message_logs_recipient ON message_logs(recipient);
+CREATE INDEX idx_message_logs_direction ON message_logs(direction, created_at DESC);
 
 -- ---------- AI agents and chats ----------
 
@@ -1001,6 +1016,68 @@ CREATE TABLE notification_rules (
 
 CREATE INDEX idx_notification_rules_org_active
   ON notification_rules(organization_id, is_active);
+
+-- ---------- Notification center ----------
+
+CREATE TABLE notification_events (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  organization_id uuid NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  event_type text NOT NULL,
+  category text NOT NULL,
+  severity text NOT NULL,
+  title text NOT NULL,
+  body text NOT NULL,
+  link_path text,
+  source_table text,
+  source_id text,
+  actor_user_id uuid REFERENCES app_users(id) ON DELETE SET NULL,
+  payload jsonb NOT NULL DEFAULT '{}'::jsonb,
+  dedupe_key text,
+  occurred_at timestamptz NOT NULL DEFAULT now(),
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE UNIQUE INDEX idx_notification_events_dedupe_key
+  ON notification_events(dedupe_key)
+  WHERE dedupe_key IS NOT NULL;
+
+CREATE INDEX idx_notification_events_org_occurred
+  ON notification_events(organization_id, occurred_at DESC);
+
+CREATE INDEX idx_notification_events_event_type_occurred
+  ON notification_events(event_type, occurred_at DESC);
+
+CREATE TABLE user_notifications (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  organization_id uuid NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  event_id uuid NOT NULL REFERENCES notification_events(id) ON DELETE CASCADE,
+  recipient_user_id uuid NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,
+  read_at timestamptz,
+  archived_at timestamptz,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (event_id, recipient_user_id)
+);
+
+CREATE INDEX idx_user_notifications_recipient_org_created
+  ON user_notifications(recipient_user_id, organization_id, created_at DESC);
+
+CREATE INDEX idx_user_notifications_unread
+  ON user_notifications(recipient_user_id, organization_id, created_at DESC)
+  WHERE read_at IS NULL;
+
+CREATE TABLE notification_rule_dispatches (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  notification_rule_id uuid NOT NULL REFERENCES notification_rules(id) ON DELETE CASCADE,
+  event_id uuid NOT NULL REFERENCES notification_events(id) ON DELETE CASCADE,
+  recipient text NOT NULL,
+  channel message_channel NOT NULL,
+  message_log_id uuid REFERENCES message_logs(id) ON DELETE SET NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (notification_rule_id, event_id, recipient, channel)
+);
+
+CREATE INDEX idx_notification_rule_dispatches_rule_event
+  ON notification_rule_dispatches(notification_rule_id, event_id);
 
 -- ---------- Documents ----------
 
@@ -1403,6 +1480,9 @@ ALTER TABLE message_logs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE maintenance_requests ENABLE ROW LEVEL SECURITY;
 ALTER TABLE payment_instructions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE notification_rules ENABLE ROW LEVEL SECURITY;
+ALTER TABLE notification_events ENABLE ROW LEVEL SECURITY;
+ALTER TABLE user_notifications ENABLE ROW LEVEL SECURITY;
+ALTER TABLE notification_rule_dispatches ENABLE ROW LEVEL SECURITY;
 ALTER TABLE ai_agents ENABLE ROW LEVEL SECURITY;
 ALTER TABLE ai_chats ENABLE ROW LEVEL SECURITY;
 ALTER TABLE ai_chat_messages ENABLE ROW LEVEL SECURITY;
@@ -1521,6 +1601,41 @@ CREATE POLICY notification_rules_org_member_all
   ON notification_rules FOR ALL
   USING (is_org_member(organization_id))
   WITH CHECK (is_org_member(organization_id));
+
+CREATE POLICY notification_events_org_member_all
+  ON notification_events FOR ALL
+  USING (is_org_member(organization_id))
+  WITH CHECK (is_org_member(organization_id));
+
+CREATE POLICY user_notifications_recipient_all
+  ON user_notifications FOR ALL
+  USING (
+    is_org_member(organization_id)
+    AND recipient_user_id = auth_user_id()
+  )
+  WITH CHECK (
+    is_org_member(organization_id)
+    AND recipient_user_id = auth_user_id()
+  );
+
+CREATE POLICY notification_rule_dispatches_org_member_all
+  ON notification_rule_dispatches FOR ALL
+  USING (
+    EXISTS (
+      SELECT 1
+      FROM notification_rules nr
+      WHERE nr.id = notification_rule_dispatches.notification_rule_id
+        AND is_org_member(nr.organization_id)
+    )
+  )
+  WITH CHECK (
+    EXISTS (
+      SELECT 1
+      FROM notification_rules nr
+      WHERE nr.id = notification_rule_dispatches.notification_rule_id
+        AND is_org_member(nr.organization_id)
+    )
+  );
 
 CREATE POLICY ai_agents_read_authenticated
   ON ai_agents FOR SELECT

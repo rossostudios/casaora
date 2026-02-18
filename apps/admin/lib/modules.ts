@@ -42,8 +42,10 @@ export const MODULES: ModuleDef[] = [
     label: "Integraciones",
     label_en: "Integrations",
     endpoint: "/integrations",
-    description: "Conecta unidades a OTAs y canales de venta directa con sync iCal.",
-    description_en: "Connect units to OTAs and direct-sales channels with iCal sync.",
+    description:
+      "Conecta unidades a OTAs y canales de venta directa con sync iCal.",
+    description_en:
+      "Connect units to OTAs and direct-sales channels with iCal sync.",
   },
   {
     slug: "guests",
@@ -163,6 +165,16 @@ export const MODULES: ModuleDef[] = [
     description_en: "Template messaging for WhatsApp, email, and SMS.",
   },
   {
+    slug: "notifications",
+    label: "Centro de notificaciones",
+    label_en: "Notification center",
+    endpoint: "/notifications",
+    description:
+      "Bandeja interna por usuario con historial, lectura y filtros por categoría.",
+    description_en:
+      "Per-user in-app inbox with history, read state, and category filters.",
+  },
+  {
     slug: "notification-rules",
     label: "Reglas de notificación",
     label_en: "Notification rules",
@@ -246,10 +258,8 @@ export const MODULES: ModuleDef[] = [
     label: "Facturación",
     label_en: "Billing",
     endpoint: "/billing/current",
-    description:
-      "Plan de suscripción, uso y configuración de facturación.",
-    description_en:
-      "Subscription plan, usage, and billing configuration.",
+    description: "Plan de suscripción, uso y configuración de facturación.",
+    description_en: "Subscription plan, usage, and billing configuration.",
   },
 ];
 

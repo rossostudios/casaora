@@ -12,6 +12,7 @@ use crate::{
     error::{AppError, AppResult},
     repository::table_service::{create_row, get_row, list_rows, update_row},
     schemas::clamp_limit_in_range,
+    services::notification_center::{emit_event, EmitNotificationEventInput},
     services::workflows::fire_trigger,
     state::AppState,
 };
@@ -695,6 +696,60 @@ async fn tenant_create_maintenance(
             Value::String(val_str(&created, "title")),
         );
         fire_trigger(pool, &org_id, "maintenance_submitted", &ctx).await;
+    }
+
+    let request_id = val_str(&created, "id");
+    if !org_id.is_empty() && !request_id.is_empty() {
+        let tenant_phone = val_str(&lease, "tenant_phone_e164");
+        let tenant_email = val_str(&lease, "tenant_email");
+        let mut event_payload = serde_json::Map::new();
+        event_payload.insert(
+            "maintenance_request_id".to_string(),
+            Value::String(request_id.clone()),
+        );
+        event_payload.insert(
+            "title".to_string(),
+            Value::String(val_str(&created, "title")),
+        );
+        event_payload.insert(
+            "tenant_full_name".to_string(),
+            Value::String(val_str(&lease, "tenant_full_name")),
+        );
+        if !tenant_phone.is_empty() {
+            event_payload.insert(
+                "tenant_phone_e164".to_string(),
+                Value::String(tenant_phone.clone()),
+            );
+            event_payload.insert("recipient_phone".to_string(), Value::String(tenant_phone));
+        }
+        if !tenant_email.is_empty() {
+            event_payload.insert(
+                "tenant_email".to_string(),
+                Value::String(tenant_email.clone()),
+            );
+            event_payload.insert("recipient_email".to_string(), Value::String(tenant_email));
+        }
+
+        let _ = emit_event(
+            pool,
+            EmitNotificationEventInput {
+                organization_id: org_id.clone(),
+                event_type: "maintenance_submitted".to_string(),
+                category: "maintenance".to_string(),
+                severity: "warning".to_string(),
+                title: "Nueva solicitud de mantenimiento".to_string(),
+                body: format!("Nueva solicitud: {}", val_str(&created, "title")),
+                link_path: Some("/module/maintenance".to_string()),
+                source_table: Some("maintenance_requests".to_string()),
+                source_id: Some(request_id.clone()),
+                actor_user_id: None,
+                payload: event_payload,
+                dedupe_key: Some(format!("maintenance_submitted:{request_id}")),
+                occurred_at: None,
+                fallback_roles: vec![],
+            },
+        )
+        .await;
     }
 
     Ok((axum::http::StatusCode::CREATED, Json(created)))

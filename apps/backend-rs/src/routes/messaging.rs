@@ -20,6 +20,7 @@ use crate::{
     services::ical::sync_all_ical_integrations,
     services::lease_renewal::run_lease_renewal_scan,
     services::messaging::process_queued_messages,
+    services::notification_center::{emit_event, EmitNotificationEventInput},
     services::sequences::process_sequences,
     state::AppState,
     tenancy::{assert_org_member, assert_org_role},
@@ -436,7 +437,7 @@ async fn whatsapp_webhook(
                             // Try to match sender to a guest or tenant
                             let org_id = match_phone_to_org(pool, sender_phone).await;
 
-                            let _ = crate::services::messaging::create_inbound_message(
+                            let created = crate::services::messaging::create_inbound_message(
                                 pool,
                                 org_id.as_deref(),
                                 sender_phone,
@@ -445,6 +446,65 @@ async fn whatsapp_webhook(
                                 wa_msg_id,
                             )
                             .await;
+
+                            if let Some(oid) = &org_id {
+                                if created.is_ok() {
+                                    let mut event_payload = serde_json::Map::new();
+                                    event_payload.insert(
+                                        "sender_phone".to_string(),
+                                        Value::String(sender_phone.to_string()),
+                                    );
+                                    event_payload.insert(
+                                        "recipient_phone".to_string(),
+                                        Value::String(sender_phone.to_string()),
+                                    );
+                                    event_payload.insert(
+                                        "wa_message_id".to_string(),
+                                        Value::String(wa_msg_id.to_string()),
+                                    );
+                                    event_payload.insert(
+                                        "message_type".to_string(),
+                                        Value::String(msg_type.to_string()),
+                                    );
+                                    event_payload.insert(
+                                        "preview".to_string(),
+                                        Value::String(text.chars().take(160).collect::<String>()),
+                                    );
+                                    if let Some(media_url) = media_url {
+                                        event_payload.insert(
+                                            "media_url".to_string(),
+                                            Value::String(media_url.to_string()),
+                                        );
+                                    }
+
+                                    let _ = emit_event(
+                                        pool,
+                                        EmitNotificationEventInput {
+                                            organization_id: oid.clone(),
+                                            event_type: "guest_message_received".to_string(),
+                                            category: "messaging".to_string(),
+                                            severity: "warning".to_string(),
+                                            title: "Nuevo mensaje de huésped".to_string(),
+                                            body: format!(
+                                                "Mensaje entrante desde {}",
+                                                sender_phone
+                                            ),
+                                            link_path: Some("/module/messaging".to_string()),
+                                            source_table: Some("message_logs".to_string()),
+                                            source_id: None,
+                                            actor_user_id: None,
+                                            payload: event_payload,
+                                            dedupe_key: Some(format!(
+                                                "guest_message_received:{}",
+                                                wa_msg_id
+                                            )),
+                                            occurred_at: None,
+                                            fallback_roles: vec![],
+                                        },
+                                    )
+                                    .await;
+                                }
+                            }
 
                             // AI auto-reply for guest messages
                             if let Some(oid) = &org_id {

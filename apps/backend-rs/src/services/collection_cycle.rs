@@ -1,9 +1,12 @@
 use chrono::{NaiveDate, Utc};
-use serde_json::{Map, Value};
+use serde_json::{json, Map, Value};
 use sqlx::PgPool;
 use tracing::{info, warn};
 
-use crate::repository::table_service::{create_row, list_rows, update_row};
+use crate::{
+    repository::table_service::{create_row, list_rows, update_row},
+    services::notification_center::{emit_event, EmitNotificationEventInput},
+};
 
 /// Result of a daily collection cycle run.
 #[derive(Debug, Clone, serde::Serialize)]
@@ -357,6 +360,7 @@ async fn mark_late_collections(
         };
 
         let tenant_phone = val_str(&lease, "tenant_phone_e164");
+        let tenant_email = val_str(&lease, "tenant_email");
         let tenant_name = val_str(&lease, "tenant_full_name");
         let amount = collection
             .as_object()
@@ -376,9 +380,12 @@ async fn mark_late_collections(
             );
 
             let mut msg = Map::new();
-            msg.insert("organization_id".to_string(), Value::String(org_id_val));
+            msg.insert(
+                "organization_id".to_string(),
+                Value::String(org_id_val.clone()),
+            );
             msg.insert("channel".to_string(), Value::String("whatsapp".to_string()));
-            msg.insert("recipient".to_string(), Value::String(tenant_phone));
+            msg.insert("recipient".to_string(), Value::String(tenant_phone.clone()));
             msg.insert("status".to_string(), Value::String("queued".to_string()));
             msg.insert(
                 "scheduled_at".to_string(),
@@ -396,6 +403,63 @@ async fn mark_late_collections(
             );
             msg.insert("payload".to_string(), Value::Object(payload));
             let _ = create_row(pool, "message_logs", &msg).await;
+        }
+
+        let mut event_payload = Map::new();
+        event_payload.insert(
+            "collection_id".to_string(),
+            Value::String(collection_id.clone()),
+        );
+        event_payload.insert("lease_id".to_string(), Value::String(lease_id.clone()));
+        event_payload.insert(
+            "tenant_name".to_string(),
+            Value::String(tenant_name.clone()),
+        );
+        if !tenant_phone.is_empty() {
+            event_payload.insert(
+                "tenant_phone_e164".to_string(),
+                Value::String(tenant_phone.clone()),
+            );
+        }
+        if !tenant_email.is_empty() {
+            event_payload.insert(
+                "tenant_email".to_string(),
+                Value::String(tenant_email.clone()),
+            );
+        }
+        event_payload.insert("currency".to_string(), Value::String(currency.clone()));
+        event_payload.insert("amount".to_string(), json!(amount));
+        event_payload.insert("due_date".to_string(), Value::String(due_date.clone()));
+
+        if let Err(error) = emit_event(
+            pool,
+            EmitNotificationEventInput {
+                organization_id: org_id_val.clone(),
+                event_type: "collection_overdue".to_string(),
+                category: "collections".to_string(),
+                severity: "warning".to_string(),
+                title: "Cobro vencido".to_string(),
+                body: format!(
+                    "{tenant_name} tiene un cobro de {amount_display} vencido desde {due_date}."
+                ),
+                link_path: Some("/module/collections".to_string()),
+                source_table: Some("collection_records".to_string()),
+                source_id: Some(collection_id.clone()),
+                actor_user_id: None,
+                payload: event_payload,
+                dedupe_key: Some(format!("collection_overdue:{collection_id}")),
+                occurred_at: None,
+                fallback_roles: vec![],
+            },
+        )
+        .await
+        {
+            warn!(
+                collection_id = %collection_id,
+                error = %error,
+                "Failed to emit collection_overdue notification"
+            );
+            result.errors += 1;
         }
 
         result.marked_late += 1;
@@ -469,6 +533,7 @@ async fn escalate_late_collections(
         };
 
         let tenant_phone = val_str(&lease, "tenant_phone_e164");
+        let tenant_email = val_str(&lease, "tenant_email");
         let tenant_name = val_str(&lease, "tenant_full_name");
         let amount = collection
             .as_object()
@@ -495,7 +560,7 @@ async fn escalate_late_collections(
                 Value::String(org_id_val.clone()),
             );
             msg.insert("channel".to_string(), Value::String("whatsapp".to_string()));
-            msg.insert("recipient".to_string(), Value::String(tenant_phone));
+            msg.insert("recipient".to_string(), Value::String(tenant_phone.clone()));
             msg.insert("status".to_string(), Value::String("queued".to_string()));
             msg.insert(
                 "scheduled_at".to_string(),
@@ -516,7 +581,7 @@ async fn escalate_late_collections(
         }
 
         // Alert the property manager / owner
-        let owner_members = match list_rows(
+        let owner_members: Vec<Value> = (list_rows(
             pool,
             "organization_members",
             Some(&{
@@ -533,11 +598,8 @@ async fn escalate_late_collections(
             "created_at",
             true,
         )
-        .await
-        {
-            Ok(m) => m,
-            Err(_) => Vec::new(),
-        };
+        .await)
+            .unwrap_or_default();
 
         for member in &owner_members {
             let user_id = val_str(member, "user_id");
@@ -583,6 +645,63 @@ async fn escalate_late_collections(
                     let _ = create_row(pool, "message_logs", &msg).await;
                 }
             }
+        }
+
+        let mut event_payload = Map::new();
+        event_payload.insert(
+            "collection_id".to_string(),
+            Value::String(collection_id.clone()),
+        );
+        event_payload.insert("lease_id".to_string(), Value::String(lease_id.clone()));
+        event_payload.insert(
+            "tenant_name".to_string(),
+            Value::String(tenant_name.clone()),
+        );
+        if !tenant_phone.is_empty() {
+            event_payload.insert(
+                "tenant_phone_e164".to_string(),
+                Value::String(tenant_phone.clone()),
+            );
+        }
+        if !tenant_email.is_empty() {
+            event_payload.insert(
+                "tenant_email".to_string(),
+                Value::String(tenant_email.clone()),
+            );
+        }
+        event_payload.insert("currency".to_string(), Value::String(currency.clone()));
+        event_payload.insert("amount".to_string(), json!(amount));
+        event_payload.insert("due_date".to_string(), Value::String(due_date.clone()));
+
+        if let Err(error) = emit_event(
+            pool,
+            EmitNotificationEventInput {
+                organization_id: org_id_val.clone(),
+                event_type: "collection_escalated".to_string(),
+                category: "collections".to_string(),
+                severity: "critical".to_string(),
+                title: "Cobro escalado".to_string(),
+                body: format!(
+                    "{tenant_name} mantiene un cobro de {amount_display} con más de 7 días de atraso."
+                ),
+                link_path: Some("/module/collections".to_string()),
+                source_table: Some("collection_records".to_string()),
+                source_id: Some(collection_id.clone()),
+                actor_user_id: None,
+                payload: event_payload,
+                dedupe_key: Some(format!("collection_escalated:{collection_id}:{today_iso}")),
+                occurred_at: None,
+                fallback_roles: vec![],
+            },
+        )
+        .await
+        {
+            warn!(
+                collection_id = %collection_id,
+                error = %error,
+                "Failed to emit collection_escalated notification"
+            );
+            result.errors += 1;
         }
 
         result.escalated += 1;

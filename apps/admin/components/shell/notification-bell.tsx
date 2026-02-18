@@ -1,7 +1,9 @@
 "use client";
 
 import { Notification03Icon } from "@hugeicons/core-free-icons";
-import { useCallback, useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { Icon } from "@/components/ui/icon";
 import {
@@ -9,92 +11,280 @@ import {
   PopoverRoot,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import type { NotificationListItem } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
-type NotificationCategory =
-  | "reservation"
-  | "task"
-  | "message"
-  | "finance"
-  | "system";
+const POLL_INTERVAL_MS = 45_000;
+const LIST_LIMIT = 8;
 
-type NotificationItem = {
-  id: string;
-  category: NotificationCategory;
-  title: string;
-  description: string;
-  time: string;
-  read: boolean;
-};
-
-const CATEGORY_COLORS: Record<NotificationCategory, string> = {
-  reservation: "bg-[var(--status-info-fg)]",
-  task: "bg-[var(--status-warning-fg)]",
-  message: "bg-primary/80",
-  finance: "bg-foreground/55",
+const CATEGORY_COLORS: Record<string, string> = {
+  collections: "bg-[var(--status-warning-fg)]",
+  maintenance: "bg-primary/80",
+  messaging: "bg-[var(--status-info-fg)]",
+  applications: "bg-foreground/60",
   system: "bg-[var(--status-danger-fg)]",
 };
 
-const SAMPLE_NOTIFICATIONS: NotificationItem[] = [
-  {
-    id: "1",
-    category: "reservation",
-    title: "New reservation #4821",
-    description: "Casa del Sol · Check-in Mar 15",
-    time: "2m ago",
-    read: false,
-  },
-  {
-    id: "2",
-    category: "task",
-    title: "Task overdue: Deep clean",
-    description: "Unit 3B · Due yesterday",
-    time: "1h ago",
-    read: false,
-  },
-  {
-    id: "3",
-    category: "message",
-    title: "Message from Carlos P.",
-    description: '"¿A qué hora es el check-in?"',
-    time: "3h ago",
-    read: false,
-  },
-  {
-    id: "4",
-    category: "system",
-    title: "Channel sync failed",
-    description: "Airbnb connection timed out",
-    time: "5h ago",
-    read: true,
-  },
-  {
-    id: "5",
-    category: "finance",
-    title: "Owner statement ready",
-    description: "February 2026 · 3 properties",
-    time: "1d ago",
-    read: true,
-  },
-];
+type NotificationBellProps = {
+  locale: string;
+  orgId: string | null;
+};
 
-export function NotificationBell({ locale }: { locale: string }) {
+function toRelativeTime(
+  value: string | null | undefined,
+  locale: string
+): string {
+  if (!value) return "";
+  const timestamp = new Date(value).getTime();
+  if (!Number.isFinite(timestamp)) return "";
+
+  const deltaSeconds = Math.round((timestamp - Date.now()) / 1000);
+  const abs = Math.abs(deltaSeconds);
+  const rtf = new Intl.RelativeTimeFormat(locale === "en-US" ? "en" : "es", {
+    numeric: "auto",
+  });
+
+  if (abs < 60) return rtf.format(deltaSeconds, "second");
+  if (abs < 3600) return rtf.format(Math.round(deltaSeconds / 60), "minute");
+  if (abs < 86_400) return rtf.format(Math.round(deltaSeconds / 3600), "hour");
+  return rtf.format(Math.round(deltaSeconds / 86_400), "day");
+}
+
+function normalizeNotification(item: unknown): NotificationListItem | null {
+  if (!item || typeof item !== "object") return null;
+  const row = item as Record<string, unknown>;
+  const id = typeof row.id === "string" ? row.id.trim() : "";
+  if (!id) return null;
+
+  return {
+    id,
+    event_id: typeof row.event_id === "string" ? row.event_id : "",
+    event_type: typeof row.event_type === "string" ? row.event_type : "",
+    category: typeof row.category === "string" ? row.category : "system",
+    severity: typeof row.severity === "string" ? row.severity : "info",
+    title: typeof row.title === "string" ? row.title : "",
+    body: typeof row.body === "string" ? row.body : "",
+    link_path: typeof row.link_path === "string" ? row.link_path : null,
+    source_table:
+      typeof row.source_table === "string" ? row.source_table : null,
+    source_id: typeof row.source_id === "string" ? row.source_id : null,
+    payload:
+      row.payload && typeof row.payload === "object"
+        ? (row.payload as Record<string, unknown>)
+        : {},
+    read_at: typeof row.read_at === "string" ? row.read_at : null,
+    created_at: typeof row.created_at === "string" ? row.created_at : null,
+    occurred_at: typeof row.occurred_at === "string" ? row.occurred_at : null,
+  };
+}
+
+export function NotificationBell({ locale, orgId }: NotificationBellProps) {
   const isEn = locale === "en-US";
-  const [notifications, setNotifications] = useState(SAMPLE_NOTIFICATIONS);
+  const router = useRouter();
+
   const [open, setOpen] = useState(false);
+  const [notifications, setNotifications] = useState<NotificationListItem[]>(
+    []
+  );
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [markingAll, setMarkingAll] = useState(false);
 
-  const unreadCount = notifications.filter((n) => !n.read).length;
   const hasUnread = unreadCount > 0;
+  const unreadDisplay = unreadCount > 99 ? "99+" : String(unreadCount);
 
-  const markAllRead = useCallback(() => {
-    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
-  }, []);
+  const loadNotifications = useCallback(
+    async (silent = false) => {
+      if (!orgId) {
+        setNotifications([]);
+        setUnreadCount(0);
+        setError(null);
+        return;
+      }
 
-  const markRead = useCallback((id: string) => {
+      if (!silent) setLoading(true);
+
+      try {
+        const [countRes, listRes] = await Promise.all([
+          fetch(
+            `/api/notifications/unread-count?org_id=${encodeURIComponent(orgId)}`,
+            {
+              method: "GET",
+              cache: "no-store",
+              headers: { Accept: "application/json" },
+            }
+          ),
+          fetch(
+            `/api/notifications?org_id=${encodeURIComponent(orgId)}&status=all&limit=${LIST_LIMIT}`,
+            {
+              method: "GET",
+              cache: "no-store",
+              headers: { Accept: "application/json" },
+            }
+          ),
+        ]);
+
+        const countPayload = (await countRes.json().catch(() => ({}))) as {
+          unread?: unknown;
+          error?: unknown;
+        };
+        const listPayload = (await listRes.json().catch(() => ({}))) as {
+          data?: unknown[];
+          error?: unknown;
+        };
+
+        if (!(countRes.ok && listRes.ok)) {
+          const message =
+            (typeof countPayload.error === "string" && countPayload.error) ||
+            (typeof listPayload.error === "string" && listPayload.error) ||
+            (isEn
+              ? "Could not load notifications."
+              : "No se pudieron cargar las notificaciones.");
+          throw new Error(message);
+        }
+
+        setUnreadCount(
+          typeof countPayload.unread === "number" ? countPayload.unread : 0
+        );
+
+        const rows = Array.isArray(listPayload.data) ? listPayload.data : [];
+        setNotifications(
+          rows
+            .map(normalizeNotification)
+            .filter((item): item is NotificationListItem => Boolean(item))
+        );
+        setError(null);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        setError(message);
+      } finally {
+        if (!silent) setLoading(false);
+      }
+    },
+    [isEn, orgId]
+  );
+
+  useEffect(() => {
+    loadNotifications(false);
+    const intervalId = window.setInterval(() => {
+      loadNotifications(true);
+    }, POLL_INTERVAL_MS);
+    return () => window.clearInterval(intervalId);
+  }, [loadNotifications]);
+
+  const markRead = useCallback(
+    async (notification: NotificationListItem) => {
+      if (!orgId) return;
+      if (!notification.read_at) {
+        const optimisticReadAt = new Date().toISOString();
+        setNotifications((prev) =>
+          prev.map((row) =>
+            row.id === notification.id
+              ? { ...row, read_at: optimisticReadAt }
+              : row
+          )
+        );
+        setUnreadCount((prev) => Math.max(0, prev - 1));
+      }
+
+      try {
+        await fetch(
+          `/api/notifications/${encodeURIComponent(notification.id)}/read?org_id=${encodeURIComponent(orgId)}`,
+          {
+            method: "POST",
+            cache: "no-store",
+            headers: { Accept: "application/json" },
+          }
+        );
+      } catch {
+        // Keep optimistic read state and refresh on next poll.
+      }
+
+      if (notification.link_path) {
+        setOpen(false);
+        router.push(notification.link_path);
+      }
+    },
+    [orgId, router]
+  );
+
+  const markAllRead = useCallback(async () => {
+    if (!orgId || markingAll) return;
+    const optimisticReadAt = new Date().toISOString();
+    setMarkingAll(true);
     setNotifications((prev) =>
-      prev.map((n) => (n.id === id ? { ...n, read: true } : n))
+      prev.map((item) =>
+        item.read_at ? item : { ...item, read_at: optimisticReadAt }
+      )
     );
-  }, []);
+    setUnreadCount(0);
+
+    try {
+      const response = await fetch("/api/notifications/read-all", {
+        method: "POST",
+        cache: "no-store",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify({ org_id: orgId }),
+      });
+      if (!response.ok) throw new Error("mark-all-failed");
+    } catch {
+      loadNotifications(true);
+    } finally {
+      setMarkingAll(false);
+    }
+  }, [loadNotifications, markingAll, orgId]);
+
+  const renderedRows = useMemo(() => {
+    return notifications.map((notification) => {
+      const isRead = Boolean(notification.read_at);
+      const dotColor = isRead
+        ? "bg-muted-foreground/30"
+        : (CATEGORY_COLORS[notification.category] ?? "bg-primary/80");
+
+      return (
+        <button
+          className={cn(
+            "flex w-full gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/50",
+            !isRead && "bg-primary/[0.03]"
+          )}
+          key={notification.id}
+          onClick={() => markRead(notification)}
+          type="button"
+        >
+          <div className="flex shrink-0 pt-1">
+            <span className={cn("h-2 w-2 rounded-full", dotColor)} />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-baseline justify-between gap-2">
+              <p
+                className={cn(
+                  "truncate text-[13px] leading-5",
+                  isRead
+                    ? "text-muted-foreground"
+                    : "font-medium text-foreground"
+                )}
+              >
+                {notification.title || notification.event_type}
+              </p>
+              <span className="shrink-0 text-[11px] text-muted-foreground/70">
+                {toRelativeTime(
+                  notification.occurred_at ?? notification.created_at,
+                  locale
+                )}
+              </span>
+            </div>
+            <p className="mt-0.5 truncate text-muted-foreground text-xs">
+              {notification.body || notification.category}
+            </p>
+          </div>
+        </button>
+      );
+    });
+  }, [locale, markRead, notifications]);
 
   return (
     <PopoverRoot onOpenChange={setOpen} open={open}>
@@ -108,19 +298,21 @@ export function NotificationBell({ locale }: { locale: string }) {
       >
         <Icon icon={Notification03Icon} size={18} />
         {hasUnread ? (
-          <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-red-500 ring-2 ring-background" />
+          <span className="absolute -top-1 -right-1 inline-flex min-h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 font-semibold text-[10px] text-white ring-2 ring-background">
+            {unreadDisplay}
+          </span>
         ) : null}
       </PopoverTrigger>
 
       <PopoverContent align="end" className="w-[360px] p-0" sideOffset={8}>
-        {/* Header */}
         <div className="flex items-center justify-between border-border/60 border-b px-4 py-3">
           <h3 className="font-semibold text-sm">
             {isEn ? "Notifications" : "Notificaciones"}
           </h3>
           {hasUnread ? (
             <button
-              className="font-medium text-muted-foreground text-xs transition-colors hover:text-foreground"
+              className="font-medium text-muted-foreground text-xs transition-colors hover:text-foreground disabled:opacity-50"
+              disabled={markingAll}
               onClick={markAllRead}
               type="button"
             >
@@ -129,74 +321,35 @@ export function NotificationBell({ locale }: { locale: string }) {
           ) : null}
         </div>
 
-        {/* Notification Items */}
         <div className="max-h-[360px] overflow-y-auto">
-          {notifications.length === 0 ? (
+          {loading && notifications.length === 0 ? (
+            <div className="px-4 py-8 text-center text-muted-foreground text-sm">
+              {isEn ? "Loading notifications..." : "Cargando notificaciones..."}
+            </div>
+          ) : error ? (
+            <div className="px-4 py-8 text-center text-muted-foreground text-sm">
+              {isEn
+                ? "Could not load notifications."
+                : "No se pudieron cargar."}
+            </div>
+          ) : notifications.length === 0 ? (
             <div className="px-4 py-8 text-center text-muted-foreground text-sm">
               {isEn ? "No notifications" : "Sin notificaciones"}
             </div>
           ) : (
-            notifications.map((notification) => (
-              <button
-                className={cn(
-                  "flex w-full gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/50",
-                  !notification.read && "bg-primary/[0.03]"
-                )}
-                key={notification.id}
-                onClick={() => markRead(notification.id)}
-                type="button"
-              >
-                {/* Category dot */}
-                <div className="flex shrink-0 pt-1">
-                  <span
-                    className={cn(
-                      "h-2 w-2 rounded-full",
-                      notification.read
-                        ? "bg-muted-foreground/30"
-                        : CATEGORY_COLORS[notification.category]
-                    )}
-                  />
-                </div>
-
-                {/* Content */}
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-baseline justify-between gap-2">
-                    <p
-                      className={cn(
-                        "truncate text-[13px] leading-5",
-                        notification.read
-                          ? "text-muted-foreground"
-                          : "font-medium text-foreground"
-                      )}
-                    >
-                      {notification.title}
-                    </p>
-                    <span className="shrink-0 text-[11px] text-muted-foreground/70">
-                      {notification.time}
-                    </span>
-                  </div>
-                  <p className="mt-0.5 truncate text-muted-foreground text-xs">
-                    {notification.description}
-                  </p>
-                </div>
-              </button>
-            ))
+            renderedRows
           )}
         </div>
 
-        {/* Footer */}
-        {notifications.length > 0 ? (
-          <div className="border-border/60 border-t px-4 py-2.5">
-            <button
-              className="w-full text-center font-medium text-primary text-xs transition-colors hover:text-primary/80"
-              type="button"
-            >
-              {isEn
-                ? "View all notifications →"
-                : "Ver todas las notificaciones →"}
-            </button>
-          </div>
-        ) : null}
+        <div className="border-border/60 border-t px-4 py-2.5">
+          <Link
+            className="block w-full text-center font-medium text-primary text-xs transition-colors hover:text-primary/80"
+            href="/module/notifications"
+            onClick={() => setOpen(false)}
+          >
+            {isEn ? "View all notifications" : "Ver todas las notificaciones"}
+          </Link>
+        </div>
       </PopoverContent>
     </PopoverRoot>
   );

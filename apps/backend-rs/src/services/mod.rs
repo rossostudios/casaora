@@ -12,6 +12,7 @@ pub mod ical;
 pub mod lease_renewal;
 pub mod lease_schedule;
 pub mod messaging;
+pub mod notification_center;
 pub mod payments;
 pub mod plan_limits;
 pub mod pricing;

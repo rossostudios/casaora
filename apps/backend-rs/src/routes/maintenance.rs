@@ -12,6 +12,7 @@ use crate::{
     repository::table_service::{create_row, get_row, list_rows, update_row},
     schemas::clamp_limit_in_range,
     services::audit::write_audit_log,
+    services::notification_center::{emit_event, EmitNotificationEventInput},
     state::AppState,
     tenancy::{assert_org_member, assert_org_role},
 };
@@ -135,6 +136,7 @@ async fn update_maintenance_request(
     let org_id = val_str(&existing, "organization_id");
     assert_org_role(&state, &user_id, &org_id, MAINTENANCE_EDIT_ROLES).await?;
 
+    let previous_status = val_str(&existing, "status");
     let mut patch = Map::new();
     if let Some(status) = &payload.status {
         patch.insert("status".to_string(), Value::String(status.clone()));
@@ -169,6 +171,7 @@ async fn update_maintenance_request(
     }
 
     let updated = update_row(pool, "maintenance_requests", &path.request_id, &patch, "id").await?;
+    let new_status = val_str(&updated, "status");
 
     // Also update the linked task status if it exists
     let task_id = val_str(&updated, "task_id");
@@ -253,6 +256,108 @@ async fn update_maintenance_request(
                 );
                 msg.insert("payload".to_string(), Value::Object(pl));
                 let _ = create_row(pool, "message_logs", &msg).await;
+            }
+        }
+    }
+
+    if let Some(status) = payload.status.as_deref() {
+        if previous_status != new_status {
+            let normalized_event = match status {
+                "acknowledged" => Some((
+                    "maintenance_acknowledged",
+                    "info",
+                    "Mantenimiento confirmado",
+                )),
+                "scheduled" => Some(("maintenance_scheduled", "info", "Mantenimiento programado")),
+                "completed" | "closed" => {
+                    Some(("maintenance_completed", "info", "Mantenimiento completado"))
+                }
+                _ => None,
+            };
+
+            if let Some((event_type, severity, title)) = normalized_event {
+                let mut event_payload = Map::new();
+                event_payload.insert(
+                    "maintenance_request_id".to_string(),
+                    Value::String(path.request_id.clone()),
+                );
+                event_payload.insert("status".to_string(), Value::String(new_status.clone()));
+                event_payload.insert(
+                    "title".to_string(),
+                    Value::String(val_str(&updated, "title")),
+                );
+                if let Some(assigned_user_id) = updated
+                    .as_object()
+                    .and_then(|obj| obj.get("assigned_user_id"))
+                    .and_then(Value::as_str)
+                    .map(str::trim)
+                    .filter(|value| !value.is_empty())
+                {
+                    event_payload.insert(
+                        "assigned_user_id".to_string(),
+                        Value::String(assigned_user_id.to_string()),
+                    );
+                }
+                if let Some(submitted_by_phone) = updated
+                    .as_object()
+                    .and_then(|obj| obj.get("submitted_by_phone"))
+                    .and_then(Value::as_str)
+                    .map(str::trim)
+                    .filter(|value| !value.is_empty())
+                {
+                    event_payload.insert(
+                        "submitted_by_phone".to_string(),
+                        Value::String(submitted_by_phone.to_string()),
+                    );
+                    event_payload.insert(
+                        "recipient_phone".to_string(),
+                        Value::String(submitted_by_phone.to_string()),
+                    );
+                }
+                if let Some(submitted_by_email) = updated
+                    .as_object()
+                    .and_then(|obj| obj.get("submitted_by_email"))
+                    .and_then(Value::as_str)
+                    .map(str::trim)
+                    .filter(|value| !value.is_empty())
+                {
+                    event_payload.insert(
+                        "submitted_by_email".to_string(),
+                        Value::String(submitted_by_email.to_string()),
+                    );
+                    event_payload.insert(
+                        "recipient_email".to_string(),
+                        Value::String(submitted_by_email.to_string()),
+                    );
+                }
+
+                if let Err(error) = emit_event(
+                    pool,
+                    EmitNotificationEventInput {
+                        organization_id: org_id.clone(),
+                        event_type: event_type.to_string(),
+                        category: "maintenance".to_string(),
+                        severity: severity.to_string(),
+                        title: title.to_string(),
+                        body: format!("{} — {}", val_str(&updated, "title"), new_status),
+                        link_path: Some("/module/maintenance".to_string()),
+                        source_table: Some("maintenance_requests".to_string()),
+                        source_id: Some(path.request_id.clone()),
+                        actor_user_id: Some(user_id.clone()),
+                        payload: event_payload,
+                        dedupe_key: Some(format!("{event_type}:{}", path.request_id)),
+                        occurred_at: None,
+                        fallback_roles: vec![],
+                    },
+                )
+                .await
+                {
+                    tracing::warn!(
+                        request_id = %path.request_id,
+                        error = %error,
+                        "Failed to emit maintenance status notification event"
+                    );
+                }
             }
         }
     }
@@ -352,6 +457,72 @@ async fn public_create_maintenance_request(
             mr_patch.insert("task_id".to_string(), Value::String(task_id));
             let _ = update_row(pool, "maintenance_requests", &mr_id, &mr_patch, "id").await;
         }
+    }
+
+    let mut event_payload = Map::new();
+    let request_id = val_str(&created, "id");
+    event_payload.insert(
+        "maintenance_request_id".to_string(),
+        Value::String(request_id.clone()),
+    );
+    event_payload.insert(
+        "title".to_string(),
+        Value::String(val_str(&created, "title")),
+    );
+    if let Some(submitted_by_phone) = created
+        .as_object()
+        .and_then(|obj| obj.get("submitted_by_phone"))
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        event_payload.insert(
+            "submitted_by_phone".to_string(),
+            Value::String(submitted_by_phone.to_string()),
+        );
+        event_payload.insert(
+            "recipient_phone".to_string(),
+            Value::String(submitted_by_phone.to_string()),
+        );
+    }
+    if let Some(submitted_by_email) = created
+        .as_object()
+        .and_then(|obj| obj.get("submitted_by_email"))
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        event_payload.insert(
+            "submitted_by_email".to_string(),
+            Value::String(submitted_by_email.to_string()),
+        );
+        event_payload.insert(
+            "recipient_email".to_string(),
+            Value::String(submitted_by_email.to_string()),
+        );
+    }
+
+    if !request_id.is_empty() {
+        let _ = emit_event(
+            pool,
+            EmitNotificationEventInput {
+                organization_id: val_str(&created, "organization_id"),
+                event_type: "maintenance_submitted".to_string(),
+                category: "maintenance".to_string(),
+                severity: "warning".to_string(),
+                title: "Nuevo mantenimiento".to_string(),
+                body: format!("Nueva solicitud: {}", val_str(&created, "title")),
+                link_path: Some("/module/maintenance".to_string()),
+                source_table: Some("maintenance_requests".to_string()),
+                source_id: Some(request_id.clone()),
+                actor_user_id: None,
+                payload: event_payload,
+                dedupe_key: Some(format!("maintenance_submitted:{request_id}")),
+                occurred_at: None,
+                fallback_roles: vec![],
+            },
+        )
+        .await;
     }
 
     Ok((axum::http::StatusCode::CREATED, Json(created)))
