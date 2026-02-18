@@ -70,7 +70,7 @@ require_cmd() {
 require_cmd railway
 require_cmd jq
 require_cmd curl
-require_cmd rg
+require_cmd grep
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd -- "$SCRIPT_DIR/.." && pwd)"
@@ -90,7 +90,7 @@ run_cmd() {
 function_exists() {
   local env="$1"
   local name="$2"
-  railway functions -e "$env" list 2>/dev/null | rg -q "^${name} "
+  railway functions -e "$env" list 2>/dev/null | grep -q "^${name} "
 }
 
 wait_for_backend_deploy() {
