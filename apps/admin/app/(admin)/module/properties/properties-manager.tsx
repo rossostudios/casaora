@@ -185,6 +185,7 @@ export function PropertiesManager({
         codeLabel={dict.code}
         createLabel={common.create}
         description={dict.description}
+        isEn={isEn}
         nameLabel={dict.name}
         onOpenChange={setOpen}
         open={open}

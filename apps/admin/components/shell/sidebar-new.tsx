@@ -63,7 +63,7 @@ function SidebarContent({
       </div>
 
       <div className="px-3 pb-2">
-        <div className="flex items-center gap-1 rounded-xl border border-white/10 bg-white/5 p-1">
+        <div className="flex items-center gap-1 rounded-xl bg-sidebar-accent/20 p-1">
           <div className="flex min-w-0 flex-1 items-center gap-0.5">
             {PRIMARY_TABS.map((tab) => {
               const active = tab.key === activeTab;
@@ -73,8 +73,8 @@ function SidebarContent({
                   className={cn(
                     "inline-flex min-w-0 items-center gap-1.5 rounded-lg px-2 py-1.5 font-medium text-[12px] transition-colors",
                     active
-                      ? "bg-white/20 text-sidebar-foreground shadow-sm drop-shadow-sm"
-                      : "text-white/60 hover:bg-white/10 hover:text-white"
+                      ? "bg-sidebar-accent text-sidebar-foreground"
+                      : "text-white/60 hover:bg-sidebar-accent/40 hover:text-white"
                   )}
                   href={tab.href}
                   key={tab.key}
@@ -108,7 +108,7 @@ function SidebarContent({
               <TooltipTrigger asChild>
                 <button
                   aria-label={isEn ? "Search" : "Buscar"}
-                  className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-white/60 transition-colors hover:bg-white/10 hover:text-white"
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-white/60 transition-colors hover:bg-sidebar-accent/40 hover:text-white"
                   onClick={openSearch}
                   type="button"
                 >
@@ -152,7 +152,7 @@ function SidebarContent({
 
       <div className="shrink-0 space-y-2 p-3 pt-0">
         <Link
-          className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-full border border-white/10 bg-white/10 px-3 font-medium text-[13px] text-sidebar-foreground drop-shadow-sm backdrop-blur-md transition-colors hover:border-white/20 hover:bg-white/20"
+          className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-full bg-sidebar-accent px-3 font-medium text-[13px] text-sidebar-foreground transition-colors hover:bg-sidebar-accent/80"
           href="/app/agents?new=1"
         >
           <Icon icon={AiVoiceGeneratorIcon} size={14} />
@@ -185,7 +185,7 @@ export function SidebarNew({
 
   if (isDesktop) {
     return (
-      <aside className="h-full w-full min-w-0 shrink-0 border-border/60 border-r bg-sidebar text-sidebar-foreground">
+      <aside className="h-full w-full min-w-0 shrink-0 bg-sidebar text-sidebar-foreground">
         <Suspense fallback={null}>
           <SidebarContent
             locale={locale}

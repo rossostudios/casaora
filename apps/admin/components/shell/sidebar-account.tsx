@@ -211,15 +211,15 @@ export function SidebarAccount({
           aria-label={isEn ? "Open account menu" : "Abrir menú de cuenta"}
           className={cn(
             buttonVariants({ variant: "ghost", size: "sm" }),
-            "group w-full justify-start gap-2.5 rounded-2xl border border-transparent px-2.5 py-2.5 text-sidebar-foreground/80 outline-none",
-            "transition-all duration-[120ms] ease-[cubic-bezier(0.22,1,0.36,1)] hover:bg-white/10 hover:border-white/20 hover:text-sidebar-foreground hover:shadow-sm",
+            "group h-auto w-full justify-start gap-2.5 rounded-2xl border border-transparent px-2.5 py-2.5 text-sidebar-foreground/80 outline-none",
+            "transition-all duration-[120ms] ease-[cubic-bezier(0.22,1,0.36,1)] hover:bg-sidebar-accent/30 hover:text-sidebar-foreground",
             "focus-visible:ring-2 focus-visible:ring-sidebar-ring/30",
-            open && "border-white/20 bg-white/10 text-sidebar-foreground shadow-sm",
+            open && "bg-sidebar-accent/30 text-sidebar-foreground",
             collapsed ? "justify-center px-0" : ""
           )}
           title={displayName}
         >
-          <span className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-2xl border border-white/20 bg-white/10 font-semibold text-sidebar-foreground text-sm backdrop-blur-md transition-colors group-hover:border-white/30">
+          <span className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-2xl bg-sidebar-accent/40 font-semibold text-sidebar-foreground text-sm transition-colors group-hover:bg-sidebar-accent/50">
             {account.avatarUrl ? (
               <Image
                 alt={isEn ? "Avatar" : "Avatar"}
@@ -239,7 +239,7 @@ export function SidebarAccount({
               collapsed ? "sr-only" : ""
             )}
           >
-            <span className="block truncate font-medium text-[13px] leading-5 drop-shadow-sm">
+            <span className="block truncate font-medium text-[13px] leading-5">
               {displayName}
             </span>
             <span className="block truncate text-[11px] text-white/50">

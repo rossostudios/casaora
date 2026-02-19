@@ -53,8 +53,8 @@ export function NavLinkRow({
       className={cn(
         "group/nav flex items-center gap-2 rounded-lg px-2 py-[5px] transition-all duration-200 ease-in-out",
         active
-          ? "bg-sidebar-accent text-sidebar-foreground"
-          : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground"
+          ? "bg-sidebar-accent text-white"
+          : "text-white hover:bg-sidebar-accent/50"
       )}
       href={href}
     >
@@ -62,8 +62,8 @@ export function NavLinkRow({
         className={cn(
           "shrink-0 transition-colors",
           active
-            ? "text-sidebar-primary"
-            : "text-sidebar-foreground/50 group-hover/nav:text-sidebar-foreground/75"
+            ? "text-white"
+            : "text-white/80 group-hover/nav:text-white"
         )}
         icon={icon}
         size={16}

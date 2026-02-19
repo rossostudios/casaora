@@ -43,22 +43,11 @@ export function ScrollArea({
       </ScrollAreaPrimitive.Viewport>
 
       <ScrollAreaPrimitive.Scrollbar
-        className="flex w-2.5 touch-none p-0.5 transition-colors data-[hovering]:bg-muted/60"
+        className="hidden"
         orientation="vertical"
       >
-        <ScrollAreaPrimitive.Thumb className="relative flex-1 rounded-full bg-border/80" />
+        <ScrollAreaPrimitive.Thumb />
       </ScrollAreaPrimitive.Scrollbar>
-
-      {withHorizontalScrollbar ? (
-        <ScrollAreaPrimitive.Scrollbar
-          className="flex h-2.5 touch-none p-0.5 transition-colors data-[hovering]:bg-muted/60"
-          orientation="horizontal"
-        >
-          <ScrollAreaPrimitive.Thumb className="relative flex-1 rounded-full bg-border/80" />
-        </ScrollAreaPrimitive.Scrollbar>
-      ) : null}
-
-      <ScrollAreaPrimitive.Corner className="bg-muted/70" />
     </ScrollAreaPrimitive.Root>
   );
 }

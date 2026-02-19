@@ -64,13 +64,13 @@ export function OrgSwitcher({
     [activeOrgId, orgs]
   );
 
+  const fallbackOrgName = useMemo(
+    () => orgs.find((org) => org.name?.trim())?.name?.trim() ?? "",
+    [orgs]
+  );
+
   const label =
-    activeOrg?.name?.trim() ||
-    (activeOrgId
-      ? shortId(activeOrgId)
-      : isEn
-        ? "Select organization"
-        : "Seleccionar organización");
+    activeOrg?.name?.trim() || fallbackOrgName || (isEn ? "Agency" : "Agencia");
 
   const onSelect = async (orgId: string) => {
     const errTitle = isEn
@@ -111,11 +111,11 @@ export function OrgSwitcher({
       <PopoverTrigger
         className={cn(
           "group flex w-full items-center gap-3 rounded-xl border border-transparent p-1.5 outline-none transition-all duration-200",
-          "hover:bg-white/10 hover:border-white/20 hover:shadow-sm focus-visible:ring-2 focus-visible:ring-sidebar-ring",
-          open && "bg-white/10 border-white/20 shadow-sm"
+          "hover:bg-sidebar-accent/30 focus-visible:ring-2 focus-visible:ring-sidebar-ring",
+          open && "bg-sidebar-accent/30"
         )}
       >
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-white/20 bg-white/10 shadow-xs transition-colors group-hover:border-white/30 backdrop-blur-md">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-sidebar-accent/40 transition-colors group-hover:bg-sidebar-accent/50">
           {activeOrg?.logo_url ? (
             <Image
               alt={
@@ -137,7 +137,7 @@ export function OrgSwitcher({
           )}
         </div>
         <div className="flex min-w-0 flex-1 flex-col text-left">
-          <span className="truncate font-medium text-sidebar-foreground text-sm leading-tight drop-shadow-sm">
+          <span className="truncate font-medium text-sidebar-foreground text-sm leading-tight">
             {loading ? (
               <span className="animate-pulse rounded bg-white/20 text-transparent">
                 Loading

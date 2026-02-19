@@ -10,7 +10,6 @@ import {
   ResizablePanelGroup,
 } from "@/components/ui/resizable";
 import type { Locale } from "@/lib/i18n";
-import { cn } from "@/lib/utils";
 
 type DesktopResizableShellProps = {
   shellSurfaceClass: string;
@@ -47,10 +46,7 @@ export function DesktopResizableShell({
 }: DesktopResizableShellProps) {
   return (
     <div
-      className={cn(
-        "h-full min-h-0 w-full overflow-hidden",
-        shellSurfaceClass
-      )}
+      className="h-full min-h-0 w-full overflow-hidden bg-[var(--sidebar)]"
       data-nav-open={!sidebarCollapsed}
       data-shell-mode={viewportMode}
     >
@@ -80,9 +76,9 @@ export function DesktopResizableShell({
             viewportMode={viewportMode}
           />
         </ResizablePanel>
-        <ResizableHandle withHandle />
+        <ResizableHandle className="w-0 after:hidden" />
         <ResizablePanel
-          className="min-h-0 min-w-0 overflow-hidden"
+          className="min-h-0 min-w-0 overflow-hidden rounded-l-[20px] bg-[var(--shell-surface)]"
           minSize="50%"
         >
           {contentColumn}
