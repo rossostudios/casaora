@@ -13,11 +13,11 @@ import {
   ResponsiveContainer,
   Tooltip,
   type TooltipContentProps,
-} from "recharts";
+} from "@/lib/recharts";
 import type {
   NameType,
   ValueType,
-} from "recharts/types/component/DefaultTooltipContent";
+} from "@/lib/recharts";
 
 import { cn } from "@/lib/utils";
 

@@ -21,11 +21,14 @@ export function PinButton({
   children,
   ...props
 }: PinButtonProps) {
-  const [pinned, setPinned] = useState(false);
+  const [pinned, setPinned] = useState(() =>
+    typeof window !== "undefined"
+      ? getPins().some((it) => it.href === href)
+      : false
+  );
 
   useEffect(() => {
     const sync = () => setPinned(getPins().some((it) => it.href === href));
-    sync();
     return subscribeShortcuts(sync);
   }, [href]);
 

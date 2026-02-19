@@ -98,22 +98,28 @@ export function TeamManager({
     setLoading(true);
     setError(null);
     setSuccess(null);
+    const emailValue = inviteEmail.trim();
+    const successMsg = isEn
+      ? `Invitation sent to ${emailValue}`
+      : `Invitación enviada a ${emailValue}`;
     try {
       await apiPost(`/organizations/${orgId}/invites`, {
-        email: inviteEmail.trim(),
+        email: emailValue,
         role: inviteRole,
         expires_in_days: 14,
       });
       setInviteEmail("");
-      setSuccess(
-        isEn
-          ? `Invitation sent to ${inviteEmail.trim()}`
-          : `Invitación enviada a ${inviteEmail.trim()}`
-      );
+      setSuccess(successMsg);
       router.refresh();
+      setLoading(false);
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
+      let msg: string;
+      if (err instanceof Error) {
+        msg = err.message;
+      } else {
+        msg = String(err);
+      }
+      setError(msg);
       setLoading(false);
     }
   }
@@ -124,9 +130,15 @@ export function TeamManager({
     try {
       await apiDelete(`/organizations/${orgId}/invites/${inviteId}`);
       router.refresh();
+      setLoading(false);
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
+      let msg: string;
+      if (err instanceof Error) {
+        msg = err.message;
+      } else {
+        msg = String(err);
+      }
+      setError(msg);
       setLoading(false);
     }
   }

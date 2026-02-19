@@ -27,18 +27,22 @@ export function SignOutButton({
 
   const onClick = async () => {
     setBusy(true);
+    const errorMsg = isEn ? "Could not sign out" : "No se pudo cerrar sesión";
+
     try {
       const supabase = getSupabaseBrowserClient();
       const { error } = await supabase.auth.signOut();
       if (error) {
-        toast.error(isEn ? "Could not sign out" : "No se pudo cerrar sesión", {
+        toast.error(errorMsg, {
           description: error.message,
         });
+        setBusy(false);
         return;
       }
       router.replace(redirectTo);
       router.refresh();
-    } finally {
+      setBusy(false);
+    } catch {
       setBusy(false);
     }
   };

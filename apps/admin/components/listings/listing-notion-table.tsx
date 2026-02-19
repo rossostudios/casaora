@@ -1,4 +1,5 @@
 "use client";
+"use no memo";
 
 import {
   Bathtub01Icon,
@@ -745,6 +746,7 @@ export function ListingNotionTable({
 
                     {header.column.getCanResize() && (
                       <div
+                        aria-label="Resize column"
                         className={cn(
                           "absolute right-0 top-0 h-full w-1 cursor-col-resize select-none touch-none",
                           "hover:bg-primary/30",
@@ -753,6 +755,7 @@ export function ListingNotionTable({
                         onDoubleClick={() => header.column.resetSize()}
                         onMouseDown={header.getResizeHandler()}
                         onTouchStart={header.getResizeHandler()}
+                        role="separator"
                       />
                     )}
                   </TableHead>

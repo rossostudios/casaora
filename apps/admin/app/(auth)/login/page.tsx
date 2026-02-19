@@ -89,21 +89,23 @@ function LoginPageInner() {
     }
 
     setBusy(true);
+    const signInErr = isEn ? "Could not sign in" : "No se pudo iniciar sesión";
+    const welcomeMsg = isEn ? "Welcome back" : "Bienvenido de nuevo";
     try {
       const { error } = await supabase.auth.signInWithPassword({
         email: trimmedEmail,
         password,
       });
       if (error) {
-        toast.error(isEn ? "Could not sign in" : "No se pudo iniciar sesión", {
-          description: error.message,
-        });
+        toast.error(signInErr, { description: error.message });
+        setBusy(false);
         return;
       }
-      toast.success(isEn ? "Welcome back" : "Bienvenido de nuevo");
+      toast.success(welcomeMsg);
       router.replace(next);
       router.refresh();
-    } finally {
+      setBusy(false);
+    } catch {
       setBusy(false);
     }
   };

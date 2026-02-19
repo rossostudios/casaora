@@ -41,18 +41,31 @@ export default async function TeamSettingsPage() {
   let fetchError: string | null = null;
 
   try {
-    const [membersRes, invitesRes] = await Promise.all([
-      fetchJson<{ data?: Record<string, unknown>[] }>(
-        `/organizations/${orgId}/members`,
-        { org_id: orgId }
-      ),
-      fetchJson<{ data?: Record<string, unknown>[] }>(
+    let invitesPromiseResult: { data?: Record<string, unknown>[] };
+    try {
+      invitesPromiseResult = await fetchJson<{ data?: Record<string, unknown>[] }>(
         `/organizations/${orgId}/invites`,
         { org_id: orgId }
-      ).catch(() => ({ data: [] })),
-    ]);
-    members = membersRes.data ?? [];
-    invites = invitesRes.data ?? [];
+      );
+    } catch {
+      invitesPromiseResult = { data: [] };
+    }
+    const membersRes = await fetchJson<{ data?: Record<string, unknown>[] }>(
+      `/organizations/${orgId}/members`,
+      { org_id: orgId }
+    );
+    const membersData = membersRes.data;
+    if (membersData != null) {
+      members = membersData;
+    } else {
+      members = [];
+    }
+    const invitesData = invitesPromiseResult.data;
+    if (invitesData != null) {
+      invites = invitesData;
+    } else {
+      invites = [];
+    }
   } catch (err) {
     if (isOrgMembershipError(errorMessage(err)))
       return <OrgAccessChanged orgId={orgId} />;

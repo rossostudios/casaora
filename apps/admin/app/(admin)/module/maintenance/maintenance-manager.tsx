@@ -244,9 +244,13 @@ export function MaintenanceManager({
       try {
         await updateMaintenanceRequestAction(fd);
       } catch {
-        toast.error(
-          isEn ? "Status update failed" : "Error al actualizar estado"
-        );
+        let catchErrMsg: string;
+        if (isEn) {
+          catchErrMsg = "Status update failed";
+        } else {
+          catchErrMsg = "Error al actualizar estado";
+        }
+        toast.error(catchErrMsg);
       }
     });
   }

@@ -60,28 +60,43 @@ export function AccountAvatarField({
     }
 
     setUploading(true);
+    const errorLabel = isEn ? "Avatar upload failed" : "Error al subir avatar";
+    const noUrlMsg = isEn ? "Could not resolve uploaded image URL." : "No se pudo obtener la URL de la imagen.";
     try {
       const supabase = getSupabaseBrowserClient();
       const key = `profiles/${userId}/avatar/${crypto.randomUUID()}-${safeFileName(file.name)}`;
       const { error: uploadError } = await supabase.storage
         .from("documents")
         .upload(key, file, { upsert: false });
-      if (uploadError) throw new Error(uploadError.message);
+      if (uploadError) {
+        toast.error(errorLabel, { description: uploadError.message });
+        setUploading(false);
+        return;
+      }
 
       const { data } = supabase.storage.from("documents").getPublicUrl(key);
       if (!data.publicUrl) {
-        throw new Error(
-          isEn ? "Could not resolve uploaded image URL." : "No se pudo obtener la URL de la imagen."
-        );
+        toast.error(errorLabel, { description: noUrlMsg });
+        setUploading(false);
+        return;
       }
       setAvatarUrl(data.publicUrl);
-      toast.success(isEn ? "Avatar uploaded" : "Avatar subido");
+      let uploadedMsg: string;
+      if (isEn) {
+        uploadedMsg = "Avatar uploaded";
+      } else {
+        uploadedMsg = "Avatar subido";
+      }
+      toast.success(uploadedMsg);
+      setUploading(false);
     } catch (err) {
-      toast.error(
-        isEn ? "Avatar upload failed" : "Error al subir avatar",
-        { description: err instanceof Error ? err.message : String(err) }
-      );
-    } finally {
+      let errDesc: string;
+      if (err instanceof Error) {
+        errDesc = err.message;
+      } else {
+        errDesc = String(err);
+      }
+      toast.error(errorLabel, { description: errDesc });
       setUploading(false);
     }
   }

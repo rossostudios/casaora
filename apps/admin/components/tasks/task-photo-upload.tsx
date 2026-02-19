@@ -32,6 +32,9 @@ export function TaskPhotoUpload({
 
   async function uploadFile(file: File) {
     setUploading(true);
+    const successMsg = isEn ? "Photo uploaded" : "Foto subida";
+    const fallbackErrMsg = isEn ? "Upload failed" : "Error al subir";
+
     try {
       const supabase = getSupabaseBrowserClient();
       const safeName = file.name.replaceAll(/[^\w.-]+/g, "-");
@@ -39,23 +42,25 @@ export function TaskPhotoUpload({
       const { error } = await supabase.storage
         .from("receipts")
         .upload(key, file, { upsert: false });
-      if (error) throw new Error(error.message);
+      if (error) {
+        toast.error(error.message);
+        setUploading(false);
+        return;
+      }
 
       const { data } = supabase.storage.from("receipts").getPublicUrl(key);
       const newUrls = [...urls, data.publicUrl];
 
       await patchItem(newUrls);
       setUrls(newUrls);
-      toast.success(isEn ? "Photo uploaded" : "Foto subida");
+      toast.success(successMsg);
+      setUploading(false);
     } catch (err) {
-      toast.error(
-        err instanceof Error
-          ? err.message
-          : isEn
-            ? "Upload failed"
-            : "Error al subir"
-      );
-    } finally {
+      let msg = fallbackErrMsg;
+      if (err instanceof Error) {
+        msg = err.message;
+      }
+      toast.error(msg);
       setUploading(false);
     }
   }
@@ -66,11 +71,17 @@ export function TaskPhotoUpload({
       try {
         await patchItem(newUrls);
         setUrls(newUrls);
-        toast.success(isEn ? "Photo removed" : "Foto eliminada");
+        let removedMsg = "Foto eliminada";
+        if (isEn) {
+          removedMsg = "Photo removed";
+        }
+        toast.success(removedMsg);
       } catch {
-        toast.error(
-          isEn ? "Failed to remove photo" : "Error al eliminar foto"
-        );
+        let removeErrMsg = "Error al eliminar foto";
+        if (isEn) {
+          removeErrMsg = "Failed to remove photo";
+        }
+        toast.error(removeErrMsg);
       }
     });
   }

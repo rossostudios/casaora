@@ -25,16 +25,25 @@ export async function SimilarListings({
 }: SimilarListingsProps) {
   let similar: MarketplaceListingViewModel[] = [];
 
+  const cityParam = city || undefined;
+  const propertyTypeParam = propertyType || undefined;
   try {
     const response = await fetchPublicListings({
-      city: city || undefined,
-      propertyType: propertyType || undefined,
+      city: cityParam,
+      propertyType: propertyTypeParam,
       orgId,
       limit: 8,
     });
-    const records = (response.data ?? []) as Record<string, unknown>[];
+    const rawData = response.data;
+    let records: Record<string, unknown>[] = [];
+    if (rawData != null) records = rawData as Record<string, unknown>[];
     similar = records
-      .filter((r) => String(r.public_slug ?? "") !== currentSlug)
+      .filter((r) => {
+        const slug = r.public_slug;
+        let slugStr = "";
+        if (slug != null) slugStr = String(slug);
+        return slugStr !== currentSlug;
+      })
       .slice(0, 4)
       .map((record, index) =>
         toMarketplaceListingViewModel({ listing: record, locale, index })

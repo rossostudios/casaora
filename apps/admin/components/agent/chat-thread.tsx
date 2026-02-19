@@ -1,7 +1,8 @@
 "use client";
 
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -26,14 +27,14 @@ import { cn } from "@/lib/utils";
 const PROMPTS: Record<string, { "en-US": string[]; "es-PY": string[] }> = {
   "morning-brief": {
     "en-US": [
-      "Give me today’s top 5 priorities.",
+      "Give me today's top 5 priorities.",
       "Which turnovers are at risk this morning?",
       "What is the biggest operational bottleneck now?",
     ],
     "es-PY": [
       "Dame las 5 prioridades de hoy.",
-      "¿Qué turnovers están en riesgo esta mañana?",
-      "¿Cuál es el mayor cuello de botella operativo ahora?",
+      "\u00bfQu\u00e9 turnovers est\u00e1n en riesgo esta ma\u00f1ana?",
+      "\u00bfCu\u00e1l es el mayor cuello de botella operativo ahora?",
     ],
   },
   "guest-concierge": {
@@ -44,8 +45,8 @@ const PROMPTS: Record<string, { "en-US": string[]; "es-PY": string[] }> = {
     ],
     "es-PY": [
       "Redacta un mensaje de check-in para las llegadas de esta semana.",
-      "Muéstrame todos los huéspedes que llegan en los próximos 7 días.",
-      "Escribe un mensaje de bienvenida para el huésped de la unidad 3.",
+      "Mu\u00e9strame todos los hu\u00e9spedes que llegan en los pr\u00f3ximos 7 d\u00edas.",
+      "Escribe un mensaje de bienvenida para el hu\u00e9sped de la unidad 3.",
     ],
   },
   "owner-insight": {
@@ -56,8 +57,8 @@ const PROMPTS: Record<string, { "en-US": string[]; "es-PY": string[] }> = {
     ],
     "es-PY": [
       "Resume los ingresos de este mes por propiedad.",
-      "Compara ingresos vs gastos de los últimos 3 meses.",
-      "Señala gastos inusuales de este mes.",
+      "Compara ingresos vs gastos de los \u00faltimos 3 meses.",
+      "Se\u00f1ala gastos inusuales de este mes.",
     ],
   },
   "price-optimizer": {
@@ -67,9 +68,9 @@ const PROMPTS: Record<string, { "en-US": string[]; "es-PY": string[] }> = {
       "Suggest seasonal pricing adjustments for next quarter.",
     ],
     "es-PY": [
-      "¿Qué unidades tienen la ocupación más baja este mes?",
-      "Identifica unidades con precios bajos según tendencias.",
-      "Sugiere ajustes de precios estacionales para el próximo trimestre.",
+      "\u00bfQu\u00e9 unidades tienen la ocupaci\u00f3n m\u00e1s baja este mes?",
+      "Identifica unidades con precios bajos seg\u00fan tendencias.",
+      "Sugiere ajustes de precios estacionales para el pr\u00f3ximo trimestre.",
     ],
   },
   "market-match": {
@@ -79,9 +80,9 @@ const PROMPTS: Record<string, { "en-US": string[]; "es-PY": string[] }> = {
       "Score the top 5 pending applications by fit.",
     ],
     "es-PY": [
-      "Empareja los últimos solicitantes con anuncios disponibles.",
-      "¿Qué anuncios pet-friendly están disponibles?",
-      "Puntúa las 5 mejores solicitudes pendientes por compatibilidad.",
+      "Empareja los \u00faltimos solicitantes con anuncios disponibles.",
+      "\u00bfQu\u00e9 anuncios pet-friendly est\u00e1n disponibles?",
+      "Punt\u00faa las 5 mejores solicitudes pendientes por compatibilidad.",
     ],
   },
   "maintenance-triage": {
@@ -92,8 +93,8 @@ const PROMPTS: Record<string, { "en-US": string[]; "es-PY": string[] }> = {
     ],
     "es-PY": [
       "Muestra solicitudes de mantenimiento abiertas por urgencia.",
-      "¿Qué propiedades tienen más reparaciones pendientes?",
-      "Estima costos de reparación para tickets abiertos este mes.",
+      "\u00bfQu\u00e9 propiedades tienen m\u00e1s reparaciones pendientes?",
+      "Estima costos de reparaci\u00f3n para tickets abiertos este mes.",
     ],
   },
   "compliance-guard": {
@@ -103,8 +104,8 @@ const PROMPTS: Record<string, { "en-US": string[]; "es-PY": string[] }> = {
       "Check document expirations across all properties.",
     ],
     "es-PY": [
-      "Señala contratos que vencen en los próximos 30 días.",
-      "¿Qué inquilinos tienen pagos vencidos este mes?",
+      "Se\u00f1ala contratos que vencen en los pr\u00f3ximos 30 d\u00edas.",
+      "\u00bfQu\u00e9 inquilinos tienen pagos vencidos este mes?",
       "Revisa vencimientos de documentos en todas las propiedades.",
     ],
   },
@@ -116,8 +117,8 @@ const PROMPTS: Record<string, { "en-US": string[]; "es-PY": string[] }> = {
     ],
     "es-PY": [
       "Resume los riesgos clave de hoy.",
-      "¿Qué debo corregir primero en operaciones?",
-      "Dame un plan de acción conciso.",
+      "\u00bfQu\u00e9 debo corregir primero en operaciones?",
+      "Dame un plan de acci\u00f3n conciso.",
     ],
   },
 };
@@ -129,6 +130,11 @@ const MESSAGE_SKELETON_KEYS = [
   "message-skeleton-4",
   "message-skeleton-5",
 ];
+
+interface ThreadData {
+  chat: AgentChatSummary | null;
+  messages: AgentChatMessage[];
+}
 
 function normalizeChat(payload: unknown): AgentChatSummary | null {
   if (!payload || typeof payload !== "object") return null;
@@ -186,6 +192,51 @@ function normalizeMessages(payload: unknown): AgentChatMessage[] {
     .filter((row) => row.id && row.content);
 }
 
+async function fetchThread(chatId: string, orgId: string): Promise<ThreadData> {
+  const [chatRes, messagesRes] = await Promise.all([
+    fetch(
+      `/api/agent/chats/${encodeURIComponent(chatId)}?org_id=${encodeURIComponent(orgId)}`,
+      {
+        method: "GET",
+        cache: "no-store",
+        headers: { Accept: "application/json" },
+      }
+    ),
+    fetch(
+      `/api/agent/chats/${encodeURIComponent(chatId)}/messages?org_id=${encodeURIComponent(orgId)}&limit=160`,
+      {
+        method: "GET",
+        cache: "no-store",
+        headers: { Accept: "application/json" },
+      }
+    ),
+  ]);
+
+  const chatPayload = (await chatRes.json()) as unknown;
+  const messagesPayload = (await messagesRes.json()) as unknown;
+
+  if (!chatRes.ok) {
+    let message = "Could not load chat.";
+    if (chatPayload != null && typeof chatPayload === "object" && "error" in chatPayload) {
+      message = String((chatPayload as { error?: unknown }).error);
+    }
+    throw new Error(message);
+  }
+
+  if (!messagesRes.ok) {
+    let message = "Could not load messages.";
+    if (messagesPayload != null && typeof messagesPayload === "object" && "error" in messagesPayload) {
+      message = String((messagesPayload as { error?: unknown }).error);
+    }
+    throw new Error(message);
+  }
+
+  return {
+    chat: normalizeChat(chatPayload),
+    messages: normalizeMessages(messagesPayload),
+  };
+}
+
 export function ChatThread({
   orgId,
   locale,
@@ -197,10 +248,8 @@ export function ChatThread({
 }) {
   const isEn = locale === "en-US";
   const router = useRouter();
+  const queryClient = useQueryClient();
 
-  const [chat, setChat] = useState<AgentChatSummary | null>(null);
-  const [messages, setMessages] = useState<AgentChatMessage[]>([]);
-  const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -212,6 +261,21 @@ export function ChatThread({
   const [streamingTools, setStreamingTools] = useState<
     { name: string; preview?: string; ok?: boolean }[]
   >([]);
+  // Local messages appended optimistically during send (before refetch)
+  const [localMessages, setLocalMessages] = useState<AgentChatMessage[]>([]);
+  const [localChat, setLocalChat] = useState<AgentChatSummary | null>(null);
+
+  const threadQuery = useQuery<ThreadData, Error>({
+    queryKey: ["agent-thread", chatId, orgId],
+    queryFn: () => fetchThread(chatId, orgId),
+  });
+
+  const chat = localChat ?? threadQuery.data?.chat ?? null;
+  const messages = [
+    ...(threadQuery.data?.messages ?? []),
+    ...localMessages,
+  ];
+  const loading = threadQuery.isLoading;
 
   const quickPrompts = useMemo(() => {
     const key =
@@ -221,75 +285,9 @@ export function ChatThread({
     return PROMPTS[key][locale];
   }, [chat?.agent_slug, locale]);
 
-  const loadThread = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-
-    try {
-      const [chatRes, messagesRes] = await Promise.all([
-        fetch(
-          `/api/agent/chats/${encodeURIComponent(chatId)}?org_id=${encodeURIComponent(orgId)}`,
-          {
-            method: "GET",
-            cache: "no-store",
-            headers: { Accept: "application/json" },
-          }
-        ),
-        fetch(
-          `/api/agent/chats/${encodeURIComponent(chatId)}/messages?org_id=${encodeURIComponent(orgId)}&limit=160`,
-          {
-            method: "GET",
-            cache: "no-store",
-            headers: { Accept: "application/json" },
-          }
-        ),
-      ]);
-
-      const chatPayload = (await chatRes.json()) as unknown;
-      const messagesPayload = (await messagesRes.json()) as unknown;
-
-      if (!chatRes.ok) {
-        const message =
-          chatPayload &&
-          typeof chatPayload === "object" &&
-          "error" in chatPayload
-            ? String((chatPayload as { error?: unknown }).error)
-            : isEn
-              ? "Could not load chat."
-              : "No se pudo cargar el chat.";
-        throw new Error(message);
-      }
-
-      if (!messagesRes.ok) {
-        const message =
-          messagesPayload &&
-          typeof messagesPayload === "object" &&
-          "error" in messagesPayload
-            ? String((messagesPayload as { error?: unknown }).error)
-            : isEn
-              ? "Could not load messages."
-              : "No se pudieron cargar los mensajes.";
-        throw new Error(message);
-      }
-
-      setChat(normalizeChat(chatPayload));
-      setMessages(normalizeMessages(messagesPayload));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-      setChat(null);
-      setMessages([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [chatId, isEn, orgId]);
-
-  useEffect(() => {
-    loadThread().catch(() => undefined);
-  }, [loadThread]);
-
   const sendMessageStream = async (message: string) => {
     // Optimistically add user message
-    setMessages((prev) => [
+    setLocalMessages((prev) => [
       ...prev,
       {
         id: `temp-user-${Date.now()}`,
@@ -319,7 +317,7 @@ export function ChatThread({
 
     if (!response.ok || !response.body) {
       throw new Error(
-        isEn ? "Streaming failed." : "La transmisión falló."
+        isEn ? "Streaming failed." : "La transmisi\u00f3n fall\u00f3."
       );
     }
 
@@ -333,62 +331,70 @@ export function ChatThread({
 
       buffer += decoder.decode(value, { stream: true });
       const lines = buffer.split("\n");
-      buffer = lines.pop() ?? "";
+      const remainder = lines.pop();
+      buffer = remainder != null ? remainder : "";
 
       for (const line of lines) {
         if (!line.startsWith("data: ")) continue;
         const data = line.slice(6).trim();
         if (!data) continue;
 
+        let parsedEvent: Record<string, unknown> | null = null;
         try {
-          const event = JSON.parse(data) as {
-            type: string;
-            name?: string;
-            preview?: string;
-            ok?: boolean;
-            text?: string;
-            content?: string;
-            tool_trace?: unknown[];
-            message?: string;
-          };
-
-          if (event.type === "tool_call" && event.name) {
-            setStreamingTools((prev) => [
-              ...prev,
-              { name: event.name as string },
-            ]);
-          } else if (event.type === "tool_result" && event.name) {
-            setStreamingTools((prev) =>
-              prev.map((t) =>
-                t.name === event.name && t.preview === undefined
-                  ? { ...t, preview: event.preview, ok: event.ok }
-                  : t
-              )
-            );
-          } else if (event.type === "token" && event.text) {
-            setStreamingText(event.text);
-          } else if (event.type === "done" && event.content) {
-            // Finalize: add assistant message
-            setMessages((prev) => [
-              ...prev,
-              {
-                id: `temp-assistant-${Date.now()}`,
-                chat_id: chatId,
-                org_id: orgId,
-                role: "assistant" as const,
-                content: event.content as string,
-                tool_trace: event.tool_trace as AgentChatMessage["tool_trace"],
-                fallback_used: false,
-                created_at: new Date().toISOString(),
-              },
-            ]);
-            setStreamingText("");
-            setStreamingTools([]);
-          } else if (event.type === "error") {
-            throw new Error(event.message || "Agent error");
-          }
+          parsedEvent = JSON.parse(data) as Record<string, unknown>;
         } catch {
           // Skip unparseable lines
+        }
+        if (parsedEvent == null) continue;
+
+        const eventType = String(parsedEvent.type);
+        const eventName = typeof parsedEvent.name === "string" ? parsedEvent.name : undefined;
+
+        if (eventType === "tool_call" && eventName) {
+          const nameVal = eventName;
+          setStreamingTools((prev) => [
+            ...prev,
+            { name: nameVal },
+          ]);
+        } else if (eventType === "tool_result" && eventName) {
+          const nameVal = eventName;
+          const previewVal = typeof parsedEvent.preview === "string" ? parsedEvent.preview : undefined;
+          const okVal = typeof parsedEvent.ok === "boolean" ? parsedEvent.ok : undefined;
+          setStreamingTools((prev) =>
+            prev.map((t) => {
+              if (t.name === nameVal && t.preview === undefined) {
+                return { ...t, preview: previewVal, ok: okVal };
+              }
+              return t;
+            })
+          );
+        } else if (eventType === "token" && typeof parsedEvent.text === "string") {
+          setStreamingText(parsedEvent.text);
+        } else if (eventType === "done" && typeof parsedEvent.content === "string") {
+          // Finalize: add assistant message
+          const doneContent = parsedEvent.content as string;
+          const doneToolTrace = parsedEvent.tool_trace as AgentChatMessage["tool_trace"];
+          setLocalMessages((prev) => [
+            ...prev,
+            {
+              id: `temp-assistant-${Date.now()}`,
+              chat_id: chatId,
+              org_id: orgId,
+              role: "assistant" as const,
+              content: doneContent,
+              tool_trace: doneToolTrace,
+              fallback_used: false,
+              created_at: new Date().toISOString(),
+            },
+          ]);
+          setStreamingText("");
+          setStreamingTools([]);
+        } else if (eventType === "error") {
+          let errorMessage = "Agent error";
+          if (typeof parsedEvent.message === "string") {
+            errorMessage = parsedEvent.message;
+          }
+          throw new Error(errorMessage);
         }
       }
     }
@@ -427,7 +433,7 @@ export function ChatThread({
     }
 
     if (payload.chat) {
-      setChat(payload.chat);
+      setLocalChat(payload.chat);
     }
 
     const appended: AgentChatMessage[] = [];
@@ -435,9 +441,12 @@ export function ChatThread({
     if (payload.assistant_message) appended.push(payload.assistant_message);
 
     if (appended.length) {
-      setMessages((previous) => [...previous, ...appended]);
+      setLocalMessages((previous) => [...previous, ...appended]);
     } else {
-      await loadThread();
+      // Clear local messages before refetch to avoid duplicates
+      setLocalMessages([]);
+      setLocalChat(null);
+      await queryClient.invalidateQueries({ queryKey: ["agent-thread", chatId, orgId] });
     }
   };
 
@@ -456,9 +465,15 @@ export function ChatThread({
         await sendMessageFallback(message);
       }
       setDraft("");
+      setSending(false);
+      setStreamingText("");
+      setStreamingTools([]);
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
+      let errMsg = String(err);
+      if (err instanceof Error) {
+        errMsg = err.message;
+      }
+      setError(errMsg);
       setSending(false);
       setStreamingText("");
       setStreamingTools([]);
@@ -468,6 +483,7 @@ export function ChatThread({
   const mutateChat = async (action: "archive" | "restore" | "delete") => {
     setBusy(true);
     setError(null);
+    const fallbackErrorMsg = isEn ? "Chat update failed." : "La actualizaci\u00f3n del chat fall\u00f3.";
 
     try {
       let response: Response;
@@ -500,26 +516,38 @@ export function ChatThread({
 
       const payload = (await response.json()) as { error?: string };
       if (!response.ok) {
-        throw new Error(
-          payload.error ||
-            (isEn ? "Chat update failed." : "La actualización del chat falló.")
-        );
+        let errorMsg = fallbackErrorMsg;
+        if (payload.error) {
+          errorMsg = payload.error;
+        }
+        setError(errorMsg);
+        setBusy(false);
+        return;
       }
 
       if (action === "delete") {
         router.push("/app/chats");
         router.refresh();
+        setBusy(false);
         return;
       }
 
-      await loadThread();
+      setLocalMessages([]);
+      setLocalChat(null);
+      await queryClient.invalidateQueries({ queryKey: ["agent-thread", chatId, orgId] });
       router.refresh();
+      setBusy(false);
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
+      let errMsg = String(err);
+      if (err instanceof Error) {
+        errMsg = err.message;
+      }
+      setError(errMsg);
       setBusy(false);
     }
   };
+
+  const displayError = error ?? threadQuery.error?.message ?? null;
 
   return (
     <Card>
@@ -611,12 +639,12 @@ export function ChatThread({
       </CardHeader>
 
       <CardContent className="space-y-4">
-        {error ? (
+        {displayError ? (
           <Alert variant="destructive">
             <AlertTitle>
               {isEn ? "Request failed" : "Solicitud fallida"}
             </AlertTitle>
-            <AlertDescription>{error}</AlertDescription>
+            <AlertDescription>{displayError}</AlertDescription>
           </Alert>
         ) : null}
 
@@ -634,7 +662,7 @@ export function ChatThread({
             {allowMutations
               ? isEn
                 ? "Writes run only when confirmation is checked below."
-                : "La escritura se ejecuta solo cuando se marca la confirmación abajo."
+                : "La escritura se ejecuta solo cuando se marca la confirmaci\u00f3n abajo."
               : isEn
                 ? "The agent analyzes data without mutating records."
                 : "El agente analiza datos sin modificar registros."}
@@ -658,7 +686,7 @@ export function ChatThread({
             <div className="rounded-lg border border-dashed bg-muted/25 p-4 text-muted-foreground text-sm">
               {isEn
                 ? "No messages yet. Start the conversation below."
-                : "Todavía no hay mensajes. Inicia la conversación abajo."}
+                : "Todav\u00eda no hay mensajes. Inicia la conversaci\u00f3n abajo."}
             </div>
           ) : (
             messages.map((message) => (
@@ -681,7 +709,7 @@ export function ChatThread({
                     {message.role === "user"
                       ? isEn
                         ? "You"
-                        : "Tú"
+                        : "T\u00fa"
                       : isEn
                         ? "Agent"
                         : "Agente"}
@@ -703,10 +731,10 @@ export function ChatThread({
                       </CollapsibleTrigger>
                       <CollapsibleContent>
                         <div className="mt-2 space-y-1 rounded-lg border bg-muted/20 p-2">
-                          {message.tool_trace.map((tool, index) => (
+                          {message.tool_trace.map((tool) => (
                             <div
                               className="flex items-center justify-between gap-2 rounded-md bg-background/80 px-2 py-1"
-                              key={`${message.id}-tool-${index}`}
+                              key={`${message.id}-${tool.tool ?? "tool"}-${tool.preview ?? ""}-${String(tool.ok)}`}
                             >
                               <span className="font-mono text-[11px]">
                                 {tool.tool || "tool"}
@@ -730,10 +758,10 @@ export function ChatThread({
               <div className="max-w-[92%] rounded-2xl border border-border/60 bg-card px-3 py-2 space-y-2">
                 {streamingTools.length > 0 ? (
                   <div className="space-y-1">
-                    {streamingTools.map((tool, index) => (
+                    {streamingTools.map((tool) => (
                       <div
                         className="flex items-center gap-2 rounded-md bg-muted/30 px-2 py-1 text-[11px]"
-                        key={`stream-tool-${index}`}
+                        key={`stream-${tool.name}-${tool.preview ?? ""}-${String(tool.ok)}`}
                       >
                         <span className="inline-block h-1.5 w-1.5 rounded-full bg-primary animate-pulse" />
                         <span className="font-mono">{tool.name}</span>
@@ -757,7 +785,7 @@ export function ChatThread({
                 ) : streamingTools.length === 0 ? (
                   <p className="text-muted-foreground text-sm flex items-center gap-2">
                     <span className="inline-block h-1.5 w-1.5 rounded-full bg-primary animate-pulse" />
-                    {isEn ? "Agent is thinking..." : "El agente está pensando..."}
+                    {isEn ? "Agent is thinking..." : "El agente est\u00e1 pensando..."}
                   </p>
                 ) : null}
               </div>

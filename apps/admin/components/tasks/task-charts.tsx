@@ -10,7 +10,7 @@ import {
   LineChart,
   XAxis,
   YAxis,
-} from "recharts";
+} from "@/lib/recharts";
 
 import {
   type ChartConfig,

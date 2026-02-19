@@ -29,6 +29,7 @@ import { getActiveOrgId } from "@/lib/org";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { cn } from "@/lib/utils";
 
+import { BackgroundCheckCard } from "@/components/guests/background-check-card";
 import { VerificationCard } from "@/components/guests/verification-card";
 
 import { GuestProfileActions } from "../guest-profile-actions";
@@ -52,6 +53,18 @@ type GuestRecord = {
   id_document_url: string | null;
   selfie_url: string | null;
   verified_at: string | null;
+  date_of_birth: string | null;
+  emergency_contact_name: string | null;
+  emergency_contact_phone: string | null;
+  address: string | null;
+  city: string | null;
+  occupation: string | null;
+  document_expiry: string | null;
+  nationality: string | null;
+  background_check_status: string | null;
+  background_check_date: string | null;
+  background_check_notes: string | null;
+  background_check_report_url: string | null;
 };
 
 type ReservationRow = {
@@ -154,6 +167,18 @@ async function fetchGuest(options: {
     id_document_url: asOptionalString(record.id_document_url),
     selfie_url: asOptionalString(record.selfie_url),
     verified_at: asOptionalString(record.verified_at),
+    date_of_birth: asOptionalString(record.date_of_birth),
+    emergency_contact_name: asOptionalString(record.emergency_contact_name),
+    emergency_contact_phone: asOptionalString(record.emergency_contact_phone),
+    address: asOptionalString(record.address),
+    city: asOptionalString(record.city),
+    occupation: asOptionalString(record.occupation),
+    document_expiry: asOptionalString(record.document_expiry),
+    nationality: asOptionalString(record.nationality),
+    background_check_status: asOptionalString(record.background_check_status),
+    background_check_date: asOptionalString(record.background_check_date),
+    background_check_notes: asOptionalString(record.background_check_notes),
+    background_check_report_url: asOptionalString(record.background_check_report_url),
   };
 
   if (!guest.organization_id) {
@@ -165,6 +190,57 @@ async function fetchGuest(options: {
   }
 
   return guest;
+}
+
+function DocumentExpiryRow({
+  documentExpiry,
+  isEn,
+  locale,
+  todayIso,
+}: {
+  documentExpiry: string | null;
+  isEn: boolean;
+  locale: string;
+  todayIso: string;
+}) {
+  const expiry = (documentExpiry ?? "").trim();
+  const label = asDateLabel(locale, expiry);
+
+  let badge: React.ReactNode = null;
+  if (expiry) {
+    const thirtyDaysFromNow = new Date();
+    thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
+    const threshold = thirtyDaysFromNow.toISOString().slice(0, 10);
+
+    if (expiry < todayIso) {
+      badge = (
+        <Badge variant="destructive" className="ml-2 text-[11px]">
+          {isEn ? "Expired" : "Vencido"}
+        </Badge>
+      );
+    } else if (expiry < threshold) {
+      badge = (
+        <Badge
+          className="ml-2 border-amber-300 bg-amber-100 text-amber-800 text-[11px] dark:border-amber-700 dark:bg-amber-950 dark:text-amber-300"
+          variant="outline"
+        >
+          {isEn ? "Expiring soon" : "Vence pronto"}
+        </Badge>
+      );
+    }
+  }
+
+  return (
+    <div className="rounded-md border bg-muted/10 px-3 py-2">
+      <p className="text-muted-foreground text-xs">
+        {isEn ? "Document expiry" : "Vencimiento del documento"}
+      </p>
+      <p className="mt-1 flex items-center font-medium text-foreground">
+        {label ?? "-"}
+        {badge}
+      </p>
+    </div>
+  );
 }
 
 export default async function GuestProfilePage({ params }: PageProps) {
@@ -446,10 +522,50 @@ export default async function GuestProfilePage({ params }: PageProps) {
             </div>
             <div className="rounded-md border bg-muted/10 px-3 py-2">
               <p className="text-muted-foreground text-xs">
+                {isEn ? "Nationality" : "Nacionalidad"}
+              </p>
+              <p className="mt-1 font-medium text-foreground">
+                {(guest.nationality ?? "").trim() || "-"}
+              </p>
+            </div>
+            <DocumentExpiryRow
+              documentExpiry={guest.document_expiry}
+              isEn={isEn}
+              locale={locale}
+              todayIso={todayIso}
+            />
+            <div className="rounded-md border bg-muted/10 px-3 py-2">
+              <p className="text-muted-foreground text-xs">
                 {isEn ? "Language" : "Idioma"}
               </p>
               <p className="mt-1 font-medium text-foreground">
                 {(guest.preferred_language ?? "").trim() || "-"}
+              </p>
+            </div>
+            <div className="rounded-md border bg-muted/10 px-3 py-2">
+              <p className="text-muted-foreground text-xs">
+                {isEn ? "Date of birth" : "Fecha de nacimiento"}
+              </p>
+              <p className="mt-1 font-medium text-foreground">
+                {asDateLabel(locale, guest.date_of_birth) ?? "-"}
+              </p>
+            </div>
+            <div className="rounded-md border bg-muted/10 px-3 py-2">
+              <p className="text-muted-foreground text-xs">
+                {isEn ? "Occupation" : "Ocupación"}
+              </p>
+              <p className="mt-1 font-medium text-foreground">
+                {(guest.occupation ?? "").trim() || "-"}
+              </p>
+            </div>
+            <div className="rounded-md border bg-muted/10 px-3 py-2">
+              <p className="text-muted-foreground text-xs">
+                {isEn ? "Address" : "Dirección"}
+              </p>
+              <p className="mt-1 font-medium text-foreground">
+                {[(guest.address ?? "").trim(), (guest.city ?? "").trim()]
+                  .filter(Boolean)
+                  .join(", ") || "-"}
               </p>
             </div>
           </CardContent>
@@ -480,12 +596,50 @@ export default async function GuestProfilePage({ params }: PageProps) {
         </Card>
       </section>
 
+      {((guest.emergency_contact_name ?? "").trim() ||
+        (guest.emergency_contact_phone ?? "").trim()) && (
+        <Card>
+          <CardHeader>
+            <CardTitle>
+              {isEn ? "Emergency contact" : "Contacto de emergencia"}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3 text-sm">
+            <div className="rounded-md border bg-muted/10 px-3 py-2">
+              <p className="text-muted-foreground text-xs">
+                {isEn ? "Name" : "Nombre"}
+              </p>
+              <p className="mt-1 font-medium text-foreground">
+                {(guest.emergency_contact_name ?? "").trim() || "-"}
+              </p>
+            </div>
+            <div className="rounded-md border bg-muted/10 px-3 py-2">
+              <p className="text-muted-foreground text-xs">
+                {isEn ? "Phone" : "Teléfono"}
+              </p>
+              <p className="mt-1 font-medium text-foreground">
+                {(guest.emergency_contact_phone ?? "").trim() || "-"}
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       <VerificationCard
         guestId={guest.id}
         idDocumentUrl={guest.id_document_url}
         selfieUrl={guest.selfie_url}
         verificationStatus={guest.verification_status}
         verifiedAt={guest.verified_at}
+      />
+
+      <BackgroundCheckCard
+        backgroundCheckDate={guest.background_check_date}
+        backgroundCheckNotes={guest.background_check_notes}
+        backgroundCheckReportUrl={guest.background_check_report_url}
+        backgroundCheckStatus={guest.background_check_status}
+        guestId={guest.id}
+        orgId={guest.organization_id}
       />
 
       <TableCard

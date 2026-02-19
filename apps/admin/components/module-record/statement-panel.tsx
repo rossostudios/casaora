@@ -130,7 +130,7 @@ export function StatementPanel({
           </div>
           <div className="max-h-[28rem] divide-y overflow-auto">
             {lineItems.length ? (
-              lineItems.map((line, index) => {
+              lineItems.map((line) => {
                 const sourceBase = SOURCE_HREF_BASE_BY_TABLE[line.source_table];
                 const sourceHref =
                   sourceBase && isUuid(line.source_id)
@@ -144,7 +144,7 @@ export function StatementPanel({
                 return (
                   <div
                     className="grid grid-cols-[1.2fr_1.1fr_1fr_0.9fr] gap-3 px-3 py-2.5"
-                    key={`${line.source_table}:${line.source_id}:${index}`}
+                    key={`${line.source_table}:${line.source_id}:${line.kind}`}
                   >
                     <div className="min-w-0 space-y-0.5">
                       <p className="truncate font-medium text-sm">

@@ -1,7 +1,8 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -75,9 +76,9 @@ export function BillingManager({
         plan_id: planId,
       });
       router.refresh();
+      setSubmitting(false);
     } catch {
       /* ignore */
-    } finally {
       setSubmitting(false);
     }
   }
@@ -95,9 +96,9 @@ export function BillingManager({
     try {
       await apiPost("/billing/cancel", { org_id: orgId });
       router.refresh();
+      setSubmitting(false);
     } catch {
       /* ignore */
-    } finally {
       setSubmitting(false);
     }
   }
@@ -238,42 +239,44 @@ export function BillingManager({
 }
 
 function ReferralCard({ orgId, isEn }: { orgId: string; isEn: boolean }) {
-  const [code, setCode] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [redemptions, setRedemptions] = useState<Record<string, unknown>[]>([]);
 
-  const loadCode = useCallback(async () => {
-    setLoading(true);
-    try {
+  const codeQuery = useQuery({
+    queryKey: ["referral-code", orgId],
+    queryFn: async () => {
       const res = await fetch(
         `${API_BASE}/referrals/my-code?org_id=${encodeURIComponent(orgId)}`,
         { method: "GET", headers: { Accept: "application/json" } }
       );
-      if (res.ok) {
-        const data = await res.json();
-        const referral = data.referral;
-        if (referral?.code) setCode(String(referral.code));
+      if (!res.ok) return null;
+      const data = await res.json();
+      const referral = data.referral;
+      if (referral != null && referral.code) {
+        return String(referral.code);
       }
+      return null;
+    },
+  });
 
-      const histRes = await fetch(
+  const historyQuery = useQuery({
+    queryKey: ["referral-history", orgId],
+    queryFn: async () => {
+      const res = await fetch(
         `${API_BASE}/referrals/history?org_id=${encodeURIComponent(orgId)}`,
         { method: "GET", headers: { Accept: "application/json" } }
       );
-      if (histRes.ok) {
-        const histData = await histRes.json();
-        setRedemptions(Array.isArray(histData.data) ? histData.data : []);
+      if (!res.ok) return [];
+      const histData = await res.json();
+      if (Array.isArray(histData.data)) {
+        return histData.data as Record<string, unknown>[];
       }
-    } catch {
-      /* ignore */
-    } finally {
-      setLoading(false);
-    }
-  }, [orgId]);
+      return [];
+    },
+  });
 
-  useEffect(() => {
-    loadCode();
-  }, [loadCode]);
+  const loading = codeQuery.isLoading || historyQuery.isLoading;
+  const code = codeQuery.data ?? null;
+  const redemptions = historyQuery.data ?? [];
 
   function handleCopy() {
     if (!code) return;
@@ -325,8 +328,8 @@ function ReferralCard({ orgId, isEn }: { orgId: string; isEn: boolean }) {
             {isEn ? "Referral History" : "Historial de Referidos"} ({redemptions.length})
           </h4>
           <ul className="text-muted-foreground space-y-1 text-sm">
-            {redemptions.map((r, i) => (
-              <li className="flex items-center gap-2" key={i}>
+            {redemptions.map((r) => (
+              <li className="flex items-center gap-2" key={`${String(r.created_at)}-${String(r.status)}`}>
                 <StatusBadge
                   label={String(r.status ?? "pending")}
                   value={String(r.status ?? "pending")}

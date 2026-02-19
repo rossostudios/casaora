@@ -198,6 +198,15 @@ pub struct CreateGuestInput {
     #[serde(default = "default_es_lang")]
     pub preferred_language: String,
     pub notes: Option<String>,
+    pub id_document_url: Option<String>,
+    pub date_of_birth: Option<String>,
+    pub emergency_contact_name: Option<String>,
+    pub emergency_contact_phone: Option<String>,
+    pub address: Option<String>,
+    pub city: Option<String>,
+    pub occupation: Option<String>,
+    pub document_expiry: Option<String>,
+    pub nationality: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize, serde::Serialize)]
@@ -210,6 +219,39 @@ pub struct UpdateGuestInput {
     pub country_code: Option<String>,
     pub preferred_language: Option<String>,
     pub notes: Option<String>,
+    pub id_document_url: Option<String>,
+    pub date_of_birth: Option<String>,
+    pub emergency_contact_name: Option<String>,
+    pub emergency_contact_phone: Option<String>,
+    pub address: Option<String>,
+    pub city: Option<String>,
+    pub occupation: Option<String>,
+    pub document_expiry: Option<String>,
+    pub nationality: Option<String>,
+    pub background_check_status: Option<String>,
+    pub background_check_date: Option<String>,
+    pub background_check_notes: Option<String>,
+    pub background_check_report_url: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize, serde::Serialize)]
+pub struct UpdateBackgroundCheckInput {
+    pub background_check_status: String,
+    pub background_check_date: Option<String>,
+    pub background_check_notes: Option<String>,
+    pub background_check_report_url: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize, serde::Serialize)]
+pub struct AddReservationGuestInput {
+    pub guest_id: String,
+    pub role: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize, serde::Serialize)]
+pub struct ReservationGuestPath {
+    pub reservation_id: String,
+    pub reservation_guest_id: String,
 }
 
 #[derive(Debug, Clone, Deserialize, serde::Serialize)]

@@ -10,7 +10,7 @@ import {
   PieChart,
   XAxis,
   YAxis,
-} from "recharts";
+} from "@/lib/recharts";
 import { Badge } from "@/components/ui/badge";
 import {
   Card,

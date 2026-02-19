@@ -41,6 +41,8 @@ export function ListingInquiryForm({ slug, isEn }: ListingInquiryFormProps) {
         return;
       }
 
+      const catchFallbackMsg = isEn ? "Something went wrong." : "Algo salió mal.";
+
       try {
         const res = await fetch(
           `${API_BASE}/public/listings/${encodeURIComponent(slug)}/inquire`,
@@ -53,22 +55,24 @@ export function ListingInquiryForm({ slug, isEn }: ListingInquiryFormProps) {
 
         if (!res.ok) {
           const data = await res.json().catch(() => ({}));
-          throw new Error(
-            (data as Record<string, string>).message ??
-              `Request failed (${res.status})`
-          );
+          const serverMsg = (data as Record<string, string>).message;
+          let errText = `Request failed (${res.status})`;
+          if (serverMsg) {
+            errText = serverMsg;
+          }
+          setState("error");
+          setErrorMsg(errText);
+          return;
         }
 
         setState("success");
       } catch (err) {
         setState("error");
-        setErrorMsg(
-          err instanceof Error
-            ? err.message
-            : isEn
-              ? "Something went wrong."
-              : "Algo salió mal."
-        );
+        let msg = catchFallbackMsg;
+        if (err instanceof Error) {
+          msg = err.message;
+        }
+        setErrorMsg(msg);
       }
     },
     [slug, isEn]

@@ -36,9 +36,8 @@ function safeDecode(value: string): string {
 export default async function PropertiesModulePage({
   searchParams,
 }: PageProps) {
-  const { properties: dict, common } = await getActiveDictionary();
-  const orgId = await getActiveOrgId();
-  const { success, error } = await searchParams;
+  const [{ properties: dict, common }, orgId, { success, error }] =
+    await Promise.all([getActiveDictionary(), getActiveOrgId(), searchParams]);
 
   const successMessage = success
     ? safeDecode(success) === "property-created"

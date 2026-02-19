@@ -3,7 +3,7 @@
 import { PlusSignIcon } from "@hugeicons/core-free-icons";
 import type { ColumnDef } from "@tanstack/react-table";
 import { usePathname, useSearchParams } from "next/navigation";
-import { useMemo, useState } from "react";
+import { Suspense, useMemo, useState } from "react";
 
 import {
   createPricingTemplateAction,
@@ -38,6 +38,20 @@ function asBoolean(value: unknown): boolean {
 }
 
 export function PricingManager({
+  orgId,
+  templates,
+}: {
+  orgId: string;
+  templates: Record<string, unknown>[];
+}) {
+  return (
+    <Suspense fallback={null}>
+      <PricingManagerInner orgId={orgId} templates={templates} />
+    </Suspense>
+  );
+}
+
+function PricingManagerInner({
   orgId,
   templates,
 }: {
@@ -211,23 +225,24 @@ export function PricingManager({
           <input name="organization_id" type="hidden" value={orgId} />
           <input name="next" type="hidden" value={nextPath} />
 
-          <label className="space-y-1 text-sm">
+          <label className="space-y-1 text-sm" htmlFor="pricing-template-name">
             <span>{isEn ? "Template name" : "Nombre de plantilla"}</span>
-            <Input name="name" placeholder="Largo plazo estándar" required />
+            <Input id="pricing-template-name" name="name" placeholder="Largo plazo estándar" required />
           </label>
 
-          <label className="space-y-1 text-sm">
+          <label className="space-y-1 text-sm" htmlFor="pricing-currency">
             <span>{isEn ? "Currency" : "Moneda"}</span>
-            <Select defaultValue="PYG" name="currency">
+            <Select defaultValue="PYG" id="pricing-currency" name="currency">
               <option value="PYG">PYG</option>
               <option value="USD">USD</option>
             </Select>
           </label>
 
           <div className="grid gap-3 md:grid-cols-2">
-            <label className="space-y-1 text-sm">
+            <label className="space-y-1 text-sm" htmlFor="pricing-monthly-rent">
               <span>{isEn ? "Monthly rent" : "Alquiler mensual"}</span>
               <Input
+                id="pricing-monthly-rent"
                 min={0}
                 name="monthly_rent"
                 required
@@ -235,37 +250,40 @@ export function PricingManager({
                 type="number"
               />
             </label>
-            <label className="space-y-1 text-sm">
+            <label className="space-y-1 text-sm" htmlFor="pricing-advance-rent">
               <span>{isEn ? "Advance rent" : "Adelanto"}</span>
-              <Input min={0} name="advance_rent" step="0.01" type="number" />
+              <Input id="pricing-advance-rent" min={0} name="advance_rent" step="0.01" type="number" />
             </label>
-            <label className="space-y-1 text-sm">
+            <label className="space-y-1 text-sm" htmlFor="pricing-security-deposit">
               <span>{isEn ? "Security deposit" : "Garantía"}</span>
               <Input
+                id="pricing-security-deposit"
                 min={0}
                 name="security_deposit"
                 step="0.01"
                 type="number"
               />
             </label>
-            <label className="space-y-1 text-sm">
+            <label className="space-y-1 text-sm" htmlFor="pricing-service-fee">
               <span>{isEn ? "Service fee (flat)" : "Servicio (fijo)"}</span>
               <Input
+                id="pricing-service-fee"
                 min={0}
                 name="service_fee_flat"
                 step="0.01"
                 type="number"
               />
             </label>
-            <label className="space-y-1 text-sm">
+            <label className="space-y-1 text-sm" htmlFor="pricing-tax-iva">
               <span>IVA</span>
-              <Input min={0} name="tax_iva" step="0.01" type="number" />
+              <Input id="pricing-tax-iva" min={0} name="tax_iva" step="0.01" type="number" />
             </label>
-            <label className="space-y-1 text-sm">
+            <label className="space-y-1 text-sm" htmlFor="pricing-guarantee-option-fee">
               <span>
                 {isEn ? "Guarantee option fee" : "Costo opción de garantía"}
               </span>
               <Input
+                id="pricing-guarantee-option-fee"
                 min={0}
                 name="guarantee_option_fee"
                 step="0.01"

@@ -66,6 +66,14 @@ export function ImageLightbox({
     <div
       className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90"
       onClick={onClose}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onClose();
+        }
+      }}
+      role="button"
+      tabIndex={0}
     >
       {/* Counter */}
       <div className="absolute top-4 left-4 z-10 rounded-full bg-black/60 px-3 py-1.5 text-sm text-white">

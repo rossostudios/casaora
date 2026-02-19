@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -30,38 +31,29 @@ type ApprovalQueueProps = {
 };
 
 export function ApprovalQueue({ orgId, locale }: ApprovalQueueProps) {
+  "use no memo";
   const isEn = locale === "en-US";
-  const [approvals, setApprovals] = useState<Approval[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [reviewNotes, setReviewNotes] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState<Record<string, boolean>>({});
 
-  const fetchApprovals = useCallback(async () => {
-    try {
+  const { data: approvals = [], isPending: loading } = useQuery({
+    queryKey: ["agent-approvals", orgId],
+    queryFn: async () => {
       const response = await fetch(
         `/api/agent/approvals?org_id=${encodeURIComponent(orgId)}`,
         { cache: "no-store", headers: { Accept: "application/json" } }
       );
-      if (!response.ok) return;
+      if (!response.ok) return [];
       const payload = (await response.json()) as { data?: Approval[] };
-      setApprovals(payload.data ?? []);
-    } catch {
-      // silently fail
-    } finally {
-      setLoading(false);
-    }
-  }, [orgId]);
-
-  useEffect(() => {
-    fetchApprovals().catch(() => undefined);
-    const interval = setInterval(() => {
-      fetchApprovals().catch(() => undefined);
-    }, 30_000);
-    return () => clearInterval(interval);
-  }, [fetchApprovals]);
+      return payload.data ?? [];
+    },
+    refetchInterval: 30_000,
+  });
 
   const handleReview = async (id: string, action: "approve" | "reject") => {
     setBusy((prev) => ({ ...prev, [id]: true }));
+    const note = reviewNotes[id] || null;
     try {
       await fetch(
         `/api/agent/approvals/${id}/${action}?org_id=${encodeURIComponent(orgId)}`,
@@ -71,13 +63,17 @@ export function ApprovalQueue({ orgId, locale }: ApprovalQueueProps) {
             "Content-Type": "application/json",
             Accept: "application/json",
           },
-          body: JSON.stringify({ note: reviewNotes[id] || null }),
+          body: JSON.stringify({ note }),
         }
       );
-      setApprovals((prev) => prev.filter((a) => a.id !== id));
+      queryClient.setQueryData(
+        ["agent-approvals", orgId],
+        (prev: Approval[] | undefined) =>
+          prev ? prev.filter((a) => a.id !== id) : []
+      );
+      setBusy((prev) => ({ ...prev, [id]: false }));
     } catch {
       // silently fail
-    } finally {
       setBusy((prev) => ({ ...prev, [id]: false }));
     }
   };

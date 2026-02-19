@@ -284,8 +284,8 @@ export default async function StakeholderReportPage({ searchParams }: PageProps)
         </CardHeader>
         {sectionErrors.length > 0 ? (
           <CardContent className="space-y-1 text-muted-foreground text-xs">
-            {sectionErrors.map((message, index) => (
-              <p key={`${message}-${index}`}>{message}</p>
+            {sectionErrors.map((message) => (
+              <p key={message}>{message}</p>
             ))}
           </CardContent>
         ) : null}

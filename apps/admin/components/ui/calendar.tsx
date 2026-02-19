@@ -1,7 +1,7 @@
 "use client";
 
 import { ArrowLeft01Icon, ArrowRight01Icon } from "@hugeicons/core-free-icons";
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
@@ -144,15 +144,18 @@ export function Calendar({
     return monthStart(base);
   });
 
-  // When the selected date changes, jump to its month (derive during render).
-  const prevSelectedRef = useRef(selectedDate);
-  if (selectedDate && selectedDate !== prevSelectedRef.current) {
-    const target = monthStart(selectedDate);
-    if (target.getTime() !== displayMonth.getTime()) {
-      setDisplayMonth(target);
+  // Track previous selected date to sync displayMonth during render
+  // (setState during render — React-recommended pattern for derived state).
+  const [prevValue, setPrevValue] = useState(value);
+  if (value !== prevValue) {
+    setPrevValue(value);
+    if (selectedDate) {
+      const target = monthStart(selectedDate);
+      if (displayMonth.getTime() !== target.getTime()) {
+        setDisplayMonth(target);
+      }
     }
   }
-  prevSelectedRef.current = selectedDate;
 
   const labels = useMemo(() => weekdayLabels(locale), [locale]);
   const days = useMemo(() => monthDays(displayMonth), [displayMonth]);

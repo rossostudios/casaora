@@ -1,8 +1,9 @@
 "use client";
 
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -65,6 +66,31 @@ const CHAT_SKELETON_KEYS = [
   "chat-skeleton-6",
 ];
 
+async function fetchChats(orgId: string, archived: boolean): Promise<AgentChatSummary[]> {
+  const archivedParam = archived ? "true" : "false";
+  const response = await fetch(
+    `/api/agent/chats?org_id=${encodeURIComponent(orgId)}&archived=${archivedParam}&limit=80`,
+    {
+      method: "GET",
+      cache: "no-store",
+      headers: {
+        Accept: "application/json",
+      },
+    }
+  );
+  const payload = (await response.json()) as unknown;
+
+  if (!response.ok) {
+    let message = "Could not load chats.";
+    if (payload != null && typeof payload === "object" && "error" in payload) {
+      message = String((payload as { error?: unknown }).error);
+    }
+    throw new Error(message);
+  }
+
+  return normalizeChats(payload);
+}
+
 export function ChatHistory({
   orgId,
   locale,
@@ -76,108 +102,66 @@ export function ChatHistory({
 }) {
   const isEn = locale === "en-US";
   const router = useRouter();
+  const queryClient = useQueryClient();
 
   const [archived, setArchived] = useState(defaultArchived);
-  const [chats, setChats] = useState<AgentChatSummary[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [busyChatId, setBusyChatId] = useState<string | null>(null);
   const [deleteArmedId, setDeleteArmedId] = useState<string | null>(null);
 
-  const loadChats = useCallback(async () => {
-    setLoading(true);
-    setError(null);
+  const chatsQuery = useQuery<AgentChatSummary[], Error>({
+    queryKey: ["agent-chats", orgId, archived],
+    queryFn: () => fetchChats(orgId, archived),
+  });
 
-    try {
-      const response = await fetch(
-        `/api/agent/chats?org_id=${encodeURIComponent(orgId)}&archived=${archived ? "true" : "false"}&limit=80`,
-        {
-          method: "GET",
-          cache: "no-store",
-          headers: {
-            Accept: "application/json",
-          },
-        }
-      );
-      const payload = (await response.json()) as unknown;
-
-      if (!response.ok) {
-        const message =
-          payload && typeof payload === "object" && "error" in payload
-            ? String((payload as { error?: unknown }).error)
-            : isEn
-              ? "Could not load chats."
-              : "No se pudieron cargar los chats.";
-        throw new Error(message);
+  const mutateChatMutation = useMutation<void, Error, { chatId: string; action: "archive" | "restore" | "delete" }>({
+    mutationFn: async ({ chatId, action }) => {
+      let response: Response;
+      if (action === "delete") {
+        response = await fetch(
+          `/api/agent/chats/${encodeURIComponent(chatId)}?org_id=${encodeURIComponent(orgId)}`,
+          {
+            method: "DELETE",
+            headers: {
+              Accept: "application/json",
+            },
+          }
+        );
+      } else {
+        response = await fetch(
+          `/api/agent/chats/${encodeURIComponent(chatId)}`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Accept: "application/json",
+            },
+            body: JSON.stringify({
+              org_id: orgId,
+              action,
+            }),
+          }
+        );
       }
 
-      setChats(normalizeChats(payload));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-      setChats([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [archived, isEn, orgId]);
-
-  useEffect(() => {
-    loadChats().catch(() => undefined);
-  }, [loadChats]);
-
-  const mutateChat = useCallback(
-    async (chatId: string, action: "archive" | "restore" | "delete") => {
-      setBusyChatId(chatId);
-      setError(null);
-
-      try {
-        let response: Response;
-        if (action === "delete") {
-          response = await fetch(
-            `/api/agent/chats/${encodeURIComponent(chatId)}?org_id=${encodeURIComponent(orgId)}`,
-            {
-              method: "DELETE",
-              headers: {
-                Accept: "application/json",
-              },
-            }
-          );
-        } else {
-          response = await fetch(
-            `/api/agent/chats/${encodeURIComponent(chatId)}`,
-            {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                Accept: "application/json",
-              },
-              body: JSON.stringify({
-                org_id: orgId,
-                action,
-              }),
-            }
-          );
-        }
-
-        const payload = (await response.json()) as { error?: string };
-        if (!response.ok) {
-          throw new Error(
-            payload.error ||
-              (isEn
-                ? "Chat update failed."
-                : "La actualización del chat falló.")
-          );
-        }
-
-        await loadChats();
-        router.refresh();
-      } catch (err) {
-        setError(err instanceof Error ? err.message : String(err));
-      } finally {
-        setBusyChatId(null);
+      const payload = (await response.json()) as { error?: string };
+      if (!response.ok) {
+        const fallbackMsg = isEn
+          ? "Chat update failed."
+          : "La actualizaci\u00f3n del chat fall\u00f3.";
+        throw new Error(payload.error || fallbackMsg);
       }
     },
-    [isEn, loadChats, orgId, router]
-  );
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["agent-chats", orgId, archived] });
+      router.refresh();
+    },
+  });
+
+  const chats = chatsQuery.data ?? [];
+  const loading = chatsQuery.isLoading;
+  const error = chatsQuery.error?.message ?? mutateChatMutation.error?.message ?? null;
+  const busyChatId = mutateChatMutation.isPending
+    ? mutateChatMutation.variables?.chatId ?? null
+    : null;
 
   return (
     <Card>
@@ -237,10 +221,10 @@ export function ChatHistory({
             {archived
               ? isEn
                 ? "No archived chats yet."
-                : "Todavía no hay chats archivados."
+                : "Todav\u00eda no hay chats archivados."
               : isEn
                 ? "No active chats yet. Start one from Agents."
-                : "Todavía no hay chats activos. Inicia uno desde Agentes."}
+                : "Todav\u00eda no hay chats activos. Inicia uno desde Agentes."}
           </div>
         ) : (
           <div className="space-y-2">
@@ -261,7 +245,7 @@ export function ChatHistory({
                   </div>
                   <p className="line-clamp-2 text-muted-foreground text-xs">
                     {chat.latest_message_preview ||
-                      (isEn ? "No messages yet." : "Todavía no hay mensajes.")}
+                      (isEn ? "No messages yet." : "Todav\u00eda no hay mensajes.")}
                   </p>
                   <p className="text-[11px] text-muted-foreground">
                     {isEn ? "Updated" : "Actualizado"}:{" "}
@@ -285,7 +269,7 @@ export function ChatHistory({
                       const nextAction = chat.is_archived
                         ? "restore"
                         : "archive";
-                      mutateChat(chat.id, nextAction).catch(() => undefined);
+                      mutateChatMutation.mutate({ chatId: chat.id, action: nextAction });
                     }}
                     size="sm"
                     variant="outline"
@@ -319,7 +303,7 @@ export function ChatHistory({
                         setDeleteArmedId(chat.id);
                         return;
                       }
-                      mutateChat(chat.id, "delete").catch(() => undefined);
+                      mutateChatMutation.mutate({ chatId: chat.id, action: "delete" });
                       setDeleteArmedId(null);
                     }}
                     size="sm"

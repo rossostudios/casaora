@@ -6,6 +6,7 @@ import {
   FinancialBreakdownCard,
   FinancialKpiRow,
 } from "@/components/reservations/reservation-financials";
+import { AccompanyingGuests } from "@/components/reservations/accompanying-guests";
 import { ReservationGuestCard } from "@/components/reservations/reservation-guest-card";
 import { ReservationHero } from "@/components/reservations/reservation-hero";
 import { ReservationStatusTimeline } from "@/components/reservations/reservation-status-timeline";
@@ -176,6 +177,12 @@ export default async function ReservationDetailPage({ params }: PageProps) {
             guestId={r.guest_id}
             guestName={r.guest_name}
             isEn={isEn}
+          />
+
+          <AccompanyingGuests
+            orgId={activeOrgId ?? ""}
+            primaryGuestId={r.guest_id}
+            reservationId={r.id}
           />
 
           <Card>

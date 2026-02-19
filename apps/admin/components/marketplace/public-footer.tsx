@@ -161,12 +161,12 @@ export function PublicFooter({ locale }: { locale: "es-PY" | "en-US" }) {
             {isEn ? "All rights reserved." : "Todos los derechos reservados."}
           </p>
           <div className="flex items-center gap-5 text-xs text-[#faf8f5]/40">
-            <a className="transition-colors hover:text-[#faf8f5]/60" href="#">
+            <Link className="transition-colors hover:text-[#faf8f5]/60" href="/privacy">
               {isEn ? "Privacy Policy" : "Política de privacidad"}
-            </a>
-            <a className="transition-colors hover:text-[#faf8f5]/60" href="#">
+            </Link>
+            <Link className="transition-colors hover:text-[#faf8f5]/60" href="/terms">
               {isEn ? "Terms of Service" : "Términos de servicio"}
-            </a>
+            </Link>
           </div>
         </div>
       </div>

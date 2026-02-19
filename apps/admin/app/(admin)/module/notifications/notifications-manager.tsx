@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import type { NotificationListItem, NotificationListResponse } from "@/lib/api";
 import { Select } from "@/components/ui/select";
@@ -72,6 +73,76 @@ function toRelativeTime(value: string | null | undefined, locale: string): strin
   return rtf.format(Math.round(deltaSeconds / 86_400), "day");
 }
 
+type NotificationsQueryData = {
+  rows: NotificationListItem[];
+  nextCursor: string | null;
+};
+
+async function fetchNotificationsPage(
+  orgId: string,
+  status: StatusFilter,
+  category: string,
+  isEn: boolean,
+  cursor?: string
+): Promise<NotificationsQueryData> {
+  const defaultErrorMessage = isEn
+    ? "Could not load notifications."
+    : "No se pudieron cargar las notificaciones.";
+
+  const qs = new URLSearchParams();
+  qs.set("org_id", orgId);
+  qs.set("limit", String(PAGE_LIMIT));
+  qs.set("status", status);
+  if (category !== "all") qs.set("category", category);
+  if (cursor) qs.set("cursor", cursor);
+
+  const listResponse = await fetch(`/api/notifications?${qs.toString()}`, {
+    method: "GET",
+    cache: "no-store",
+    headers: { Accept: "application/json" },
+  });
+  const listPayloadRaw = (await listResponse.json().catch(() => ({}))) as
+    | NotificationListResponse
+    | { error?: unknown };
+
+  if (!listResponse.ok) {
+    const errPayload = listPayloadRaw as { error?: unknown };
+    if (typeof errPayload.error === "string") {
+      throw new Error(errPayload.error as string);
+    }
+    throw new Error(defaultErrorMessage);
+  }
+
+  const listPayload = listPayloadRaw as NotificationListResponse;
+  const rows = Array.isArray(listPayload.data)
+    ? listPayload.data
+        .map(normalizeNotification)
+        .filter((item): item is NotificationListItem => Boolean(item))
+    : [];
+  const nextCursor =
+    typeof listPayload.next_cursor === "string" ? listPayload.next_cursor : null;
+
+  return { rows, nextCursor };
+}
+
+async function fetchUnreadCount(orgId: string): Promise<number> {
+  const unreadResponse = await fetch(
+    `/api/notifications/unread-count?org_id=${encodeURIComponent(orgId)}`,
+    {
+      method: "GET",
+      cache: "no-store",
+      headers: { Accept: "application/json" },
+    }
+  );
+  const unreadPayload = (await unreadResponse.json().catch(() => ({}))) as {
+    unread?: unknown;
+  };
+  if (unreadResponse.ok && typeof unreadPayload.unread === "number") {
+    return unreadPayload.unread;
+  }
+  return 0;
+}
+
 export function NotificationsManager({
   orgId,
   locale,
@@ -79,16 +150,48 @@ export function NotificationsManager({
   initialCategory,
 }: NotificationsManagerProps) {
   const isEn = locale === "en-US";
+  const queryClient = useQueryClient();
   const [status, setStatus] = useState<StatusFilter>(() => normalizeStatus(initialStatus));
   const [category, setCategory] = useState<string>(
     initialCategory?.trim() || "all"
   );
-  const [rows, setRows] = useState<NotificationListItem[]>([]);
-  const [nextCursor, setNextCursor] = useState<string | null>(null);
-  const [unreadCount, setUnreadCount] = useState(0);
-  const [loading, setLoading] = useState(false);
+  const [extraRows, setExtraRows] = useState<NotificationListItem[]>([]);
+  const [extraCursor, setExtraCursor] = useState<string | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+
+  const notificationsQuery = useQuery({
+    queryKey: ["notifications", orgId, status, category],
+    queryFn: () => fetchNotificationsPage(orgId, status, category, isEn),
+    refetchInterval: POLL_INTERVAL_MS,
+  });
+
+  const unreadQuery = useQuery({
+    queryKey: ["notifications-unread-count", orgId],
+    queryFn: () => fetchUnreadCount(orgId),
+    refetchInterval: POLL_INTERVAL_MS,
+  });
+
+  // Reset extra rows when filters change (notificationsQuery refetches)
+  const queryRows = notificationsQuery.data?.rows ?? [];
+  const queryCursor = notificationsQuery.data?.nextCursor ?? null;
+
+  // When the base query changes, clear paginated extra rows
+  const rows = useMemo(() => [...queryRows, ...extraRows], [queryRows, extraRows]);
+  const nextCursor = extraRows.length > 0 ? extraCursor : queryCursor;
+  const unreadCount = unreadQuery.data ?? 0;
+  const loading = notificationsQuery.isLoading;
+  const error = notificationsQuery.error
+    ? notificationsQuery.error.message
+    : null;
+
+  // Clear extra rows when query key changes (status/category)
+  const prevKeyRef = `${status}-${category}`;
+  const [lastKey, setLastKey] = useState(prevKeyRef);
+  if (prevKeyRef !== lastKey) {
+    setExtraRows([]);
+    setExtraCursor(null);
+    setLastKey(prevKeyRef);
+  }
 
   const categories = useMemo(() => {
     const set = new Set<string>();
@@ -99,114 +202,48 @@ export function NotificationsManager({
     return ["all", ...Array.from(set).sort()];
   }, [category, rows]);
 
-  const loadNotifications = useCallback(
-    async (options?: { cursor?: string; append?: boolean; silent?: boolean }) => {
-      const cursor = options?.cursor;
-      const append = options?.append === true;
-      const silent = options?.silent === true;
-
-      if (append) {
-        setLoadingMore(true);
-      } else if (!silent) {
-        setLoading(true);
-      }
-
+  const loadMore = useCallback(
+    async (cursor: string) => {
+      setLoadingMore(true);
       try {
-        const qs = new URLSearchParams();
-        qs.set("org_id", orgId);
-        qs.set("limit", String(PAGE_LIMIT));
-        qs.set("status", status);
-        if (category !== "all") qs.set("category", category);
-        if (cursor) qs.set("cursor", cursor);
-
-        const listResponse = await fetch(`/api/notifications?${qs.toString()}`, {
-          method: "GET",
-          cache: "no-store",
-          headers: { Accept: "application/json" },
-        });
-        const listPayloadRaw = (await listResponse.json().catch(() => ({}))) as
-          | NotificationListResponse
-          | { error?: unknown };
-
-        if (!listResponse.ok) {
-          const message =
-            typeof (listPayloadRaw as { error?: unknown }).error === "string"
-              ? ((listPayloadRaw as { error?: string }).error as string)
-              : isEn
-                ? "Could not load notifications."
-                : "No se pudieron cargar las notificaciones.";
-          throw new Error(message);
-        }
-
-        const listPayload = listPayloadRaw as NotificationListResponse;
-        const parsedRows = Array.isArray(listPayload.data)
-          ? listPayload.data
-              .map(normalizeNotification)
-              .filter((item): item is NotificationListItem => Boolean(item))
-          : [];
-
-        setRows((prev) => (append ? [...prev, ...parsedRows] : parsedRows));
-        setNextCursor(
-          typeof listPayload.next_cursor === "string"
-            ? listPayload.next_cursor
-            : null
-        );
-        setError(null);
-
-        if (!append) {
-          const unreadResponse = await fetch(
-            `/api/notifications/unread-count?org_id=${encodeURIComponent(orgId)}`,
-            {
-              method: "GET",
-              cache: "no-store",
-              headers: { Accept: "application/json" },
-            }
-          );
-          const unreadPayload = (await unreadResponse.json().catch(() => ({}))) as {
-            unread?: unknown;
-          };
-          if (unreadResponse.ok) {
-            setUnreadCount(
-              typeof unreadPayload.unread === "number" ? unreadPayload.unread : 0
-            );
-          }
-        }
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        setError(message);
-      } finally {
-        if (append) {
-          setLoadingMore(false);
-        } else if (!silent) {
-          setLoading(false);
-        }
+        const page = await fetchNotificationsPage(orgId, status, category, isEn, cursor);
+        setExtraRows((prev) => [...prev, ...page.rows]);
+        setExtraCursor(page.nextCursor);
+      } catch {
+        // ignore pagination errors
       }
+      setLoadingMore(false);
     },
-    [category, isEn, orgId, status]
+    [orgId, status, category, isEn]
   );
-
-  useEffect(() => {
-    loadNotifications();
-  }, [loadNotifications]);
-
-  useEffect(() => {
-    const intervalId = window.setInterval(() => {
-      loadNotifications({ silent: true });
-    }, POLL_INTERVAL_MS);
-    return () => window.clearInterval(intervalId);
-  }, [loadNotifications]);
 
   const markRead = useCallback(
     async (item: NotificationListItem) => {
       if (!item.id) return;
       if (!item.read_at) {
-        const optimisticReadAt = new Date().toISOString();
-        setRows((prev) =>
+        // Optimistic update in the query cache
+        queryClient.setQueryData<NotificationsQueryData>(
+          ["notifications", orgId, status, category],
+          (old) => {
+            if (!old) return old;
+            const optimisticReadAt = new Date().toISOString();
+            return {
+              ...old,
+              rows: old.rows.map((row) =>
+                row.id === item.id ? { ...row, read_at: optimisticReadAt } : row
+              ),
+            };
+          }
+        );
+        setExtraRows((prev) =>
           prev.map((row) =>
-            row.id === item.id ? { ...row, read_at: optimisticReadAt } : row
+            row.id === item.id ? { ...row, read_at: new Date().toISOString() } : row
           )
         );
-        setUnreadCount((prev) => Math.max(0, prev - 1));
+        queryClient.setQueryData<number>(
+          ["notifications-unread-count", orgId],
+          (old) => Math.max(0, (old ?? 0) - 1)
+        );
       }
 
       try {
@@ -222,15 +259,32 @@ export function NotificationsManager({
         // Keep optimistic state. Poll will reconcile.
       }
     },
-    [orgId]
+    [orgId, status, category, queryClient]
   );
 
   const markAllRead = useCallback(async () => {
     const optimisticReadAt = new Date().toISOString();
-    setRows((prev) =>
-      prev.map((row) => (row.read_at ? row : { ...row, read_at: optimisticReadAt }))
+    queryClient.setQueryData<NotificationsQueryData>(
+      ["notifications", orgId, status, category],
+      (old) => {
+        if (!old) return old;
+        return {
+          ...old,
+          rows: old.rows.map((row) =>
+            row.read_at ? row : { ...row, read_at: optimisticReadAt }
+          ),
+        };
+      }
     );
-    setUnreadCount(0);
+    setExtraRows((prev) =>
+      prev.map((row) =>
+        row.read_at ? row : { ...row, read_at: optimisticReadAt }
+      )
+    );
+    queryClient.setQueryData<number>(
+      ["notifications-unread-count", orgId],
+      0
+    );
 
     try {
       await fetch("/api/notifications/read-all", {
@@ -243,9 +297,9 @@ export function NotificationsManager({
         body: JSON.stringify({ org_id: orgId }),
       });
     } catch {
-      loadNotifications({ silent: true });
+      void queryClient.invalidateQueries({ queryKey: ["notifications", orgId, status, category] });
     }
-  }, [loadNotifications, orgId]);
+  }, [orgId, status, category, queryClient]);
 
   return (
     <div className="space-y-4">
@@ -368,7 +422,7 @@ export function NotificationsManager({
           <button
             className="rounded-lg border border-border px-4 py-2 text-sm transition-colors hover:bg-muted disabled:opacity-60"
             disabled={loadingMore}
-            onClick={() => loadNotifications({ cursor: nextCursor, append: true })}
+            onClick={() => nextCursor && loadMore(nextCursor)}
             type="button"
           >
             {loadingMore

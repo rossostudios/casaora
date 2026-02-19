@@ -72,17 +72,16 @@ export default async function MarketplacePage({
   let listings: MarketplaceListingViewModel[] = [];
   let apiError: string | null = null;
 
+  const orgIdParam = defaultOrgId || undefined;
   try {
     const [response, usdPygRate] = await Promise.all([
-      fetchPublicListings(
-        toMarketplaceListParams(filters, defaultOrgId || undefined)
-      ),
+      fetchPublicListings(toMarketplaceListParams(filters, orgIdParam)),
       fetchUsdPygRate(),
     ]);
-    const records = sortMarketplaceListings(
-      (response.data ?? []) as Record<string, unknown>[],
-      filters.sort
-    );
+    const rawData = response.data;
+    let dataArr: Record<string, unknown>[] = [];
+    if (rawData != null) dataArr = rawData as Record<string, unknown>[];
+    const records = sortMarketplaceListings(dataArr, filters.sort);
     listings = records.map((record, index) =>
       toMarketplaceListingViewModel({
         listing: record,
@@ -92,7 +91,9 @@ export default async function MarketplacePage({
       })
     );
   } catch (err) {
-    apiError = err instanceof Error ? err.message : String(err);
+    let msg = String(err);
+    if (err instanceof Error) msg = err.message;
+    apiError = msg;
   }
 
   // Client-side "available now" filter: keep listings with availableFrom <= today

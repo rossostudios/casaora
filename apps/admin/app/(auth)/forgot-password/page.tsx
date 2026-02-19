@@ -64,31 +64,28 @@ export default function ForgotPasswordPage() {
     }
 
     setBusy(true);
+    const redirectTo = `${getSiteUrl()}/auth/callback?next=${encodeURIComponent("/reset-password")}`;
+    const sendErr = isEn ? "Could not send link" : "No se pudo enviar el enlace";
+    const checkTitle = isEn ? "Check your email" : "Revisa tu correo";
+    const checkDesc = isEn
+      ? "We sent a password reset link (if the account exists)."
+      : "Enviamos un enlace para restablecer la contraseña (si la cuenta existe).";
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(
         trimmedEmail,
-        {
-          redirectTo: `${getSiteUrl()}/auth/callback?next=${encodeURIComponent("/reset-password")}`,
-        }
+        { redirectTo }
       );
 
       if (error) {
-        toast.error(
-          isEn ? "Could not send link" : "No se pudo enviar el enlace",
-          {
-            description: error.message,
-          }
-        );
+        toast.error(sendErr, { description: error.message });
+        setBusy(false);
         return;
       }
 
-      toast.success(isEn ? "Check your email" : "Revisa tu correo", {
-        description: isEn
-          ? "We sent a password reset link (if the account exists)."
-          : "Enviamos un enlace para restablecer la contraseña (si la cuenta existe).",
-      });
+      toast.success(checkTitle, { description: checkDesc });
       setEmail("");
-    } finally {
+      setBusy(false);
+    } catch {
       setBusy(false);
     }
   };

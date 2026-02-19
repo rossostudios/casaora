@@ -108,17 +108,23 @@ export function OwnerStatements({ locale }: { locale: string }) {
         );
         if (res.ok) {
           const data = await res.json();
+          const rawCollections = data.collections;
+          const rawExpenses = data.expenses;
+          let collectionsArr: Record<string, unknown>[] = [];
+          if (rawCollections != null) collectionsArr = rawCollections as Record<string, unknown>[];
+          let expensesArr: Record<string, unknown>[] = [];
+          if (rawExpenses != null) expensesArr = rawExpenses as Record<string, unknown>[];
           setDetails((prev) => ({
             ...prev,
             [id]: {
-              collections: (data.collections ?? []) as Record<string, unknown>[],
-              expenses: (data.expenses ?? []) as Record<string, unknown>[],
+              collections: collectionsArr,
+              expenses: expensesArr,
             },
           }));
         }
+        setDetailLoading(false);
       } catch {
         // silently fail
-      } finally {
         setDetailLoading(false);
       }
     },

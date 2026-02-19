@@ -75,6 +75,13 @@ export function LanguageSelector({ className }: LanguageSelectorProps) {
     persistLocale(next);
     setOpen(false);
 
+    const nextIsEn = next === "en-US";
+    const successTitle = nextIsEn ? "Language updated" : "Idioma actualizado";
+    const prevIsEn = previous === "en-US";
+    const errorTitle = prevIsEn
+      ? "Could not update language"
+      : "No se pudo actualizar el idioma";
+
     try {
       const response = await fetch("/api/locale", {
         method: "POST",
@@ -89,29 +96,31 @@ export function LanguageSelector({ className }: LanguageSelectorProps) {
 
       if (!response.ok) {
         const text = await response.text().catch(() => "");
-        throw new Error(text || "Request failed");
+        let errText = "Request failed";
+        if (text) {
+          errText = text;
+        }
+        persistLocale(previous);
+        toast.error(errorTitle, { description: errText });
+        setPendingLocale(null);
+        return;
       }
 
-      const nextIsEn = next === "en-US";
-      toast.success(nextIsEn ? "Language updated" : "Idioma actualizado", {
+      toast.success(successTitle, {
         description: localeLabel(next),
       });
 
       startRefresh(() => {
         router.refresh();
       });
+      setPendingLocale(null);
     } catch (err) {
-      const prevIsEn = previous === "en-US";
       persistLocale(previous);
-      toast.error(
-        prevIsEn
-          ? "Could not update language"
-          : "No se pudo actualizar el idioma",
-        {
-          description: err instanceof Error ? err.message : String(err),
-        }
-      );
-    } finally {
+      let desc = String(err);
+      if (err instanceof Error) {
+        desc = err.message;
+      }
+      toast.error(errorTitle, { description: desc });
       setPendingLocale(null);
     }
   };

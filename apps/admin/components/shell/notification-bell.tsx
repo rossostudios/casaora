@@ -1,9 +1,10 @@
 "use client";
 
 import { Notification03Icon } from "@hugeicons/core-free-icons";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 
 import { Icon } from "@/components/ui/icon";
 import {
@@ -79,113 +80,123 @@ function normalizeNotification(item: unknown): NotificationListItem | null {
 }
 
 export function NotificationBell({ locale, orgId }: NotificationBellProps) {
+  "use no memo";
   const isEn = locale === "en-US";
   const router = useRouter();
 
+  const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
-  const [notifications, setNotifications] = useState<NotificationListItem[]>(
-    []
-  );
-  const [unreadCount, setUnreadCount] = useState(0);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
   const [markingAll, setMarkingAll] = useState(false);
+
+  type NotificationsData = {
+    notifications: NotificationListItem[];
+    unreadCount: number;
+  };
+
+  const {
+    data,
+    isPending: loading,
+    isError,
+    refetch,
+  } = useQuery<NotificationsData>({
+    queryKey: ["notifications", orgId],
+    queryFn: async () => {
+      const fallbackMsg = isEn
+        ? "Could not load notifications."
+        : "No se pudieron cargar las notificaciones.";
+
+      const [countRes, listRes] = await Promise.all([
+        fetch(
+          `/api/notifications/unread-count?org_id=${encodeURIComponent(orgId!)}`,
+          {
+            method: "GET",
+            cache: "no-store",
+            headers: { Accept: "application/json" },
+          }
+        ),
+        fetch(
+          `/api/notifications?org_id=${encodeURIComponent(orgId!)}&status=all&limit=${LIST_LIMIT}`,
+          {
+            method: "GET",
+            cache: "no-store",
+            headers: { Accept: "application/json" },
+          }
+        ),
+      ]);
+
+      const countPayload = (await countRes.json().catch(() => ({}))) as {
+        unread?: unknown;
+        error?: unknown;
+      };
+      const listPayload = (await listRes.json().catch(() => ({}))) as {
+        data?: unknown[];
+        error?: unknown;
+      };
+
+      let anyFailed = false;
+      if (!countRes.ok) { anyFailed = true; }
+      if (!listRes.ok) { anyFailed = true; }
+      if (anyFailed) {
+        let countError = "";
+        if (typeof countPayload.error === "string") {
+          countError = countPayload.error;
+        }
+        let listError = "";
+        if (typeof listPayload.error === "string") {
+          listError = listPayload.error;
+        }
+        let message = fallbackMsg;
+        if (countError) {
+          message = countError;
+        } else if (listError) {
+          message = listError;
+        }
+        throw new Error(message);
+      }
+
+      const unreadCount =
+        typeof countPayload.unread === "number" ? countPayload.unread : 0;
+
+      let rows: unknown[] = [];
+      if (Array.isArray(listPayload.data)) {
+        rows = listPayload.data;
+      }
+      const notifications = rows
+        .map(normalizeNotification)
+        .filter((item): item is NotificationListItem => Boolean(item));
+
+      return { notifications, unreadCount };
+    },
+    enabled: !!orgId,
+    refetchInterval: POLL_INTERVAL_MS,
+  });
+
+  const notifications = data?.notifications ?? [];
+  const unreadCount = data?.unreadCount ?? 0;
+  const error = isError;
 
   const hasUnread = unreadCount > 0;
   const unreadDisplay = unreadCount > 99 ? "99+" : String(unreadCount);
-
-  const loadNotifications = useCallback(
-    async (silent = false) => {
-      if (!orgId) {
-        setNotifications([]);
-        setUnreadCount(0);
-        setError(null);
-        return;
-      }
-
-      if (!silent) setLoading(true);
-
-      try {
-        const [countRes, listRes] = await Promise.all([
-          fetch(
-            `/api/notifications/unread-count?org_id=${encodeURIComponent(orgId)}`,
-            {
-              method: "GET",
-              cache: "no-store",
-              headers: { Accept: "application/json" },
-            }
-          ),
-          fetch(
-            `/api/notifications?org_id=${encodeURIComponent(orgId)}&status=all&limit=${LIST_LIMIT}`,
-            {
-              method: "GET",
-              cache: "no-store",
-              headers: { Accept: "application/json" },
-            }
-          ),
-        ]);
-
-        const countPayload = (await countRes.json().catch(() => ({}))) as {
-          unread?: unknown;
-          error?: unknown;
-        };
-        const listPayload = (await listRes.json().catch(() => ({}))) as {
-          data?: unknown[];
-          error?: unknown;
-        };
-
-        if (!(countRes.ok && listRes.ok)) {
-          const message =
-            (typeof countPayload.error === "string" && countPayload.error) ||
-            (typeof listPayload.error === "string" && listPayload.error) ||
-            (isEn
-              ? "Could not load notifications."
-              : "No se pudieron cargar las notificaciones.");
-          throw new Error(message);
-        }
-
-        setUnreadCount(
-          typeof countPayload.unread === "number" ? countPayload.unread : 0
-        );
-
-        const rows = Array.isArray(listPayload.data) ? listPayload.data : [];
-        setNotifications(
-          rows
-            .map(normalizeNotification)
-            .filter((item): item is NotificationListItem => Boolean(item))
-        );
-        setError(null);
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        setError(message);
-      } finally {
-        if (!silent) setLoading(false);
-      }
-    },
-    [isEn, orgId]
-  );
-
-  useEffect(() => {
-    loadNotifications(false);
-    const intervalId = window.setInterval(() => {
-      loadNotifications(true);
-    }, POLL_INTERVAL_MS);
-    return () => window.clearInterval(intervalId);
-  }, [loadNotifications]);
 
   const markRead = useCallback(
     async (notification: NotificationListItem) => {
       if (!orgId) return;
       if (!notification.read_at) {
         const optimisticReadAt = new Date().toISOString();
-        setNotifications((prev) =>
-          prev.map((row) =>
-            row.id === notification.id
-              ? { ...row, read_at: optimisticReadAt }
-              : row
-          )
+        queryClient.setQueryData(
+          ["notifications", orgId],
+          (prev: NotificationsData | undefined) => {
+            if (!prev) return prev;
+            return {
+              notifications: prev.notifications.map((row) =>
+                row.id === notification.id
+                  ? { ...row, read_at: optimisticReadAt }
+                  : row
+              ),
+              unreadCount: Math.max(0, prev.unreadCount - 1),
+            };
+          }
         );
-        setUnreadCount((prev) => Math.max(0, prev - 1));
       }
 
       try {
@@ -206,19 +217,25 @@ export function NotificationBell({ locale, orgId }: NotificationBellProps) {
         router.push(notification.link_path);
       }
     },
-    [orgId, router]
+    [orgId, queryClient, router]
   );
 
   const markAllRead = useCallback(async () => {
     if (!orgId || markingAll) return;
     const optimisticReadAt = new Date().toISOString();
     setMarkingAll(true);
-    setNotifications((prev) =>
-      prev.map((item) =>
-        item.read_at ? item : { ...item, read_at: optimisticReadAt }
-      )
+    queryClient.setQueryData(
+      ["notifications", orgId],
+      (prev: NotificationsData | undefined) => {
+        if (!prev) return prev;
+        return {
+          notifications: prev.notifications.map((item) =>
+            item.read_at ? item : { ...item, read_at: optimisticReadAt }
+          ),
+          unreadCount: 0,
+        };
+      }
     );
-    setUnreadCount(0);
 
     try {
       const response = await fetch("/api/notifications/read-all", {
@@ -230,13 +247,15 @@ export function NotificationBell({ locale, orgId }: NotificationBellProps) {
         },
         body: JSON.stringify({ org_id: orgId }),
       });
-      if (!response.ok) throw new Error("mark-all-failed");
+      if (!response.ok) {
+        refetch();
+      }
+      setMarkingAll(false);
     } catch {
-      loadNotifications(true);
-    } finally {
+      refetch();
       setMarkingAll(false);
     }
-  }, [loadNotifications, markingAll, orgId]);
+  }, [markingAll, orgId, queryClient, refetch]);
 
   const renderedRows = useMemo(() => {
     return notifications.map((notification) => {

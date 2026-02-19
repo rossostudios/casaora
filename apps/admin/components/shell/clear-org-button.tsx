@@ -22,6 +22,12 @@ export function ClearOrgButton({
 
   const onClick = async () => {
     setBusy(true);
+    const errTitle = isEn ? "Could not clear selection" : "No se pudo borrar la selección";
+    const fallbackDesc = isEn ? "Request failed" : "Falló la solicitud";
+    const successTitle = isEn ? "Selection cleared" : "Selección borrada";
+    const successDesc = isEn
+      ? "Select a workspace to continue."
+      : "Selecciona un espacio de trabajo para continuar.";
     try {
       const response = await fetch("/api/org", {
         method: "DELETE",
@@ -30,30 +36,24 @@ export function ClearOrgButton({
 
       if (!response.ok) {
         const text = await response.text().catch(() => "");
-        toast.error(
-          isEn ? "Could not clear selection" : "No se pudo borrar la selección",
-          {
-            description:
-              text || (isEn ? "Request failed" : "Falló la solicitud"),
-          }
-        );
+        let desc = fallbackDesc;
+        if (text) {
+          desc = text;
+        }
+        toast.error(errTitle, { description: desc });
+        setBusy(false);
         return;
       }
 
-      toast.success(isEn ? "Selection cleared" : "Selección borrada", {
-        description: isEn
-          ? "Select a workspace to continue."
-          : "Selecciona un espacio de trabajo para continuar.",
-      });
+      toast.success(successTitle, { description: successDesc });
       router.refresh();
+      setBusy(false);
     } catch (err) {
-      toast.error(
-        isEn ? "Could not clear selection" : "No se pudo borrar la selección",
-        {
-          description: err instanceof Error ? err.message : String(err),
-        }
-      );
-    } finally {
+      let desc = String(err);
+      if (err instanceof Error) {
+        desc = err.message;
+      }
+      toast.error(errTitle, { description: desc });
       setBusy(false);
     }
   };

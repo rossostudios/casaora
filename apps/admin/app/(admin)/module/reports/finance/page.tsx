@@ -89,10 +89,20 @@ export default async function FinanceDashboardPage({
       "/properties",
       { org_id: orgId }
     );
-    properties = propResult.items ?? [];
+    const items = propResult.items;
+    if (items != null) {
+      properties = items;
+    } else {
+      properties = [];
+    }
   } catch {
     // non-critical — filter will just be empty
   }
+
+  const finDashTitle = isEn ? "Financial Dashboard" : "Dashboard Financiero";
+  const finDashErr = isEn
+    ? "Failed to load finance data."
+    : "Error al cargar datos financieros.";
 
   try {
     data = await fetchJson<FinanceDashboardData>(
@@ -105,16 +115,10 @@ export default async function FinanceDashboardPage({
     return (
       <Card>
         <CardHeader>
-          <CardTitle>
-            {isEn ? "Financial Dashboard" : "Dashboard Financiero"}
-          </CardTitle>
+          <CardTitle>{finDashTitle}</CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-muted-foreground text-sm">
-            {isEn
-              ? "Failed to load finance data."
-              : "Error al cargar datos financieros."}
-          </p>
+          <p className="text-muted-foreground text-sm">{finDashErr}</p>
         </CardContent>
       </Card>
     );

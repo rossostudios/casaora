@@ -2,7 +2,9 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
+
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -76,10 +78,10 @@ function dueLabel(days: number, isEn: boolean): string {
 }
 
 export function TenantPayments({ locale }: { locale: string }) {
+  "use no memo";
   const isEn = locale === "en-US";
   const router = useRouter();
-  const [payments, setPayments] = useState<Row[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [submitting, setSubmitting] = useState<string | null>(null);
   const [submitSuccess, setSubmitSuccess] = useState<string | null>(null);
   const [bankDetails, setBankDetails] = useState<BankDetails | null>(null);
@@ -91,6 +93,10 @@ export function TenantPayments({ locale }: { locale: string }) {
   const [receiptUrl, setReceiptUrl] = useState("");
   const [notes, setNotes] = useState("");
 
+  const [tokenState] = useState(() =>
+    typeof window !== "undefined" ? localStorage.getItem("tenant_token") : null
+  );
+
   const getToken = useCallback(() => {
     const token = localStorage.getItem("tenant_token");
     if (!token) {
@@ -100,43 +106,61 @@ export function TenantPayments({ locale }: { locale: string }) {
     return token;
   }, [router]);
 
-  const load = useCallback(async () => {
-    const token = getToken();
-    if (!token) return;
-    try {
+  const { data: payments = [], isPending: loading } = useQuery({
+    queryKey: ["tenant-payments", tokenState],
+    queryFn: async () => {
+      const token = getToken();
+      if (!token) return [];
       const res = await fetch(`${API_BASE}/tenant/payments`, {
         headers: { "x-tenant-token": token },
       });
       if (res.status === 401) {
         localStorage.clear();
         router.push("/tenant/login");
-        return;
+        return [];
       }
+      if (!res.ok) return [];
       const json = await res.json();
-      setPayments(
-        ((json.data ?? []) as Record<string, unknown>[]).map((r) => ({
+      const rawData = json.data;
+      let rows: Record<string, unknown>[] = [];
+      if (rawData != null) rows = rawData as Record<string, unknown>[];
+      return rows.map((r): Row => {
+        const currency = asString(r.currency);
+        const paidAt = asString(r.paid_at);
+        const payMethod = asString(r.payment_method);
+        const payRef = asString(r.payment_reference);
+        const payLinkRef = asString(r.payment_link_reference);
+        const notesVal = asString(r.notes);
+
+        let currencyVal = "PYG";
+        if (currency) { currencyVal = currency; }
+        let paidAtVal: string | null = null;
+        if (paidAt) { paidAtVal = paidAt; }
+        let payMethodVal: string | null = null;
+        if (payMethod) { payMethodVal = payMethod; }
+        let payRefVal: string | null = null;
+        if (payRef) { payRefVal = payRef; }
+        let payLinkRefVal: string | null = null;
+        if (payLinkRef) { payLinkRefVal = payLinkRef; }
+        let notesResult: string | null = null;
+        if (notesVal) { notesResult = notesVal; }
+
+        return {
           id: asString(r.id),
           due_date: asString(r.due_date),
           amount: asNumber(r.amount),
-          currency: asString(r.currency) || "PYG",
+          currency: currencyVal,
           status: asString(r.status),
-          paid_at: asString(r.paid_at) || null,
-          payment_method: asString(r.payment_method) || null,
-          payment_reference: asString(r.payment_reference) || null,
-          payment_link_reference: asString(r.payment_link_reference) || null,
-          notes: asString(r.notes) || null,
-        }))
-      );
-    } catch {
-      /* ignore */
-    } finally {
-      setLoading(false);
-    }
-  }, [router, getToken]);
-
-  useEffect(() => {
-    load();
-  }, [load]);
+          paid_at: paidAtVal,
+          payment_method: payMethodVal,
+          payment_reference: payRefVal,
+          payment_link_reference: payLinkRefVal,
+          notes: notesResult,
+        };
+      });
+    },
+    enabled: Boolean(tokenState),
+  });
 
   const fetchPaymentInstructions = useCallback(
     async (collectionId: string) => {
@@ -151,11 +175,23 @@ export function TenantPayments({ locale }: { locale: string }) {
           const json = await res.json();
           const bd = json.bank_details as Record<string, unknown> | null;
           if (bd) {
+            const bName = asString(bd.bank_name);
+            const bAcct = asString(bd.bank_account_number);
+            const bHolder = asString(bd.bank_account_holder);
+            const bRuc = asString(bd.bank_ruc);
+            let bankName: string | null = null;
+            if (bName) { bankName = bName; }
+            let bankAcct: string | null = null;
+            if (bAcct) { bankAcct = bAcct; }
+            let bankHolder: string | null = null;
+            if (bHolder) { bankHolder = bHolder; }
+            let bankRuc: string | null = null;
+            if (bRuc) { bankRuc = bRuc; }
             setBankDetails({
-              bank_name: asString(bd.bank_name) || null,
-              bank_account_number: asString(bd.bank_account_number) || null,
-              bank_account_holder: asString(bd.bank_account_holder) || null,
-              bank_ruc: asString(bd.bank_ruc) || null,
+              bank_name: bankName,
+              bank_account_number: bankAcct,
+              bank_account_holder: bankHolder,
+              bank_ruc: bankRuc,
             });
           }
         }
@@ -185,6 +221,10 @@ export function TenantPayments({ locale }: { locale: string }) {
     if (!token) return;
 
     setSubmitting(collectionId);
+    const methodVal = paymentMethod || undefined;
+    const refVal = paymentReference || undefined;
+    const receiptVal = receiptUrl || undefined;
+    const notesVal = notes || undefined;
     try {
       const res = await fetch(
         `${API_BASE}/tenant/payments/${collectionId}/submit`,
@@ -195,10 +235,10 @@ export function TenantPayments({ locale }: { locale: string }) {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            payment_method: paymentMethod || undefined,
-            payment_reference: paymentReference || undefined,
-            receipt_url: receiptUrl || undefined,
-            notes: notes || undefined,
+            payment_method: methodVal,
+            payment_reference: refVal,
+            receipt_url: receiptVal,
+            notes: notesVal,
           }),
         }
       );
@@ -206,12 +246,11 @@ export function TenantPayments({ locale }: { locale: string }) {
       if (res.ok) {
         setSubmitSuccess(collectionId);
         setExpandedId(null);
-        // Reload data
-        await load();
+        queryClient.invalidateQueries({ queryKey: ["tenant-payments"] });
       }
+      setSubmitting(null);
     } catch {
       /* ignore */
-    } finally {
       setSubmitting(null);
     }
   };

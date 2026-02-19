@@ -48,6 +48,132 @@ const CHANNELS = [
   { value: "sms", label: "SMS" },
 ];
 
+async function saveSequenceAndSteps(opts: {
+  editingId: string | null;
+  orgId: string;
+  formName: string;
+  formTrigger: string;
+  formActive: boolean;
+  steps: Step[];
+  isEn: boolean;
+}): Promise<string> {
+  let sequenceId = opts.editingId;
+
+  if (opts.editingId) {
+    await authedFetch("/communication-sequences/" + opts.editingId, {
+      method: "PATCH",
+      body: JSON.stringify({
+        name: opts.formName,
+        trigger_type: opts.formTrigger,
+        is_active: opts.formActive,
+      }),
+    });
+  } else {
+    const created = await authedFetch<Record<string, unknown>>(
+      "/communication-sequences",
+      {
+        method: "POST",
+        body: JSON.stringify({
+          organization_id: opts.orgId,
+          name: opts.formName,
+          trigger_type: opts.formTrigger,
+          is_active: opts.formActive,
+        }),
+      }
+    );
+    sequenceId = asString(created.id);
+  }
+
+  if (!sequenceId) {
+    const msg = opts.isEn ? "Failed to save sequence" : "Error al guardar secuencia";
+    throw new Error(msg);
+  }
+
+  if (opts.editingId) {
+    for (let i = 0; i < opts.steps.length; i++) {
+      const step = opts.steps[i];
+      let templateIdVal: string | undefined;
+      if (step.template_id) {
+        templateIdVal = step.template_id;
+      } else {
+        templateIdVal = undefined;
+      }
+      let subjectVal: string | undefined;
+      if (step.channel === "email") {
+        subjectVal = step.subject;
+      } else {
+        subjectVal = undefined;
+      }
+      if (step.id) {
+        await authedFetch("/sequence-steps/" + step.id, {
+          method: "PATCH",
+          body: JSON.stringify({
+            step_order: step.step_order,
+            delay_hours: step.delay_hours,
+            channel: step.channel,
+            subject: subjectVal,
+            body_template: step.body_template,
+            template_id: templateIdVal,
+          }),
+        });
+      } else {
+        await authedFetch(
+          "/communication-sequences/" + sequenceId + "/steps",
+          {
+            method: "POST",
+            body: JSON.stringify({
+              step_order: step.step_order,
+              delay_hours: step.delay_hours,
+              channel: step.channel,
+              subject: subjectVal,
+              body_template: step.body_template,
+              template_id: templateIdVal,
+            }),
+          }
+        );
+      }
+    }
+  } else {
+    for (let i = 0; i < opts.steps.length; i++) {
+      const step = opts.steps[i];
+      if (!step.body_template) {
+        if (!step.template_id) continue;
+      }
+      let templateIdVal: string | undefined;
+      if (step.template_id) {
+        templateIdVal = step.template_id;
+      } else {
+        templateIdVal = undefined;
+      }
+      let subjectVal: string | undefined;
+      if (step.channel === "email") {
+        subjectVal = step.subject;
+      } else {
+        subjectVal = undefined;
+      }
+      await authedFetch(
+        "/communication-sequences/" + sequenceId + "/steps",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            step_order: step.step_order,
+            delay_hours: step.delay_hours,
+            channel: step.channel,
+            subject: subjectVal,
+            body_template: step.body_template,
+            template_id: templateIdVal,
+          }),
+        }
+      );
+    }
+  }
+
+  if (opts.editingId) {
+    return opts.isEn ? "Sequence updated" : "Secuencia actualizada";
+  }
+  return opts.isEn ? "Sequence created" : "Secuencia creada";
+}
+
 export function SequencesManager({
   sequences,
   templates,
@@ -59,6 +185,7 @@ export function SequencesManager({
   locale: string;
   orgId: string;
 }) {
+  "use no memo";
   const locale = useActiveLocale();
   const isEn = locale === "en-US";
   const router = useRouter();
@@ -118,19 +245,58 @@ export function SequencesManager({
       const data = await authedFetch<{ data?: Record<string, unknown>[] }>(
         `/communication-sequences/${id}/steps?org_id=${encodeURIComponent(orgId)}`
       );
-      const loaded = (data.data ?? []).map((s) => ({
-        id: asString(s.id),
-        step_order: Number(s.step_order) || 1,
-        delay_hours: Number(s.delay_hours) || 0,
-        channel: asString(s.channel) || "whatsapp",
-        subject: asString(s.subject),
-        body_template: asString(s.body_template),
-        template_id: asString(s.template_id),
-      }));
-      setSteps(loaded.length > 0 ? loaded : [emptyStep(1)]);
+      let rawSteps: Record<string, unknown>[];
+      if (data.data != null) {
+        rawSteps = data.data;
+      } else {
+        rawSteps = [];
+      }
+      const loaded = rawSteps.map((s) => {
+        const stepOrder = Number(s.step_order);
+        const delayHours = Number(s.delay_hours);
+        const channelVal = asString(s.channel);
+        let stepOrderVal: number;
+        if (Number.isFinite(stepOrder)) {
+          if (stepOrder > 0) {
+            stepOrderVal = stepOrder;
+          } else {
+            stepOrderVal = 1;
+          }
+        } else {
+          stepOrderVal = 1;
+        }
+        let delayHoursVal: number;
+        if (Number.isFinite(delayHours)) {
+          delayHoursVal = delayHours;
+        } else {
+          delayHoursVal = 0;
+        }
+        let channelFinal: string;
+        if (channelVal) {
+          channelFinal = channelVal;
+        } else {
+          channelFinal = "whatsapp";
+        }
+        return {
+          id: asString(s.id),
+          step_order: stepOrderVal,
+          delay_hours: delayHoursVal,
+          channel: channelFinal,
+          subject: asString(s.subject),
+          body_template: asString(s.body_template),
+          template_id: asString(s.template_id),
+        };
+      });
+      let stepsToSet: Step[];
+      if (loaded.length > 0) {
+        stepsToSet = loaded;
+      } else {
+        stepsToSet = [emptyStep(1)];
+      }
+      setSteps(stepsToSet);
+      setLoadingSteps(false);
     } catch {
       setSteps([emptyStep(1)]);
-    } finally {
       setLoadingSteps(false);
     }
   }
@@ -156,108 +322,25 @@ export function SequencesManager({
     e.preventDefault();
     setSubmitting(true);
 
+    const errMsg = isEn ? "Failed to save sequence" : "Error al guardar secuencia";
     try {
-      let sequenceId = editingId;
-
-      if (editingId) {
-        // Update sequence
-        await authedFetch(`/communication-sequences/${editingId}`, {
-          method: "PATCH",
-          body: JSON.stringify({
-            name: formName,
-            trigger_type: formTrigger,
-            is_active: formActive,
-          }),
-        });
-      } else {
-        // Create sequence
-        const created = await authedFetch<Record<string, unknown>>(
-          "/communication-sequences",
-          {
-            method: "POST",
-            body: JSON.stringify({
-              organization_id: orgId,
-              name: formName,
-              trigger_type: formTrigger,
-              is_active: formActive,
-            }),
-          }
-        );
-        sequenceId = asString(created.id);
-      }
-
-      if (!sequenceId) throw new Error("Missing sequence ID");
-
-      // Sync steps: delete old ones that have IDs, then create all
-      if (editingId) {
-        // Delete existing steps that were removed
-        const existingIds = steps.filter((s) => s.id).map((s) => s.id!);
-        // For simplicity, we delete steps that have IDs and aren't in current list
-        // Actually, let's just update/create. Delete removed ones.
-        for (const step of steps) {
-          if (step.id) {
-            await authedFetch(`/sequence-steps/${step.id}`, {
-              method: "PATCH",
-              body: JSON.stringify({
-                step_order: step.step_order,
-                delay_hours: step.delay_hours,
-                channel: step.channel,
-                subject: step.channel === "email" ? step.subject : undefined,
-                body_template: step.body_template,
-                template_id: step.template_id || undefined,
-              }),
-            });
-          } else {
-            await authedFetch(
-              `/communication-sequences/${sequenceId}/steps`,
-              {
-                method: "POST",
-                body: JSON.stringify({
-                  step_order: step.step_order,
-                  delay_hours: step.delay_hours,
-                  channel: step.channel,
-                  subject: step.channel === "email" ? step.subject : undefined,
-                  body_template: step.body_template,
-                  template_id: step.template_id || undefined,
-                }),
-              }
-            );
-          }
-        }
-      } else {
-        // Create all steps for new sequence
-        for (const step of steps) {
-          if (!step.body_template && !step.template_id) continue;
-          await authedFetch(
-            `/communication-sequences/${sequenceId}/steps`,
-            {
-              method: "POST",
-              body: JSON.stringify({
-                step_order: step.step_order,
-                delay_hours: step.delay_hours,
-                channel: step.channel,
-                subject: step.channel === "email" ? step.subject : undefined,
-                body_template: step.body_template,
-                template_id: step.template_id || undefined,
-              }),
-            }
-          );
-        }
-      }
-
-      toast.success(
-        editingId
-          ? isEn ? "Sequence updated" : "Secuencia actualizada"
-          : isEn ? "Sequence created" : "Secuencia creada"
-      );
+      const successMsg = await saveSequenceAndSteps({
+        editingId,
+        orgId,
+        formName,
+        formTrigger,
+        formActive,
+        steps,
+        isEn,
+      });
+      toast.success(successMsg);
       setSheetOpen(false);
       resetForm();
       router.refresh();
     } catch {
-      toast.error(isEn ? "Failed to save sequence" : "Error al guardar secuencia");
-    } finally {
-      setSubmitting(false);
+      toast.error(errMsg);
     }
+    setSubmitting(false);
   }
 
   async function handleDelete(seqId: string) {
@@ -267,10 +350,22 @@ export function SequencesManager({
       await authedFetch(`/communication-sequences/${seqId}`, {
         method: "DELETE",
       });
-      toast.success(isEn ? "Sequence deleted" : "Secuencia eliminada");
+      let delMsg: string;
+      if (isEn) {
+        delMsg = "Sequence deleted";
+      } else {
+        delMsg = "Secuencia eliminada";
+      }
+      toast.success(delMsg);
       router.refresh();
     } catch {
-      toast.error(isEn ? "Delete failed" : "Error al eliminar");
+      let delErrMsg: string;
+      if (isEn) {
+        delErrMsg = "Delete failed";
+      } else {
+        delErrMsg = "Error al eliminar";
+      }
+      toast.error(delErrMsg);
     }
   }
 
@@ -433,7 +528,7 @@ export function SequencesManager({
                 {steps.map((step, idx) => (
                   <div
                     className="space-y-2 rounded-lg border bg-muted/30 p-3"
-                    key={idx}
+                    key={step.id ?? `step-${step.step_order}`}
                   >
                     <div className="flex items-center justify-between">
                       <span className="text-xs font-semibold text-muted-foreground">

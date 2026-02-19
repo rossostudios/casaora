@@ -38,12 +38,16 @@ export default async function PublicHomePage() {
   const defaultOrgId = process.env.NEXT_PUBLIC_DEFAULT_ORG_ID?.trim();
 
   let listings: Record<string, unknown>[] = [];
+  const orgIdParam = defaultOrgId || undefined;
   try {
     const response = await fetchPublicListings({
-      orgId: defaultOrgId || undefined,
+      orgId: orgIdParam,
       limit: 6,
     });
-    listings = response.data ?? [];
+    const rawData = response.data;
+    if (rawData != null) {
+      listings = rawData;
+    }
   } catch {
     listings = [];
   }

@@ -101,8 +101,12 @@ export function CommandPalette({
 
   const [query, setQuery] = useState("");
   const [cursor, setCursor] = useState(0);
-  const [pins, setPins] = useState<ShortcutItem[]>([]);
-  const [recents, setRecents] = useState<ShortcutItem[]>([]);
+  const [pins, setPins] = useState<ShortcutItem[]>(() =>
+    typeof window !== "undefined" ? getPins() : []
+  );
+  const [recents, setRecents] = useState<ShortcutItem[]>(() =>
+    typeof window !== "undefined" ? getRecents() : []
+  );
 
   const [debouncedHref, setDebouncedHref] = useState<string | null>(null);
 
@@ -111,7 +115,6 @@ export function CommandPalette({
       setPins(getPins());
       setRecents(getRecents());
     };
-    sync();
     return subscribeShortcuts(sync);
   }, []);
 
@@ -149,10 +152,10 @@ export function CommandPalette({
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [isControlled, open, onOpenChangeProp]);
 
-  // Reset palette state when it opens; auto-focus the input.
-  const prevOpenRef = useRef(open);
-  if (prevOpenRef.current !== open) {
-    prevOpenRef.current = open;
+  // Reset palette state when it opens (setState during render — React pattern).
+  const [prevOpen, setPrevOpen] = useState(open);
+  if (open !== prevOpen) {
+    setPrevOpen(open);
     if (open) {
       setQuery("");
       setCursor(0);
@@ -161,7 +164,8 @@ export function CommandPalette({
       setDebouncedHref(null);
     }
   }
-  // Focus the input after the palette mounts open.
+
+  // Auto-focus the input when palette opens (DOM side effect).
   useEffect(() => {
     if (open) {
       window.setTimeout(() => inputRef.current?.focus(), 0);

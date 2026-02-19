@@ -122,6 +122,17 @@ export function BookingPage({
       setBookingState("submitting");
       setBookingError("");
 
+      let emailVal: string | undefined = undefined;
+      if (guestEmail) { emailVal = guestEmail; }
+      let phoneVal: string | undefined = undefined;
+      if (guestPhone) { phoneVal = guestPhone; }
+      let notesVal: string | undefined = undefined;
+      if (notes) { notesVal = notes; }
+
+      const networkErrMsg = isEn
+        ? "Network error. Please try again."
+        : "Error de red. Intenta de nuevo.";
+
       try {
         const res = await fetch(
           `${API_BASE}/public/booking/${encodeURIComponent(orgSlug)}/reserve`,
@@ -133,17 +144,26 @@ export function BookingPage({
               check_in_date: checkIn,
               check_out_date: checkOut,
               guest_full_name: guestName,
-              guest_email: guestEmail || undefined,
-              guest_phone_e164: guestPhone || undefined,
+              guest_email: emailVal,
+              guest_phone_e164: phoneVal,
               num_guests: numGuests,
-              notes: notes || undefined,
+              notes: notesVal,
             }),
           }
         );
 
         if (!res.ok) {
           const body = await res.json().catch(() => ({}));
-          const msg = asString(body.error) || asString(body.message) || "Booking failed";
+          let msg = "Booking failed";
+          const errorStr = asString(body.error);
+          if (errorStr) {
+            msg = errorStr;
+          } else {
+            const messageStr = asString(body.message);
+            if (messageStr) {
+              msg = messageStr;
+            }
+          }
           setBookingError(msg);
           setBookingState("error");
           return;
@@ -155,9 +175,7 @@ export function BookingPage({
         }
         setBookingState("confirmed");
       } catch {
-        setBookingError(
-          isEn ? "Network error. Please try again." : "Error de red. Intenta de nuevo."
-        );
+        setBookingError(networkErrMsg);
         setBookingState("error");
       }
     },

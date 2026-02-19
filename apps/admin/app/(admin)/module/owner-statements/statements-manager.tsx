@@ -1,7 +1,7 @@
 "use client";
 
 import { PlusSignIcon } from "@hugeicons/core-free-icons";
-import { useMemo, useState, useTransition } from "react";
+import { Suspense, useMemo, useState, useTransition } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 import type { ColumnDef } from "@tanstack/react-table";
 
@@ -87,6 +87,29 @@ function formatDate(value: string | null, locale: string): string {
 }
 
 export function StatementsManager({
+  orgId,
+  statements,
+  properties,
+  units,
+}: {
+  orgId: string;
+  statements: Record<string, unknown>[];
+  properties: Record<string, unknown>[];
+  units: Record<string, unknown>[];
+}) {
+  return (
+    <Suspense fallback={null}>
+      <StatementsManagerInner
+        orgId={orgId}
+        properties={properties}
+        statements={statements}
+        units={units}
+      />
+    </Suspense>
+  );
+}
+
+function StatementsManagerInner({
   orgId,
   statements,
   properties,

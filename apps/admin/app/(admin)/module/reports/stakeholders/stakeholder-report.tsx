@@ -10,7 +10,7 @@ import {
   CartesianGrid,
   XAxis,
   YAxis,
-} from "recharts";
+} from "@/lib/recharts";
 
 import { StakeholderReportPdfButton } from "@/components/reports/stakeholder-report-pdf";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";

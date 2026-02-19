@@ -39,21 +39,26 @@ export function AiComposeAssist({
     setError(null);
     setDraft(null);
 
-    try {
-      const messages = conversation
-        .filter((m) => m.body)
-        .map((m) => ({
-          role: m.direction === "outbound" ? "assistant" : "user",
-          content: m.body ?? "",
-        }));
+    const preparedMessages = conversation
+      .filter((m) => m.body)
+      .map((m) => {
+        const bodyVal = m.body;
+        const role = m.direction === "outbound" ? "assistant" : "user";
+        const content = bodyVal != null ? bodyVal : "";
+        return { role, content };
+      });
 
+    const noDraftMsg = isEn ? "No draft generated." : "No se generó borrador.";
+    const fallbackErrMsg = isEn ? "AI request failed." : "Error en la solicitud de IA.";
+
+    try {
       const result = await authedFetch<{ reply?: string; message?: string }>(
         "/agent/chat",
         {
           method: "POST",
           body: JSON.stringify({
             org_id: orgId,
-            messages,
+            messages: preparedMessages,
             context: {
               channel,
               guest_name: guestName,
@@ -62,21 +67,24 @@ export function AiComposeAssist({
         }
       );
 
-      const text = result.reply || result.message || "";
+      let text = "";
+      if (result.reply) {
+        text = result.reply;
+      } else if (result.message) {
+        text = result.message;
+      }
       if (text) {
         setDraft(text);
       } else {
-        setError(isEn ? "No draft generated." : "No se generó borrador.");
+        setError(noDraftMsg);
       }
+      setLoading(false);
     } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : isEn
-            ? "AI request failed."
-            : "Error en la solicitud de IA."
-      );
-    } finally {
+      let msg = fallbackErrMsg;
+      if (err instanceof Error) {
+        msg = err.message;
+      }
+      setError(msg);
       setLoading(false);
     }
   }, [orgId, conversation, channel, guestName, isEn]);

@@ -1,4 +1,5 @@
 "use client";
+"use no memo";
 
 import {
   type ColumnDef,
@@ -43,6 +44,10 @@ type NotionDataTableProps<TRow> = {
   onSelectionChange?: (selectedRows: TRow[]) => void;
   getRowId?: (row: TRow) => string;
 };
+
+function RowActionsCell<TRow>({ row, render }: { row: TRow; render: (row: TRow) => ReactNode }) {
+  return <div className="flex justify-end">{render(row)}</div>;
+}
 
 export function NotionDataTable<TRow>({
   data,
@@ -127,9 +132,7 @@ export function NotionDataTable<TRow>({
         enableSorting: false,
         enableResizing: false,
         cell: ({ row }) => (
-          <div className="flex justify-end">
-            {renderRowActions(row.original)}
-          </div>
+          <RowActionsCell row={row.original} render={renderRowActions} />
         ),
       });
     }
@@ -220,6 +223,7 @@ export function NotionDataTable<TRow>({
 
                     {header.column.getCanResize() && (
                       <div
+                        aria-label="Resize column"
                         className={cn(
                           "absolute right-0 top-0 h-full w-1 cursor-col-resize select-none touch-none",
                           "hover:bg-primary/30",
@@ -228,6 +232,7 @@ export function NotionDataTable<TRow>({
                         onDoubleClick={() => header.column.resetSize()}
                         onMouseDown={header.getResizeHandler()}
                         onTouchStart={header.getResizeHandler()}
+                        role="separator"
                       />
                     )}
                   </TableHead>

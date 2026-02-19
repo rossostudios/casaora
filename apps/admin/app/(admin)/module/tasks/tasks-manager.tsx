@@ -3,7 +3,7 @@
 import type { ColumnDef } from "@tanstack/react-table";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import { useMemo, useState } from "react";
+import { Suspense, useMemo, useState } from "react";
 
 import { createTaskAction } from "@/app/(admin)/module/tasks/actions";
 import { Button } from "@/components/ui/button";
@@ -40,6 +40,29 @@ import { TaskFilters } from "@/components/tasks/task-filters";
 import { TaskRowActions } from "@/components/tasks/task-row-actions";
 
 export function TasksManager({
+  currentUserId,
+  orgId,
+  tasks,
+  units,
+}: {
+  currentUserId: string | null;
+  orgId: string;
+  tasks: Record<string, unknown>[];
+  units: Record<string, unknown>[];
+}) {
+  return (
+    <Suspense fallback={null}>
+      <TasksManagerInner
+        currentUserId={currentUserId}
+        orgId={orgId}
+        tasks={tasks}
+        units={units}
+      />
+    </Suspense>
+  );
+}
+
+function TasksManagerInner({
   currentUserId,
   orgId,
   tasks,

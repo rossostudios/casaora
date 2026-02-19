@@ -2,7 +2,9 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
+
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -21,30 +23,35 @@ function asString(v: unknown): string {
 type Row = { id: string; title: string; category: string; urgency: string; status: string; created_at: string };
 
 export function TenantMaintenance({ locale }: { locale: string }) {
+  "use no memo";
   const isEn = locale === "en-US";
   const router = useRouter();
-  const [requests, setRequests] = useState<Row[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [showForm, setShowForm] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [tokenState] = useState(() =>
+    typeof window !== "undefined" ? localStorage.getItem("tenant_token") : null
+  );
 
-  const load = useCallback(async () => {
-    const token = localStorage.getItem("tenant_token");
-    if (!token) { router.push("/tenant/login"); return; }
-    try {
+  const { data: requests = [], isPending: loading } = useQuery({
+    queryKey: ["tenant-maintenance", tokenState],
+    queryFn: async () => {
+      const token = localStorage.getItem("tenant_token");
+      if (!token) { router.push("/tenant/login"); return []; }
       const res = await fetch(`${API_BASE}/tenant/maintenance-requests`, { headers: { "x-tenant-token": token } });
-      if (res.status === 401) { localStorage.clear(); router.push("/tenant/login"); return; }
+      if (res.status === 401) { localStorage.clear(); router.push("/tenant/login"); return []; }
+      if (!res.ok) return [];
       const json = await res.json();
-      setRequests(
-        ((json.data ?? []) as Record<string, unknown>[]).map((r) => ({
-          id: asString(r.id), title: asString(r.title), category: asString(r.category),
-          urgency: asString(r.urgency), status: asString(r.status), created_at: asString(r.created_at).slice(0, 10),
-        }))
-      );
-    } catch { /* ignore */ } finally { setLoading(false); }
-  }, [router]);
-
-  useEffect(() => { load(); }, [load]);
+      const rawData = json.data;
+      let rows: Record<string, unknown>[] = [];
+      if (rawData != null) rows = rawData as Record<string, unknown>[];
+      return rows.map((r): Row => ({
+        id: asString(r.id), title: asString(r.title), category: asString(r.category),
+        urgency: asString(r.urgency), status: asString(r.status), created_at: asString(r.created_at).slice(0, 10),
+      }));
+    },
+    enabled: Boolean(tokenState),
+  });
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -61,8 +68,9 @@ export function TenantMaintenance({ locale }: { locale: string }) {
           urgency: fd.get("urgency"), description: fd.get("description"),
         }),
       });
-      if (res.ok) { setShowForm(false); load(); }
-    } catch { /* ignore */ } finally { setSubmitting(false); }
+      if (res.ok) { setShowForm(false); queryClient.invalidateQueries({ queryKey: ["tenant-maintenance"] }); }
+      setSubmitting(false);
+    } catch { /* ignore */ setSubmitting(false); }
   }
 
   if (loading) {

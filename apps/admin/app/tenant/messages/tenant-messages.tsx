@@ -2,7 +2,9 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
+
+import { useQuery } from "@tanstack/react-query";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -18,38 +20,36 @@ function asString(v: unknown): string {
 type MessageLog = Record<string, unknown>;
 
 export function TenantMessages({ locale }: { locale: string }) {
+  "use no memo";
   const isEn = locale === "en-US";
   const router = useRouter();
-  const [messages, setMessages] = useState<MessageLog[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [tokenState] = useState(() =>
+    typeof window !== "undefined" ? localStorage.getItem("tenant_token") : null
+  );
 
-  const fetchMessages = useCallback(async () => {
-    const token = localStorage.getItem("tenant_token");
-    if (!token) {
-      router.push("/tenant/login");
-      return;
-    }
-    try {
+  const { data: messages = [], isPending: loading } = useQuery({
+    queryKey: ["tenant-messages", tokenState],
+    queryFn: async () => {
+      const token = localStorage.getItem("tenant_token");
+      if (!token) {
+        router.push("/tenant/login");
+        return [];
+      }
       const res = await fetch(`${API_BASE}/tenant/messages`, {
         headers: { "x-tenant-token": token },
       });
       if (res.status === 401) {
         localStorage.clear();
         router.push("/tenant/login");
-        return;
+        return [];
       }
-      const data = await res.json();
-      setMessages(Array.isArray(data.data) ? data.data : []);
-    } catch {
-      /* ignore */
-    } finally {
-      setLoading(false);
-    }
-  }, [router]);
-
-  useEffect(() => {
-    fetchMessages();
-  }, [fetchMessages]);
+      if (!res.ok) return [];
+      const json = await res.json();
+      const items = json.data;
+      return (Array.isArray(items) ? items : []) as MessageLog[];
+    },
+    enabled: Boolean(tokenState),
+  });
 
   if (loading) {
     return (

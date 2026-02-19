@@ -23,6 +23,22 @@ function Kbd({ children }: { children: string }) {
   );
 }
 
+function KeyDisplay({ keys, isMac }: { keys: string[]; isMac: boolean }) {
+  return keys.map((key, i) => {
+    const display = key === "Mod" ? (isMac ? "⌘" : "Ctrl") : key;
+    return (
+      <span className="inline-flex items-center gap-0.5" key={key}>
+        {i > 0 && (
+          <span className="mx-0.5 text-muted-foreground text-xs">
+            {keys[0] === "G" ? "then" : "+"}
+          </span>
+        )}
+        <Kbd>{display}</Kbd>
+      </span>
+    );
+  });
+}
+
 export function ShortcutsHelp({ open, onOpenChange, locale }: ShortcutsHelpProps) {
   const isMac = useIsMac();
   const isEn = locale === "en-US";
@@ -44,22 +60,6 @@ export function ShortcutsHelp({ open, onOpenChange, locale }: ShortcutsHelpProps
   if (!open) return null;
 
   const groups = getShortcutsByCategory(locale);
-
-  const renderKeys = (keys: string[]) => {
-    return keys.map((key, i) => {
-      const display = key === "Mod" ? (isMac ? "⌘" : "Ctrl") : key;
-      return (
-        <span className="inline-flex items-center gap-0.5" key={i}>
-          {i > 0 && (
-            <span className="mx-0.5 text-muted-foreground text-xs">
-              {keys[0] === "G" ? "then" : "+"}
-            </span>
-          )}
-          <Kbd>{display}</Kbd>
-        </span>
-      );
-    });
-  };
 
   return (
     <div className="fixed inset-0 z-50">
@@ -106,7 +106,7 @@ export function ShortcutsHelp({ open, onOpenChange, locale }: ShortcutsHelpProps
                         {shortcut.localizedLabel}
                       </span>
                       <span className="flex shrink-0 items-center gap-1">
-                        {renderKeys(shortcut.keys)}
+                        <KeyDisplay keys={shortcut.keys} isMac={isMac} />
                       </span>
                     </div>
                   ))}

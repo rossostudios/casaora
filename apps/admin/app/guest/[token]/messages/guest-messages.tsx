@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
+
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -26,29 +28,27 @@ interface Message {
 }
 
 export function GuestMessages() {
+  "use no memo";
   const { token, headers, apiBase } = useGuest();
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [sending, setSending] = useState(false);
   const [draft, setDraft] = useState("");
   const [error, setError] = useState("");
 
-  const loadMessages = useCallback(async () => {
-    try {
+  const { data: messages = [], isPending: loading } = useQuery({
+    queryKey: ["guest-messages", token],
+    queryFn: async () => {
       const res = await fetch(`${apiBase}/guest/messages`, { headers });
-      if (!res.ok) throw new Error("Failed to load messages");
+      if (!res.ok) {
+        setError("Could not load messages.");
+        return [];
+      }
       const json = await res.json();
-      setMessages(Array.isArray(json.data) ? json.data : []);
-    } catch {
-      setError("Could not load messages.");
-    } finally {
-      setLoading(false);
-    }
-  }, [apiBase, headers]);
-
-  useEffect(() => {
-    loadMessages();
-  }, [loadMessages]);
+      const items = json.data;
+      return (Array.isArray(items) ? items : []) as Message[];
+    },
+    enabled: Boolean(token),
+  });
 
   async function sendMessage(e: React.FormEvent) {
     e.preventDefault();
@@ -63,12 +63,16 @@ export function GuestMessages() {
         headers,
         body: JSON.stringify({ body }),
       });
-      if (!res.ok) throw new Error("Failed to send message");
+      if (!res.ok) {
+        setError("Could not send message.");
+        setSending(false);
+        return;
+      }
       setDraft("");
-      await loadMessages();
+      queryClient.invalidateQueries({ queryKey: ["guest-messages"] });
+      setSending(false);
     } catch {
       setError("Could not send message.");
-    } finally {
       setSending(false);
     }
   }

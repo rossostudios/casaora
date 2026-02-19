@@ -2,7 +2,9 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
+
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -23,37 +25,35 @@ function asNumber(value: unknown): number {
 }
 
 export function TenantDashboard({ locale }: { locale: string }) {
+  "use no memo";
   const isEn = locale === "en-US";
   const router = useRouter();
-  const [data, setData] = useState<Record<string, unknown> | null>(null);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
+  const [tokenState] = useState(() =>
+    typeof window !== "undefined" ? localStorage.getItem("tenant_token") : null
+  );
 
-  const fetchDashboard = useCallback(async () => {
-    const token = localStorage.getItem("tenant_token");
-    if (!token) {
-      router.push("/tenant/login");
-      return;
-    }
-    try {
+  const { data = null, isPending: loading } = useQuery({
+    queryKey: ["tenant-dashboard", tokenState],
+    queryFn: async () => {
+      const token = localStorage.getItem("tenant_token");
+      if (!token) {
+        router.push("/tenant/login");
+        return null;
+      }
       const res = await fetch(`${API_BASE}/tenant/me`, {
         headers: { "x-tenant-token": token },
       });
       if (res.status === 401) {
         localStorage.clear();
         router.push("/tenant/login");
-        return;
+        return null;
       }
-      setData(await res.json());
-    } catch {
-      /* ignore */
-    } finally {
-      setLoading(false);
-    }
-  }, [router]);
-
-  useEffect(() => {
-    fetchDashboard();
-  }, [fetchDashboard]);
+      if (!res.ok) return null;
+      return (await res.json()) as Record<string, unknown>;
+    },
+    enabled: Boolean(tokenState),
+  });
 
   if (loading) {
     return (
@@ -87,7 +87,7 @@ export function TenantDashboard({ locale }: { locale: string }) {
         body: "{}",
       });
       if (res.ok) {
-        fetchDashboard();
+        queryClient.invalidateQueries({ queryKey: ["tenant-dashboard"] });
       }
     } catch {
       /* ignore */

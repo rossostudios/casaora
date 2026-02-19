@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -69,11 +70,11 @@ export function ContractTemplatesSection({
 }: {
   orgId: string;
 }) {
+  "use no memo";
   const locale = useActiveLocale();
   const isEn = locale === "en-US";
 
-  const [templates, setTemplates] = useState<TemplateRow[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [sheetOpen, setSheetOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
 
@@ -84,30 +85,26 @@ export function ContractTemplatesSection({
   const [isDefault, setIsDefault] = useState(false);
   const [busy, setBusy] = useState(false);
 
-  const fetchTemplates = useCallback(async () => {
-    try {
+  const { data: templates = [], isPending: loading } = useQuery({
+    queryKey: ["contract-templates", orgId],
+    queryFn: async () => {
       const res = await fetch(
         `${API_BASE}/contract-templates?org_id=${encodeURIComponent(orgId)}`,
         { credentials: "include" }
       );
-      if (res.ok) {
-        const data = await res.json();
-        const items = ((data as { data?: unknown[] }).data ?? []) as Record<
-          string,
-          unknown
-        >[];
-        setTemplates(items.map(parseTemplate));
+      if (!res.ok) return [];
+      const data = await res.json();
+      const dataObj = data as { data?: unknown[] };
+      let rawItems: unknown[];
+      if (dataObj.data != null) {
+        rawItems = dataObj.data;
+      } else {
+        rawItems = [];
       }
-    } catch {
-      // ignore
-    } finally {
-      setLoading(false);
-    }
-  }, [orgId]);
-
-  useEffect(() => {
-    fetchTemplates();
-  }, [fetchTemplates]);
+      const items = rawItems as Record<string, unknown>[];
+      return items.map(parseTemplate);
+    },
+  });
 
   const extractVariables = (text: string): string[] => {
     const matches = text.match(/\{\{(\w+)\}\}/g) ?? [];
@@ -126,24 +123,28 @@ export function ContractTemplatesSection({
     if (!name.trim()) return;
     setBusy(true);
 
+    const vars = extractVariables(bodyTemplate);
+    const url = editingId
+      ? `${API_BASE}/contract-templates/${encodeURIComponent(editingId)}`
+      : `${API_BASE}/contract-templates`;
+    const method = editingId ? "PATCH" : "POST";
+    const defaultErrorMsg = isEn ? "Failed to save template" : "Error al guardar la plantilla";
+    const successMsg = editingId
+      ? isEn ? "Template updated" : "Plantilla actualizada"
+      : isEn ? "Template created" : "Plantilla creada";
+
+    const body: Record<string, unknown> = {
+      name: name.trim(),
+      language,
+      body_template: bodyTemplate,
+      variables: vars,
+      is_default: isDefault,
+    };
+    if (!editingId) {
+      body.organization_id = orgId;
+    }
+
     try {
-      const vars = extractVariables(bodyTemplate);
-      const url = editingId
-        ? `${API_BASE}/contract-templates/${encodeURIComponent(editingId)}`
-        : `${API_BASE}/contract-templates`;
-      const method = editingId ? "PATCH" : "POST";
-
-      const body: Record<string, unknown> = {
-        name: name.trim(),
-        language,
-        body_template: bodyTemplate,
-        variables: vars,
-        is_default: isDefault,
-      };
-      if (!editingId) {
-        body.organization_id = orgId;
-      }
-
       const res = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
@@ -152,32 +153,40 @@ export function ContractTemplatesSection({
       });
 
       if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        toast.error(
-          asString((data as Record<string, unknown>).message) ||
-            (isEn ? "Failed to save template" : "Error al guardar la plantilla")
-        );
+        let rawData: Record<string, unknown>;
+        try {
+          rawData = await res.json();
+        } catch {
+          rawData = {};
+        }
+        const msg = asString(rawData.message);
+        let errorMsg: string;
+        if (msg) {
+          errorMsg = msg;
+        } else {
+          errorMsg = defaultErrorMsg;
+        }
+        toast.error(errorMsg);
+        setBusy(false);
         return;
       }
 
-      toast.success(
-        editingId
-          ? isEn
-            ? "Template updated"
-            : "Plantilla actualizada"
-          : isEn
-            ? "Template created"
-            : "Plantilla creada"
-      );
+      toast.success(successMsg);
       setSheetOpen(false);
       resetForm();
-      fetchTemplates();
+      queryClient.invalidateQueries({ queryKey: ["contract-templates", orgId] });
+      setBusy(false);
     } catch {
-      toast.error(isEn ? "Network error" : "Error de red");
-    } finally {
+      let networkErrMsg: string;
+      if (isEn) {
+        networkErrMsg = "Network error";
+      } else {
+        networkErrMsg = "Error de red";
+      }
+      toast.error(networkErrMsg);
       setBusy(false);
     }
-  }, [name, language, bodyTemplate, isDefault, orgId, editingId, isEn, fetchTemplates]);
+  }, [name, language, bodyTemplate, isDefault, orgId, editingId, isEn, queryClient]);
 
   const handleDelete = useCallback(
     async (id: string) => {
@@ -187,19 +196,41 @@ export function ContractTemplatesSection({
           `${API_BASE}/contract-templates/${encodeURIComponent(id)}`,
           { method: "DELETE", credentials: "include" }
         );
-        if (res.ok || res.status === 204) {
-          toast.success(
-            isEn ? "Template deleted" : "Plantilla eliminada"
-          );
-          setTemplates((prev) => prev.filter((t) => t.id !== id));
+        let isSuccess: boolean;
+        if (res.ok) {
+          isSuccess = true;
+        } else if (res.status === 204) {
+          isSuccess = true;
+        } else {
+          isSuccess = false;
         }
+        if (isSuccess) {
+          let delMsg: string;
+          if (isEn) {
+            delMsg = "Template deleted";
+          } else {
+            delMsg = "Plantilla eliminada";
+          }
+          toast.success(delMsg);
+          queryClient.setQueryData(
+            ["contract-templates", orgId],
+            (prev: TemplateRow[] | undefined) =>
+              prev ? prev.filter((t) => t.id !== id) : []
+          );
+        }
+        setBusy(false);
       } catch {
-        toast.error(isEn ? "Delete failed" : "Error al eliminar");
-      } finally {
+        let delErrMsg: string;
+        if (isEn) {
+          delErrMsg = "Delete failed";
+        } else {
+          delErrMsg = "Error al eliminar";
+        }
+        toast.error(delErrMsg);
         setBusy(false);
       }
     },
-    [isEn]
+    [isEn, orgId, queryClient]
   );
 
   const handleEdit = (t: TemplateRow) => {

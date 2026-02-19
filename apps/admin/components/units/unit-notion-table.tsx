@@ -1,4 +1,5 @@
 "use client";
+"use no memo";
 
 import {
   Building06Icon,
@@ -432,6 +433,7 @@ export function UnitNotionTable({
 
                   {header.column.getCanResize() && (
                     <div
+                      aria-label="Resize column"
                       className={cn(
                         "absolute right-0 top-0 h-full w-1 cursor-col-resize select-none touch-none",
                         "hover:bg-primary/30",
@@ -440,6 +442,7 @@ export function UnitNotionTable({
                       onDoubleClick={() => header.column.resetSize()}
                       onMouseDown={header.getResizeHandler()}
                       onTouchStart={header.getResizeHandler()}
+                      role="separator"
                     />
                   )}
                 </TableHead>

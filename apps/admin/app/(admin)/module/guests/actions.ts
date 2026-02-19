@@ -52,6 +52,20 @@ export async function createGuestAction(formData: FormData) {
   const preferred_language =
     toStringValue(formData.get("preferred_language")) || undefined;
   const notes = toStringValue(formData.get("notes")) || undefined;
+  const id_document_url =
+    toStringValue(formData.get("id_document_url")) || undefined;
+  const date_of_birth =
+    toStringValue(formData.get("date_of_birth")) || undefined;
+  const emergency_contact_name =
+    toStringValue(formData.get("emergency_contact_name")) || undefined;
+  const emergency_contact_phone =
+    toStringValue(formData.get("emergency_contact_phone")) || undefined;
+  const address = toStringValue(formData.get("address")) || undefined;
+  const city = toStringValue(formData.get("city")) || undefined;
+  const occupation = toStringValue(formData.get("occupation")) || undefined;
+  const document_expiry =
+    toStringValue(formData.get("document_expiry")) || undefined;
+  const nationality = toStringValue(formData.get("nationality")) || undefined;
 
   if (!organization_id) {
     redirect(guestsUrl({ error: "Falta contexto de organización." }));
@@ -71,6 +85,15 @@ export async function createGuestAction(formData: FormData) {
       country_code,
       preferred_language,
       notes,
+      id_document_url,
+      date_of_birth,
+      emergency_contact_name,
+      emergency_contact_phone,
+      address,
+      city,
+      occupation,
+      document_expiry,
+      nationality,
     });
     revalidatePath("/module/guests");
     redirect(withParams(next, { success: "huesped-creado" }));
@@ -99,6 +122,20 @@ export async function updateGuestAction(formData: FormData) {
   const preferred_language =
     toStringValue(formData.get("preferred_language")) || undefined;
   const notes = toStringValue(formData.get("notes")) || undefined;
+  const id_document_url =
+    toStringValue(formData.get("id_document_url")) || undefined;
+  const date_of_birth =
+    toStringValue(formData.get("date_of_birth")) || undefined;
+  const emergency_contact_name =
+    toStringValue(formData.get("emergency_contact_name")) || undefined;
+  const emergency_contact_phone =
+    toStringValue(formData.get("emergency_contact_phone")) || undefined;
+  const address = toStringValue(formData.get("address")) || undefined;
+  const city = toStringValue(formData.get("city")) || undefined;
+  const occupation = toStringValue(formData.get("occupation")) || undefined;
+  const document_expiry =
+    toStringValue(formData.get("document_expiry")) || undefined;
+  const nationality = toStringValue(formData.get("nationality")) || undefined;
 
   if (!id) {
     redirect(guestsUrl({ error: "El ID del huésped es obligatorio." }));
@@ -114,6 +151,15 @@ export async function updateGuestAction(formData: FormData) {
       country_code,
       preferred_language,
       notes,
+      id_document_url,
+      date_of_birth,
+      emergency_contact_name,
+      emergency_contact_phone,
+      address,
+      city,
+      occupation,
+      document_expiry,
+      nationality,
     });
     revalidatePath("/module/guests");
     revalidatePath(`/module/guests/${id}`);

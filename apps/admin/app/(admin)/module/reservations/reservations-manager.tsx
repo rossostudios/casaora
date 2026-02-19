@@ -1,236 +1,40 @@
 "use client";
 
-import {
-  Calendar02Icon,
-  Calendar03Icon,
-  Globe02Icon,
-  Home01Icon,
-  LeftToRightListBulletIcon,
-  Login03Icon,
-  Logout03Icon,
-  Money01Icon,
-  PlusSignIcon,
-} from "@hugeicons/core-free-icons";
+import { PlusSignIcon } from "@hugeicons/core-free-icons";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { CartesianGrid, Line, LineChart, XAxis, YAxis } from "recharts";
 
 import {
   bulkTransitionReservationStatusAction,
-  createCalendarBlockAction,
-  createReservationAction,
-  deleteCalendarBlockAction,
-  transitionReservationStatusAction,
 } from "@/app/(admin)/module/reservations/actions";
-import { ReservationsExportButton } from "@/components/reservations/reservations-export-button";
+import { ReservationBlockSheet } from "@/app/(admin)/module/reservations/reservation-block-sheet";
+import { ReservationFormSheet } from "@/app/(admin)/module/reservations/reservation-form-sheet";
+import { ReservationsFilters } from "@/app/(admin)/module/reservations/reservations-filters";
+import { ReservationsStats } from "@/app/(admin)/module/reservations/reservations-stats";
+import { ReservationsTable } from "@/app/(admin)/module/reservations/reservations-table";
+import { ReservationsToolbar } from "@/app/(admin)/module/reservations/reservations-toolbar";
+import { ReservationsTrendChart } from "@/app/(admin)/module/reservations/reservations-trend-chart";
+import {
+  asNumber,
+  asString,
+  isIsoDate,
+  overlapsRange,
+  type QuickFilter,
+  type ReservationRow,
+  type UnitRow,
+} from "@/app/(admin)/module/reservations/reservations-types";
 import { MonthlyCalendar } from "@/app/(admin)/module/reservations/monthly-calendar";
 import { WeeklyCalendar } from "@/app/(admin)/module/reservations/weekly-calendar";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  type ChartConfig,
-  ChartContainer,
-  ChartTooltip,
-  ChartTooltipContent,
-} from "@/components/ui/chart";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
+import { type ChartConfig } from "@/components/ui/chart";
 import { type DataTableRow } from "@/components/ui/data-table";
-import { DatePicker } from "@/components/ui/date-picker";
-import { Form } from "@/components/ui/form";
 import { Icon } from "@/components/ui/icon";
-import { Input } from "@/components/ui/input";
-import { NotionDataTable } from "@/components/ui/notion-data-table";
-import { Select } from "@/components/ui/select";
-import { Sheet } from "@/components/ui/sheet";
-import { StatCard } from "@/components/ui/stat-card";
-import { StatusBadge } from "@/components/ui/status-badge";
-import {
-  TableCell,
-  TableRow,
-} from "@/components/ui/table";
 import { useNewBookingToast } from "@/lib/features/reservations/use-new-booking-toast";
-import { formatCurrency } from "@/lib/format";
 import {
   type ReservationSavedView,
   getAllViews,
-  PRESET_VIEWS_ES,
 } from "@/lib/features/reservations/saved-views";
 import { useActiveLocale } from "@/lib/i18n/client";
-import type { ColumnDef } from "@tanstack/react-table";
-
-type UnitRow = {
-  id: string;
-  name?: string | null;
-  code?: string | null;
-  property_name?: string | null;
-};
-
-type ReservationRow = {
-  id: string;
-  status?: string | null;
-  check_in_date?: string | null;
-  check_out_date?: string | null;
-  total_amount?: number | string | null;
-  amount_paid?: number | string | null;
-  currency?: string | null;
-
-  unit_id?: string | null;
-  unit_name?: string | null;
-
-  property_id?: string | null;
-  property_name?: string | null;
-
-  guest_id?: string | null;
-  guest_name?: string | null;
-
-  adults?: number | string | null;
-  children?: number | string | null;
-
-  integration_id?: string | null;
-  integration_name?: string | null;
-  channel_name?: string | null;
-
-  source?: string | null;
-  listing_public_slug?: string | null;
-};
-
-const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
-
-function isIsoDate(value: unknown): value is string {
-  return typeof value === "string" && ISO_DATE_RE.test(value);
-}
-
-function asString(value: unknown): string {
-  return typeof value === "string" ? value : value ? String(value) : "";
-}
-
-function asNumber(value: unknown): number | null {
-  if (typeof value === "number") return Number.isFinite(value) ? value : null;
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : null;
-}
-
-function overlapsRange(options: {
-  start: string;
-  end: string;
-  from?: string;
-  to?: string;
-}): boolean {
-  const { start, end, from, to } = options;
-  if (!(isIsoDate(start) && isIsoDate(end))) return true;
-  const windowFrom = isIsoDate(from) ? from : null;
-  const windowTo = isIsoDate(to) ? to : null;
-  if (!(windowFrom || windowTo)) return true;
-
-  const rangeStart = windowFrom ?? start;
-  const rangeEnd = windowTo ?? end;
-
-  return !(end <= rangeStart || start >= rangeEnd);
-}
-
-function daysBetween(a: string | null, b: string | null): number | null {
-  if (!(a && b && isIsoDate(a) && isIsoDate(b))) return null;
-  const d1 = new Date(a);
-  const d2 = new Date(b);
-  if (Number.isNaN(d1.valueOf()) || Number.isNaN(d2.valueOf())) return null;
-  return Math.max(0, Math.round((d2.getTime() - d1.getTime()) / 86_400_000));
-}
-
-function statusActions(status: string): { next: string; label: string }[] {
-  const normalized = status.trim().toLowerCase();
-  if (normalized === "pending") {
-    return [
-      { next: "confirmed", label: "Confirm" },
-      { next: "cancelled", label: "Cancel" },
-    ];
-  }
-  if (normalized === "confirmed") {
-    return [
-      { next: "checked_in", label: "Check-in" },
-      { next: "no_show", label: "No-show" },
-      { next: "cancelled", label: "Cancel" },
-    ];
-  }
-  if (normalized === "checked_in") {
-    return [{ next: "checked_out", label: "Check-out" }];
-  }
-  return [];
-}
-
-function localizedActionLabel(isEn: boolean, next: string): string {
-  if (isEn) {
-    if (next === "confirmed") return "Confirm";
-    if (next === "checked_in") return "Check-in";
-    if (next === "checked_out") return "Check-out";
-    if (next === "cancelled") return "Cancel";
-    if (next === "no_show") return "No-show";
-    return next;
-  }
-
-  if (next === "confirmed") return "Confirmar";
-  if (next === "checked_in") return "Check-in";
-  if (next === "checked_out") return "Check-out";
-  if (next === "cancelled") return "Cancelar";
-  if (next === "no_show") return "No-show";
-  return next;
-}
-
-function humanizeStatus(status: string, isEn: boolean): string {
-  const s = status.trim().toLowerCase();
-  if (isEn) {
-    if (s === "pending") return "Pending";
-    if (s === "confirmed") return "Confirmed";
-    if (s === "checked_in") return "Checked In";
-    if (s === "checked_out") return "Checked Out";
-    if (s === "cancelled") return "Cancelled";
-    if (s === "no_show") return "No Show";
-    return status;
-  }
-  if (s === "pending") return "Pendiente";
-  if (s === "confirmed") return "Confirmada";
-  if (s === "checked_in") return "Check-in";
-  if (s === "checked_out") return "Check-out";
-  if (s === "cancelled") return "Cancelada";
-  if (s === "no_show") return "No show";
-  return status;
-}
-
-type QuickFilter =
-  | "all"
-  | "arrivals_today"
-  | "departures_today"
-  | "in_house"
-  | "pending";
-
-function ReservationRowActions({ row }: { row: DataTableRow }) {
-  const locale = useActiveLocale();
-  const isEn = locale === "en-US";
-
-  const id = asString(row.id).trim();
-  const status = asString(row.status).trim();
-  if (!(id && status)) return null;
-
-  const actions = statusActions(status);
-  if (!actions.length) return null;
-
-  return (
-    <div className="flex flex-wrap justify-end gap-2" data-row-click="ignore">
-      {actions.map((action) => (
-        <Form action={transitionReservationStatusAction} key={action.next}>
-          <input name="reservation_id" type="hidden" value={id} />
-          <input name="status" type="hidden" value={action.next} />
-          <Button size="sm" type="submit" variant="outline">
-            {localizedActionLabel(isEn, action.next)}
-          </Button>
-        </Form>
-      ))}
-    </div>
-  );
-}
 
 export function ReservationsManager({
   blocks,
@@ -257,7 +61,6 @@ export function ReservationsManager({
   const [bulkActionPending, setBulkActionPending] = useState(false);
   const [viewMode, setViewMode] = useState<"list" | "calendar" | "month">(defaultView);
 
-  // Listen for header button custom event
   useEffect(() => {
     const handler = () => setOpen(true);
     window.addEventListener("open-reservation-sheet", handler);
@@ -342,7 +145,6 @@ export function ReservationsManager({
     });
   }, [reservations]);
 
-  // KPI stats computed from all reservations (unfiltered)
   const kpiStats = useMemo(() => {
     let arrivalsToday = 0;
     let departuresToday = 0;
@@ -378,7 +180,6 @@ export function ReservationsManager({
     return allRows.filter((row) => {
       const rowStatus = asString(row.status).trim().toLowerCase();
 
-      // Quick filter logic
       if (quickFilter === "arrivals_today") {
         const ci = asString(row.check_in_date);
         if (
@@ -395,7 +196,6 @@ export function ReservationsManager({
         if (rowStatus !== "pending") return false;
       }
 
-      // Standard filters (only apply when quick filter is "all")
       if (quickFilter === "all") {
         if (normalizedStatus !== "all" && rowStatus !== normalizedStatus) {
           return false;
@@ -440,7 +240,6 @@ export function ReservationsManager({
     });
   }, [allRows, from, query, quickFilter, sourceFilter, status, to, today, unitId]);
 
-  // Period revenue from filtered rows
   const periodRevenue = useMemo(() => {
     let total = 0;
     let currency = "PYG";
@@ -452,189 +251,6 @@ export function ReservationsManager({
     }
     return { total, currency };
   }, [filteredRows]);
-
-  const reservationColumns = useMemo<ColumnDef<DataTableRow>[]>(
-    () => [
-      {
-        accessorKey: "status",
-        header: isEn ? "Status" : "Estado",
-        size: 120,
-        cell: ({ getValue }) => (
-          <StatusBadge value={asString(getValue())} />
-        ),
-      },
-      {
-        accessorKey: "check_in_date",
-        header: "Check-in",
-        size: 110,
-      },
-      {
-        accessorKey: "check_out_date",
-        header: "Check-out",
-        size: 110,
-      },
-      {
-        id: "nights",
-        header: isEn ? "Nights" : "Noches",
-        size: 70,
-        cell: ({ row }) => {
-          const nights = daysBetween(
-            asString(row.original.check_in_date),
-            asString(row.original.check_out_date)
-          );
-          return nights != null ? (
-            <span className="tabular-nums text-sm">{nights}</span>
-          ) : (
-            <span className="text-muted-foreground">-</span>
-          );
-        },
-      },
-      {
-        accessorKey: "guest_name",
-        header: isEn ? "Guest" : "Huésped",
-        size: 180,
-        cell: ({ row }) => {
-          const name = asString(row.original.guest_name).trim();
-          const adults = asNumber(row.original.adults) ?? 0;
-          const children = asNumber(row.original.children) ?? 0;
-
-          if (!name) {
-            return <span className="text-muted-foreground">-</span>;
-          }
-
-          const comp =
-            adults > 0 || children > 0
-              ? [adults > 0 && `${adults}A`, children > 0 && `${children}C`]
-                  .filter(Boolean)
-                  .join(" ")
-              : null;
-
-          return (
-            <div className="flex items-center gap-2">
-              <span className="truncate">{name}</span>
-              {comp ? (
-                <Badge
-                  className="shrink-0 px-1.5 py-0 text-[10px]"
-                  variant="secondary"
-                >
-                  {comp}
-                </Badge>
-              ) : null}
-            </div>
-          );
-        },
-      },
-      {
-        accessorKey: "unit_name",
-        header: isEn ? "Unit" : "Unidad",
-        size: 130,
-        cell: ({ getValue }) => {
-          const name = asString(getValue()).trim();
-          return name || <span className="text-muted-foreground">-</span>;
-        },
-      },
-      {
-        id: "channel",
-        header: isEn ? "Channel" : "Canal",
-        size: 110,
-        cell: ({ row }) => {
-          const channel = asString(row.original.channel_name).trim();
-          const integration = asString(row.original.integration_name).trim();
-          const display = channel || integration;
-          if (!display)
-            return <span className="text-muted-foreground">-</span>;
-          return (
-            <Badge
-              className="px-1.5 py-0 text-[10px]"
-              variant="outline"
-            >
-              {display}
-            </Badge>
-          );
-        },
-      },
-      {
-        id: "source",
-        header: isEn ? "Source" : "Origen",
-        size: 110,
-        cell: ({ row }) => {
-          const source = asString(row.original.source).trim().toLowerCase();
-          if (!source || source === "manual") {
-            return (
-              <Badge className="bg-muted text-muted-foreground border-0 px-1.5 py-0 text-[10px]">
-                Manual
-              </Badge>
-            );
-          }
-          if (source === "direct_booking") {
-            return (
-              <Badge className="bg-primary/10 text-primary border-0 px-1.5 py-0 text-[10px]">
-                Marketplace
-              </Badge>
-            );
-          }
-          return (
-            <Badge className="px-1.5 py-0 text-[10px]" variant="outline">
-              {source}
-            </Badge>
-          );
-        },
-      },
-      {
-        id: "payment",
-        header: isEn ? "Payment" : "Pago",
-        size: 90,
-        cell: ({ row }) => {
-          const total = asNumber(row.original.total_amount);
-          const paid = asNumber(row.original.amount_paid);
-          if (total == null || total === 0) {
-            return <span className="text-muted-foreground">-</span>;
-          }
-          const paidAmount = paid ?? 0;
-          const ratio = Math.min(1, paidAmount / total);
-
-          if (ratio >= 1) {
-            return (
-              <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 border-0 px-1.5 py-0 text-[10px]">
-                {isEn ? "Paid" : "Pagado"}
-              </Badge>
-            );
-          }
-          if (ratio <= 0) {
-            return (
-              <Badge className="bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 border-0 px-1.5 py-0 text-[10px]">
-                {isEn ? "Unpaid" : "Sin pago"}
-              </Badge>
-            );
-          }
-          return (
-            <Badge
-              className="bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 border-0 px-1.5 py-0 text-[10px] tabular-nums"
-            >
-              {Math.round(ratio * 100)}%
-            </Badge>
-          );
-        },
-      },
-      {
-        accessorKey: "total_amount",
-        header: isEn ? "Amount" : "Monto",
-        size: 130,
-        cell: ({ row }) => {
-          const amount = asNumber(row.original.total_amount);
-          const currency = asString(row.original.currency).trim() || "PYG";
-          return amount != null ? (
-            <span className="tabular-nums text-sm">
-              {formatCurrency(amount, currency, locale)}
-            </span>
-          ) : (
-            <span className="text-muted-foreground">-</span>
-          );
-        },
-      },
-    ],
-    [isEn, locale]
-  );
 
   const reservationsTrendData = useMemo(() => {
     const days: string[] = [];
@@ -715,379 +331,97 @@ export function ReservationsManager({
         await bulkTransitionReservationStatusAction(ids, targetStatus);
         setSelectedRows([]);
         router.refresh();
-      } finally {
+        setBulkActionPending(false);
+      } catch {
         setBulkActionPending(false);
       }
     },
     [selectedRows, router],
   );
 
-  const applyQuickFilter = (filter: QuickFilter) => {
-    setQuickFilter(filter);
-    if (filter !== "all") {
-      setStatus("all");
-    }
-  };
+  const handleStatusChange = useCallback(
+    (value: string) => {
+      setStatus(value);
+      if (value !== "all") setQuickFilter("all");
+    },
+    [],
+  );
 
-  // Footer row for total amount sum
-  const footerRow = useMemo(() => {
-    let sum = 0;
-    let currency = "PYG";
-    for (const row of filteredRows) {
-      const amount = asNumber(row.total_amount);
-      if (amount != null) sum += amount;
-      const cur = asString(row.currency).trim();
-      if (cur) currency = cur;
-    }
-    if (sum === 0) return null;
-    return { sum, currency };
-  }, [filteredRows]);
+  const filteredBlocks = useMemo(() => {
+    if (unitId === "all") return blocks;
+    return blocks.filter(
+      (b) => asString((b as Record<string, unknown>).unit_id).trim() === unitId
+    );
+  }, [blocks, unitId]);
+
+  const calendarReservations = useMemo(() => {
+    if (unitId === "all") return reservations;
+    return filteredRows.map((r) => r as unknown as Record<string, unknown>);
+  }, [unitId, reservations, filteredRows]);
 
   return (
     <div className="space-y-4">
-      {/* KPI Stat Cards */}
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-        <StatCard
-          icon={Login03Icon}
-          label={isEn ? "Today's Arrivals" : "Llegadas hoy"}
-          value={String(kpiStats.arrivalsToday)}
-        />
-        <StatCard
-          icon={Logout03Icon}
-          label={isEn ? "Today's Departures" : "Salidas hoy"}
-          value={String(kpiStats.departuresToday)}
-        />
-        <StatCard
-          icon={Home01Icon}
-          label={isEn ? "In-House" : "In-house"}
-          value={String(kpiStats.inHouse)}
-        />
-        <StatCard
-          icon={Globe02Icon}
-          label="Marketplace"
-          value={String(kpiStats.marketplace)}
-        />
-        <StatCard
-          helper={`${total} ${isEn ? "filtered records" : "registros filtrados"}`}
-          icon={Money01Icon}
-          label={isEn ? "Period Revenue" : "Ingresos del periodo"}
-          value={formatCurrency(
-            periodRevenue.total,
-            periodRevenue.currency,
-            locale
-          )}
-        />
-      </div>
+      <ReservationsStats
+        isEn={isEn}
+        kpiStats={kpiStats}
+        locale={locale}
+        periodRevenue={periodRevenue}
+        total={total}
+      />
 
-      {/* Saved views + view toggle */}
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex flex-wrap gap-1.5">
-          {savedViews.map((view) => (
-            <Button
-              key={view.id}
-              onClick={() => applySavedView(view)}
-              size="sm"
-              variant={activeViewId === view.id ? "secondary" : "ghost"}
-            >
-              {!isEn && view.preset
-                ? PRESET_VIEWS_ES[view.id] ?? view.name
-                : view.name}
-            </Button>
-          ))}
-        </div>
-
-        <div className="inline-flex items-center gap-1 rounded-xl border border-border/40 bg-background/40 p-1">
-          <Button
-            className="h-8 w-8 rounded-lg p-0 transition-all"
-            onClick={() => setViewMode("list")}
-            size="sm"
-            variant={viewMode === "list" ? "secondary" : "ghost"}
-          >
-            <Icon icon={LeftToRightListBulletIcon} size={14} />
-          </Button>
-          <Button
-            className="h-8 w-8 rounded-lg p-0 transition-all"
-            onClick={() => setViewMode("calendar")}
-            size="sm"
-            variant={viewMode === "calendar" ? "secondary" : "ghost"}
-          >
-            <Icon icon={Calendar02Icon} size={14} />
-          </Button>
-          <Button
-            className="h-8 w-8 rounded-lg p-0 transition-all"
-            onClick={() => setViewMode("month")}
-            size="sm"
-            variant={viewMode === "month" ? "secondary" : "ghost"}
-          >
-            <Icon icon={Calendar03Icon} size={14} />
-          </Button>
-        </div>
-      </div>
+      <ReservationsToolbar
+        activeViewId={activeViewId}
+        isEn={isEn}
+        onApplySavedView={applySavedView}
+        onSetViewMode={setViewMode}
+        savedViews={savedViews}
+        viewMode={viewMode}
+      />
 
       {viewMode === "list" ? (
         <>
-          {/* Filters */}
-          <div className="space-y-3">
-            <div className="grid w-full gap-2 md:grid-cols-5">
-              <label className="space-y-1">
-                <span className="block font-medium text-muted-foreground text-xs">
-                  {isEn ? "Search" : "Buscar"}
-                </span>
-                <Input
-                  onChange={(event) => setQuery(event.target.value)}
-                  placeholder={
-                    isEn ? "Guest, unit, status..." : "Huésped, unidad, estado..."
-                  }
-                  value={query}
-                />
-              </label>
-
-              <label className="space-y-1">
-                <span className="block font-medium text-muted-foreground text-xs">
-                  {isEn ? "Status" : "Estado"}
-                </span>
-                <Select
-                  onChange={(event) => {
-                    setStatus(event.target.value);
-                    if (event.target.value !== "all") setQuickFilter("all");
-                  }}
-                  value={status}
-                >
-                  <option value="all">{isEn ? "All" : "Todos"}</option>
-                  <option value="pending">{humanizeStatus("pending", isEn)}</option>
-                  <option value="confirmed">
-                    {humanizeStatus("confirmed", isEn)}
-                  </option>
-                  <option value="checked_in">
-                    {humanizeStatus("checked_in", isEn)}
-                  </option>
-                  <option value="checked_out">
-                    {humanizeStatus("checked_out", isEn)}
-                  </option>
-                  <option value="cancelled">
-                    {humanizeStatus("cancelled", isEn)}
-                  </option>
-                  <option value="no_show">
-                    {humanizeStatus("no_show", isEn)}
-                  </option>
-                </Select>
-              </label>
-
-              <label className="space-y-1">
-                <span className="block font-medium text-muted-foreground text-xs">
-                  {isEn ? "Unit" : "Unidad"}
-                </span>
-                <Select
-                  onChange={(event) => setUnitId(event.target.value)}
-                  value={unitId}
-                >
-                  <option value="all">{isEn ? "All units" : "Todas"}</option>
-                  {unitOptions.map((unit) => (
-                    <option key={unit.id} value={unit.id}>
-                      {unit.label}
-                    </option>
-                  ))}
-                </Select>
-              </label>
-
-              <label className="space-y-1">
-                <span className="block font-medium text-muted-foreground text-xs">
-                  {isEn ? "Source" : "Origen"}
-                </span>
-                <Select
-                  onChange={(event) => setSourceFilter(event.target.value)}
-                  value={sourceFilter}
-                >
-                  <option value="all">{isEn ? "All sources" : "Todos"}</option>
-                  <option value="manual">Manual</option>
-                  <option value="direct_booking">Marketplace</option>
-                  <option value="external">{isEn ? "External" : "Externo"}</option>
-                </Select>
-              </label>
-
-              <div className="grid grid-cols-2 gap-2">
-                <label className="space-y-1">
-                  <span className="block font-medium text-muted-foreground text-xs">
-                    {isEn ? "From" : "Desde"}
-                  </span>
-                  <DatePicker
-                    locale={locale}
-                    max={to || undefined}
-                    onValueChange={setFrom}
-                    value={from}
-                  />
-                </label>
-                <label className="space-y-1">
-                  <span className="block font-medium text-muted-foreground text-xs">
-                    {isEn ? "To" : "Hasta"}
-                  </span>
-                  <DatePicker
-                    locale={locale}
-                    min={from || undefined}
-                    onValueChange={setTo}
-                    value={to}
-                  />
-                </label>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-end gap-2">
-              <span className="text-muted-foreground text-sm">
-                {total} {isEn ? (total === 1 ? "record" : "records") : (total === 1 ? "registro" : "registros")}
-              </span>
-              <ReservationsExportButton
-                format="csv"
-                isEn={isEn}
-                locale={locale}
-                rows={filteredRows as Parameters<typeof ReservationsExportButton>[0]["rows"]}
-              />
-              <ReservationsExportButton
-                format="pdf"
-                isEn={isEn}
-                locale={locale}
-                rows={filteredRows as Parameters<typeof ReservationsExportButton>[0]["rows"]}
-              />
-            </div>
-          </div>
-
-          {/* Collapsible trend chart */}
-          <Collapsible defaultOpen={false}>
-            <section className="rounded-3xl border border-border/80 bg-card/85 p-3.5">
-              <CollapsibleTrigger className="flex w-full items-center justify-between">
-                <div>
-                  <p className="font-semibold text-sm">
-                    {isEn
-                      ? "Check-in / check-out trend"
-                      : "Tendencia check-in/check-out"}
-                  </p>
-                  <p className="text-muted-foreground text-xs">
-                    {isEn
-                      ? "Next 7 days from current filters"
-                      : "Próximos 7 días con filtros actuales"}
-                  </p>
-                </div>
-                <span className="text-muted-foreground text-xs">
-                  {isEn ? "Toggle" : "Mostrar"}
-                </span>
-              </CollapsibleTrigger>
-              <CollapsibleContent>
-                <div className="mt-2">
-                  <ChartContainer
-                    className="h-52 w-full"
-                    config={reservationsTrendConfig}
-                  >
-                    <LineChart
-                      data={reservationsTrendData}
-                      margin={{ left: 2, right: 8 }}
-                    >
-                      <CartesianGrid vertical={false} />
-                      <XAxis
-                        axisLine={false}
-                        dataKey="day"
-                        tickLine={false}
-                        tickMargin={8}
-                      />
-                      <YAxis
-                        allowDecimals={false}
-                        axisLine={false}
-                        tickLine={false}
-                      />
-                      <ChartTooltip
-                        content={(props) => (
-                          <ChartTooltipContent
-                            {...props}
-                            headerFormatter={() =>
-                              isEn
-                                ? "Reservations trend"
-                                : "Tendencia de reservas"
-                            }
-                          />
-                        )}
-                      />
-                      <Line
-                        dataKey="checkIns"
-                        dot={{ r: 3 }}
-                        stroke="var(--color-checkIns)"
-                        strokeWidth={2}
-                        type="monotone"
-                      />
-                      <Line
-                        dataKey="checkOuts"
-                        dot={{ r: 3 }}
-                        stroke="var(--color-checkOuts)"
-                        strokeWidth={2}
-                        type="monotone"
-                      />
-                    </LineChart>
-                  </ChartContainer>
-                </div>
-              </CollapsibleContent>
-            </section>
-          </Collapsible>
-
-          {selectedRows.length > 0 ? (
-            <div className="sticky bottom-0 z-20 flex items-center justify-between gap-3 rounded-xl border border-border bg-card p-3 shadow-lg">
-              <span className="text-sm font-medium">
-                {selectedRows.length} {isEn ? "selected" : "seleccionados"}
-              </span>
-              <div className="flex items-center gap-2">
-                <Button
-                  disabled={bulkActionPending}
-                  onClick={() => handleBulkAction("confirmed")}
-                  size="sm"
-                  variant="outline"
-                >
-                  {isEn ? "Confirm All" : "Confirmar todos"}
-                </Button>
-                <Button
-                  disabled={bulkActionPending}
-                  onClick={() => handleBulkAction("cancelled")}
-                  size="sm"
-                  variant="outline"
-                >
-                  {isEn ? "Cancel All" : "Cancelar todos"}
-                </Button>
-                <Button
-                  onClick={() => setSelectedRows([])}
-                  size="sm"
-                  variant="ghost"
-                >
-                  {isEn ? "Clear" : "Limpiar"}
-                </Button>
-              </div>
-            </div>
-          ) : null}
-
-          <NotionDataTable
-            columns={reservationColumns}
-            data={filteredRows}
-            enableSelection
-            getRowId={(row) => asString(row.id)}
-            onSelectionChange={setSelectedRows}
-            footer={
-              footerRow ? (
-                <TableRow>
-                  <TableCell className="py-2 font-semibold text-xs" colSpan={9}>
-                    {isEn ? "Total" : "Total"}
-                  </TableCell>
-                  <TableCell className="py-2 text-right font-semibold tabular-nums text-xs">
-                    {formatCurrency(footerRow.sum, footerRow.currency, locale)}
-                  </TableCell>
-                </TableRow>
-              ) : undefined
-            }
-            hideSearch
+          <ReservationsFilters
+            filteredRows={filteredRows}
+            from={from}
             isEn={isEn}
+            locale={locale}
+            onFromChange={setFrom}
+            onQueryChange={setQuery}
+            onSourceFilterChange={setSourceFilter}
+            onStatusChange={handleStatusChange}
+            onToChange={setTo}
+            onUnitIdChange={setUnitId}
+            query={query}
+            sourceFilter={sourceFilter}
+            status={status}
+            to={to}
+            total={total}
+            unitId={unitId}
+            unitOptions={unitOptions}
+          />
+
+          <ReservationsTrendChart
+            isEn={isEn}
+            trendConfig={reservationsTrendConfig}
+            trendData={reservationsTrendData}
+          />
+
+          <ReservationsTable
+            bulkActionPending={bulkActionPending}
+            filteredRows={filteredRows}
+            isEn={isEn}
+            locale={locale}
+            onBulkAction={handleBulkAction}
+            onClearSelection={() => setSelectedRows([])}
             onRowClick={handleRowClick}
-            renderRowActions={(row) => <ReservationRowActions row={row} />}
-            rowActionsHeader={isEn ? "Actions" : "Acciones"}
+            onSelectionChange={setSelectedRows}
+            selectedRows={selectedRows}
           />
         </>
       ) : null}
 
       {viewMode === "calendar" ? (
         <>
-          {/* Weekly calendar view */}
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2">
               {unitId !== "all" ? (
@@ -1108,20 +442,10 @@ export function ReservationsManager({
           </div>
 
           <WeeklyCalendar
-            blocks={
-              unitId !== "all"
-                ? blocks.filter(
-                    (b) => asString((b as Record<string, unknown>).unit_id).trim() === unitId
-                  )
-                : blocks
-            }
+            blocks={filteredBlocks}
             isEn={isEn}
             locale={locale}
-            reservations={
-              unitId !== "all"
-                ? filteredRows.map((r) => r as unknown as Record<string, unknown>)
-                : reservations
-            }
+            reservations={calendarReservations}
             units={unitOptions}
           />
         </>
@@ -1129,7 +453,6 @@ export function ReservationsManager({
 
       {viewMode === "month" ? (
         <>
-          {/* Monthly calendar view */}
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2">
               {unitId !== "all" ? (
@@ -1150,273 +473,32 @@ export function ReservationsManager({
           </div>
 
           <MonthlyCalendar
-            blocks={
-              unitId !== "all"
-                ? blocks.filter(
-                    (b) => asString((b as Record<string, unknown>).unit_id).trim() === unitId
-                  )
-                : blocks
-            }
+            blocks={filteredBlocks}
             isEn={isEn}
             locale={locale}
-            reservations={
-              unitId !== "all"
-                ? filteredRows.map((r) => r as unknown as Record<string, unknown>)
-                : reservations
-            }
+            reservations={calendarReservations}
             units={unitOptions}
           />
         </>
       ) : null}
 
-      <Sheet
-        description={
-          isEn
-            ? "Create a manual reservation and manage overlaps."
-            : "Crea una reserva manual y gestiona solapamientos."
-        }
+      <ReservationFormSheet
+        isEn={isEn}
+        locale={locale}
         onOpenChange={setOpen}
         open={open}
-        title={isEn ? "New reservation" : "Nueva reserva"}
-      >
-        <Form action={createReservationAction} className="space-y-4">
-          <input name="organization_id" type="hidden" value={orgId} />
+        orgId={orgId}
+        unitOptions={unitOptions}
+      />
 
-          <label className="block space-y-1">
-            <span className="block font-medium text-muted-foreground text-xs">
-              {isEn ? "Unit" : "Unidad"}
-            </span>
-            <Select defaultValue="" name="unit_id" required>
-              <option disabled value="">
-                {isEn ? "Select a unit" : "Selecciona una unidad"}
-              </option>
-              {unitOptions.map((unit) => (
-                <option key={unit.id} value={unit.id}>
-                  {unit.label}
-                </option>
-              ))}
-            </Select>
-          </label>
-
-          <label className="block space-y-1">
-            <span className="block font-medium text-muted-foreground text-xs">
-              {isEn ? "Guest name" : "Nombre del huésped"}
-            </span>
-            <Input
-              name="guest_name"
-              placeholder={isEn ? "Guest full name" : "Nombre completo"}
-            />
-          </label>
-
-          <div className="grid gap-3 md:grid-cols-2">
-            <label className="block space-y-1">
-              <span className="block font-medium text-muted-foreground text-xs">
-                Check-in
-              </span>
-              <DatePicker locale={locale} name="check_in_date" />
-            </label>
-            <label className="block space-y-1">
-              <span className="block font-medium text-muted-foreground text-xs">
-                Check-out
-              </span>
-              <DatePicker locale={locale} name="check_out_date" />
-            </label>
-          </div>
-
-          {/* Guest composition */}
-          <div className="grid grid-cols-4 gap-2">
-            <label className="block space-y-1">
-              <span className="block font-medium text-muted-foreground text-xs">
-                {isEn ? "Adults" : "Adultos"}
-              </span>
-              <Input
-                defaultValue={1}
-                min={0}
-                name="adults"
-                type="number"
-              />
-            </label>
-            <label className="block space-y-1">
-              <span className="block font-medium text-muted-foreground text-xs">
-                {isEn ? "Children" : "Niños"}
-              </span>
-              <Input
-                defaultValue={0}
-                min={0}
-                name="children"
-                type="number"
-              />
-            </label>
-            <label className="block space-y-1">
-              <span className="block font-medium text-muted-foreground text-xs">
-                {isEn ? "Infants" : "Infantes"}
-              </span>
-              <Input
-                defaultValue={0}
-                min={0}
-                name="infants"
-                type="number"
-              />
-            </label>
-            <label className="block space-y-1">
-              <span className="block font-medium text-muted-foreground text-xs">
-                {isEn ? "Pets" : "Mascotas"}
-              </span>
-              <Input
-                defaultValue={0}
-                min={0}
-                name="pets"
-                type="number"
-              />
-            </label>
-          </div>
-
-          <div className="grid gap-3 md:grid-cols-3">
-            <label className="block space-y-1">
-              <span className="block font-medium text-muted-foreground text-xs">
-                {isEn ? "Nightly rate" : "Tarifa/noche"}
-              </span>
-              <Input
-                min={0}
-                name="nightly_rate"
-                step="0.01"
-                type="number"
-              />
-            </label>
-
-            <label className="block space-y-1">
-              <span className="block font-medium text-muted-foreground text-xs">
-                {isEn ? "Total amount" : "Monto total"}
-              </span>
-              <Input
-                min={0}
-                name="total_amount"
-                required
-                step="0.01"
-                type="number"
-              />
-            </label>
-
-            <label className="block space-y-1">
-              <span className="block font-medium text-muted-foreground text-xs">
-                {isEn ? "Currency" : "Moneda"}
-              </span>
-              <Select defaultValue="PYG" name="currency">
-                <option value="PYG">PYG</option>
-                <option value="USD">USD</option>
-              </Select>
-            </label>
-          </div>
-
-          <label className="block space-y-1">
-            <span className="block font-medium text-muted-foreground text-xs">
-              {isEn ? "Initial status" : "Estado inicial"}
-            </span>
-            <Select defaultValue="pending" name="status">
-              <option value="pending">{humanizeStatus("pending", isEn)}</option>
-              <option value="confirmed">
-                {humanizeStatus("confirmed", isEn)}
-              </option>
-              <option value="checked_in">
-                {humanizeStatus("checked_in", isEn)}
-              </option>
-            </Select>
-          </label>
-
-          <label className="block space-y-1">
-            <span className="block font-medium text-muted-foreground text-xs">
-              {isEn ? "Notes" : "Notas"}
-            </span>
-            <Input name="notes" placeholder={isEn ? "Optional" : "Opcional"} />
-          </label>
-
-          <div className="flex flex-wrap justify-end gap-2">
-            <Button
-              onClick={() => setOpen(false)}
-              type="button"
-              variant="outline"
-            >
-              {isEn ? "Cancel" : "Cancelar"}
-            </Button>
-            <Button type="submit" variant="secondary">
-              {isEn ? "Create" : "Crear"}
-            </Button>
-          </div>
-        </Form>
-      </Sheet>
-
-      <Sheet
-        description={
-          isEn
-            ? "Create a manual availability block (maintenance, owner use, etc.)."
-            : "Crea un bloqueo manual de disponibilidad (mantenimiento, uso del propietario, etc.)."
-        }
+      <ReservationBlockSheet
+        isEn={isEn}
+        locale={locale}
         onOpenChange={setBlockSheetOpen}
         open={blockSheetOpen}
-        title={isEn ? "New calendar block" : "Nuevo bloqueo"}
-      >
-        <Form action={createCalendarBlockAction} className="space-y-4">
-          <input name="organization_id" type="hidden" value={orgId} />
-
-          <label className="block space-y-1">
-            <span className="block font-medium text-muted-foreground text-xs">
-              {isEn ? "Unit" : "Unidad"}
-            </span>
-            <Select defaultValue="" name="unit_id" required>
-              <option disabled value="">
-                {isEn ? "Select a unit" : "Selecciona una unidad"}
-              </option>
-              {unitOptions.map((unit) => (
-                <option key={unit.id} value={unit.id}>
-                  {unit.label}
-                </option>
-              ))}
-            </Select>
-          </label>
-
-          <div className="grid gap-3 md:grid-cols-2">
-            <label className="block space-y-1">
-              <span className="block font-medium text-muted-foreground text-xs">
-                {isEn ? "Starts" : "Inicio"}
-              </span>
-              <DatePicker locale={locale} name="starts_on" />
-            </label>
-            <label className="block space-y-1">
-              <span className="block font-medium text-muted-foreground text-xs">
-                {isEn ? "Ends" : "Fin"}
-              </span>
-              <DatePicker locale={locale} name="ends_on" />
-            </label>
-          </div>
-
-          <label className="block space-y-1">
-            <span className="block font-medium text-muted-foreground text-xs">
-              {isEn ? "Reason (optional)" : "Motivo (opcional)"}
-            </span>
-            <Input
-              name="reason"
-              placeholder={
-                isEn
-                  ? "Maintenance, owner use..."
-                  : "Mantenimiento, uso propietario..."
-              }
-            />
-          </label>
-
-          <div className="flex flex-wrap justify-end gap-2">
-            <Button
-              onClick={() => setBlockSheetOpen(false)}
-              type="button"
-              variant="outline"
-            >
-              {isEn ? "Cancel" : "Cancelar"}
-            </Button>
-            <Button type="submit" variant="secondary">
-              {isEn ? "Create" : "Crear"}
-            </Button>
-          </div>
-        </Form>
-      </Sheet>
+        orgId={orgId}
+        unitOptions={unitOptions}
+      />
     </div>
   );
 }

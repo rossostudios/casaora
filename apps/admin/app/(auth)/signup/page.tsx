@@ -97,43 +97,39 @@ function SignupPageInner() {
     }
 
     setBusy(true);
+    const fullNameData = fullName.trim() ? { full_name: fullName.trim() } : undefined;
+    const redirectUrl = `${getSiteUrl()}/auth/callback?next=${encodeURIComponent(next)}`;
+    const errTitle = isEn ? "Could not create account" : "No se pudo crear la cuenta";
+    const successTitle = isEn ? "Account created" : "Cuenta creada";
+    const successDesc = isEn
+      ? "Check your email to confirm your address."
+      : "Revisa tu correo para confirmar tu dirección.";
     try {
       const { error } = await supabase.auth.signUp({
         email: trimmedEmail,
         password,
         options: {
-          data: fullName.trim() ? { full_name: fullName.trim() } : undefined,
-          emailRedirectTo: `${getSiteUrl()}/auth/callback?next=${encodeURIComponent(next)}`,
+          data: fullNameData,
+          emailRedirectTo: redirectUrl,
         },
       });
 
       if (error) {
-        toast.error(
-          isEn ? "Could not create account" : "No se pudo crear la cuenta",
-          {
-            description: error.message,
-          }
-        );
+        toast.error(errTitle, { description: error.message });
+        setBusy(false);
         return;
       }
 
       // Persist referral code for redemption after onboarding
       const trimmedRef = referralCode.trim().toUpperCase();
       if (trimmedRef) {
-        try {
-          localStorage.setItem("pa-referral-code", trimmedRef);
-        } catch {
-          /* ignore */
-        }
+        localStorage.setItem("pa-referral-code", trimmedRef);
       }
 
-      toast.success(isEn ? "Account created" : "Cuenta creada", {
-        description: isEn
-          ? "Check your email to confirm your address."
-          : "Revisa tu correo para confirmar tu dirección.",
-      });
+      toast.success(successTitle, { description: successDesc });
       router.replace(`/login?next=${encodeURIComponent(next)}`);
-    } finally {
+      setBusy(false);
+    } catch {
       setBusy(false);
     }
   };

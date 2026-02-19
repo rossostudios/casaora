@@ -6,24 +6,8 @@ import type { FormEvent } from "react";
 import { useState } from "react";
 import { toast } from "sonner";
 
-import { DataImportSheet } from "@/components/import/data-import-sheet";
 import { Badge } from "@/components/ui/badge";
-import { Button, buttonVariants } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
-import { Input } from "@/components/ui/input";
-import { Separator } from "@/components/ui/separator";
-import { Spinner } from "@/components/ui/spinner";
+import { buttonVariants } from "@/components/ui/button";
 import type { Locale } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
@@ -35,34 +19,29 @@ import {
   wizardCreateUnit,
   wizardSeedDemoData,
 } from "./actions";
+import { SetupAdvancedSection } from "./setup-advanced-section";
 import {
-  ActiveStepCard,
   asString,
-  CompletedStepRow,
   CompletionCard,
   DemoSeedCallout,
   ExistingOrganizations,
   isOrganizationProfileType,
   isRentalMode,
-  LockedStepRow,
-  OptionalStepCard,
-  OrganizationCoreFields,
-  OrganizationProfileInputs,
   type OrganizationProfileType,
   ProgressStepper,
   profileTypeLabel,
   type RentalMode,
-  RentalModeInputs,
-  type Row,
   rentalModeLabel,
+  type Row,
   type StepDef,
   TechnicalDetails,
 } from "./setup-components";
-import { SetupManager } from "./setup-manager";
-
-/* ------------------------------------------------------------------ */
-/*  Props                                                              */
-/* ------------------------------------------------------------------ */
+import { SetupImportSheets } from "./setup-import-sheets";
+import { SetupStepConnect } from "./setup-step-connect";
+import { SetupStepOrganization } from "./setup-step-organization";
+import { SetupStepProperty } from "./setup-step-property";
+import { SetupStepUnit } from "./setup-step-unit";
+import { fd, fdNum, type Step4View, type SubmittingState } from "./setup-types";
 
 export type SetupWizardProps = {
   initialOrgId: string | null;
@@ -76,26 +55,6 @@ export type SetupWizardProps = {
   initialTab?: string;
   initialPlanId?: string;
 };
-
-/* ------------------------------------------------------------------ */
-/*  Helper: read FormData value as string                              */
-/* ------------------------------------------------------------------ */
-
-function fd(form: HTMLFormElement, name: string): string {
-  const val = new FormData(form).get(name);
-  return typeof val === "string" ? val.trim() : "";
-}
-
-function fdNum(form: HTMLFormElement, name: string, fallback: number): number {
-  const raw = fd(form, name);
-  if (!raw) return fallback;
-  const n = Number(raw);
-  return Number.isFinite(n) ? n : fallback;
-}
-
-/* ------------------------------------------------------------------ */
-/*  Component                                                          */
-/* ------------------------------------------------------------------ */
 
 export function SetupWizard({
   initialOrgId,
@@ -111,8 +70,6 @@ export function SetupWizard({
 }: SetupWizardProps) {
   const router = useRouter();
   const isEn = locale === "en-US";
-
-  /* ---- State ---------------------------------------------------- */
 
   const [orgId, setOrgId] = useState(initialOrgId);
   const [orgName, setOrgName] = useState(
@@ -133,25 +90,20 @@ export function SetupWizard({
   const [rentalMode, setRentalMode] = useState<RentalMode>(initRentalMode);
   const [properties, setProperties] = useState<Row[]>(initialProperties);
   const [units, setUnits] = useState<Row[]>(initialUnits);
-  const [submitting, setSubmitting] = useState<
-    null | "org" | "property" | "unit" | "seed" | "integration" | "lease"
-  >(null);
+  const [submitting, setSubmitting] = useState<SubmittingState>(null);
   const [leaseDone, setLeaseDone] = useState(false);
   const [importPropertyOpen, setImportPropertyOpen] = useState(false);
   const [importUnitOpen, setImportUnitOpen] = useState(false);
   const [importLeaseOpen, setImportLeaseOpen] = useState(false);
   const [step4Done, setStep4Done] = useState(false);
   const [step4Skipped, setStep4Skipped] = useState(false);
-  const [step4View, setStep4View] = useState<"str" | "ltr">(
+  const [step4View, setStep4View] = useState<Step4View>(
     rentalMode === "ltr" ? "ltr" : "str"
   );
 
-  // If org context is lost, import sheets must be closed (prevents orphaned Radix portals).
   const effectiveImportPropertyOpen = orgId ? importPropertyOpen : false;
   const effectiveImportUnitOpen = orgId ? importUnitOpen : false;
   const effectiveImportLeaseOpen = orgId ? importLeaseOpen : false;
-
-  /* ---- Derived -------------------------------------------------- */
 
   const orgDone = Boolean(orgId);
   const propertyDone = properties.length > 0;
@@ -182,79 +134,30 @@ export function SetupWizard({
     integrations.length === 0;
 
   const strLinks = [
-    {
-      href: "/module/channels",
-      label: isEn ? "Connect a channel" : "Conectar un canal",
-    },
-    {
-      href: "/module/reservations",
-      label: isEn ? "Start reservations" : "Iniciar reservas",
-    },
+    { href: "/module/channels", label: isEn ? "Connect a channel" : "Conectar un canal" },
+    { href: "/module/reservations", label: isEn ? "Start reservations" : "Iniciar reservas" },
   ];
-
   const ltrLinks = [
-    {
-      href: "/module/leases",
-      label: isEn ? "Manage leases" : "Gestionar contratos",
-    },
-    {
-      href: "/module/collections",
-      label: isEn ? "View collections" : "Ver cobros",
-    },
-    {
-      href: "/module/listings",
-      label: isEn ? "Publish listing" : "Publicar anuncio",
-    },
+    { href: "/module/leases", label: isEn ? "Manage leases" : "Gestionar contratos" },
+    { href: "/module/collections", label: isEn ? "View collections" : "Ver cobros" },
+    { href: "/module/listings", label: isEn ? "Publish listing" : "Publicar anuncio" },
   ];
-
   const nextActionLinks =
-    rentalMode === "str"
-      ? strLinks
-      : rentalMode === "ltr"
-        ? ltrLinks
-        : [...strLinks, ...ltrLinks];
+    rentalMode === "str" ? strLinks : rentalMode === "ltr" ? ltrLinks : [...strLinks, ...ltrLinks];
 
   const steps: StepDef[] = [
-    {
-      number: 1,
-      label: isEn ? "Organization" : "Organización",
-      done: orgDone,
-      active: activeStep === 1,
-    },
-    {
-      number: 2,
-      label: isEn ? "Property" : "Propiedad",
-      done: propertyDone,
-      active: activeStep === 2,
-    },
-    {
-      number: 3,
-      label: isEn ? "Unit" : "Unidad",
-      done: unitDone,
-      active: activeStep === 3,
-    },
+    { number: 1, label: isEn ? "Organization" : "Organización", done: orgDone, active: activeStep === 1 },
+    { number: 2, label: isEn ? "Property" : "Propiedad", done: propertyDone, active: activeStep === 2 },
+    { number: 3, label: isEn ? "Unit" : "Unidad", done: unitDone, active: activeStep === 3 },
     ...(onboardingDone
-      ? [
-          {
-            number: 4,
-            label:
-              rentalMode === "ltr"
-                ? isEn
-                  ? "Lease"
-                  : "Contrato"
-                : isEn
-                  ? "Connect"
-                  : "Conectar",
-            done: step4Complete,
-            active: !step4Complete,
-          },
-        ]
+      ? [{
+          number: 4,
+          label: rentalMode === "ltr" ? (isEn ? "Lease" : "Contrato") : (isEn ? "Connect" : "Conectar"),
+          done: step4Complete,
+          active: !step4Complete,
+        }]
       : []),
   ];
-
-  const openAdvancedByDefault = Boolean(initialTab);
-
-  /* ---- Handlers ------------------------------------------------- */
 
   const handleCreateOrg = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -274,25 +177,20 @@ export function SetupWizard({
 
     if (!result.ok) {
       toast.error(
-        isEn
-          ? "Could not create organization"
-          : "No se pudo crear la organización",
+        isEn ? "Could not create organization" : "No se pudo crear la organización",
         { description: result.error }
       );
       setSubmitting(null);
       return;
     }
 
-    // Set cookie client-side (belt-and-suspenders with server-side set in action)
     try {
       await fetch("/api/org", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ org_id: result.data.id }),
       });
-    } catch {
-      // Cookie was already set server-side in the action
-    }
+    } catch { /* Cookie was already set server-side in the action */ }
 
     setOrgId(result.data.id);
     setOrgName(result.data.name);
@@ -305,42 +203,27 @@ export function SetupWizard({
       description: result.data.name,
     });
 
-    // Auto-subscribe to plan if planId is provided (from pricing page)
     if (initialPlanId && result.data.id) {
+      const planSuccessTitle = isEn ? "Plan activated" : "Plan activado";
+      const planSuccessDesc = isEn ? "Your trial period has started." : "Tu período de prueba ha comenzado.";
+      const planErrorTitle = isEn ? "Could not activate plan" : "No se pudo activar el plan";
+      const planErrorDesc = isEn
+        ? "You can activate it later from Settings → Billing."
+        : "Puedes activarlo después desde Ajustes → Facturación.";
+
       try {
         const subscribeRes = await fetch(`${apiBaseUrl}/billing/subscribe`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            organization_id: result.data.id,
-            plan_id: initialPlanId,
-          }),
+          body: JSON.stringify({ organization_id: result.data.id, plan_id: initialPlanId }),
         });
         if (subscribeRes.ok) {
-          toast.success(isEn ? "Plan activated" : "Plan activado", {
-            description: isEn
-              ? "Your trial period has started."
-              : "Tu período de prueba ha comenzado.",
-          });
+          toast.success(planSuccessTitle, { description: planSuccessDesc });
         } else {
-          toast.error(
-            isEn ? "Could not activate plan" : "No se pudo activar el plan",
-            {
-              description: isEn
-                ? "You can activate it later from Settings → Billing."
-                : "Puedes activarlo después desde Ajustes → Facturación.",
-            }
-          );
+          toast.error(planErrorTitle, { description: planErrorDesc });
         }
       } catch {
-        toast.error(
-          isEn ? "Could not activate plan" : "No se pudo activar el plan",
-          {
-            description: isEn
-              ? "You can activate it later from Settings → Billing."
-              : "Puedes activarlo después desde Ajustes → Facturación.",
-          }
-        );
+        toast.error(planErrorTitle, { description: planErrorDesc });
       }
     }
 
@@ -363,21 +246,13 @@ export function SetupWizard({
     });
 
     if (!result.ok) {
-      toast.error(
-        isEn ? "Could not create property" : "No se pudo crear la propiedad",
-        { description: result.error }
-      );
+      toast.error(isEn ? "Could not create property" : "No se pudo crear la propiedad", { description: result.error });
       setSubmitting(null);
       return;
     }
 
-    setProperties((prev) => [
-      ...prev,
-      { id: result.data.id, name: result.data.name },
-    ]);
-    toast.success(isEn ? "Property created" : "Propiedad creada", {
-      description: result.data.name,
-    });
+    setProperties((prev) => [...prev, { id: result.data.id, name: result.data.name }]);
+    toast.success(isEn ? "Property created" : "Propiedad creada", { description: result.data.name });
     setSubmitting(null);
   };
 
@@ -398,25 +273,17 @@ export function SetupWizard({
     });
 
     if (!result.ok) {
-      toast.error(
-        isEn ? "Could not create unit" : "No se pudo crear la unidad",
-        { description: result.error }
-      );
+      toast.error(isEn ? "Could not create unit" : "No se pudo crear la unidad", { description: result.error });
       setSubmitting(null);
       return;
     }
 
-    setUnits((prev) => [
-      ...prev,
-      { id: result.data.id, name: fd(form, "name"), code: fd(form, "code") },
-    ]);
+    setUnits((prev) => [...prev, { id: result.data.id, name: fd(form, "name"), code: fd(form, "code") }]);
     toast.success(isEn ? "Unit created" : "Unidad creada");
     setSubmitting(null);
   };
 
-  const handleCreateIntegrationStep4 = async (
-    e: FormEvent<HTMLFormElement>
-  ) => {
+  const handleCreateIntegrationStep4 = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (submitting || !orgId) return;
     setSubmitting("integration");
@@ -432,20 +299,13 @@ export function SetupWizard({
     });
 
     if (!result.ok) {
-      toast.error(
-        isEn
-          ? "Could not create channel"
-          : "No se pudo crear el canal",
-        { description: result.error }
-      );
+      toast.error(isEn ? "Could not create channel" : "No se pudo crear el canal", { description: result.error });
       setSubmitting(null);
       return;
     }
 
     setStep4Done(true);
-    toast.success(isEn ? "Channel created" : "Canal creado", {
-      description: result.data.name,
-    });
+    toast.success(isEn ? "Channel created" : "Canal creado", { description: result.data.name });
     setSubmitting(null);
   };
 
@@ -470,10 +330,7 @@ export function SetupWizard({
     });
 
     if (!result.ok) {
-      toast.error(
-        isEn ? "Could not create lease" : "No se pudo crear el contrato",
-        { description: result.error }
-      );
+      toast.error(isEn ? "Could not create lease" : "No se pudo crear el contrato", { description: result.error });
       setSubmitting(null);
       return;
     }
@@ -494,10 +351,7 @@ export function SetupWizard({
 
     const result = await wizardSeedDemoData({ organization_id: orgId });
     if (!result.ok) {
-      toast.error(
-        isEn ? "Could not load demo data" : "No se pudieron cargar datos demo",
-        { description: result.error }
-      );
+      toast.error(isEn ? "Could not load demo data" : "No se pudieron cargar datos demo", { description: result.error });
       setSubmitting(null);
       return;
     }
@@ -509,27 +363,18 @@ export function SetupWizard({
     router.refresh();
   };
 
-  /* ---- Render --------------------------------------------------- */
-
   return (
     <div className="mx-auto max-w-2xl space-y-6 py-2">
-      {/* Header */}
       <div className="text-center">
         <Badge className="mb-3" variant="outline">
           {isEn ? "Setup" : "Configuración"}
         </Badge>
         <h1 className="font-semibold text-2xl text-foreground tracking-tight">
           {onboardingDone
-            ? isEn
-              ? "You're all set"
-              : "Todo listo"
+            ? isEn ? "You're all set" : "Todo listo"
             : orgDone
-              ? isEn
-                ? "Complete your setup"
-                : "Completa tu configuración"
-              : isEn
-                ? "Set up your workspace"
-                : "Configura tu espacio de trabajo"}
+              ? isEn ? "Complete your setup" : "Completa tu configuración"
+              : isEn ? "Set up your workspace" : "Configura tu espacio de trabajo"}
         </h1>
         <p className="mt-1 text-muted-foreground text-sm">
           {onboardingDone
@@ -542,727 +387,106 @@ export function SetupWizard({
         </p>
       </div>
 
-      {/* Stepper */}
       <ProgressStepper steps={steps} />
 
-      {/* Demo seed (prominent when org has no data) */}
       {showDemoSeed ? (
-        <DemoSeedCallout
-          isEn={isEn}
-          onSeed={handleSeedDemo}
-          submitting={submitting === "seed"}
-        />
+        <DemoSeedCallout isEn={isEn} onSeed={handleSeedDemo} submitting={submitting === "seed"} />
       ) : null}
 
-      {/* Completion card */}
       {onboardingDone ? (
-        <CompletionCard
-          isEn={isEn}
-          nextActionLinks={nextActionLinks}
-          rentalMode={rentalMode}
-        />
+        <CompletionCard isEn={isEn} nextActionLinks={nextActionLinks} rentalMode={rentalMode} />
       ) : null}
 
-      {/* Step 1: Organization */}
-      {orgDone ? (
-        <CompletedStepRow
-          stepNumber={1}
-          summary={`${orgName || (isEn ? "Organization" : "Organización")} · ${profileTypeLabel(profileType, isEn)} · ${rentalModeLabel(rentalMode, isEn)}`}
-          title={isEn ? "Organization" : "Organización"}
-        />
-      ) : (
-        <ActiveStepCard
-          description={
-            isEn
-              ? "Set up your workspace and choose your operating profile."
-              : "Configura tu espacio y elige tu perfil operativo."
-          }
-          stepNumber={1}
-          title={isEn ? "Create your organization" : "Crea tu organización"}
-        >
-          <form className="grid gap-3" onSubmit={handleCreateOrg}>
-            <OrganizationProfileInputs
-              defaultValue="management_company"
-              isEn={isEn}
-            />
-            <RentalModeInputs defaultValue="both" isEn={isEn} />
-            <OrganizationCoreFields isEn={isEn} />
-            <Button
-              className="mt-1 w-full"
-              disabled={submitting !== null}
-              type="submit"
-            >
-              {submitting === "org" ? (
-                <>
-                  <Spinner className="text-primary-foreground" size="sm" />
-                  {isEn ? "Creating..." : "Creando..."}
-                </>
-              ) : isEn ? (
-                "Create organization"
-              ) : (
-                "Crear organización"
-              )}
-            </Button>
-          </form>
-        </ActiveStepCard>
-      )}
-
-      {/* Step 2: Property */}
-      {propertyDone ? (
-        <CompletedStepRow
-          stepNumber={2}
-          summary={`${properties.length} ${isEn ? (properties.length === 1 ? "property" : "properties") : properties.length === 1 ? "propiedad" : "propiedades"}`}
-          title={isEn ? "Property" : "Propiedad"}
-        />
-      ) : activeStep === 2 ? (
-        <ActiveStepCard
-          description={
-            isEn
-              ? "Register your first asset in your portfolio."
-              : "Registra tu primer activo del portafolio."
-          }
-          stepNumber={2}
-          title={
-            isEn ? "Add your first property" : "Agrega tu primera propiedad"
-          }
-        >
-          <form className="grid gap-3" onSubmit={handleCreateProperty}>
-            <label className="grid gap-1">
-              <span className="font-medium text-muted-foreground text-xs">
-                {isEn ? "Property name" : "Nombre de propiedad"}
-              </span>
-              <Input name="name" placeholder="Villa Morra HQ" required />
-            </label>
-            <label className="grid gap-1">
-              <span className="font-medium text-muted-foreground text-xs">
-                {isEn ? "Code" : "Código"}
-              </span>
-              <Input name="code" placeholder="VM-HQ" />
-            </label>
-            <label className="grid gap-1">
-              <span className="font-medium text-muted-foreground text-xs">
-                {isEn ? "Address" : "Dirección"}
-              </span>
-              <Input name="address_line1" placeholder="Av. España 1234" />
-            </label>
-            <label className="grid gap-1">
-              <span className="font-medium text-muted-foreground text-xs">
-                {isEn ? "City" : "Ciudad"}
-              </span>
-              <Input name="city" placeholder="Asunción" />
-            </label>
-            <Button
-              className="mt-1 w-full"
-              disabled={submitting !== null}
-              type="submit"
-            >
-              {submitting === "property" ? (
-                <>
-                  <Spinner className="text-primary-foreground" size="sm" />
-                  {isEn ? "Creating..." : "Creando..."}
-                </>
-              ) : isEn ? (
-                "Create property"
-              ) : (
-                "Crear propiedad"
-              )}
-            </Button>
-          </form>
-          <div className="mt-3 text-center">
-            <button
-              className="font-medium text-muted-foreground text-xs transition-colors hover:text-foreground"
-              onClick={() => setImportPropertyOpen(true)}
-              type="button"
-            >
-              {isEn ? "Import from Excel/CSV" : "Importar desde Excel/CSV"}
-            </button>
-          </div>
-        </ActiveStepCard>
-      ) : (
-        <LockedStepRow
-          description={
-            isEn
-              ? "Unlocked after creating an organization."
-              : "Se habilita al crear una organización."
-          }
-          stepNumber={2}
-          title={
-            isEn ? "Add your first property" : "Agrega tu primera propiedad"
-          }
-        />
-      )}
-
-      {/* Step 3: Unit */}
-      {unitDone ? (
-        <CompletedStepRow
-          stepNumber={3}
-          summary={`${units.length} ${isEn ? (units.length === 1 ? "unit" : "units") : units.length === 1 ? "unidad" : "unidades"}`}
-          title={isEn ? "Unit" : "Unidad"}
-        />
-      ) : activeStep === 3 ? (
-        <ActiveStepCard
-          description={
-            isEn
-              ? "Add your first rentable unit to finish onboarding."
-              : "Agrega tu primera unidad alquilable para finalizar el onboarding."
-          }
-          stepNumber={3}
-          title={isEn ? "Create your first unit" : "Crea tu primera unidad"}
-        >
-          <form className="grid gap-3" onSubmit={handleCreateUnit}>
-            <label className="grid gap-1">
-              <span className="font-medium text-muted-foreground text-xs">
-                {isEn ? "Property" : "Propiedad"}
-              </span>
-              <select
-                className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
-                defaultValue={propertyOptions[0]?.id ?? ""}
-                name="property_id"
-                required
-              >
-                {propertyOptions.length === 0 ? (
-                  <option value="">
-                    {isEn
-                      ? "Create a property first"
-                      : "Crea una propiedad primero"}
-                  </option>
-                ) : null}
-                {propertyOptions.map((property) => (
-                  <option key={property.id} value={property.id}>
-                    {property.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <label className="grid gap-1">
-                <span className="font-medium text-muted-foreground text-xs">
-                  {isEn ? "Unit code" : "Código de unidad"}
-                </span>
-                <Input name="code" placeholder="A1" required />
-              </label>
-              <label className="grid gap-1">
-                <span className="font-medium text-muted-foreground text-xs">
-                  {isEn ? "Unit name" : "Nombre de unidad"}
-                </span>
-                <Input name="name" placeholder="Departamento A1" required />
-              </label>
-            </div>
-            <div className="grid grid-cols-3 gap-3">
-              <label className="grid gap-1">
-                <span className="font-medium text-muted-foreground text-xs">
-                  {isEn ? "Max guests" : "Máx. huéspedes"}
-                </span>
-                <Input
-                  defaultValue={2}
-                  min={1}
-                  name="max_guests"
-                  type="number"
-                />
-              </label>
-              <label className="grid gap-1">
-                <span className="font-medium text-muted-foreground text-xs">
-                  {isEn ? "Bedrooms" : "Dormitorios"}
-                </span>
-                <Input defaultValue={1} min={0} name="bedrooms" type="number" />
-              </label>
-              <label className="grid gap-1">
-                <span className="font-medium text-muted-foreground text-xs">
-                  {isEn ? "Bathrooms" : "Baños"}
-                </span>
-                <Input
-                  defaultValue={1}
-                  min={0}
-                  name="bathrooms"
-                  step="0.5"
-                  type="number"
-                />
-              </label>
-            </div>
-            <Button
-              className="mt-1 w-full"
-              disabled={submitting !== null}
-              type="submit"
-            >
-              {submitting === "unit" ? (
-                <>
-                  <Spinner className="text-primary-foreground" size="sm" />
-                  {isEn ? "Creating..." : "Creando..."}
-                </>
-              ) : isEn ? (
-                "Create unit"
-              ) : (
-                "Crear unidad"
-              )}
-            </Button>
-          </form>
-          <div className="mt-3 text-center">
-            <button
-              className="font-medium text-muted-foreground text-xs transition-colors hover:text-foreground"
-              onClick={() => setImportUnitOpen(true)}
-              type="button"
-            >
-              {isEn ? "Import from Excel/CSV" : "Importar desde Excel/CSV"}
-            </button>
-          </div>
-        </ActiveStepCard>
-      ) : (
-        <LockedStepRow
-          description={
-            isEn ? "Complete step 2 first." : "Completa el paso 2 primero."
-          }
-          stepNumber={3}
-          title={isEn ? "Create your first unit" : "Crea tu primera unidad"}
-        />
-      )}
-
-      {/* Step 4: Optional — Connect a channel or publish listing */}
-      {onboardingDone && !step4Complete ? (
-        <OptionalStepCard
-          description={
-            rentalMode === "both"
-              ? isEn
-                ? "Set up an OTA channel or create a tenant lease."
-                : "Configura un canal OTA o crea un contrato de inquilino."
-              : rentalMode === "ltr"
-                ? isEn
-                  ? "Set up a tenant contract and auto-generate the collection schedule."
-                  : "Configura un contrato de inquilino y genera el calendario de cobro automáticamente."
-                : isEn
-                  ? "Link your OTA channels to start receiving reservations."
-                  : "Conecta tus canales OTA para empezar a recibir reservas."
-          }
-          isEn={isEn}
-          stepNumber={4}
-          title={
-            rentalMode === "both"
-              ? isEn
-                ? "Connect or create a lease"
-                : "Conecta o crea un contrato"
-              : rentalMode === "ltr"
-                ? isEn
-                  ? "Create your first lease"
-                  : "Crea tu primer contrato"
-              : isEn
-                  ? "Connect a channel"
-                  : "Conecta un canal"
-          }
-        >
-          {rentalMode === "both" ? (
-            <div className="mb-3 flex rounded-lg border border-border bg-muted/30 p-0.5">
-              <button
-                className={cn(
-                  "flex-1 rounded-md px-3 py-1.5 font-medium text-xs transition-colors",
-                  step4View === "str"
-                    ? "bg-background text-foreground shadow-sm"
-                    : "text-muted-foreground hover:text-foreground"
-                )}
-                onClick={() => setStep4View("str")}
-                type="button"
-              >
-                {isEn
-                  ? "Short-term (Channel)"
-                  : "Corto plazo (Canal)"}
-              </button>
-              <button
-                className={cn(
-                  "flex-1 rounded-md px-3 py-1.5 font-medium text-xs transition-colors",
-                  step4View === "ltr"
-                    ? "bg-background text-foreground shadow-sm"
-                    : "text-muted-foreground hover:text-foreground"
-                )}
-                onClick={() => setStep4View("ltr")}
-                type="button"
-              >
-                {isEn ? "Long-term (Lease)" : "Largo plazo (Contrato)"}
-              </button>
-            </div>
-          ) : null}
-          {(rentalMode === "both" ? step4View : rentalMode) !== "ltr" ? (
-            <div className="space-y-4">
-              <form
-                className="grid gap-3"
-                onSubmit={handleCreateIntegrationStep4}
-              >
-                <label className="grid gap-1">
-                  <span className="font-medium text-muted-foreground text-xs">
-                    {isEn ? "Channel type" : "Tipo de canal"}
-                  </span>
-                  <select
-                    className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
-                    defaultValue="airbnb"
-                    name="kind"
-                    required
-                  >
-                    <option value="airbnb">Airbnb</option>
-                    <option value="bookingcom">Booking.com</option>
-                    <option value="direct">
-                      {isEn ? "Direct" : "Directo"}
-                    </option>
-                    <option value="vrbo">Vrbo</option>
-                    <option value="other">{isEn ? "Other" : "Otro"}</option>
-                  </select>
-                </label>
-                <label className="grid gap-1">
-                  <span className="font-medium text-muted-foreground text-xs">
-                    {isEn ? "Channel name" : "Nombre del canal"}
-                  </span>
-                  <Input name="channel_name" placeholder="Airbnb" required />
-                </label>
-                <label className="grid gap-1">
-                  <span className="font-medium text-muted-foreground text-xs">
-                    {isEn ? "Unit" : "Unidad"}
-                  </span>
-                  <select
-                    className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
-                    defaultValue={unitOptions[0]?.id ?? ""}
-                    name="unit_id"
-                    required
-                  >
-                    {unitOptions.map((unit) => (
-                      <option key={unit.id} value={unit.id}>
-                        {unit.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="grid gap-1">
-                  <span className="font-medium text-muted-foreground text-xs">
-                    {isEn ? "Public name" : "Nombre público"}
-                  </span>
-                  <Input
-                    name="public_name"
-                    placeholder={
-                      isEn
-                        ? "Airbnb - Apartment A1"
-                        : "Airbnb - Departamento A1"
-                    }
-                    required
-                  />
-                </label>
-                <label className="grid gap-1">
-                  <span className="font-medium text-muted-foreground text-xs">
-                    {isEn
-                      ? "iCal import URL (optional)"
-                      : "URL de importación iCal (opcional)"}
-                  </span>
-                  <Input
-                    name="ical_import_url"
-                    placeholder="https://calendar.google.com/calendar/ical/..."
-                  />
-                </label>
-                <div className="flex items-center gap-2">
-                  <Button
-                    className="flex-1"
-                    disabled={submitting !== null}
-                    type="submit"
-                  >
-                    {submitting === "integration" ? (
-                      <>
-                        <Spinner
-                          className="text-primary-foreground"
-                          size="sm"
-                        />
-                        {isEn ? "Creating..." : "Creando..."}
-                      </>
-                    ) : isEn ? (
-                      "Create channel"
-                    ) : (
-                      "Crear canal"
-                    )}
-                  </Button>
-                  <Button
-                    onClick={() => setStep4Skipped(true)}
-                    size="sm"
-                    type="button"
-                    variant="ghost"
-                  >
-                    {isEn ? "Skip" : "Omitir"}
-                  </Button>
-                </div>
-              </form>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              <form className="grid gap-3" onSubmit={handleCreateLeaseStep4}>
-                <label className="grid gap-1">
-                  <span className="font-medium text-muted-foreground text-xs">
-                    {isEn ? "Unit" : "Unidad"}
-                  </span>
-                  <select
-                    className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
-                    defaultValue={unitOptions[0]?.id ?? ""}
-                    name="unit_id"
-                    required
-                  >
-                    {unitOptions.map((unit) => (
-                      <option key={unit.id} value={unit.id}>
-                        {unit.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="grid gap-1">
-                  <span className="font-medium text-muted-foreground text-xs">
-                    {isEn
-                      ? "Tenant full name"
-                      : "Nombre completo del inquilino"}
-                  </span>
-                  <Input
-                    name="tenant_full_name"
-                    placeholder="Juan Pérez"
-                    required
-                  />
-                </label>
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <label className="grid gap-1">
-                    <span className="font-medium text-muted-foreground text-xs">
-                      {isEn ? "Email (optional)" : "Email (opcional)"}
-                    </span>
-                    <Input
-                      name="tenant_email"
-                      placeholder="juan@email.com"
-                      type="email"
-                    />
-                  </label>
-                  <label className="grid gap-1">
-                    <span className="font-medium text-muted-foreground text-xs">
-                      {isEn ? "Phone (optional)" : "Teléfono (opcional)"}
-                    </span>
-                    <Input
-                      name="tenant_phone_e164"
-                      placeholder="+595 981 123456"
-                    />
-                  </label>
-                </div>
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <label className="grid gap-1">
-                    <span className="font-medium text-muted-foreground text-xs">
-                      {isEn ? "Monthly rent" : "Renta mensual"}
-                    </span>
-                    <Input
-                      min={0}
-                      name="monthly_rent"
-                      placeholder="2500000"
-                      required
-                      step="any"
-                      type="number"
-                    />
-                  </label>
-                  <label className="grid gap-1">
-                    <span className="font-medium text-muted-foreground text-xs">
-                      {isEn ? "Currency" : "Moneda"}
-                    </span>
-                    <select
-                      className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
-                      defaultValue="PYG"
-                      name="currency"
-                    >
-                      <option value="PYG">PYG (₲)</option>
-                      <option value="USD">USD ($)</option>
-                    </select>
-                  </label>
-                </div>
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <label className="grid gap-1">
-                    <span className="font-medium text-muted-foreground text-xs">
-                      {isEn ? "Start date" : "Fecha de inicio"}
-                    </span>
-                    <Input name="starts_on" required type="date" />
-                  </label>
-                  <label className="grid gap-1">
-                    <span className="font-medium text-muted-foreground text-xs">
-                      {isEn ? "End date (optional)" : "Fecha de fin (opcional)"}
-                    </span>
-                    <Input name="ends_on" type="date" />
-                  </label>
-                </div>
-                <p className="text-muted-foreground text-xs">
-                  {isEn
-                    ? "A monthly collection schedule will be generated automatically."
-                    : "Se generará un calendario de cobro mensual automáticamente."}
-                </p>
-                <div className="flex items-center gap-2">
-                  <Button
-                    className="flex-1"
-                    disabled={submitting !== null}
-                    type="submit"
-                  >
-                    {submitting === "lease" ? (
-                      <>
-                        <Spinner
-                          className="text-primary-foreground"
-                          size="sm"
-                        />
-                        {isEn ? "Creating..." : "Creando..."}
-                      </>
-                    ) : isEn ? (
-                      "Create lease"
-                    ) : (
-                      "Crear contrato"
-                    )}
-                  </Button>
-                  <Button
-                    onClick={() => setStep4Skipped(true)}
-                    size="sm"
-                    type="button"
-                    variant="ghost"
-                  >
-                    {isEn ? "Skip" : "Omitir"}
-                  </Button>
-                </div>
-              </form>
-              <div className="border-border/40 border-t pt-3">
-                <div className="mb-2 flex items-center justify-between">
-                  <p className="font-medium text-muted-foreground text-xs">
-                    {isEn ? "Or continue with:" : "O continúa con:"}
-                  </p>
-                  <button
-                    className="font-medium text-muted-foreground text-xs transition-colors hover:text-foreground"
-                    onClick={() => setImportLeaseOpen(true)}
-                    type="button"
-                  >
-                    {isEn
-                      ? "Import leases from CSV"
-                      : "Importar contratos desde CSV"}
-                  </button>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  <Link
-                    className={cn(
-                      buttonVariants({ variant: "outline", size: "sm" })
-                    )}
-                    href="/module/listings"
-                  >
-                    {isEn ? "Publish listing" : "Publicar anuncio"}
-                  </Link>
-                  <Link
-                    className={cn(
-                      buttonVariants({ variant: "outline", size: "sm" })
-                    )}
-                    href="/module/pricing"
-                  >
-                    {isEn ? "Set up pricing" : "Configurar precios"}
-                  </Link>
-                </div>
-              </div>
-            </div>
-          )}
-        </OptionalStepCard>
-      ) : null}
-
-      {/* Technical details */}
-      <TechnicalDetails
-        apiBaseUrl={apiBaseUrl}
+      <SetupStepOrganization
         isEn={isEn}
-        orgId={orgId}
+        orgDone={orgDone}
+        orgName={orgName}
         profileType={profileType}
+        rentalMode={rentalMode}
+        submitting={submitting}
+        onSubmit={handleCreateOrg}
       />
 
-      {/* Existing organizations (for step 1) */}
-      {orgDone ? null : (
-        <ExistingOrganizations
-          isEn={isEn}
-          locale={locale}
-          organizations={initialOrganizations}
-        />
-      )}
+      <SetupStepProperty
+        isEn={isEn}
+        propertyDone={propertyDone}
+        propertyCount={properties.length}
+        activeStep={activeStep}
+        submitting={submitting}
+        onSubmit={handleCreateProperty}
+        onImportClick={() => setImportPropertyOpen(true)}
+      />
 
-      {/* Separator + Advanced */}
-      {orgDone ? (
-        <>
-          <Separator />
-          <Collapsible defaultOpen={openAdvancedByDefault}>
-            <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between gap-2">
-                  <div>
-                    <CardTitle className="text-xl">
-                      {isEn ? "Advanced onboarding" : "Onboarding avanzado"}
-                    </CardTitle>
-                    <CardDescription>
-                      {isEn
-                        ? "Full CRUD manager for organizations, properties, units, and channels."
-                        : "Administrador CRUD completo para organizaciones, propiedades, unidades y canales."}
-                    </CardDescription>
-                  </div>
-                  <CollapsibleTrigger
-                    className={cn(
-                      buttonVariants({
-                        variant: "outline",
-                        size: "sm",
-                      })
-                    )}
-                  >
-                    {isEn ? "Toggle advanced" : "Alternar avanzado"}
-                  </CollapsibleTrigger>
-                </div>
-              </CardHeader>
-              <CollapsibleContent>
-                <CardContent>
-                  <SetupManager
-                    initialTab={initialTab}
-                    integrations={integrations}
-                    organizations={initialOrganizations}
-                    orgId={orgId as string}
-                    properties={properties}
-                    units={units}
-                  />
-                </CardContent>
-              </CollapsibleContent>
-            </Card>
-          </Collapsible>
-        </>
+      <SetupStepUnit
+        isEn={isEn}
+        unitDone={unitDone}
+        unitCount={units.length}
+        activeStep={activeStep}
+        submitting={submitting}
+        propertyOptions={propertyOptions}
+        onSubmit={handleCreateUnit}
+        onImportClick={() => setImportUnitOpen(true)}
+      />
+
+      {onboardingDone && !step4Complete ? (
+        <SetupStepConnect
+          isEn={isEn}
+          rentalMode={rentalMode}
+          step4View={step4View}
+          unitOptions={unitOptions}
+          submitting={submitting}
+          onStep4ViewChange={setStep4View}
+          onCreateIntegration={handleCreateIntegrationStep4}
+          onCreateLease={handleCreateLeaseStep4}
+          onSkip={() => setStep4Skipped(true)}
+          onImportLeaseClick={() => setImportLeaseOpen(true)}
+        />
       ) : null}
 
-      {/* Back link */}
+      <TechnicalDetails apiBaseUrl={apiBaseUrl} isEn={isEn} orgId={orgId} profileType={profileType} />
+
+      {orgDone ? null : (
+        <ExistingOrganizations isEn={isEn} locale={locale} organizations={initialOrganizations} />
+      )}
+
+      {orgDone ? (
+        <SetupAdvancedSection
+          isEn={isEn}
+          orgId={orgId as string}
+          initialTab={initialTab}
+          initialOrganizations={initialOrganizations}
+          properties={properties}
+          units={units}
+          integrations={integrations}
+          openAdvancedByDefault={Boolean(initialTab)}
+        />
+      ) : null}
+
       {orgDone ? null : (
         <div className="flex justify-center">
-          <a
-            className={cn(
-              buttonVariants({ variant: "ghost", size: "sm" }),
-              "text-muted-foreground"
-            )}
+          <Link
+            className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "text-muted-foreground")}
             href="/app"
           >
             {isEn ? "Back to dashboard" : "Volver al panel"}
-          </a>
+          </Link>
         </div>
       )}
 
-      {/* CSV Import sheets */}
       {orgId ? (
-        <>
-          <DataImportSheet
-            isEn={isEn}
-            mode="properties"
-            onImportComplete={() => router.refresh()}
-            onOpenChange={setImportPropertyOpen}
-            open={effectiveImportPropertyOpen}
-            orgId={orgId}
-          />
-          <DataImportSheet
-            isEn={isEn}
-            mode="units"
-            onImportComplete={() => router.refresh()}
-            onOpenChange={setImportUnitOpen}
-            open={effectiveImportUnitOpen}
-            orgId={orgId}
-            properties={propertyOptions.map((p) => ({
-              id: p.id,
-              name: p.label,
-            }))}
-          />
-          <DataImportSheet
-            isEn={isEn}
-            mode="leases"
-            onImportComplete={() => router.refresh()}
-            onOpenChange={setImportLeaseOpen}
-            open={effectiveImportLeaseOpen}
-            orgId={orgId}
-            units={unitOptions.map((u) => ({ id: u.id, name: u.label }))}
-          />
-        </>
+        <SetupImportSheets
+          isEn={isEn}
+          orgId={orgId}
+          propertyOptions={propertyOptions}
+          unitOptions={unitOptions}
+          importPropertyOpen={effectiveImportPropertyOpen}
+          importUnitOpen={effectiveImportUnitOpen}
+          importLeaseOpen={effectiveImportLeaseOpen}
+          onImportPropertyOpenChange={setImportPropertyOpen}
+          onImportUnitOpenChange={setImportUnitOpen}
+          onImportLeaseOpenChange={setImportLeaseOpen}
+          onImportComplete={() => router.refresh()}
+        />
       ) : null}
     </div>
   );

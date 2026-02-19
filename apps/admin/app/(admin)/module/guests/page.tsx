@@ -17,24 +17,9 @@ import { getActiveLocale } from "@/lib/i18n/server";
 import { getActiveOrgId } from "@/lib/org";
 import { cn } from "@/lib/utils";
 
-import { GuestsCrm } from "./guests-crm";
+import type { GuestCrmRow } from "@/components/guests/guests-crm-types";
 
-type GuestCrmRow = {
-  id: string;
-  full_name: string;
-  email: string | null;
-  phone_e164: string | null;
-  document_type: string | null;
-  document_number: string | null;
-  country_code: string | null;
-  preferred_language: string | null;
-  notes: string | null;
-  reservation_count: number;
-  last_stay_end: string | null;
-  next_stay_start: string | null;
-  lifetime_value: number;
-  verification_status: string | null;
-};
+import { GuestsCrm } from "./guests-crm";
 
 type PageProps = {
   searchParams: Promise<{ success?: string; error?: string }>;
@@ -255,6 +240,15 @@ export default async function GuestsModulePage({ searchParams }: PageProps) {
         next_stay_start: nextStayStart,
         lifetime_value: Math.round(lifetimeValue * 100) / 100,
         verification_status: asOptionalString(guest.verification_status),
+        id_document_url: asOptionalString(guest.id_document_url),
+        date_of_birth: asOptionalString(guest.date_of_birth),
+        emergency_contact_name: asOptionalString(guest.emergency_contact_name),
+        emergency_contact_phone: asOptionalString(guest.emergency_contact_phone),
+        address: asOptionalString(guest.address),
+        city: asOptionalString(guest.city),
+        occupation: asOptionalString(guest.occupation),
+        document_expiry: asOptionalString(guest.document_expiry),
+        nationality: asOptionalString(guest.nationality),
       } satisfies GuestCrmRow;
     })
     .filter((row): row is GuestCrmRow => Boolean(row));

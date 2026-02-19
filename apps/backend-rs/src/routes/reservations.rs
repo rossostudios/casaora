@@ -12,11 +12,11 @@ use sha1::Digest;
 use crate::{
     auth::require_user_id,
     error::{AppError, AppResult},
-    repository::table_service::{create_row, get_row, list_rows, update_row},
+    repository::table_service::{create_row, delete_row, get_row, list_rows, update_row},
     schemas::{
-        clamp_limit_in_range, remove_nulls, serialize_to_map, CreateReservationInput,
-        DepositRefundInput, ReservationPath, ReservationStatusInput, ReservationsQuery,
-        UpdateReservationInput,
+        clamp_limit_in_range, remove_nulls, serialize_to_map, AddReservationGuestInput,
+        CreateReservationInput, DepositRefundInput, ReservationGuestPath, ReservationPath,
+        ReservationStatusInput, ReservationsQuery, UpdateReservationInput,
     },
     services::{
         audit::write_audit_log, enrichment::enrich_reservations, sequences::enroll_in_sequences,
@@ -132,6 +132,14 @@ pub fn router() -> axum::Router<AppState> {
         .route(
             "/reservations/{reservation_id}/status",
             axum::routing::post(transition_status),
+        )
+        .route(
+            "/reservations/{reservation_id}/guests",
+            axum::routing::get(list_reservation_guests).post(add_reservation_guest),
+        )
+        .route(
+            "/reservations/{reservation_id}/guests/{reservation_guest_id}",
+            axum::routing::delete(remove_reservation_guest),
         )
 }
 
@@ -1032,4 +1040,170 @@ async fn send_guest_portal_link(
             "link": magic_link,
         })),
     ))
+}
+
+// ── Accompanying Guests ─────────────────────────────────────────────
+
+async fn list_reservation_guests(
+    State(state): State<AppState>,
+    Path(path): Path<ReservationPath>,
+    headers: HeaderMap,
+) -> AppResult<Json<Value>> {
+    let user_id = require_user_id(&state, &headers).await?;
+    let pool = db_pool(&state)?;
+
+    let reservation = get_row(pool, "reservations", &path.reservation_id, "id").await?;
+    let org_id = value_str(&reservation, "organization_id");
+    assert_org_member(&state, &user_id, &org_id).await?;
+
+    let mut filters = Map::new();
+    filters.insert(
+        "reservation_id".to_string(),
+        Value::String(path.reservation_id.clone()),
+    );
+    let rows = list_rows(pool, "reservation_guests", Some(&filters), 100, 0, "created_at", true)
+        .await?;
+
+    // Enrich with guest name/contact
+    let mut enriched = Vec::with_capacity(rows.len());
+    for row in rows {
+        let mut obj = row.as_object().cloned().unwrap_or_default();
+        let guest_id = value_string(obj.get("guest_id")).unwrap_or_default();
+        if !guest_id.is_empty() {
+            if let Ok(guest) = get_row(pool, "guests", &guest_id, "id").await {
+                obj.insert(
+                    "guest_name".to_string(),
+                    guest
+                        .as_object()
+                        .and_then(|g| g.get("full_name"))
+                        .cloned()
+                        .unwrap_or(Value::Null),
+                );
+                obj.insert(
+                    "guest_email".to_string(),
+                    guest
+                        .as_object()
+                        .and_then(|g| g.get("email"))
+                        .cloned()
+                        .unwrap_or(Value::Null),
+                );
+                obj.insert(
+                    "guest_phone_e164".to_string(),
+                    guest
+                        .as_object()
+                        .and_then(|g| g.get("phone_e164"))
+                        .cloned()
+                        .unwrap_or(Value::Null),
+                );
+            }
+        }
+        enriched.push(Value::Object(obj));
+    }
+
+    Ok(Json(json!({ "data": enriched })))
+}
+
+async fn add_reservation_guest(
+    State(state): State<AppState>,
+    Path(path): Path<ReservationPath>,
+    headers: HeaderMap,
+    Json(payload): Json<AddReservationGuestInput>,
+) -> AppResult<impl IntoResponse> {
+    let user_id = require_user_id(&state, &headers).await?;
+    let pool = db_pool(&state)?;
+
+    let reservation = get_row(pool, "reservations", &path.reservation_id, "id").await?;
+    let org_id = value_str(&reservation, "organization_id");
+    assert_org_role(&state, &user_id, &org_id, &["owner_admin", "operator"]).await?;
+
+    // Validate guest belongs to same org
+    let guest = get_row(pool, "guests", &payload.guest_id, "id").await?;
+    let guest_org_id = value_str(&guest, "organization_id");
+    if guest_org_id != org_id {
+        return Err(AppError::BadRequest(
+            "Guest does not belong to the same organization.".to_string(),
+        ));
+    }
+
+    // Cannot add the primary guest as accompanying
+    let primary_guest_id = value_str(&reservation, "guest_id");
+    if payload.guest_id == primary_guest_id {
+        return Err(AppError::BadRequest(
+            "Cannot add the primary guest as an accompanying guest.".to_string(),
+        ));
+    }
+
+    let mut record = Map::new();
+    record.insert(
+        "reservation_id".to_string(),
+        Value::String(path.reservation_id.clone()),
+    );
+    record.insert("guest_id".to_string(), Value::String(payload.guest_id));
+    record.insert(
+        "role".to_string(),
+        Value::String(payload.role.unwrap_or_else(|| "accompanying".to_string())),
+    );
+
+    let created = create_row(pool, "reservation_guests", &record).await?;
+
+    write_audit_log(
+        state.db_pool.as_ref(),
+        Some(&org_id),
+        Some(&user_id),
+        "add_reservation_guest",
+        "reservation_guests",
+        created
+            .as_object()
+            .and_then(|o| o.get("id"))
+            .and_then(Value::as_str),
+        None,
+        Some(created.clone()),
+    )
+    .await;
+
+    Ok((axum::http::StatusCode::CREATED, Json(created)))
+}
+
+async fn remove_reservation_guest(
+    State(state): State<AppState>,
+    Path(path): Path<ReservationGuestPath>,
+    headers: HeaderMap,
+) -> AppResult<Json<Value>> {
+    let user_id = require_user_id(&state, &headers).await?;
+    let pool = db_pool(&state)?;
+
+    let rg = get_row(
+        pool,
+        "reservation_guests",
+        &path.reservation_guest_id,
+        "id",
+    )
+    .await?;
+    let rg_reservation_id = value_string(rg.as_object().and_then(|o| o.get("reservation_id")))
+        .unwrap_or_default();
+    if rg_reservation_id != path.reservation_id {
+        return Err(AppError::BadRequest(
+            "Reservation guest does not belong to this reservation.".to_string(),
+        ));
+    }
+
+    let reservation = get_row(pool, "reservations", &path.reservation_id, "id").await?;
+    let org_id = value_str(&reservation, "organization_id");
+    assert_org_role(&state, &user_id, &org_id, &["owner_admin", "operator"]).await?;
+
+    let deleted = delete_row(pool, "reservation_guests", &path.reservation_guest_id, "id").await?;
+
+    write_audit_log(
+        state.db_pool.as_ref(),
+        Some(&org_id),
+        Some(&user_id),
+        "remove_reservation_guest",
+        "reservation_guests",
+        Some(&path.reservation_guest_id),
+        Some(deleted.clone()),
+        None,
+    )
+    .await;
+
+    Ok(Json(deleted))
 }

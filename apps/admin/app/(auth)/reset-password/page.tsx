@@ -97,18 +97,20 @@ export default function ResetPasswordPage() {
     }
 
     setBusy(true);
+    const updateErr = isEn ? "Could not update" : "No se pudo actualizar";
+    const successMsg = isEn ? "Password updated" : "Contraseña actualizada";
     try {
       const { error } = await supabase.auth.updateUser({ password });
       if (error) {
-        toast.error(isEn ? "Could not update" : "No se pudo actualizar", {
-          description: error.message,
-        });
+        toast.error(updateErr, { description: error.message });
+        setBusy(false);
         return;
       }
-      toast.success(isEn ? "Password updated" : "Contraseña actualizada");
+      toast.success(successMsg);
       router.replace("/");
       router.refresh();
-    } finally {
+      setBusy(false);
+    } catch {
       setBusy(false);
     }
   };

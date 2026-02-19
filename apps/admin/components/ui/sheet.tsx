@@ -43,26 +43,24 @@ export function Sheet({
   const [animatingClosed, setAnimatingClosed] = useState(false);
   const mounted = open || animatingClosed;
 
-  // Handle open/close transitions.
-  const prevOpenRef = useRef(open);
-  if (prevOpenRef.current !== open) {
-    prevOpenRef.current = open;
+  // Sync animation state during render (React-recommended derived state pattern).
+  const [prevOpen, setPrevOpen] = useState(open);
+  if (open !== prevOpen) {
+    setPrevOpen(open);
     if (open) {
-      // Sheet just opened: capture previously focused element.
-      previouslyFocusedRef.current =
-        document.activeElement instanceof HTMLElement
-          ? document.activeElement
-          : null;
       setAnimatingClosed(false);
     } else {
-      // Sheet just closed: keep mounted briefly for exit animation.
       setAnimatingClosed(true);
     }
   }
 
-  // Focus the close button after the sheet opens.
+  // DOM side effects when sheet opens (focus management).
   useEffect(() => {
     if (open) {
+      previouslyFocusedRef.current =
+        document.activeElement instanceof HTMLElement
+          ? document.activeElement
+          : null;
       window.setTimeout(() => closeRef.current?.focus(), 0);
     }
   }, [open]);

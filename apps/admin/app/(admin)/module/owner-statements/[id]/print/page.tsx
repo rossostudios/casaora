@@ -9,9 +9,11 @@ type PageProps = {
 };
 
 export default async function AdminStatementPrintPage({ params }: PageProps) {
-  const { id } = await params;
-  const locale = await getActiveLocale();
-  const orgId = await getActiveOrgId();
+  const [{ id }, locale, orgId] = await Promise.all([
+    params,
+    getActiveLocale(),
+    getActiveOrgId(),
+  ]);
 
   let statement: Record<string, unknown> | null = null;
   let collections: Record<string, unknown>[] = [];
@@ -24,9 +26,22 @@ export default async function AdminStatementPrintPage({ params }: PageProps) {
       { org_id: orgId },
     );
     statement = res;
-    collections = (Array.isArray(res.collections) ? res.collections : []) as Record<string, unknown>[];
-    expenses = (Array.isArray(res.expenses) ? res.expenses : []) as Record<string, unknown>[];
-    orgName = String(res.organization_name ?? "");
+    if (Array.isArray(res.collections)) {
+      collections = res.collections as Record<string, unknown>[];
+    } else {
+      collections = [];
+    }
+    if (Array.isArray(res.expenses)) {
+      expenses = res.expenses as Record<string, unknown>[];
+    } else {
+      expenses = [];
+    }
+    const rawOrgName = res.organization_name;
+    if (rawOrgName != null) {
+      orgName = String(rawOrgName);
+    } else {
+      orgName = "";
+    }
   } catch {
     // Will render empty state
   }

@@ -1,14 +1,6 @@
 "use client";
 
-import {
-  Add01Icon,
-  CalendarCheckIn01Icon,
-  Delete02Icon,
-  NoteEditIcon,
-  PencilEdit01Icon,
-  UserGroupIcon,
-} from "@hugeicons/core-free-icons";
-import type { ColumnDef } from "@tanstack/react-table";
+import { Add01Icon, UserGroupIcon } from "@hugeicons/core-free-icons";
 import Link from "next/link";
 import { useCallback, useMemo, useState } from "react";
 
@@ -17,16 +9,17 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { CopyButton } from "@/components/ui/copy-button";
 import { DataTable, type DataTableRow } from "@/components/ui/data-table";
 import { EmptyState } from "@/components/ui/empty-state";
-import { Form } from "@/components/ui/form";
-import { HoverLink } from "@/components/ui/hover-link";
 import { Icon } from "@/components/ui/icon";
-import { Input } from "@/components/ui/input";
 import { Sheet } from "@/components/ui/sheet";
-import { StatusBadge } from "@/components/ui/status-badge";
-import { Textarea } from "@/components/ui/textarea";
-import { formatCurrency } from "@/lib/format";
 import { useActiveLocale } from "@/lib/i18n/client";
 import { cn } from "@/lib/utils";
+
+import { GuestDetailView } from "@/components/guests/guest-detail-view";
+import { GuestForm } from "@/components/guests/guest-form";
+import type { GuestCrmRow, Segment, SheetMode } from "@/components/guests/guests-crm-types";
+import { hasContact } from "@/components/guests/guests-crm-types";
+import { GuestsSegments } from "@/components/guests/guests-segments";
+import { buildGuestColumns } from "@/components/guests/guests-table-columns";
 
 import {
   createGuestAction,
@@ -34,78 +27,7 @@ import {
   updateGuestAction,
 } from "./actions";
 
-export type GuestCrmRow = {
-  id: string;
-  full_name: string;
-  email: string | null;
-  phone_e164: string | null;
-  document_type: string | null;
-  document_number: string | null;
-  country_code: string | null;
-  preferred_language: string | null;
-  notes: string | null;
-  reservation_count: number;
-  last_stay_end: string | null;
-  next_stay_start: string | null;
-  lifetime_value: number;
-  verification_status: string | null;
-};
-
-type Segment = "all" | "upcoming" | "returning" | "no_contact" | "notes";
-type SheetMode = "create" | "view" | "edit";
-
-function asDateLabel(locale: string, value: string | null): string | null {
-  if (!value) return null;
-  const date = new Date(value);
-  if (Number.isNaN(date.valueOf())) return null;
-  return new Intl.DateTimeFormat(locale, { dateStyle: "medium" }).format(date);
-}
-
-function initials(value: string): string {
-  const trimmed = value.trim();
-  if (!trimmed) return "?";
-  const parts = trimmed
-    .split(" ")
-    .map((part) => part.trim())
-    .filter(Boolean);
-  const first = parts[0]?.[0] ?? "?";
-  const second = parts.length > 1 ? parts.at(-1)?.[0] : "";
-  return `${first}${second}`.toUpperCase();
-}
-
-function SegmentButton({
-  active,
-  label,
-  count,
-  onClick,
-}: {
-  active: boolean;
-  label: string;
-  count: number;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      className={cn(
-        "inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm transition-colors",
-        active
-          ? "border-primary/30 bg-primary/10 text-foreground"
-          : "bg-background/60 text-muted-foreground hover:text-foreground"
-      )}
-      onClick={onClick}
-      type="button"
-    >
-      <span className="font-medium">{label}</span>
-      <span className="rounded-full bg-muted/40 px-2 py-0.5 font-mono text-[11px] text-muted-foreground">
-        {count}
-      </span>
-    </button>
-  );
-}
-
-function hasContact(row: GuestCrmRow): boolean {
-  return Boolean((row.email ?? "").trim() || (row.phone_e164 ?? "").trim());
-}
+export type { GuestCrmRow } from "@/components/guests/guests-crm-types";
 
 export function GuestsCrm({
   orgId,
@@ -137,7 +59,8 @@ export function GuestsCrm({
       if (row.next_stay_start) next.upcoming += 1;
       if (row.reservation_count > 1) next.returning += 1;
       if (!hasContact(row)) next.no_contact += 1;
-      if ((row.notes ?? "").trim()) next.notes += 1;
+      const rowNotesVal = row.notes != null ? row.notes : "";
+      if (rowNotesVal.trim()) next.notes += 1;
     }
 
     return next;
@@ -151,7 +74,10 @@ export function GuestsCrm({
       return rows.filter((row) => row.reservation_count > 1);
     if (segment === "no_contact") return rows.filter((row) => !hasContact(row));
     if (segment === "notes")
-      return rows.filter((row) => (row.notes ?? "").trim().length > 0);
+      return rows.filter((row) => {
+        const nVal = row.notes != null ? row.notes : "";
+        return nVal.trim().length > 0;
+      });
     return rows;
   }, [rows, segment]);
 
@@ -171,150 +97,10 @@ export function GuestsCrm({
     }, 200);
   };
 
-  const columns = useMemo<ColumnDef<DataTableRow>[]>(() => {
-    return [
-      {
-        id: "guest",
-        header: t("Guest", "Huésped"),
-        accessorFn: (row) => String((row as GuestCrmRow).full_name ?? ""),
-        cell: ({ row }) => {
-          const guest = row.original as GuestCrmRow;
-          const href = `/module/guests/${guest.id}`;
-          const contact =
-            (guest.email ?? "").trim() ||
-            (guest.phone_e164 ?? "").trim() ||
-            t("No contact", "Sin contacto");
-
-          return (
-            <div className="min-w-0">
-              <div className="flex items-start gap-3">
-                <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border bg-muted/20 font-semibold text-primary">
-                  {initials(guest.full_name)}
-                </div>
-                <div className="min-w-0">
-                  <HoverLink
-                    className="block max-w-[22rem] truncate font-medium text-foreground underline-offset-4 hover:underline"
-                    description={t(
-                      "Open guest CRM profile.",
-                      "Abrir el perfil CRM del huésped."
-                    )}
-                    href={href}
-                    id={guest.id}
-                    label={guest.full_name}
-                    meta={t("Guest", "Huésped")}
-                    prefetch={false}
-                  >
-                    {guest.full_name}
-                  </HoverLink>
-                  <p className="max-w-[22rem] truncate text-muted-foreground text-xs">
-                    {contact}
-                  </p>
-                  <div className="mt-1 flex flex-wrap items-center gap-1.5">
-                    {guest.next_stay_start ? (
-                      <Badge className="gap-1" variant="secondary">
-                        <Icon icon={CalendarCheckIn01Icon} size={14} />
-                        {t("Upcoming", "Próxima")}
-                      </Badge>
-                    ) : null}
-                    {guest.reservation_count > 1 ? (
-                      <Badge variant="outline">
-                        {t("Returning", "Recurrente")}
-                      </Badge>
-                    ) : null}
-                    {(guest.notes ?? "").trim() ? (
-                      <Badge className="gap-1" variant="outline">
-                        <Icon icon={NoteEditIcon} size={14} />
-                        {t("Notes", "Notas")}
-                      </Badge>
-                    ) : null}
-                  </div>
-                </div>
-              </div>
-            </div>
-          );
-        },
-      },
-      {
-        id: "stays",
-        header: t("Stays", "Estancias"),
-        accessorFn: (row) => (row as GuestCrmRow).reservation_count,
-        cell: ({ row }) => {
-          const guest = row.original as GuestCrmRow;
-          return (
-            <span className="inline-flex items-center rounded-full border bg-background/60 px-2 py-1 font-mono text-[11px]">
-              {guest.reservation_count}
-            </span>
-          );
-        },
-      },
-      {
-        id: "next",
-        header: t("Next stay", "Próxima estancia"),
-        accessorFn: (row) => (row as GuestCrmRow).next_stay_start ?? "",
-        cell: ({ row }) => {
-          const guest = row.original as GuestCrmRow;
-          const label = asDateLabel(locale, guest.next_stay_start);
-          return label ? (
-            <span title={guest.next_stay_start ?? undefined}>{label}</span>
-          ) : (
-            <span className="text-muted-foreground">-</span>
-          );
-        },
-      },
-      {
-        id: "last",
-        header: t("Last stay", "Última estancia"),
-        accessorFn: (row) => (row as GuestCrmRow).last_stay_end ?? "",
-        cell: ({ row }) => {
-          const guest = row.original as GuestCrmRow;
-          const label = asDateLabel(locale, guest.last_stay_end);
-          return label ? (
-            <span title={guest.last_stay_end ?? undefined}>{label}</span>
-          ) : (
-            <span className="text-muted-foreground">-</span>
-          );
-        },
-      },
-      {
-        id: "value",
-        header: "LTV",
-        accessorFn: (row) => (row as GuestCrmRow).lifetime_value,
-        cell: ({ row }) => {
-          const guest = row.original as GuestCrmRow;
-          return (
-            <span className="tabular-nums">
-              {formatCurrency(guest.lifetime_value, "PYG", locale)}
-            </span>
-          );
-        },
-      },
-      {
-        id: "verification",
-        header: t("Verified", "Verificado"),
-        accessorFn: (row) => (row as GuestCrmRow).verification_status ?? "",
-        cell: ({ row }) => {
-          const guest = row.original as GuestCrmRow;
-          const status = guest.verification_status;
-          if (!status)
-            return <span className="text-muted-foreground">—</span>;
-          return (
-            <StatusBadge
-              value={status}
-              tone={
-                status === "verified"
-                  ? "success"
-                  : status === "pending"
-                    ? "warning"
-                    : status === "rejected"
-                      ? "danger"
-                      : "neutral"
-              }
-            />
-          );
-        },
-      },
-    ];
-  }, [locale, t]);
+  const columns = useMemo(
+    () => buildGuestColumns(locale, t),
+    [locale, t]
+  );
 
   const recordHref = record ? `/module/guests/${record.id}` : "/module/guests";
   const recordReservationsHref = record
@@ -335,59 +121,29 @@ export function GuestsCrm({
       );
     }
     if (!record) return "";
-    const contact =
-      (record.email ?? "").trim() || (record.phone_e164 ?? "").trim() || "";
-    return contact
-      ? contact
-      : t("No contact information yet.", "Aún no hay información de contacto.");
+    const emailStr = record.email != null ? record.email : "";
+    const phoneStr = record.phone_e164 != null ? record.phone_e164 : "";
+    let contact = "";
+    if (emailStr.trim()) {
+      contact = emailStr.trim();
+    } else if (phoneStr.trim()) {
+      contact = phoneStr.trim();
+    }
+    if (contact) {
+      return contact;
+    }
+    return t("No contact information yet.", "Aún no hay información de contacto.");
   })();
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <div className="flex flex-wrap items-center gap-2">
-          <SegmentButton
-            active={segment === "all"}
-            count={counts.all}
-            label={t("All", "Todos")}
-            onClick={() => setSegment("all")}
-          />
-          <SegmentButton
-            active={segment === "upcoming"}
-            count={counts.upcoming}
-            label={t("Upcoming", "Próximos")}
-            onClick={() => setSegment("upcoming")}
-          />
-          <SegmentButton
-            active={segment === "returning"}
-            count={counts.returning}
-            label={t("Returning", "Recurrentes")}
-            onClick={() => setSegment("returning")}
-          />
-          <SegmentButton
-            active={segment === "notes"}
-            count={counts.notes}
-            label={t("Notes", "Notas")}
-            onClick={() => setSegment("notes")}
-          />
-          <SegmentButton
-            active={segment === "no_contact"}
-            count={counts.no_contact}
-            label={t("No contact", "Sin contacto")}
-            onClick={() => setSegment("no_contact")}
-          />
-        </div>
-
-        <Button
-          className="gap-2"
-          onClick={() => openSheet("create", null)}
-          type="button"
-          variant="secondary"
-        >
-          <Icon icon={Add01Icon} size={16} />
-          {t("New guest", "Nuevo huésped")}
-        </Button>
-      </div>
+      <GuestsSegments
+        counts={counts}
+        onCreateClick={() => openSheet("create", null)}
+        onSegmentChange={setSegment}
+        segment={segment}
+        t={t}
+      />
 
       {rows.length === 0 ? (
         <EmptyState
@@ -472,286 +228,26 @@ export function GuestsCrm({
         }
       >
         {sheetMode === "view" && record ? (
-          <div className="space-y-6">
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="rounded-lg border bg-muted/10 p-3">
-                <p className="text-muted-foreground text-xs uppercase tracking-wide">
-                  {t("Reservations", "Reservas")}
-                </p>
-                <p className="mt-1 font-semibold text-xl tabular-nums">
-                  {record.reservation_count}
-                </p>
-              </div>
-              <div className="rounded-lg border bg-muted/10 p-3">
-                <p className="text-muted-foreground text-xs uppercase tracking-wide">
-                  {t("Lifetime value", "Valor de por vida")}
-                </p>
-                <p className="mt-1 font-semibold text-xl tabular-nums">
-                  {formatCurrency(record.lifetime_value, "PYG", locale)}
-                </p>
-              </div>
-              <div className="rounded-lg border bg-muted/10 p-3">
-                <p className="text-muted-foreground text-xs uppercase tracking-wide">
-                  {t("Next stay", "Próxima estancia")}
-                </p>
-                <p className="mt-1 font-medium text-sm">
-                  {asDateLabel(locale, record.next_stay_start) ?? "-"}
-                </p>
-              </div>
-              <div className="rounded-lg border bg-muted/10 p-3">
-                <p className="text-muted-foreground text-xs uppercase tracking-wide">
-                  {t("Last stay", "Última estancia")}
-                </p>
-                <p className="mt-1 font-medium text-sm">
-                  {asDateLabel(locale, record.last_stay_end) ?? "-"}
-                </p>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <p className="font-medium text-foreground text-sm">
-                {t("Contact", "Contacto")}
-              </p>
-              <div className="grid gap-2">
-                <ContactLine
-                  label={t("Email", "Correo")}
-                  value={record.email}
-                />
-                <ContactLine
-                  label={t("Phone", "Teléfono")}
-                  value={record.phone_e164}
-                />
-                <ContactLine
-                  label={t("Language", "Idioma")}
-                  value={record.preferred_language}
-                />
-                <ContactLine
-                  label={t("Document", "Documento")}
-                  value={
-                    [
-                      (record.document_type ?? "").trim(),
-                      (record.document_number ?? "").trim(),
-                    ]
-                      .filter(Boolean)
-                      .join(" ") || null
-                  }
-                />
-                <ContactLine
-                  label={t("Country", "País")}
-                  value={record.country_code}
-                />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <p className="font-medium text-foreground text-sm">
-                {t("Notes", "Notas")}
-              </p>
-              {(record.notes ?? "").trim() ? (
-                <div className="rounded-md border bg-muted/10 p-3 text-foreground text-sm">
-                  <p className="whitespace-pre-wrap">{record.notes}</p>
-                </div>
-              ) : (
-                <p className="text-muted-foreground text-sm">
-                  {t(
-                    "No notes yet. Add preferences and details to personalize stays.",
-                    "Aún no hay notas. Agrega preferencias y detalles para personalizar estancias."
-                  )}
-                </p>
-              )}
-            </div>
-
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <Button
-                className="gap-2"
-                onClick={() => openSheet("edit", record)}
-                type="button"
-                variant="secondary"
-              >
-                <Icon icon={PencilEdit01Icon} size={16} />
-                {t("Edit guest", "Editar huésped")}
-              </Button>
-
-              <Form action={deleteGuestAction}>
-                <input name="id" type="hidden" value={record.id} />
-                <input name="next" type="hidden" value="/module/guests" />
-                {deleteArmed ? (
-                  <Button className="gap-2" type="submit" variant="destructive">
-                    <Icon icon={Delete02Icon} size={16} />
-                    {t("Confirm deletion", "Confirmar eliminación")}
-                  </Button>
-                ) : (
-                  <Button
-                    className="gap-2"
-                    onClick={() => setDeleteArmed(true)}
-                    type="button"
-                    variant="outline"
-                  >
-                    <Icon icon={Delete02Icon} size={16} />
-                    {t("Delete", "Eliminar")}
-                  </Button>
-                )}
-              </Form>
-            </div>
-          </div>
+          <GuestDetailView
+            deleteAction={deleteGuestAction}
+            deleteArmed={deleteArmed}
+            locale={locale}
+            onDeleteArm={() => setDeleteArmed(true)}
+            onEditClick={() => openSheet("edit", record)}
+            record={record}
+            t={t}
+          />
         ) : (
           <GuestForm
+            createAction={createGuestAction}
             mode={sheetMode}
             onCancel={closeSheet}
             orgId={orgId}
             record={record}
+            updateAction={updateGuestAction}
           />
         )}
       </Sheet>
     </div>
-  );
-}
-
-function ContactLine({
-  label,
-  value,
-}: {
-  label: string;
-  value: string | null;
-}) {
-  const text = (value ?? "").trim();
-  return (
-    <div className="flex items-start justify-between gap-3 rounded-md border bg-background/40 px-3 py-2">
-      <p className="text-muted-foreground text-xs">{label}</p>
-      <p className="max-w-[70%] truncate text-right font-medium text-foreground text-sm">
-        {text || "-"}
-      </p>
-    </div>
-  );
-}
-
-function GuestForm({
-  mode,
-  orgId,
-  record,
-  onCancel,
-}: {
-  mode: SheetMode;
-  orgId: string;
-  record: GuestCrmRow | null;
-  onCancel: () => void;
-}) {
-  const locale = useActiveLocale();
-  const isEn = locale === "en-US";
-  const t = useCallback((en: string, es: string) => (isEn ? en : es), [isEn]);
-
-  const isCreate = mode === "create";
-  const action = isCreate ? createGuestAction : updateGuestAction;
-
-  return (
-    <Form action={action} className="grid gap-4">
-      <input name="next" type="hidden" value="/module/guests" />
-      {isCreate ? (
-        <input name="organization_id" type="hidden" value={orgId} />
-      ) : (
-        <input name="id" type="hidden" value={record?.id ?? ""} />
-      )}
-
-      <div className="grid gap-1">
-        <label className="font-medium text-xs">
-          {t("Full name", "Nombre completo")}
-        </label>
-        <Input
-          defaultValue={record?.full_name ?? ""}
-          name="full_name"
-          placeholder="Ana Perez"
-          required
-        />
-      </div>
-
-      <div className="grid gap-3 sm:grid-cols-2">
-        <div className="grid gap-1">
-          <label className="font-medium text-xs">Email</label>
-          <Input
-            defaultValue={record?.email ?? ""}
-            name="email"
-            placeholder="ana@example.com"
-            type="email"
-          />
-        </div>
-        <div className="grid gap-1">
-          <label className="font-medium text-xs">
-            {t("Phone", "Teléfono")}
-          </label>
-          <Input
-            defaultValue={record?.phone_e164 ?? ""}
-            name="phone_e164"
-            placeholder="+595981000000"
-          />
-        </div>
-      </div>
-
-      <div className="grid gap-3 sm:grid-cols-3">
-        <div className="grid gap-1">
-          <label className="font-medium text-xs">
-            {t("Document type", "Tipo de documento")}
-          </label>
-          <Input
-            defaultValue={record?.document_type ?? ""}
-            name="document_type"
-            placeholder="passport"
-          />
-        </div>
-        <div className="grid gap-1">
-          <label className="font-medium text-xs">
-            {t("Document number", "Número de documento")}
-          </label>
-          <Input
-            defaultValue={record?.document_number ?? ""}
-            name="document_number"
-            placeholder="123456789"
-          />
-        </div>
-        <div className="grid gap-1">
-          <label className="font-medium text-xs">{t("Country", "País")}</label>
-          <Input
-            defaultValue={record?.country_code ?? ""}
-            maxLength={2}
-            name="country_code"
-            placeholder="PY"
-          />
-        </div>
-      </div>
-
-      <div className="grid gap-1">
-        <label className="font-medium text-xs">
-          {t("Preferred language", "Idioma preferido")}
-        </label>
-        <Input
-          defaultValue={record?.preferred_language ?? "es"}
-          name="preferred_language"
-          placeholder={isEn ? "en" : "es"}
-        />
-      </div>
-
-      <div className="grid gap-1">
-        <label className="font-medium text-xs">{t("Notes", "Notas")}</label>
-        <Textarea
-          defaultValue={record?.notes ?? ""}
-          name="notes"
-          placeholder={t(
-            "Preferences, special requests, document details...",
-            "Preferencias, pedidos especiales, datos de documentos..."
-          )}
-        />
-      </div>
-
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <Button onClick={onCancel} type="button" variant="ghost">
-          {t("Cancel", "Cancelar")}
-        </Button>
-        <Button className="gap-2" type="submit" variant="secondary">
-          <Icon icon={isCreate ? Add01Icon : PencilEdit01Icon} size={16} />
-          {isCreate
-            ? t("Create guest", "Crear huésped")
-            : t("Save changes", "Guardar cambios")}
-        </Button>
-      </div>
-    </Form>
   );
 }

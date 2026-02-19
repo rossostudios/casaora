@@ -45,7 +45,8 @@ export default async function PlatformAdminPage() {
       ),
     ]);
     stats = statsRes;
-    orgs = orgsRes.data ?? [];
+    const orgsData = orgsRes.data;
+    if (orgsData != null) orgs = orgsData;
   } catch (err) {
     loadError = errorMessage(err);
   }

@@ -95,13 +95,14 @@ export default async function ReservationsModulePage({
   let blocks: Record<string, unknown>[] = [];
   let units: Record<string, unknown>[] = [];
 
+  const reservationExtra = guestFilter ? { guest_id: guestFilter } : undefined;
   try {
     const [reservationRows, blockRows, unitRows] = await Promise.all([
       fetchList(
         "/reservations",
         orgId,
         1000,
-        guestFilter ? { guest_id: guestFilter } : undefined
+        reservationExtra
       ),
       fetchList("/calendar/blocks", orgId, 1000),
       fetchList("/units", orgId, 500),

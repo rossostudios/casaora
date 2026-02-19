@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Calendar02Icon } from "@hugeicons/core-free-icons";
 import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
@@ -104,33 +105,25 @@ function ListingCalendar({
   isEn: boolean;
 }) {
   const [currentMonth, setCurrentMonth] = useState(() => new Date());
-  const [days, setDays] = useState<CalendarDay[]>([]);
-  const [loading, setLoading] = useState(false);
 
   const monthKey = toMonthKey(currentMonth);
   const monthNames = isEn ? MONTH_NAMES_EN : MONTH_NAMES_ES;
   const dayLabels = isEn ? DAY_LABELS_EN : DAY_LABELS_ES;
 
-  const fetchAvailability = useCallback(async () => {
-    setLoading(true);
-    try {
+  const { data: days = [], isLoading: loading } = useQuery({
+    queryKey: ["listing-availability", slug, monthKey],
+    queryFn: async () => {
       const res = await fetch(
         `${API_BASE}/public/listings/${encodeURIComponent(slug)}/availability?month=${monthKey}`
       );
-      if (res.ok) {
-        const data = await res.json();
-        setDays((data.days ?? []) as CalendarDay[]);
+      if (!res.ok) return [];
+      const data = await res.json();
+      if (data.days != null) {
+        return data.days as CalendarDay[];
       }
-    } catch {
-      // silently fail
-    } finally {
-      setLoading(false);
-    }
-  }, [slug, monthKey]);
-
-  useEffect(() => {
-    fetchAvailability();
-  }, [fetchAvailability]);
+      return [];
+    },
+  });
 
   const monthNum = currentMonth.getMonth();
   const yearNum = currentMonth.getFullYear();
@@ -141,7 +134,7 @@ function ListingCalendar({
       <div className="mb-2 flex items-center justify-between">
         <button
           className="rounded px-2 py-0.5 text-sm hover:bg-[#f5f0eb]"
-          onClick={() => setCurrentMonth(addMonths(currentMonth, -1))}
+          onClick={() => { setCurrentMonth(addMonths(currentMonth, -1)); }}
           type="button"
         >
           &larr;
@@ -151,7 +144,7 @@ function ListingCalendar({
         </span>
         <button
           className="rounded px-2 py-0.5 text-sm hover:bg-[#f5f0eb]"
-          onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}
+          onClick={() => { setCurrentMonth(addMonths(currentMonth, 1)); }}
           type="button"
         >
           &rarr;

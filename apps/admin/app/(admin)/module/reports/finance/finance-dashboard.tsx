@@ -13,7 +13,7 @@ import {
   PieChart,
   XAxis,
   YAxis,
-} from "recharts";
+} from "@/lib/recharts";
 
 import {
   Card,
@@ -608,8 +608,8 @@ export function FinanceDashboard({
                     </tr>
                   </thead>
                   <tbody>
-                    {outstandingCollections.map((c, i) => (
-                      <tr className="border-b border-border/50" key={i}>
+                    {outstandingCollections.map((c) => (
+                      <tr className="border-b border-border/50" key={`${asString(c.due_date)}-${asNumber(c.amount)}-${asString(c.status)}`}>
                         <td className="py-2 tabular-nums">
                           {asString(c.due_date)}
                         </td>

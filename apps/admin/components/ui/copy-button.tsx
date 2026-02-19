@@ -28,18 +28,22 @@ export function CopyButton({ value, label, className }: CopyButtonProps) {
   const [copied, setCopied] = useState(false);
 
   const onCopy = async () => {
+    const successMsg = isEn ? "Copied" : "Copiado";
+    const errorTitle = isEn ? "Could not copy" : "No se pudo copiar";
+    const errorDesc = isEn
+      ? "Your browser blocked clipboard access."
+      : "Tu navegador bloqueó el acceso al portapapeles.";
+
     try {
       await navigator.clipboard.writeText(value);
       setCopied(true);
-      toast.success(isEn ? "Copied" : "Copiado", {
+      toast.success(successMsg, {
         description: shortId(value),
       });
       window.setTimeout(() => setCopied(false), 1200);
     } catch {
-      toast.error(isEn ? "Could not copy" : "No se pudo copiar", {
-        description: isEn
-          ? "Your browser blocked clipboard access."
-          : "Tu navegador bloqueó el acceso al portapapeles.",
+      toast.error(errorTitle, {
+        description: errorDesc,
       });
     }
   };

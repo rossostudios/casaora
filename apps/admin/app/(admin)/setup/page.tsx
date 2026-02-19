@@ -63,9 +63,11 @@ type SetupPageProps = {
 /* ================================================================== */
 
 export default async function SetupPage({ searchParams }: SetupPageProps) {
-  const { tab, plan } = await searchParams;
-  const orgId = await getActiveOrgId();
-  const locale = await getActiveLocale();
+  const [{ tab, plan }, orgId, locale] = await Promise.all([
+    searchParams,
+    getActiveOrgId(),
+    getActiveLocale(),
+  ]);
   const isEn = locale === "en-US";
 
   /* ---------------------------------------------------------------- */

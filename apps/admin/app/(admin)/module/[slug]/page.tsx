@@ -32,6 +32,34 @@ import {
 import { getActiveOrgId } from "@/lib/org";
 import { cn } from "@/lib/utils";
 
+/** Helper to parse search params into extra query params — extracted from
+ * the component so the React Compiler doesn't see value blocks in try/catch. */
+async function buildExtraQuery(
+  searchParams: Promise<Record<string, string | string[] | undefined>>,
+): Promise<Record<string, string>> {
+  const rawSearchParams = await searchParams;
+  const extraQuery: Record<string, string> = {};
+  let paramsToIterate: Record<string, string | string[] | undefined>;
+  if (rawSearchParams != null) {
+    paramsToIterate = rawSearchParams;
+  } else {
+    paramsToIterate = {};
+  }
+
+  for (const [key, value] of Object.entries(paramsToIterate)) {
+    if (key === "org_id") continue;
+    if (key === "limit") continue;
+    if (typeof value === "string") {
+      extraQuery[key] = value;
+    } else if (Array.isArray(value)) {
+      if (typeof value[0] === "string") {
+        extraQuery[key] = value[0];
+      }
+    }
+  }
+  return extraQuery;
+}
+
 type ModulePageProps = {
   params: Promise<{
     slug: string;
@@ -155,36 +183,40 @@ export default async function ModulePage({
   }
 
   if (moduleDef.kind === "report") {
+    const reportApiTitle = isEn ? "API connection failed" : "Fallo de conexión a la API";
+    const reportApiDesc = isEn
+      ? "Could not load report data from the backend."
+      : "No se pudieron cargar los datos del informe desde el backend.";
+    const reportBackendLabel = isEn ? "Backend base URL" : "URL base del backend";
+    const reportBackendHint = isEn
+      ? "Make sure the backend is running (`cd apps/backend-rs && cargo run`)"
+      : "Asegúrate de que el backend esté ejecutándose (`cd apps/backend-rs && cargo run`)";
+
     let report: Record<string, unknown>;
     try {
       report = await fetchOwnerSummary(moduleDef.endpoint, orgId);
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
+      let message: string;
+      if (err instanceof Error) {
+        message = err.message;
+      } else {
+        message = String(err);
+      }
       return (
         <Card>
           <CardHeader>
-            <CardTitle>
-              {isEn ? "API connection failed" : "Fallo de conexión a la API"}
-            </CardTitle>
-            <CardDescription>
-              {isEn
-                ? "Could not load report data from the backend."
-                : "No se pudieron cargar los datos del informe desde el backend."}
-            </CardDescription>
+            <CardTitle>{reportApiTitle}</CardTitle>
+            <CardDescription>{reportApiDesc}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-2 text-muted-foreground text-sm">
             <p>
-              {isEn ? "Backend base URL" : "URL base del backend"}:{" "}
+              {reportBackendLabel}:{" "}
               <code className="rounded bg-muted px-1 py-0.5">
                 {getApiBaseUrl()}
               </code>
             </p>
             <p className="break-words">{message}</p>
-            <p>
-              {isEn
-                ? "Make sure the backend is running (`cd apps/backend-rs && cargo run`)"
-                : "Asegúrate de que el backend esté ejecutándose (`cd apps/backend-rs && cargo run`)"}
-            </p>
+            <p>{reportBackendHint}</p>
           </CardContent>
         </Card>
       );
@@ -247,19 +279,18 @@ export default async function ModulePage({
   }
 
   let rows: Record<string, unknown>[] = [];
+  const modApiTitle = isEn ? "API connection failed" : "Fallo de conexión a la API";
+  const modApiDesc = isEn
+    ? "Could not load module data from the backend."
+    : "No se pudieron cargar los datos del módulo desde el backend.";
+  const modBackendLabel = isEn ? "Backend base URL" : "URL base del backend";
+  const modBackendHint = isEn
+    ? "Make sure the backend is running (`cd apps/backend-rs && cargo run`)"
+    : "Asegúrate de que el backend esté ejecutándose (`cd apps/backend-rs && cargo run`)";
+
+  const extraQuery = await buildExtraQuery(searchParams);
+
   try {
-    const rawSearchParams = await searchParams;
-    const extraQuery: Record<string, string> = {};
-
-    for (const [key, value] of Object.entries(rawSearchParams ?? {})) {
-      if (key === "org_id" || key === "limit") continue;
-      if (typeof value === "string") {
-        extraQuery[key] = value;
-      } else if (Array.isArray(value) && typeof value[0] === "string") {
-        extraQuery[key] = value[0];
-      }
-    }
-
     rows = (await fetchList(
       moduleDef.endpoint,
       orgId,
@@ -274,28 +305,18 @@ export default async function ModulePage({
     return (
       <Card>
         <CardHeader>
-          <CardTitle>
-            {isEn ? "API connection failed" : "Fallo de conexión a la API"}
-          </CardTitle>
-          <CardDescription>
-            {isEn
-              ? "Could not load module data from the backend."
-              : "No se pudieron cargar los datos del módulo desde el backend."}
-          </CardDescription>
+          <CardTitle>{modApiTitle}</CardTitle>
+          <CardDescription>{modApiDesc}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-2 text-muted-foreground text-sm">
           <p>
-            {isEn ? "Backend base URL" : "URL base del backend"}:{" "}
+            {modBackendLabel}:{" "}
             <code className="rounded bg-muted px-1 py-0.5">
               {getApiBaseUrl()}
             </code>
           </p>
           <p className="break-words">{message}</p>
-          <p>
-            {isEn
-              ? "Make sure the backend is running (`cd apps/backend-rs && cargo run`)"
-              : "Asegúrate de que el backend esté ejecutándose (`cd apps/backend-rs && cargo run`)"}
-          </p>
+          <p>{modBackendHint}</p>
         </CardContent>
       </Card>
     );

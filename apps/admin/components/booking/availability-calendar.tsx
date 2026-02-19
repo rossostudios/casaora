@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
 
 const API_BASE =
@@ -51,8 +52,6 @@ export function AvailabilityCalendar({
   onDateRangeSelect,
 }: AvailabilityCalendarProps) {
   const [currentMonth, setCurrentMonth] = useState(() => new Date());
-  const [days, setDays] = useState<CalendarDay[]>([]);
-  const [loading, setLoading] = useState(false);
   const [selectedCheckIn, setSelectedCheckIn] = useState<string | null>(null);
   const [selectedCheckOut, setSelectedCheckOut] = useState<string | null>(null);
 
@@ -60,27 +59,21 @@ export function AvailabilityCalendar({
   const monthNames = isEn ? MONTH_NAMES_EN : MONTH_NAMES_ES;
   const dayLabels = isEn ? DAY_LABELS_EN : DAY_LABELS_ES;
 
-  const fetchCalendar = useCallback(async () => {
-    if (!unitId) return;
-    setLoading(true);
-    try {
+  const { data: days = [], isLoading: loading } = useQuery({
+    queryKey: ["booking-calendar", orgSlug, unitId, monthKey],
+    queryFn: async () => {
       const res = await fetch(
         `${API_BASE}/public/booking/${encodeURIComponent(orgSlug)}/calendar?unit_id=${encodeURIComponent(unitId)}&month=${monthKey}`
       );
-      if (res.ok) {
-        const data = await res.json();
-        setDays((data.days ?? []) as CalendarDay[]);
+      if (!res.ok) return [];
+      const data = await res.json();
+      if (data.days != null) {
+        return data.days as CalendarDay[];
       }
-    } catch {
-      // silently fail
-    } finally {
-      setLoading(false);
-    }
-  }, [orgSlug, unitId, monthKey]);
-
-  useEffect(() => {
-    fetchCalendar();
-  }, [fetchCalendar]);
+      return [];
+    },
+    enabled: !!unitId,
+  });
 
   const handleDayClick = (day: CalendarDay) => {
     if (day.status !== "available") return;
@@ -133,7 +126,7 @@ export function AvailabilityCalendar({
       <div className="mb-3 flex items-center justify-between">
         <button
           className="rounded-lg px-2 py-1 text-sm hover:bg-muted"
-          onClick={() => setCurrentMonth(addMonths(currentMonth, -1))}
+          onClick={() => { setCurrentMonth(addMonths(currentMonth, -1)); }}
           type="button"
         >
           &larr;
@@ -143,7 +136,7 @@ export function AvailabilityCalendar({
         </h3>
         <button
           className="rounded-lg px-2 py-1 text-sm hover:bg-muted"
-          onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}
+          onClick={() => { setCurrentMonth(addMonths(currentMonth, 1)); }}
           type="button"
         >
           &rarr;

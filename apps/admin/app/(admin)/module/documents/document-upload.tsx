@@ -18,8 +18,10 @@ export function DocumentUpload({ orgId, isEn, onUploaded }: DocumentUploadProps)
 
   const uploadFile = useCallback(
     async (file: File) => {
-      if (!file || !orgId) return;
+      if (!file) return;
+      if (!orgId) return;
       setUploading(true);
+      const errorLabel = isEn ? "Upload failed" : "Fallo la subida";
       try {
         const supabase = getSupabaseBrowserClient();
         const safeName = file.name.replaceAll(/[^\w.-]+/g, "-");
@@ -27,22 +29,45 @@ export function DocumentUpload({ orgId, isEn, onUploaded }: DocumentUploadProps)
         const { error: uploadError } = await supabase.storage
           .from("documents")
           .upload(key, file, { upsert: false });
-        if (uploadError) throw new Error(uploadError.message);
+        if (uploadError) {
+          toast.error(errorLabel, { description: uploadError.message });
+          setUploading(false);
+          return;
+        }
         const { data } = supabase.storage.from("documents").getPublicUrl(key);
-        if (!data.publicUrl) throw new Error("Could not resolve public URL.");
+        if (!data.publicUrl) {
+          toast.error(errorLabel, { description: "Could not resolve public URL." });
+          setUploading(false);
+          return;
+        }
+        let mimeType: string;
+        if (file.type) {
+          mimeType = file.type;
+        } else {
+          mimeType = "application/octet-stream";
+        }
         onUploaded({
           url: data.publicUrl,
           name: file.name,
-          mimeType: file.type || "application/octet-stream",
+          mimeType,
           size: file.size,
         });
-        toast.success(isEn ? "File uploaded" : "Archivo subido");
+        let uploadedMsg: string;
+        if (isEn) {
+          uploadedMsg = "File uploaded";
+        } else {
+          uploadedMsg = "Archivo subido";
+        }
+        toast.success(uploadedMsg);
+        setUploading(false);
       } catch (err) {
-        toast.error(
-          isEn ? "Upload failed" : "Fallo la subida",
-          { description: err instanceof Error ? err.message : String(err) }
-        );
-      } finally {
+        let errDesc: string;
+        if (err instanceof Error) {
+          errDesc = err.message;
+        } else {
+          errDesc = String(err);
+        }
+        toast.error(errorLabel, { description: errDesc });
         setUploading(false);
       }
     },
@@ -77,6 +102,14 @@ export function DocumentUpload({ orgId, isEn, onUploaded }: DocumentUploadProps)
       }`}
       onClick={() => inputRef.current?.click()}
       onDragLeave={() => setDragOver(false)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          inputRef.current?.click();
+        }
+      }}
+      role="button"
+      tabIndex={0}
       onDragOver={(e) => {
         e.preventDefault();
         setDragOver(true);

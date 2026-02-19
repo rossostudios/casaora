@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -42,43 +42,41 @@ const SEVERITY_DOT: Record<string, string> = {
 };
 
 export function AnomalyAlerts({ orgId, locale: localeProp }: AnomalyAlertsProps) {
+  "use no memo";
   const activeLocale = useActiveLocale();
   const mounted = useMounted();
-  const [alerts, setAlerts] = useState<AnomalyAlert[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
 
   const locale = mounted ? activeLocale : localeProp;
   const isEn = locale === "en-US";
 
-  const fetchAlerts = useCallback(async () => {
-    try {
-      const today = new Date().toISOString().slice(0, 10);
-      const response = await fetch(
-        `/api/reports/anomalies?org_id=${encodeURIComponent(orgId)}&from_date=${today}&to_date=${today}`,
-        { cache: "no-store", headers: { Accept: "application/json" } }
-      );
-      if (!response.ok) return;
-      const payload = (await response.json()) as { data?: AnomalyAlert[] };
-      setAlerts(payload.data ?? []);
-    } catch {
-      // silently fail
-    } finally {
-      setLoading(false);
-    }
-  }, [orgId]);
+  const today = new Date().toISOString().slice(0, 10);
 
-  useEffect(() => {
-    fetchAlerts().catch(() => undefined);
-  }, [fetchAlerts]);
+  const { data: alerts = [], isPending: loading } = useQuery({
+    queryKey: ["anomaly-alerts", orgId, today],
+    queryFn: async () => {
+      const url = `/api/reports/anomalies?org_id=${encodeURIComponent(orgId)}&from_date=${today}&to_date=${today}`;
+      const response = await fetch(url, {
+        cache: "no-store",
+        headers: { Accept: "application/json" },
+      });
+      if (!response.ok) return [];
+      const payload = (await response.json()) as { data?: AnomalyAlert[] };
+      return payload.data ?? [];
+    },
+  });
 
   const dismissAlert = async (alertId: string) => {
     try {
-      const today = new Date().toISOString().slice(0, 10);
       await fetch(
         `/api/reports/anomalies/${alertId}/dismiss?org_id=${encodeURIComponent(orgId)}&from_date=${today}&to_date=${today}`,
         { method: "POST", headers: { Accept: "application/json" } }
       );
-      setAlerts((prev) => prev.filter((a) => a.id !== alertId));
+      queryClient.setQueryData(
+        ["anomaly-alerts", orgId, today],
+        (prev: AnomalyAlert[] | undefined) =>
+          prev ? prev.filter((a) => a.id !== alertId) : []
+      );
     } catch {
       // silently fail
     }

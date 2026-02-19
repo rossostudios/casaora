@@ -12,7 +12,7 @@ use crate::{
     repository::table_service::{create_row, delete_row, get_row, list_rows, update_row},
     schemas::{
         clamp_limit, remove_nulls, serialize_to_map, validate_input, CreateGuestInput, GuestPath,
-        GuestsQuery, UpdateGuestInput,
+        GuestsQuery, UpdateBackgroundCheckInput, UpdateGuestInput,
     },
     services::audit::write_audit_log,
     state::AppState,
@@ -30,6 +30,10 @@ pub fn router() -> axum::Router<AppState> {
             axum::routing::get(get_guest)
                 .patch(update_guest)
                 .delete(delete_guest),
+        )
+        .route(
+            "/guests/{guest_id}/background-check",
+            axum::routing::patch(update_background_check),
         )
         .route(
             "/guests/{guest_id}/verification",
@@ -163,6 +167,49 @@ async fn delete_guest(
     )
     .await;
     Ok(Json(deleted))
+}
+
+// ── Background Check ────────────────────────────────────────────────
+
+const ALLOWED_BG_STATUSES: &[&str] =
+    &["not_requested", "requested", "cleared", "failed", "expired"];
+
+async fn update_background_check(
+    State(state): State<AppState>,
+    Path(path): Path<GuestPath>,
+    headers: HeaderMap,
+    Json(payload): Json<UpdateBackgroundCheckInput>,
+) -> AppResult<Json<Value>> {
+    let user_id = require_user_id(&state, &headers).await?;
+    let pool = db_pool(&state)?;
+
+    let record = get_row(pool, "guests", &path.guest_id, "id").await?;
+    let org_id = value_str(&record, "organization_id");
+    assert_org_role(&state, &user_id, &org_id, &["owner_admin"]).await?;
+
+    if !ALLOWED_BG_STATUSES.contains(&payload.background_check_status.as_str()) {
+        return Err(AppError::BadRequest(format!(
+            "background_check_status must be one of: {}",
+            ALLOWED_BG_STATUSES.join(", ")
+        )));
+    }
+
+    let patch = remove_nulls(serialize_to_map(&payload));
+    let updated = update_row(pool, "guests", &path.guest_id, &patch, "id").await?;
+
+    write_audit_log(
+        state.db_pool.as_ref(),
+        Some(&org_id),
+        Some(&user_id),
+        "background_check_update",
+        "guests",
+        Some(&path.guest_id),
+        Some(record),
+        Some(updated.clone()),
+    )
+    .await;
+
+    Ok(Json(updated))
 }
 
 // ── Guest Verification ──────────────────────────────────────────────

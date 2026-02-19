@@ -2,7 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useState } from "react";
+import { Suspense, useCallback, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,6 +12,14 @@ const API_BASE =
   process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000/v1";
 
 export function OwnerLoginForm({ locale }: { locale: string }) {
+  return (
+    <Suspense fallback={null}>
+      <OwnerLoginFormInner locale={locale} />
+    </Suspense>
+  );
+}
+
+function OwnerLoginFormInner({ locale }: { locale: string }) {
   const isEn = locale === "en-US";
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -59,6 +67,10 @@ export function OwnerLoginForm({ locale }: { locale: string }) {
     setBusy(true);
     setError("");
 
+    const fallbackError = isEn
+      ? "Could not send access link."
+      : "No se pudo enviar el enlace de acceso.";
+    const networkError = isEn ? "Network error. Please try again." : "Error de red. Intenta de nuevo.";
     try {
       const res = await fetch(`${API_BASE}/public/owner/request-access`, {
         method: "POST",
@@ -68,21 +80,20 @@ export function OwnerLoginForm({ locale }: { locale: string }) {
 
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
-        setError(
-          (body as { message?: string }).message ??
-            (isEn
-              ? "Could not send access link."
-              : "No se pudo enviar el enlace de acceso.")
-        );
+        const msg = (body as { message?: string }).message;
+        if (msg != null) {
+          setError(msg);
+        } else {
+          setError(fallbackError);
+        }
+        setBusy(false);
         return;
       }
 
       setSent(true);
+      setBusy(false);
     } catch {
-      setError(
-        isEn ? "Network error. Please try again." : "Error de red. Intenta de nuevo."
-      );
-    } finally {
+      setError(networkError);
       setBusy(false);
     }
   }, [email, isEn]);

@@ -5,6 +5,7 @@ import type { ColumnDef } from "@tanstack/react-table";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import {
+  Suspense,
   useCallback,
   useEffect,
   useMemo,
@@ -126,6 +127,29 @@ export function LeasesManager({
   properties: Record<string, unknown>[];
   units: Record<string, unknown>[];
 }) {
+  return (
+    <Suspense fallback={null}>
+      <LeasesManagerInner
+        leases={leases}
+        orgId={orgId}
+        properties={properties}
+        units={units}
+      />
+    </Suspense>
+  );
+}
+
+function LeasesManagerInner({
+  orgId,
+  leases,
+  properties,
+  units,
+}: {
+  orgId: string;
+  leases: Record<string, unknown>[];
+  properties: Record<string, unknown>[];
+  units: Record<string, unknown>[];
+}) {
   const locale = useActiveLocale();
   const isEn = locale === "en-US";
 
@@ -191,8 +215,14 @@ export function LeasesManager({
           const data = await authedFetch<GuestResult[]>(
             `/guests?${params.toString()}`
           );
-          setGuestResults(data ?? []);
-          setShowGuestDropdown((data ?? []).length > 0);
+          let results: GuestResult[];
+          if (data != null) {
+            results = data;
+          } else {
+            results = [];
+          }
+          setGuestResults(results);
+          setShowGuestDropdown(results.length > 0);
         } catch {
           setGuestResults([]);
           setShowGuestDropdown(false);

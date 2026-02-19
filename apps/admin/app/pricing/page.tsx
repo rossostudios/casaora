@@ -52,7 +52,8 @@ export default async function PricingPage() {
     const result = await fetchJson<{ data?: Plan[] }>(
       "/public/subscription-plans"
     );
-    plans = result.data ?? [];
+    const plansData = result.data;
+    if (plansData != null) plans = plansData;
   } catch {
     // Plans couldn't be loaded — show a fallback
   }

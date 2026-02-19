@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import { OrgAccessChanged } from "@/components/shell/org-access-changed";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -22,6 +24,34 @@ import { getActiveOrgId } from "@/lib/org";
 
 import { MessagingInbox } from "./messaging-inbox";
 import { TemplateEditor } from "./template-editor";
+
+/** Helper to fetch and process messaging data — extracted from the component so the
+ * React Compiler doesn't see value blocks in try/catch. */
+async function fetchMessagingData(orgId: string): Promise<{
+  conversations: Conversation[];
+  templateRows: Record<string, unknown>[];
+}> {
+  const [logRows, guestRows, tplRows] = await Promise.all([
+    fetchList("/message-logs", orgId, 500),
+    fetchList("/guests", orgId, 500),
+    fetchList("/message-templates", orgId, 100),
+  ]);
+
+  const templateRows = tplRows as Record<string, unknown>[];
+
+  const logs = (logRows as Record<string, unknown>[]).map(toMessageLogItem);
+  const guestMap = new Map<string, GuestInfo>();
+  for (const raw of guestRows as Record<string, unknown>[]) {
+    const guest = toGuestInfo(raw);
+    const guestId = guest.id;
+    if (guestId) {
+      guestMap.set(guestId, guest);
+    }
+  }
+
+  const conversations = groupByConversation(logs, guestMap);
+  return { conversations, templateRows };
+}
 
 type PageProps = {
   searchParams: Promise<{
@@ -79,22 +109,9 @@ export default async function MessagingModulePage({
   let fetchError: string | null = null;
 
   try {
-    const [logRows, guestRows, tplRows] = await Promise.all([
-      fetchList("/message-logs", orgId, 500),
-      fetchList("/guests", orgId, 500),
-      fetchList("/message-templates", orgId, 100),
-    ]);
-
-    templateRows = tplRows as Record<string, unknown>[];
-
-    const logs = (logRows as Record<string, unknown>[]).map(toMessageLogItem);
-    const guestMap = new Map<string, GuestInfo>();
-    for (const raw of guestRows as Record<string, unknown>[]) {
-      const guest = toGuestInfo(raw);
-      if (guest.id) guestMap.set(guest.id, guest);
-    }
-
-    conversations = groupByConversation(logs, guestMap);
+    const result = await fetchMessagingData(orgId);
+    conversations = result.conversations;
+    templateRows = result.templateRows;
   } catch (err) {
     const message = errorMessage(err);
 
@@ -103,7 +120,11 @@ export default async function MessagingModulePage({
     }
 
     // If message-logs endpoint doesn't exist yet (404), show empty state
-    if (message.includes("(404)") || message.includes("Not Found")) {
+    const is404 = message.includes("(404)");
+    const isNotFound = message.includes("Not Found");
+    if (is404) {
+      fetchError = null; // graceful empty
+    } else if (isNotFound) {
       fetchError = null; // graceful empty
     } else {
       fetchError = message;
@@ -177,7 +198,7 @@ export default async function MessagingModulePage({
 
           {/* Tab switcher */}
           <div className="flex gap-1 border-b border-border/40 pb-0">
-            <a
+            <Link
               className={`inline-flex items-center gap-1.5 border-b-2 px-3 py-2 text-sm font-medium transition-colors ${
                 activeTab === "inbox"
                   ? "border-primary text-foreground"
@@ -186,8 +207,8 @@ export default async function MessagingModulePage({
               href="/module/messaging"
             >
               {isEn ? "Inbox" : "Bandeja"}
-            </a>
-            <a
+            </Link>
+            <Link
               className={`inline-flex items-center gap-1.5 border-b-2 px-3 py-2 text-sm font-medium transition-colors ${
                 activeTab === "templates"
                   ? "border-primary text-foreground"
@@ -199,7 +220,7 @@ export default async function MessagingModulePage({
               <Badge className="ml-1 px-1.5 py-0 text-[10px]" variant="secondary">
                 {templates.length}
               </Badge>
-            </a>
+            </Link>
           </div>
 
           {sp.success ? (

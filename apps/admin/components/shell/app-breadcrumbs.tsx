@@ -128,7 +128,7 @@ export function AppBreadcrumbs({
     <Breadcrumb className={className}>
       <BreadcrumbList>
         {crumbs.map((crumb, index) => (
-          <Fragment key={`${crumb.label}-${index}`}>
+          <Fragment key={crumb.href ?? crumb.label}>
             <BreadcrumbItem>
               {crumb.current ? (
                 <BreadcrumbPage>{crumb.label}</BreadcrumbPage>

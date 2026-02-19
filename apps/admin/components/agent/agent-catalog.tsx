@@ -1,7 +1,8 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -57,22 +58,20 @@ export function AgentCatalog({
 }) {
   const isEn = locale === "en-US";
   const router = useRouter();
-
-  const [agents, setAgents] = useState<AgentDefinition[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [creatingSlug, setCreatingSlug] = useState<string | null>(null);
-  const autoStartTriggered = useRef(false);
+  const autoStartTriggered = useRef<boolean>(false);
 
   const targetAgentSlug = useMemo(
     () => initialAgentSlug?.trim() || null,
     [initialAgentSlug]
   );
 
-  const loadAgents = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
+  const agentsQuery = useQuery({
+    queryKey: ["agents", orgId],
+    queryFn: async () => {
+      const fallbackMsg = isEn
+        ? "Could not load agents."
+        : "No se pudieron cargar los agentes.";
+
       const response = await fetch(
         `/api/agent/agents?org_id=${encodeURIComponent(orgId)}`,
         {
@@ -86,67 +85,57 @@ export function AgentCatalog({
 
       const payload = (await response.json()) as unknown;
       if (!response.ok) {
-        const message =
-          payload && typeof payload === "object" && "error" in payload
-            ? String((payload as { error?: unknown }).error)
-            : isEn
-              ? "Could not load agents."
-              : "No se pudieron cargar los agentes.";
+        let message = fallbackMsg;
+        if (payload != null && typeof payload === "object" && "error" in payload) {
+          message = String((payload as { error?: unknown }).error);
+        }
         throw new Error(message);
       }
 
-      setAgents(normalizeAgents(payload));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-      setAgents([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [isEn, orgId]);
-
-  useEffect(() => {
-    loadAgents().catch(() => undefined);
-  }, [loadAgents]);
-
-  const createChat = useCallback(
-    async (agentSlug: string) => {
-      setCreatingSlug(agentSlug);
-      setError(null);
-      try {
-        const response = await fetch("/api/agent/chats", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Accept: "application/json",
-          },
-          body: JSON.stringify({
-            org_id: orgId,
-            agent_slug: agentSlug,
-          }),
-        });
-
-        const payload = (await response.json()) as {
-          id?: string;
-          error?: string;
-        };
-
-        if (!(response.ok && payload.id)) {
-          throw new Error(
-            payload.error ||
-              (isEn ? "Could not create chat." : "No se pudo crear el chat.")
-          );
-        }
-
-        router.push(`/app/chats/${encodeURIComponent(payload.id)}`);
-        router.refresh();
-      } catch (err) {
-        setError(err instanceof Error ? err.message : String(err));
-      } finally {
-        setCreatingSlug(null);
-      }
+      return normalizeAgents(payload);
     },
-    [isEn, orgId, router]
-  );
+  });
+
+  const agents = agentsQuery.data ?? [];
+  const loading = agentsQuery.isLoading;
+
+  const createChatMutation = useMutation({
+    mutationFn: async (agentSlug: string) => {
+      const fallbackMsg = isEn ? "Could not create chat." : "No se pudo crear el chat.";
+
+      const response = await fetch("/api/agent/chats", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify({
+          org_id: orgId,
+          agent_slug: agentSlug,
+        }),
+      });
+
+      const payload = (await response.json()) as {
+        id?: string;
+        error?: string;
+      };
+
+      if (!response.ok || !payload.id) {
+        throw new Error(payload.error || fallbackMsg);
+      }
+
+      return payload.id;
+    },
+    onSuccess: (chatId) => {
+      router.push(`/app/chats/${encodeURIComponent(chatId)}`);
+      router.refresh();
+    },
+  });
+
+  const error = agentsQuery.error?.message ?? createChatMutation.error?.message ?? null;
+  const creatingSlug = createChatMutation.isPending
+    ? (createChatMutation.variables ?? null)
+    : null;
 
   useEffect(() => {
     if (!autoStart || loading || autoStartTriggered.current) {
@@ -167,11 +156,13 @@ export function AgentCatalog({
     }
 
     autoStartTriggered.current = true;
-    createChat(target.slug).catch(() => {
-      autoStartTriggered.current = false;
+    createChatMutation.mutate(target.slug, {
+      onError: () => {
+        autoStartTriggered.current = false;
+      },
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoStart, loading, agents, targetAgentSlug, createChat]);
+  }, [autoStart, loading, agents, targetAgentSlug]);
 
   return (
     <div className="space-y-4">
@@ -229,7 +220,8 @@ export function AgentCatalog({
                       className="w-full"
                       disabled={creatingSlug !== null}
                       onClick={() => {
-                        createChat(agent.slug).catch(() => undefined);
+                        createChatMutation.reset();
+                        createChatMutation.mutate(agent.slug);
                       }}
                     >
                       {creatingSlug === agent.slug

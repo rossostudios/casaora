@@ -1,7 +1,8 @@
 "use client";
 
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -10,90 +11,118 @@ import { Input } from "@/components/ui/input";
 const API_BASE =
   process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000/v1";
 
+interface TenantVerifyResult {
+  authenticated: boolean;
+  lease_id?: string | null;
+  email?: string | null;
+}
+
+interface RequestAccessResult {
+  ok: boolean;
+  detail?: string;
+}
+
 export function TenantLoginForm({ locale }: { locale: string }) {
+  return (
+    <Suspense fallback={null}>
+      <TenantLoginFormInner locale={locale} />
+    </Suspense>
+  );
+}
+
+function TenantLoginFormInner({ locale }: { locale: string }) {
   const isEn = locale === "en-US";
   const router = useRouter();
   const searchParams = useSearchParams();
   const tokenFromUrl = searchParams.get("token") ?? "";
 
   const [email, setEmail] = useState("");
-  const [sent, setSent] = useState(false);
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
 
-  const verifyToken = useCallback(
-    async (token: string) => {
-      setLoading(true);
-      setError("");
-      try {
-        const res = await fetch(`${API_BASE}/public/tenant/verify`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ token }),
-        });
-        const data = await res.json();
-        if (data.authenticated) {
-          localStorage.setItem("tenant_token", token);
-          localStorage.setItem("tenant_lease_id", data.lease_id ?? "");
-          localStorage.setItem("tenant_email", data.email ?? "");
-          router.push("/tenant/dashboard");
-        } else {
-          setError(
-            isEn
-              ? "Invalid or expired link. Request a new one."
-              : "Enlace inválido o expirado. Solicita uno nuevo."
-          );
-        }
-      } catch {
-        setError(
+  const verifyQuery = useQuery<TenantVerifyResult>({
+    queryKey: ["tenant-verify-token", tokenFromUrl],
+    enabled: Boolean(tokenFromUrl),
+    retry: false,
+    queryFn: async () => {
+      const res = await fetch(`${API_BASE}/public/tenant/verify`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: tokenFromUrl }),
+      });
+      const data = (await res.json()) as TenantVerifyResult;
+      if (!res.ok) {
+        throw new Error(
           isEn
             ? "Unable to verify access link."
             : "No se pudo verificar el enlace de acceso."
         );
-      } finally {
-        setLoading(false);
       }
+      return data;
     },
-    [isEn, router]
-  );
+  });
 
+  // Handle redirect + localStorage when verification succeeds (no setState)
   useEffect(() => {
-    if (tokenFromUrl) {
-      verifyToken(tokenFromUrl);
+    if (!verifyQuery.data) return;
+    const data = verifyQuery.data;
+    if (data.authenticated) {
+      const leaseId = data.lease_id;
+      const emailVal = data.email;
+      let leaseStr = "";
+      if (leaseId != null) leaseStr = leaseId;
+      let emailStr = "";
+      if (emailVal != null) emailStr = emailVal;
+      localStorage.setItem("tenant_token", tokenFromUrl);
+      localStorage.setItem("tenant_lease_id", leaseStr);
+      localStorage.setItem("tenant_email", emailStr);
+      router.push("/tenant/dashboard");
     }
-  }, [tokenFromUrl, verifyToken]);
+  }, [verifyQuery.data, tokenFromUrl, router]);
 
-  async function handleRequestAccess(e: React.FormEvent) {
-    e.preventDefault();
-    setLoading(true);
-    setError("");
-    try {
+  const requestAccessMutation = useMutation<RequestAccessResult, Error, { email: string }>({
+    mutationFn: async (variables) => {
       const res = await fetch(`${API_BASE}/public/tenant/request-access`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email }),
+        body: JSON.stringify({ email: variables.email }),
       });
       if (res.ok) {
-        setSent(true);
-      } else {
-        const data = await res.json();
-        setError(
-          data.detail ??
-            (isEn
-              ? "No active lease found for this email."
-              : "No se encontró un contrato activo para este correo.")
-        );
+        return { ok: true };
       }
-    } catch {
-      setError(
-        isEn ? "Request failed. Try again." : "Error al solicitar. Intenta de nuevo."
+      const data = (await res.json()) as { detail?: string };
+      const detail = data.detail;
+      if (detail != null) {
+        throw new Error(detail);
+      }
+      throw new Error(
+        isEn
+          ? "No active lease found for this email."
+          : "No se encontr\u00f3 un contrato activo para este correo."
       );
-    } finally {
-      setLoading(false);
-    }
+    },
+  });
+
+  function handleRequestAccess(e: React.FormEvent) {
+    e.preventDefault();
+    requestAccessMutation.mutate({ email });
   }
 
-  if (tokenFromUrl && loading) {
+  const verifyError =
+    verifyQuery.error instanceof Error ? verifyQuery.error.message : null;
+  const verifyNotAuthenticated =
+    verifyQuery.data && !verifyQuery.data.authenticated;
+  const invalidMsg = isEn
+    ? "Invalid or expired link. Request a new one."
+    : "Enlace inv\u00e1lido o expirado. Solicita uno nuevo.";
+
+  const displayError =
+    requestAccessMutation.error?.message ??
+    verifyError ??
+    (verifyNotAuthenticated ? invalidMsg : null);
+
+  const loading = verifyQuery.isLoading || requestAccessMutation.isPending;
+  const sent = requestAccessMutation.isSuccess;
+
+  if (tokenFromUrl && verifyQuery.isLoading) {
     return (
       <div className="flex min-h-[50vh] items-center justify-center">
         <p className="text-muted-foreground animate-pulse">
@@ -120,7 +149,7 @@ export function TenantLoginForm({ locale }: { locale: string }) {
               <p className="text-muted-foreground text-sm">
                 {isEn
                   ? "We sent an access link to your registered phone number."
-                  : "Enviamos un enlace de acceso a tu número registrado."}
+                  : "Enviamos un enlace de acceso a tu n\u00famero registrado."}
               </p>
             </div>
           ) : (
@@ -131,7 +160,7 @@ export function TenantLoginForm({ locale }: { locale: string }) {
                   : "Ingresa el correo asociado a tu contrato para recibir un enlace de acceso."}
               </p>
               <label className="space-y-1 text-sm">
-                <span>{isEn ? "Email" : "Correo electrónico"}</span>
+                <span>{isEn ? "Email" : "Correo electr\u00f3nico"}</span>
                 <Input
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="tu@correo.com"
@@ -140,9 +169,9 @@ export function TenantLoginForm({ locale }: { locale: string }) {
                   value={email}
                 />
               </label>
-              {error && <p className="text-sm text-red-600">{error}</p>}
+              {displayError && <p className="text-sm text-red-600">{displayError}</p>}
               <Button className="w-full" disabled={loading} type="submit">
-                {loading
+                {requestAccessMutation.isPending
                   ? isEn
                     ? "Sending..."
                     : "Enviando..."

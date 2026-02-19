@@ -92,12 +92,13 @@ export function SidebarAccount({
     avatarUrl: string | null;
     email: string | null;
     fullName: string | null;
+    loading: boolean;
   }>({
     avatarUrl: null,
     email: null,
     fullName: null,
+    loading: true,
   });
-  const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
   const isEn = locale === "en-US";
 
@@ -105,37 +106,30 @@ export function SidebarAccount({
     const supabase = getSupabaseBrowserClient();
     let mounted = true;
 
+    function extractAccount(metadata: unknown, email: string | null | undefined) {
+      const fullName =
+        metadataString(metadata, "full_name") ||
+        metadataString(metadata, "name");
+      return {
+        avatarUrl: metadataString(metadata, "avatar_url") || null,
+        email: email ?? null,
+        fullName: fullName || null,
+      };
+    }
+
     supabase.auth
       .getUser()
       .then(({ data }) => {
         if (!mounted) return;
-        const metadata = data.user?.user_metadata;
-        const fullName =
-          metadataString(metadata, "full_name") ||
-          metadataString(metadata, "name");
-        setAccount({
-          avatarUrl: metadataString(metadata, "avatar_url") || null,
-          email: data.user?.email ?? null,
-          fullName: fullName || null,
-        });
-        setLoading(false);
+        setAccount({ ...extractAccount(data.user?.user_metadata, data.user?.email), loading: false });
       })
       .catch(() => {
         if (!mounted) return;
-        setAccount({ avatarUrl: null, email: null, fullName: null });
-        setLoading(false);
+        setAccount({ avatarUrl: null, email: null, fullName: null, loading: false });
       });
 
     const { data } = supabase.auth.onAuthStateChange((_event, session) => {
-      const metadata = session?.user?.user_metadata;
-      const fullName =
-        metadataString(metadata, "full_name") ||
-        metadataString(metadata, "name");
-      setAccount({
-        avatarUrl: metadataString(metadata, "avatar_url") || null,
-        email: session?.user?.email ?? null,
-        fullName: fullName || null,
-      });
+      setAccount((prev) => ({ ...extractAccount(session?.user?.user_metadata, session?.user?.email), loading: prev.loading }));
     });
 
     return () => {
@@ -176,25 +170,26 @@ export function SidebarAccount({
   });
 
   const onSignOut = async () => {
+    const errTitle = isEn ? "Could not sign out" : "No se pudo cerrar sesión";
     try {
       const supabase = getSupabaseBrowserClient();
       const { error } = await supabase.auth.signOut();
       if (error) {
-        toast.error(isEn ? "Could not sign out" : "No se pudo cerrar sesión", {
-          description: error.message,
-        });
+        toast.error(errTitle, { description: error.message });
         return;
       }
       router.replace("/login");
       router.refresh();
     } catch (err) {
-      toast.error(isEn ? "Could not sign out" : "No se pudo cerrar sesión", {
-        description: err instanceof Error ? err.message : String(err),
-      });
+      let desc = String(err);
+      if (err instanceof Error) {
+        desc = err.message;
+      }
+      toast.error(errTitle, { description: desc });
     }
   };
 
-  const displayName = loading
+  const displayName = account.loading
     ? isEn
       ? "Loading..."
       : "Cargando..."

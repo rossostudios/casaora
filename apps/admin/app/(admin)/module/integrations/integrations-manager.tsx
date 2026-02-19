@@ -76,19 +76,29 @@ export function IntegrationsManager({
   async function handleCreate(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setSubmitting(true);
+    const unitIdVal = formUnitId ? formUnitId : undefined;
+    const channelVal = formChannel ? formChannel : undefined;
+    const icalUrlVal = formKind === "ical" ? formIcalUrl : undefined;
+    const externalIdVal = formExternalId ? formExternalId : undefined;
     try {
       await authedFetch("/integrations", {
         method: "POST",
         body: JSON.stringify({
           organization_id: orgId,
-          unit_id: formUnitId || undefined,
+          unit_id: unitIdVal,
           kind: formKind,
-          channel_name: formChannel || undefined,
-          ical_import_url: formKind === "ical" ? formIcalUrl : undefined,
-          external_listing_id: formExternalId || undefined,
+          channel_name: channelVal,
+          ical_import_url: icalUrlVal,
+          external_listing_id: externalIdVal,
         }),
       });
-      toast.success(isEn ? "Channel created" : "Canal creado");
+      let createMsg: string;
+      if (isEn) {
+        createMsg = "Channel created";
+      } else {
+        createMsg = "Canal creado";
+      }
+      toast.success(createMsg);
       setCreateOpen(false);
       setFormUnitId("");
       setFormKind("ical");
@@ -96,9 +106,15 @@ export function IntegrationsManager({
       setFormIcalUrl("");
       setFormExternalId("");
       router.refresh();
+      setSubmitting(false);
     } catch {
-      toast.error(isEn ? "Failed to create channel" : "Error al crear canal");
-    } finally {
+      let createErrMsg: string;
+      if (isEn) {
+        createErrMsg = "Failed to create channel";
+      } else {
+        createErrMsg = "Error al crear canal";
+      }
+      toast.error(createErrMsg);
       setSubmitting(false);
     }
   }
@@ -110,11 +126,23 @@ export function IntegrationsManager({
         method: "POST",
         body: JSON.stringify({}),
       });
-      toast.success(isEn ? "iCal sync started" : "Sincronización iCal iniciada");
+      let syncMsg: string;
+      if (isEn) {
+        syncMsg = "iCal sync started";
+      } else {
+        syncMsg = "Sincronización iCal iniciada";
+      }
+      toast.success(syncMsg);
       router.refresh();
+      setSyncingId(null);
     } catch {
-      toast.error(isEn ? "Sync failed" : "Fallo la sincronización");
-    } finally {
+      let syncErrMsg: string;
+      if (isEn) {
+        syncErrMsg = "Sync failed";
+      } else {
+        syncErrMsg = "Fallo la sincronización";
+      }
+      toast.error(syncErrMsg);
       setSyncingId(null);
     }
   }
@@ -124,10 +152,22 @@ export function IntegrationsManager({
       return;
     try {
       await authedFetch(`/integrations/${integrationId}`, { method: "DELETE" });
-      toast.success(isEn ? "Channel deleted" : "Canal eliminado");
+      let delMsg: string;
+      if (isEn) {
+        delMsg = "Channel deleted";
+      } else {
+        delMsg = "Canal eliminado";
+      }
+      toast.success(delMsg);
       router.refresh();
     } catch {
-      toast.error(isEn ? "Delete failed" : "Error al eliminar");
+      let delErrMsg: string;
+      if (isEn) {
+        delErrMsg = "Delete failed";
+      } else {
+        delErrMsg = "Error al eliminar";
+      }
+      toast.error(delErrMsg);
     }
   }
 

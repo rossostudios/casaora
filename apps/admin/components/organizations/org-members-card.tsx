@@ -197,21 +197,23 @@ export function OrgMembersCard({
         {canManage ? (
           <div className="rounded-lg border bg-card p-4">
             <div className="flex flex-col gap-3 md:flex-row md:items-end">
-              <label className="block flex-1">
+              <label className="block flex-1" htmlFor="member-user-id">
                 <span className="mb-1 block font-medium text-muted-foreground text-xs">
                   ID de usuario
                 </span>
                 <Input
+                  id="member-user-id"
                   onChange={(event) => setNewUserId(event.target.value)}
                   placeholder="UUID del usuario (Supabase)"
                   value={newUserId}
                 />
               </label>
-              <label className="block md:w-56">
+              <label className="block md:w-56" htmlFor="member-role">
                 <span className="mb-1 block font-medium text-muted-foreground text-xs">
                   Rol
                 </span>
                 <Select
+                  id="member-role"
                   onChange={(event) => {
                     const next = normalizeRole(event.target.value);
                     if (next) setNewRole(next);

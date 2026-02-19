@@ -2,7 +2,9 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
+
+import { useQuery } from "@tanstack/react-query";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -22,18 +24,21 @@ function asNumber(value: unknown): number {
 }
 
 export function OwnerDashboard({ locale }: { locale: string }) {
+  "use no memo";
   const isEn = locale === "en-US";
   const router = useRouter();
-  const [data, setData] = useState<Record<string, unknown> | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [tokenState] = useState(() =>
+    typeof window !== "undefined" ? localStorage.getItem("owner_token") : null
+  );
 
-  const fetchDashboard = useCallback(async () => {
-    const token = localStorage.getItem("owner_token");
-    if (!token) {
-      router.push("/owner/login");
-      return;
-    }
-    try {
+  const { data = null, isPending: loading } = useQuery({
+    queryKey: ["owner-dashboard", tokenState],
+    queryFn: async () => {
+      const token = localStorage.getItem("owner_token");
+      if (!token) {
+        router.push("/owner/login");
+        return null;
+      }
       const res = await fetch(`${API_BASE}/owner/dashboard`, {
         headers: { "x-owner-token": token },
       });
@@ -41,19 +46,13 @@ export function OwnerDashboard({ locale }: { locale: string }) {
         localStorage.removeItem("owner_token");
         localStorage.removeItem("owner_org_id");
         router.push("/owner/login");
-        return;
+        return null;
       }
-      setData(await res.json());
-    } catch {
-      /* ignore */
-    } finally {
-      setLoading(false);
-    }
-  }, [router]);
-
-  useEffect(() => {
-    fetchDashboard();
-  }, [fetchDashboard]);
+      if (!res.ok) return null;
+      return (await res.json()) as Record<string, unknown>;
+    },
+    enabled: Boolean(tokenState),
+  });
 
   if (loading) {
     return (

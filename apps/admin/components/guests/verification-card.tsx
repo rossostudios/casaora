@@ -54,44 +54,51 @@ export function VerificationCard({
   const [notes, setNotes] = useState("");
 
   async function handleReview(decision: "verified" | "rejected") {
+    const successMsg = decision === "verified"
+      ? isEn
+        ? "Guest verified"
+        : "Huésped verificado"
+      : isEn
+        ? "Verification rejected"
+        : "Verificación rechazada";
+    const fallbackErrMsg = isEn ? "Review failed" : "Error en la revisión";
+    const trimmedNotes = notes.trim();
+    const body = JSON.stringify({
+      verification_status: decision,
+      ...(trimmedNotes ? { notes: trimmedNotes } : {}),
+    });
+
+    const statusChangeCallback = onStatusChange;
     startTransition(async () => {
       try {
         const response = await fetch(`/api/guests/${guestId}/verification`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            verification_status: decision,
-            ...(notes.trim() ? { notes: notes.trim() } : {}),
-          }),
+          body,
         });
 
         if (!response.ok) {
           const data = (await response.json().catch(() => ({}))) as {
             error?: string;
           };
-          throw new Error(
-            data.error || `Request failed (${response.status})`
-          );
+          let errText = `Request failed (${response.status})`;
+          if (data.error) {
+            errText = data.error;
+          }
+          toast.error(errText);
+          return;
         }
 
-        toast.success(
-          decision === "verified"
-            ? isEn
-              ? "Guest verified"
-              : "Huésped verificado"
-            : isEn
-              ? "Verification rejected"
-              : "Verificación rechazada"
-        );
-        onStatusChange?.();
+        toast.success(successMsg);
+        if (statusChangeCallback) {
+          statusChangeCallback();
+        }
       } catch (err) {
-        toast.error(
-          err instanceof Error
-            ? err.message
-            : isEn
-              ? "Review failed"
-              : "Error en la revisión"
-        );
+        let msg = fallbackErrMsg;
+        if (err instanceof Error) {
+          msg = err.message;
+        }
+        toast.error(msg);
       }
     });
   }

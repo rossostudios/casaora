@@ -22,6 +22,9 @@ export function StripeCheckoutButton({
   async function handleCheckout() {
     setLoading(true);
     setError("");
+    const successUrl = `${window.location.origin}/pay/${referenceCode}?success=1`;
+    const cancelUrl = `${window.location.origin}/pay/${referenceCode}?cancelled=1`;
+    const fallbackError = isEn ? "Payment unavailable" : "Pago no disponible";
     try {
       const res = await fetch(
         `${API_BASE}/public/payment/${referenceCode}/checkout`,
@@ -29,25 +32,31 @@ export function StripeCheckoutButton({
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            success_url: `${window.location.origin}/pay/${referenceCode}?success=1`,
-            cancel_url: `${window.location.origin}/pay/${referenceCode}?cancelled=1`,
+            success_url: successUrl,
+            cancel_url: cancelUrl,
           }),
         }
       );
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        throw new Error(
-          (data as Record<string, string>).detail ||
-            (isEn ? "Payment unavailable" : "Pago no disponible")
-        );
+        const detail = (data as Record<string, string>).detail;
+        if (detail) {
+          setError(detail);
+        } else {
+          setError(fallbackError);
+        }
+        setLoading(false);
+        return;
       }
       const data = (await res.json()) as Record<string, string>;
       if (data.checkout_url) {
         window.location.href = data.checkout_url;
       }
+      setLoading(false);
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
+      let msg = String(err);
+      if (err instanceof Error) msg = err.message;
+      setError(msg);
       setLoading(false);
     }
   }

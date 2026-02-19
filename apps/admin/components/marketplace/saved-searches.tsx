@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { Suspense, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Cancel01Icon, FloppyDiskIcon } from "@hugeicons/core-free-icons";
 
@@ -27,34 +28,34 @@ function getVisitorId(): string {
 }
 
 export function SavedSearches({ isEn }: { isEn: boolean }) {
+  return (
+    <Suspense fallback={null}>
+      <SavedSearchesInner isEn={isEn} />
+    </Suspense>
+  );
+}
+
+function SavedSearchesInner({ isEn }: { isEn: boolean }) {
+  "use no memo";
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [searches, setSearches] = useState<SavedSearch[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [saving, setSaving] = useState(false);
 
   const visitorId = typeof window !== "undefined" ? getVisitorId() : "";
 
-  const loadSearches = useCallback(async () => {
-    if (!visitorId) return;
-    try {
+  const { data: searches = [], isPending: loading } = useQuery({
+    queryKey: ["saved-searches", visitorId],
+    queryFn: async () => {
       const res = await fetch(
         `${API_BASE}/public/saved-searches?visitor_id=${encodeURIComponent(visitorId)}`
       );
-      if (res.ok) {
-        const data = (await res.json()) as { data?: SavedSearch[] };
-        setSearches(data.data ?? []);
-      }
-    } catch {
-      // silently fail
-    } finally {
-      setLoading(false);
-    }
-  }, [visitorId]);
-
-  useEffect(() => {
-    loadSearches();
-  }, [loadSearches]);
+      if (!res.ok) return [];
+      const data = (await res.json()) as { data?: SavedSearch[] };
+      return data.data ?? [];
+    },
+    enabled: !!visitorId,
+  });
 
   const saveCurrentSearch = async () => {
     const params = Object.fromEntries(searchParams.entries());
@@ -80,11 +81,11 @@ export function SavedSearches({ isEn }: { isEn: boolean }) {
         }),
       });
       if (res.ok) {
-        await loadSearches();
+        await queryClient.invalidateQueries({ queryKey: ["saved-searches", visitorId] });
       }
+      setSaving(false);
     } catch {
       // silently fail
-    } finally {
       setSaving(false);
     }
   };
@@ -96,7 +97,11 @@ export function SavedSearches({ isEn }: { isEn: boolean }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ visitor_id: visitorId, id }),
       });
-      setSearches((prev) => prev.filter((s) => s.id !== id));
+      queryClient.setQueryData(
+        ["saved-searches", visitorId],
+        (prev: SavedSearch[] | undefined) =>
+          prev ? prev.filter((s) => s.id !== id) : []
+      );
     } catch {
       // silently fail
     }
@@ -128,6 +133,13 @@ export function SavedSearches({ isEn }: { isEn: boolean }) {
             onClick={(e) => {
               e.stopPropagation();
               deleteSearch(search.id);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                e.stopPropagation();
+                deleteSearch(search.id);
+              }
             }}
             role="button"
             tabIndex={0}

@@ -141,7 +141,9 @@ function AdminShellV2({
   children,
 }: AdminShellProps) {
   const pathname = usePathname();
-  const [viewportMode, setViewportMode] = useState<ViewportMode>("desktop");
+  const [viewportMode, setViewportMode] = useState<ViewportMode>(() =>
+    getViewportMode()
+  );
   const [isMobileDrawerOpen, setIsMobileDrawerOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const sidebarPanelRef = useRef<PanelImperativeHandle | null>(null);
@@ -152,8 +154,6 @@ function AdminShellV2({
     const tabletMedia = window.matchMedia(TABLET_QUERY);
 
     const sync = () => setViewportMode(getViewportMode());
-
-    sync();
 
     desktopMedia.addEventListener("change", sync);
     tabletMedia.addEventListener("change", sync);

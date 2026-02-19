@@ -68,35 +68,60 @@ export function OrgSettingsForm({ org }: { org: OrgRecord }) {
     }
 
     setUploadingLogo(true);
+    const errorLabel = isEn ? "Logo upload failed" : "Error al subir logo";
+    const noUrlMsg = isEn
+      ? "Could not resolve uploaded image URL."
+      : "No se pudo obtener la URL de la imagen.";
     try {
       const supabase = getSupabaseBrowserClient();
       const key = `orgs/${org.id}/branding/logo/${crypto.randomUUID()}-${safeFileName(file.name)}`;
       const { error: uploadError } = await supabase.storage
         .from("documents")
         .upload(key, file, { upsert: false });
-      if (uploadError) throw new Error(uploadError.message);
+      if (uploadError) {
+        toast.error(errorLabel, { description: uploadError.message });
+        setUploadingLogo(false);
+        return;
+      }
 
       const { data } = supabase.storage.from("documents").getPublicUrl(key);
       if (!data.publicUrl) {
-        throw new Error(
-          isEn
-            ? "Could not resolve uploaded image URL."
-            : "No se pudo obtener la URL de la imagen."
-        );
+        toast.error(errorLabel, { description: noUrlMsg });
+        setUploadingLogo(false);
+        return;
       }
       setLogoUrl(data.publicUrl);
-      toast.success(isEn ? "Logo uploaded" : "Logo subido");
+      let uploadedMsg: string;
+      if (isEn) {
+        uploadedMsg = "Logo uploaded";
+      } else {
+        uploadedMsg = "Logo subido";
+      }
+      toast.success(uploadedMsg);
+      setUploadingLogo(false);
     } catch (err) {
-      toast.error(
-        isEn ? "Logo upload failed" : "Error al subir logo",
-        { description: err instanceof Error ? err.message : String(err) }
-      );
-    } finally {
+      let errDesc: string;
+      if (err instanceof Error) {
+        errDesc = err.message;
+      } else {
+        errDesc = String(err);
+      }
+      toast.error(errorLabel, { description: errDesc });
       setUploadingLogo(false);
     }
   }
 
   function handleSave() {
+    const nameVal = name.trim() ? name.trim() : undefined;
+    const legalNameVal = legalName.trim() ? legalName.trim() : undefined;
+    const rucVal = ruc.trim() ? ruc.trim() : undefined;
+    const currencyVal = currency ? currency : undefined;
+    const timezoneVal = timezone ? timezone : undefined;
+    const bankNameVal = bankName.trim() ? bankName.trim() : undefined;
+    const bankAccountNumberVal = bankAccountNumber.trim() ? bankAccountNumber.trim() : undefined;
+    const bankAccountHolderVal = bankAccountHolder.trim() ? bankAccountHolder.trim() : undefined;
+    const qrImageUrlVal = qrImageUrl.trim() ? qrImageUrl.trim() : undefined;
+
     startTransition(async () => {
       try {
         const response = await fetch(
@@ -105,38 +130,59 @@ export function OrgSettingsForm({ org }: { org: OrgRecord }) {
             method: "PATCH",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              name: name.trim() || undefined,
-              legal_name: legalName.trim() || undefined,
-              ruc: ruc.trim() || undefined,
-              default_currency: currency || undefined,
-              timezone: timezone || undefined,
-              bank_name: bankName.trim() || undefined,
-              bank_account_number: bankAccountNumber.trim() || undefined,
-              bank_account_holder: bankAccountHolder.trim() || undefined,
-              qr_image_url: qrImageUrl.trim() || undefined,
+              name: nameVal,
+              legal_name: legalNameVal,
+              ruc: rucVal,
+              default_currency: currencyVal,
+              timezone: timezoneVal,
+              bank_name: bankNameVal,
+              bank_account_number: bankAccountNumberVal,
+              bank_account_holder: bankAccountHolderVal,
+              qr_image_url: qrImageUrlVal,
               logo_url: logoUrl.trim(),
             }),
           }
         );
 
         if (!response.ok) {
-          const data = (await response.json().catch(() => ({}))) as {
-            error?: string;
-          };
-          throw new Error(
-            data.error || `Request failed (${response.status})`
-          );
+          let rawData: Record<string, unknown>;
+          try {
+            rawData = await response.json();
+          } catch {
+            rawData = {};
+          }
+          const data = rawData as { error?: string };
+          let errMsg: string;
+          if (data.error) {
+            errMsg = data.error;
+          } else {
+            errMsg = `Request failed (${response.status})`;
+          }
+          toast.error(errMsg);
+          return;
         }
 
-        toast.success(isEn ? "Settings saved" : "Configuración guardada");
+        let savedMsg: string;
+        if (isEn) {
+          savedMsg = "Settings saved";
+        } else {
+          savedMsg = "Configuración guardada";
+        }
+        toast.success(savedMsg);
       } catch (err) {
-        toast.error(
-          err instanceof Error
-            ? err.message
-            : isEn
-              ? "Save failed"
-              : "Error al guardar"
-        );
+        let fallback: string;
+        if (isEn) {
+          fallback = "Save failed";
+        } else {
+          fallback = "Error al guardar";
+        }
+        let msg: string;
+        if (err instanceof Error) {
+          msg = err.message;
+        } else {
+          msg = fallback;
+        }
+        toast.error(msg);
       }
     });
   }
@@ -148,28 +194,31 @@ export function OrgSettingsForm({ org }: { org: OrgRecord }) {
           {isEn ? "General" : "General"}
         </h3>
         <div className="grid gap-4 md:grid-cols-2">
-          <label className="block space-y-1 text-sm">
+          <label className="block space-y-1 text-sm" htmlFor="org-settings-name">
             <span className="font-medium text-muted-foreground">
               {isEn ? "Organization name" : "Nombre de organización"}
             </span>
             <Input
+              id="org-settings-name"
               onChange={(e) => setName(e.target.value)}
               required
               value={name}
             />
           </label>
-          <label className="block space-y-1 text-sm">
+          <label className="block space-y-1 text-sm" htmlFor="org-settings-legal-name">
             <span className="font-medium text-muted-foreground">
               {isEn ? "Legal name" : "Razón social"}
             </span>
             <Input
+              id="org-settings-legal-name"
               onChange={(e) => setLegalName(e.target.value)}
               value={legalName}
             />
           </label>
-          <label className="block space-y-1 text-sm">
+          <label className="block space-y-1 text-sm" htmlFor="org-settings-ruc">
             <span className="font-medium text-muted-foreground">RUC</span>
             <Input
+              id="org-settings-ruc"
               onChange={(e) => setRuc(e.target.value)}
               placeholder="80012345-6"
               value={ruc}
@@ -250,12 +299,13 @@ export function OrgSettingsForm({ org }: { org: OrgRecord }) {
           type="file"
         />
 
-        <label className="block space-y-1 text-sm">
+        <label className="block space-y-1 text-sm" htmlFor="org-settings-logo-url">
           <span className="font-medium text-muted-foreground">
             {isEn ? "Logo URL (fallback)" : "URL del logo (alternativa)"}
           </span>
           <Input
             autoComplete="url"
+            id="org-settings-logo-url"
             onChange={(event) => setLogoUrl(event.target.value)}
             placeholder="https://..."
             value={logoUrl}
@@ -268,11 +318,12 @@ export function OrgSettingsForm({ org }: { org: OrgRecord }) {
           {isEn ? "Regional" : "Regional"}
         </h3>
         <div className="grid gap-4 md:grid-cols-2">
-          <label className="block space-y-1 text-sm">
+          <label className="block space-y-1 text-sm" htmlFor="org-settings-currency">
             <span className="font-medium text-muted-foreground">
               {isEn ? "Default currency" : "Moneda predeterminada"}
             </span>
             <Select
+              id="org-settings-currency"
               onChange={(e) => setCurrency(e.target.value)}
               value={currency}
             >
@@ -280,11 +331,12 @@ export function OrgSettingsForm({ org }: { org: OrgRecord }) {
               <option value="USD">USD (Dólar)</option>
             </Select>
           </label>
-          <label className="block space-y-1 text-sm">
+          <label className="block space-y-1 text-sm" htmlFor="org-settings-timezone">
             <span className="font-medium text-muted-foreground">
               {isEn ? "Timezone" : "Zona horaria"}
             </span>
             <Select
+              id="org-settings-timezone"
               onChange={(e) => setTimezone(e.target.value)}
               value={timezone}
             >
@@ -312,39 +364,43 @@ export function OrgSettingsForm({ org }: { org: OrgRecord }) {
             : "Utilizados para instrucciones de pago y estados del propietario."}
         </p>
         <div className="grid gap-4 md:grid-cols-2">
-          <label className="block space-y-1 text-sm">
+          <label className="block space-y-1 text-sm" htmlFor="org-settings-bank-name">
             <span className="font-medium text-muted-foreground">
               {isEn ? "Bank name" : "Nombre del banco"}
             </span>
             <Input
+              id="org-settings-bank-name"
               onChange={(e) => setBankName(e.target.value)}
               placeholder={isEn ? "e.g. Banco Itaú" : "Ej. Banco Itaú"}
               value={bankName}
             />
           </label>
-          <label className="block space-y-1 text-sm">
+          <label className="block space-y-1 text-sm" htmlFor="org-settings-bank-account">
             <span className="font-medium text-muted-foreground">
               {isEn ? "Account number" : "Número de cuenta"}
             </span>
             <Input
+              id="org-settings-bank-account"
               onChange={(e) => setBankAccountNumber(e.target.value)}
               value={bankAccountNumber}
             />
           </label>
-          <label className="block space-y-1 text-sm">
+          <label className="block space-y-1 text-sm" htmlFor="org-settings-bank-holder">
             <span className="font-medium text-muted-foreground">
               {isEn ? "Account holder" : "Titular de la cuenta"}
             </span>
             <Input
+              id="org-settings-bank-holder"
               onChange={(e) => setBankAccountHolder(e.target.value)}
               value={bankAccountHolder}
             />
           </label>
-          <label className="block space-y-1 text-sm">
+          <label className="block space-y-1 text-sm" htmlFor="org-settings-qr-url">
             <span className="font-medium text-muted-foreground">
               {isEn ? "QR image URL" : "URL de imagen QR"}
             </span>
             <Input
+              id="org-settings-qr-url"
               onChange={(e) => setQrImageUrl(e.target.value)}
               placeholder="https://..."
               value={qrImageUrl}

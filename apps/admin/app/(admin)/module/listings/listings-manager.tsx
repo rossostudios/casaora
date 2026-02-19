@@ -125,6 +125,26 @@ function toListingRow(row: Record<string, unknown>): ListingRow {
 
 const NUMERIC_FIELDS = new Set(["bedrooms", "bathrooms", "square_meters"]);
 
+async function bulkPublishListings(
+  ids: string[],
+  action: "publish" | "unpublish"
+): Promise<void> {
+  for (let i = 0; i < ids.length; i++) {
+    const encodedId = encodeURIComponent(ids[i]);
+    if (action === "publish") {
+      await authedFetch("/listings/" + encodedId + "/publish", {
+        method: "POST",
+        body: "{}",
+      });
+    } else {
+      await authedFetch("/listings/" + encodedId, {
+        method: "PATCH",
+        body: JSON.stringify({ is_published: false }),
+      });
+    }
+  }
+}
+
 export function ListingsManager({
   orgId,
   pricingTemplates,
@@ -136,6 +156,7 @@ export function ListingsManager({
   properties: Record<string, unknown>[];
   units: Record<string, unknown>[];
 }) {
+  "use no memo";
   const locale = useActiveLocale();
   const isEn = locale === "en-US";
   const queryClient = useQueryClient();
@@ -262,11 +283,15 @@ export function ListingsManager({
           { method: "POST", body: "{}" }
         );
         queryClient.invalidateQueries({ queryKey: ["listings"] });
-        toast.success(isEn ? "Published" : "Publicado");
+        let pubMsg: string;
+        if (isEn) { pubMsg = "Published"; } else { pubMsg = "Publicado"; }
+        toast.success(pubMsg);
       } catch (err) {
-        toast.error(isEn ? "Failed" : "Error", {
-          description: err instanceof Error ? err.message : String(err),
-        });
+        let failTitle: string;
+        if (isEn) { failTitle = "Failed"; } else { failTitle = "Error"; }
+        let errDesc: string;
+        if (err instanceof Error) { errDesc = err.message; } else { errDesc = String(err); }
+        toast.error(failTitle, { description: errDesc });
       }
     },
     [queryClient, isEn]
@@ -280,11 +305,15 @@ export function ListingsManager({
           { method: "PATCH", body: JSON.stringify({ is_published: false }) }
         );
         queryClient.invalidateQueries({ queryKey: ["listings"] });
-        toast.success(isEn ? "Unpublished" : "Despublicado");
+        let unpubMsg: string;
+        if (isEn) { unpubMsg = "Unpublished"; } else { unpubMsg = "Despublicado"; }
+        toast.success(unpubMsg);
       } catch (err) {
-        toast.error(isEn ? "Failed" : "Error", {
-          description: err instanceof Error ? err.message : String(err),
-        });
+        let failTitle2: string;
+        if (isEn) { failTitle2 = "Failed"; } else { failTitle2 = "Error"; }
+        let errDesc2: string;
+        if (err instanceof Error) { errDesc2 = err.message; } else { errDesc2 = String(err); }
+        toast.error(failTitle2, { description: errDesc2 });
       }
     },
     [queryClient, isEn]
@@ -307,9 +336,13 @@ export function ListingsManager({
         queryClient.invalidateQueries({ queryKey: ["listings"] });
         return { ok: true };
       } catch (err) {
+        let errMsg = String(err);
+        if (err instanceof Error) {
+          errMsg = err.message;
+        }
         return {
           ok: false,
-          error: err instanceof Error ? err.message : String(err),
+          error: errMsg,
         };
       }
     },
@@ -319,32 +352,19 @@ export function ListingsManager({
   const bulkAction = useCallback(
     async (action: "publish" | "unpublish") => {
       if (selectedIds.size === 0) return;
+      const doneMsg = isEn ? "Done" : "Hecho";
+      const errMsg = isEn ? "Failed" : "Error";
+      const ids = Array.from(selectedIds);
       setBulkProcessing(true);
       try {
-        for (const id of selectedIds) {
-          if (action === "publish") {
-            await authedFetch(
-              `/listings/${encodeURIComponent(id)}/publish`,
-              { method: "POST", body: "{}" }
-            );
-          } else {
-            await authedFetch(
-              `/listings/${encodeURIComponent(id)}`,
-              {
-                method: "PATCH",
-                body: JSON.stringify({ is_published: false }),
-              }
-            );
-          }
-        }
+        await bulkPublishListings(ids, action);
         queryClient.invalidateQueries({ queryKey: ["listings"] });
-        toast.success(isEn ? "Done" : "Hecho");
+        toast.success(doneMsg);
       } catch {
-        toast.error(isEn ? "Failed" : "Error");
-      } finally {
-        setBulkProcessing(false);
-        setSelectedIds(new Set());
+        toast.error(errMsg);
       }
+      setBulkProcessing(false);
+      setSelectedIds(new Set());
     },
     [selectedIds, queryClient, isEn]
   );

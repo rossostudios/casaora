@@ -30,12 +30,14 @@ CardHeader.displayName = "CardHeader";
 const CardTitle = forwardRef<
   HTMLHeadingElement,
   HTMLAttributes<HTMLHeadingElement>
->(({ className, ...props }, ref) => (
+>(({ className, children, ...props }, ref) => (
   <h3
     className={cn("font-semibold leading-tight", className)}
     ref={ref}
     {...props}
-  />
+  >
+    {children}
+  </h3>
 ));
 CardTitle.displayName = "CardTitle";
 

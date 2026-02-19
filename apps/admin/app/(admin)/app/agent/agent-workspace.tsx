@@ -1,7 +1,7 @@
 "use client";
 
 import { SparklesIcon, Tick01Icon } from "@hugeicons/core-free-icons";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -79,27 +79,58 @@ function fromStorage(key: string): ChatMessage[] {
 
     const rows: ChatMessage[] = [];
     parsed.forEach((item, index) => {
-      if (!item || typeof item !== "object") return;
+      if (!item) return;
+      if (typeof item !== "object") return;
       const record = item as Record<string, unknown>;
-      const role: Role = record.role === "user" ? "user" : "assistant";
-      const content =
-        typeof record.content === "string" ? record.content.trim() : "";
+      let role: Role;
+      if (record.role === "user") {
+        role = "user";
+      } else {
+        role = "assistant";
+      }
+      let content: string;
+      if (typeof record.content === "string") {
+        content = record.content.trim();
+      } else {
+        content = "";
+      }
       if (!content) return;
 
+      let id: string;
+      if (typeof record.id === "string") {
+        if (record.id) {
+          id = record.id;
+        } else {
+          id = `${role}-restored-${index + 1}`;
+        }
+      } else {
+        id = `${role}-restored-${index + 1}`;
+      }
+
+      let createdAt: string;
+      if (typeof record.createdAt === "string") {
+        if (record.createdAt) {
+          createdAt = record.createdAt;
+        } else {
+          createdAt = nowIso();
+        }
+      } else {
+        createdAt = nowIso();
+      }
+
+      let toolTrace: ToolTraceItem[] | undefined;
+      if (Array.isArray(record.toolTrace)) {
+        toolTrace = record.toolTrace as ToolTraceItem[];
+      } else {
+        toolTrace = undefined;
+      }
+
       rows.push({
-        id:
-          typeof record.id === "string" && record.id
-            ? record.id
-            : `${role}-restored-${index + 1}`,
+        id,
         role,
         content,
-        createdAt:
-          typeof record.createdAt === "string" && record.createdAt
-            ? record.createdAt
-            : nowIso(),
-        toolTrace: Array.isArray(record.toolTrace)
-          ? (record.toolTrace as ToolTraceItem[])
-          : undefined,
+        createdAt,
+        toolTrace,
       });
     });
     return rows;
@@ -122,15 +153,31 @@ export function AgentWorkspace({
   startFresh,
 }: AgentWorkspaceProps) {
   const isEn = locale === "en-US";
-  const storageKey = useMemo(() => `pa-agent-chat:${orgId}`, [orgId]);
+  const storageKey = `pa-agent-chat:${orgId}`;
 
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [messages, setMessages] = useState<ChatMessage[]>(() => {
+    if (startFresh) return [];
+    if (typeof window === "undefined") return [];
+    return fromStorage(`pa-agent-chat:${orgId}`);
+  });
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [allowMutations, setAllowMutations] = useState(false);
 
   const messageCounter = useRef(0);
+
+  const [prevStorageKey, setPrevStorageKey] = useState(storageKey);
+  const [prevStartFresh, setPrevStartFresh] = useState(startFresh);
+  if (storageKey !== prevStorageKey || startFresh !== prevStartFresh) {
+    setPrevStorageKey(storageKey);
+    setPrevStartFresh(startFresh);
+    if (startFresh) {
+      setMessages([]);
+    } else {
+      setMessages(fromStorage(storageKey));
+    }
+  }
 
   useEffect(() => {
     if (startFresh) {
@@ -139,11 +186,7 @@ export function AgentWorkspace({
       } catch {
         // Ignore storage failures.
       }
-      setMessages([]);
-      return;
     }
-
-    setMessages(fromStorage(storageKey));
   }, [startFresh, storageKey]);
 
   useEffect(() => {
@@ -154,7 +197,7 @@ export function AgentWorkspace({
 
   const nextMessageId = (role: Role): string => {
     messageCounter.current += 1;
-    return `${role}-${messageCounter.current}-${Date.now()}`;
+    return `${role}-${messageCounter.current}`;
   };
 
   const createMessage = (
@@ -186,6 +229,16 @@ export function AgentWorkspace({
     setMessages((prev) => [...prev, userMessage]);
     setDraft("");
 
+    const defaultErrorDetail = isEn
+      ? "Agent request failed."
+      : "La solicitud al agente falló.";
+    const defaultReply = isEn
+      ? "No response generated."
+      : "No se generó respuesta.";
+    const failureReply = isEn
+      ? "I could not complete that request. Please try again."
+      : "No pude completar esa solicitud. Intenta de nuevo.";
+
     try {
       const response = await fetch("/api/agent/chat", {
         method: "POST",
@@ -206,43 +259,59 @@ export function AgentWorkspace({
       };
 
       if (!response.ok) {
-        const detail =
-          typeof payload.error === "string" && payload.error
-            ? payload.error
-            : isEn
-              ? "Agent request failed."
-              : "La solicitud al agente falló.";
-        throw new Error(detail);
+        let detail: string;
+        if (typeof payload.error === "string") {
+          if (payload.error) {
+            detail = payload.error;
+          } else {
+            detail = defaultErrorDetail;
+          }
+        } else {
+          detail = defaultErrorDetail;
+        }
+        setError(detail);
+        setMessages((prev) => [
+          ...prev,
+          createMessage("assistant", failureReply),
+        ]);
+        setSending(false);
+        return;
       }
 
-      const reply =
-        typeof payload.reply === "string" && payload.reply.trim()
-          ? payload.reply.trim()
-          : isEn
-            ? "No response generated."
-            : "No se generó respuesta.";
+      let reply: string;
+      if (typeof payload.reply === "string") {
+        if (payload.reply.trim()) {
+          reply = payload.reply.trim();
+        } else {
+          reply = defaultReply;
+        }
+      } else {
+        reply = defaultReply;
+      }
+      let toolTrace: ToolTraceItem[] | undefined;
+      if (Array.isArray(payload.tool_trace)) {
+        toolTrace = payload.tool_trace;
+      } else {
+        toolTrace = undefined;
+      }
 
       setMessages((prev) => [
         ...prev,
-        createMessage(
-          "assistant",
-          reply,
-          Array.isArray(payload.tool_trace) ? payload.tool_trace : undefined
-        ),
+        createMessage("assistant", reply, toolTrace),
       ]);
+      setSending(false);
     } catch (err) {
-      const detail = err instanceof Error ? err.message : String(err);
+      let detail: string;
+      if (err instanceof Error) {
+        detail = err.message;
+      } else {
+        detail = String(err);
+      }
       setError(detail);
       setMessages((prev) => [
         ...prev,
-        createMessage(
-          "assistant",
-          isEn
-            ? "I could not complete that request. Please try again."
-            : "No pude completar esa solicitud. Intenta de nuevo."
-        ),
+        createMessage("assistant", failureReply),
       ]);
-    } finally {
       setSending(false);
     }
   };
@@ -371,10 +440,10 @@ export function AgentWorkspace({
                           </CollapsibleTrigger>
                           <CollapsibleContent>
                             <div className="mt-2 space-y-1 rounded-lg border bg-muted/20 p-2">
-                              {entry.toolTrace.map((tool, index) => (
+                              {entry.toolTrace.map((tool) => (
                                 <div
                                   className="flex items-center justify-between gap-2 rounded-md bg-background/80 px-2 py-1"
-                                  key={`${entry.id}-tool-${index}`}
+                                  key={`${entry.id}-${tool.tool ?? "tool"}-${tool.preview ?? ""}-${String(tool.ok)}`}
                                 >
                                   <span className="font-mono text-[11px]">
                                     {tool.tool || "tool"}

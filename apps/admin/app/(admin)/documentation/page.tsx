@@ -62,9 +62,11 @@ function formatGeneratedAt(value: string, locale: Locale): string {
 export default async function DocumentationPage({
   searchParams,
 }: DocumentationPageProps) {
-  const params = await searchParams;
-  const locale = await getActiveLocale();
-  const orgId = await getActiveOrgId();
+  const [params, locale, orgId] = await Promise.all([
+    searchParams,
+    getActiveLocale(),
+    getActiveOrgId(),
+  ]);
   const isEn = locale === "en-US";
   const query = asQuery(params.q).toLowerCase();
 
@@ -477,9 +479,9 @@ export default async function DocumentationPage({
               </AlertDescription>
             </Alert>
           ) : (
-            filteredWarnings.map((warning, index) => (
+            filteredWarnings.map((warning) => (
               <Alert
-                key={`${warning.source}-${warning.message}-${index}`}
+                key={`${warning.source}-${warning.message}-${warning.detail ?? ""}`}
                 variant="warning"
               >
                 <AlertTitle className="font-mono text-xs uppercase">

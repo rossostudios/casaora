@@ -287,10 +287,11 @@ export function OrganizationProfileInputs({
         {isEn ? "Organization profile" : "Perfil de organización"}
       </legend>
       <div className="grid gap-2 sm:grid-cols-2">
-        <label className="group relative flex cursor-pointer items-start gap-3 rounded-xl border border-border/70 bg-background px-4 py-3 text-sm transition-colors has-[:checked]:border-primary/50 has-[:checked]:bg-primary/5">
+        <label aria-label="Owner-operator" className="group relative flex cursor-pointer items-start gap-3 rounded-xl border border-border/70 bg-background px-4 py-3 text-sm transition-colors has-[:checked]:border-primary/50 has-[:checked]:bg-primary/5" htmlFor="profile_type_owner_operator">
           <input
             className="mt-0.5 accent-[var(--primary)]"
             defaultChecked={defaultValue === "owner_operator"}
+            id="profile_type_owner_operator"
             name="profile_type"
             required
             type="radio"
@@ -307,10 +308,11 @@ export function OrganizationProfileInputs({
             </span>
           </div>
         </label>
-        <label className="group relative flex cursor-pointer items-start gap-3 rounded-xl border border-border/70 bg-background px-4 py-3 text-sm transition-colors has-[:checked]:border-primary/50 has-[:checked]:bg-primary/5">
+        <label aria-label="Management company" className="group relative flex cursor-pointer items-start gap-3 rounded-xl border border-border/70 bg-background px-4 py-3 text-sm transition-colors has-[:checked]:border-primary/50 has-[:checked]:bg-primary/5" htmlFor="profile_type_management_company">
           <input
             className="mt-0.5 accent-[var(--primary)]"
             defaultChecked={defaultValue === "management_company"}
+            id="profile_type_management_company"
             name="profile_type"
             required
             type="radio"
@@ -345,10 +347,11 @@ export function RentalModeInputs({
         {isEn ? "What do you manage?" : "¿Qué administras?"}
       </legend>
       <div className="grid gap-2 sm:grid-cols-3">
-        <label className="group relative flex cursor-pointer items-start gap-3 rounded-xl border border-border/70 bg-background px-4 py-3 text-sm transition-colors has-[:checked]:border-primary/50 has-[:checked]:bg-primary/5">
+        <label aria-label="Short-term rentals" className="group relative flex cursor-pointer items-start gap-3 rounded-xl border border-border/70 bg-background px-4 py-3 text-sm transition-colors has-[:checked]:border-primary/50 has-[:checked]:bg-primary/5" htmlFor="rental_mode_str">
           <input
             className="mt-0.5 accent-[var(--primary)]"
             defaultChecked={defaultValue === "str"}
+            id="rental_mode_str"
             name="rental_mode"
             required
             type="radio"
@@ -365,10 +368,11 @@ export function RentalModeInputs({
             </span>
           </div>
         </label>
-        <label className="group relative flex cursor-pointer items-start gap-3 rounded-xl border border-border/70 bg-background px-4 py-3 text-sm transition-colors has-[:checked]:border-primary/50 has-[:checked]:bg-primary/5">
+        <label aria-label="Long-term rentals" className="group relative flex cursor-pointer items-start gap-3 rounded-xl border border-border/70 bg-background px-4 py-3 text-sm transition-colors has-[:checked]:border-primary/50 has-[:checked]:bg-primary/5" htmlFor="rental_mode_ltr">
           <input
             className="mt-0.5 accent-[var(--primary)]"
             defaultChecked={defaultValue === "ltr"}
+            id="rental_mode_ltr"
             name="rental_mode"
             required
             type="radio"
@@ -385,10 +389,11 @@ export function RentalModeInputs({
             </span>
           </div>
         </label>
-        <label className="group relative flex cursor-pointer items-start gap-3 rounded-xl border border-border/70 bg-background px-4 py-3 text-sm transition-colors has-[:checked]:border-primary/50 has-[:checked]:bg-primary/5">
+        <label aria-label="Both rental types" className="group relative flex cursor-pointer items-start gap-3 rounded-xl border border-border/70 bg-background px-4 py-3 text-sm transition-colors has-[:checked]:border-primary/50 has-[:checked]:bg-primary/5" htmlFor="rental_mode_both">
           <input
             className="mt-0.5 accent-[var(--primary)]"
             defaultChecked={defaultValue === "both"}
+            id="rental_mode_both"
             name="rental_mode"
             required
             type="radio"
@@ -425,57 +430,62 @@ export function OrganizationCoreFields({
 }) {
   return (
     <>
-      <label className="grid gap-1">
+      <label className="grid gap-1" htmlFor="setup-org-name">
         <span className="text-xs font-medium text-muted-foreground">
           {isEn ? "Name" : "Nombre"}
         </span>
         <Input
           defaultValue={defaults?.name ?? ""}
+          id="setup-org-name"
           name="name"
           placeholder={isEn ? "My Property Company" : "Mi Empresa Inmobiliaria"}
           required
         />
       </label>
-      <label className="grid gap-1">
+      <label className="grid gap-1" htmlFor="setup-org-legal-name">
         <span className="text-xs font-medium text-muted-foreground">
           {isEn ? "Legal name" : "Razón social"}
         </span>
         <Input
           defaultValue={defaults?.legalName ?? ""}
+          id="setup-org-legal-name"
           name="legal_name"
           placeholder={isEn ? "Company S.A." : "Empresa S.A."}
         />
       </label>
-      <label className="grid gap-1">
+      <label className="grid gap-1" htmlFor="setup-org-ruc">
         <span className="text-xs font-medium text-muted-foreground">
           {isEn ? "Tax ID (RUC)" : "RUC"}
         </span>
         <Input
           defaultValue={defaults?.ruc ?? ""}
+          id="setup-org-ruc"
           name="ruc"
           placeholder="80012345-6"
         />
       </label>
       <div className="grid gap-3 sm:grid-cols-2">
-        <label className="grid gap-1">
+        <label className="grid gap-1" htmlFor="setup-org-currency">
           <span className="text-xs font-medium text-muted-foreground">
             {isEn ? "Default currency" : "Moneda predeterminada"}
           </span>
           <select
             className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
             defaultValue={defaults?.defaultCurrency ?? "PYG"}
+            id="setup-org-currency"
             name="default_currency"
           >
             <option value="PYG">PYG — Guaraní</option>
             <option value="USD">USD — US Dollar</option>
           </select>
         </label>
-        <label className="grid gap-1">
+        <label className="grid gap-1" htmlFor="setup-org-timezone">
           <span className="text-xs font-medium text-muted-foreground">
             {isEn ? "Timezone" : "Zona horaria"}
           </span>
           <Input
             defaultValue={defaults?.timezone ?? "America/Asuncion"}
+            id="setup-org-timezone"
             name="timezone"
           />
         </label>

@@ -96,7 +96,7 @@ export function MarketplaceFiltersForm({
         id="marketplace-filters"
       >
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <label className="inline-flex h-11 w-full items-center gap-2 rounded-xl border border-[#e8e4df] bg-[var(--marketplace-bg-muted)] px-3 sm:col-span-2">
+          <label className="inline-flex h-11 w-full items-center gap-2 rounded-xl border border-[#e8e4df] bg-[var(--marketplace-bg-muted)] px-3 sm:col-span-2" htmlFor="mkt-filter-q">
             <Icon
               className="text-[var(--marketplace-text-muted)]"
               icon={Search01Icon}
@@ -105,6 +105,7 @@ export function MarketplaceFiltersForm({
             <Input
               className="h-full w-full border-0 bg-transparent px-0 py-0 text-sm shadow-none focus-visible:ring-0"
               defaultValue={filters.q}
+              id="mkt-filter-q"
               name="q"
               placeholder={
                 isEn ? "Search title or neighborhood" : "Buscar titulo o barrio"
@@ -113,7 +114,7 @@ export function MarketplaceFiltersForm({
             />
           </label>
 
-          <label className="inline-flex h-11 w-full items-center gap-2 rounded-xl border border-[#e8e4df] bg-[var(--marketplace-bg-muted)] px-3">
+          <label className="inline-flex h-11 w-full items-center gap-2 rounded-xl border border-[#e8e4df] bg-[var(--marketplace-bg-muted)] px-3" htmlFor="mkt-filter-city">
             <Icon
               className="text-[var(--marketplace-text-muted)]"
               icon={Location01Icon}
@@ -122,13 +123,14 @@ export function MarketplaceFiltersForm({
             <Input
               className="h-full w-full border-0 bg-transparent px-0 py-0 text-sm shadow-none focus-visible:ring-0"
               defaultValue={filters.city}
+              id="mkt-filter-city"
               name="city"
               placeholder={isEn ? "City" : "Ciudad"}
               type="text"
             />
           </label>
 
-          <label className="inline-flex h-11 w-full items-center gap-2 rounded-xl border border-[#e8e4df] bg-[var(--marketplace-bg-muted)] px-3">
+          <label className="inline-flex h-11 w-full items-center gap-2 rounded-xl border border-[#e8e4df] bg-[var(--marketplace-bg-muted)] px-3" htmlFor="mkt-filter-neighborhood">
             <Icon
               className="text-[var(--marketplace-text-muted)]"
               icon={Home01Icon}
@@ -137,13 +139,14 @@ export function MarketplaceFiltersForm({
             <Input
               className="h-full w-full border-0 bg-transparent px-0 py-0 text-sm shadow-none focus-visible:ring-0"
               defaultValue={filters.neighborhood}
+              id="mkt-filter-neighborhood"
               name="neighborhood"
               placeholder={isEn ? "Neighborhood" : "Barrio"}
               type="text"
             />
           </label>
 
-          <label className="inline-flex h-11 w-full items-center gap-2 rounded-xl border border-[#e8e4df] bg-[var(--marketplace-bg-muted)] px-3">
+          <label className="inline-flex h-11 w-full items-center gap-2 rounded-xl border border-[#e8e4df] bg-[var(--marketplace-bg-muted)] px-3" htmlFor="mkt-filter-property-type">
             <Icon
               className="text-[var(--marketplace-text-muted)]"
               icon={Home01Icon}
@@ -152,6 +155,7 @@ export function MarketplaceFiltersForm({
             <select
               className="h-full w-full min-w-0 bg-transparent text-sm outline-none"
               defaultValue={filters.propertyType || ""}
+              id="mkt-filter-property-type"
               name="property_type"
             >
               <option value="">
@@ -165,7 +169,7 @@ export function MarketplaceFiltersForm({
             </select>
           </label>
 
-          <label className="inline-flex h-11 w-full items-center gap-2 rounded-xl border border-[#e8e4df] bg-[var(--marketplace-bg-muted)] px-3">
+          <label className="inline-flex h-11 w-full items-center gap-2 rounded-xl border border-[#e8e4df] bg-[var(--marketplace-bg-muted)] px-3" htmlFor="mkt-filter-furnished">
             <Icon
               className="text-[var(--marketplace-text-muted)]"
               icon={Home01Icon}
@@ -180,6 +184,7 @@ export function MarketplaceFiltersForm({
                     ? "true"
                     : "false"
               }
+              id="mkt-filter-furnished"
               name="furnished"
             >
               <option value="">{isEn ? "Furnished?" : "¿Amoblado?"}</option>
@@ -190,7 +195,7 @@ export function MarketplaceFiltersForm({
             </select>
           </label>
 
-          <label className="inline-flex h-11 w-full items-center gap-2 rounded-xl border border-[#e8e4df] bg-[var(--marketplace-bg-muted)] px-3">
+          <label className="inline-flex h-11 w-full items-center gap-2 rounded-xl border border-[#e8e4df] bg-[var(--marketplace-bg-muted)] px-3" htmlFor="mkt-filter-min-monthly">
             <Icon
               className="text-[var(--marketplace-text-muted)]"
               icon={Wallet02Icon}
@@ -199,6 +204,7 @@ export function MarketplaceFiltersForm({
             <Input
               className="h-full min-w-0 flex-1 border-0 bg-transparent px-0 py-0 text-sm shadow-none focus-visible:ring-0"
               defaultValue={filters.minMonthly ?? ""}
+              id="mkt-filter-min-monthly"
               min={0}
               name="min_monthly"
               placeholder={isEn ? "Min" : "Min"}
@@ -217,13 +223,14 @@ export function MarketplaceFiltersForm({
         </div>
 
         <div className="mt-3 grid grid-cols-3 gap-3 sm:grid-cols-6">
-          <label className="inline-flex h-11 w-full items-center gap-2 rounded-xl border border-[#e8e4df] bg-[var(--marketplace-bg-muted)] px-3">
+          <label className="inline-flex h-11 w-full items-center gap-2 rounded-xl border border-[#e8e4df] bg-[var(--marketplace-bg-muted)] px-3" htmlFor="mkt-filter-bedrooms">
             <span className="text-[var(--marketplace-text-muted)] text-xs">
               {isEn ? "Beds" : "Hab"}
             </span>
             <Input
               className="h-full w-full border-0 bg-transparent px-0 py-0 text-sm shadow-none focus-visible:ring-0"
               defaultValue={filters.minBedrooms ?? ""}
+              id="mkt-filter-bedrooms"
               min={0}
               name="min_bedrooms"
               placeholder="0"
@@ -231,13 +238,14 @@ export function MarketplaceFiltersForm({
             />
           </label>
 
-          <label className="inline-flex h-11 w-full items-center gap-2 rounded-xl border border-[#e8e4df] bg-[var(--marketplace-bg-muted)] px-3">
+          <label className="inline-flex h-11 w-full items-center gap-2 rounded-xl border border-[#e8e4df] bg-[var(--marketplace-bg-muted)] px-3" htmlFor="mkt-filter-bathrooms">
             <span className="text-[var(--marketplace-text-muted)] text-xs">
               {isEn ? "Baths" : "Baños"}
             </span>
             <Input
               className="h-full w-full border-0 bg-transparent px-0 py-0 text-sm shadow-none focus-visible:ring-0"
               defaultValue={filters.minBathrooms ?? ""}
+              id="mkt-filter-bathrooms"
               min={0}
               name="min_bathrooms"
               placeholder="0"
@@ -246,13 +254,14 @@ export function MarketplaceFiltersForm({
             />
           </label>
 
-          <label className="inline-flex h-11 w-full items-center gap-2 rounded-xl border border-[#e8e4df] bg-[var(--marketplace-bg-muted)] px-3">
+          <label className="inline-flex h-11 w-full items-center gap-2 rounded-xl border border-[#e8e4df] bg-[var(--marketplace-bg-muted)] px-3" htmlFor="mkt-filter-parking">
             <span className="text-[var(--marketplace-text-muted)] text-xs">
               {isEn ? "Parking" : "Estac."}
             </span>
             <Input
               className="h-full w-full border-0 bg-transparent px-0 py-0 text-sm shadow-none focus-visible:ring-0"
               defaultValue={filters.minParking ?? ""}
+              id="mkt-filter-parking"
               min={0}
               name="min_parking"
               placeholder="0"
@@ -260,13 +269,14 @@ export function MarketplaceFiltersForm({
             />
           </label>
 
-          <label className="inline-flex h-11 w-full items-center gap-2 rounded-xl border border-[#e8e4df] bg-[var(--marketplace-bg-muted)] px-3">
+          <label className="inline-flex h-11 w-full items-center gap-2 rounded-xl border border-[#e8e4df] bg-[var(--marketplace-bg-muted)] px-3" htmlFor="mkt-filter-pets">
             <span className="text-[var(--marketplace-text-muted)] text-xs">
               {isEn ? "Pets" : "Mascotas"}
             </span>
             <Input
               className="h-full w-full border-0 bg-transparent px-0 py-0 text-sm shadow-none focus-visible:ring-0"
               defaultValue={filters.petPolicy}
+              id="mkt-filter-pets"
               name="pet_policy"
               placeholder={isEn ? "Any" : "Cualquier"}
               type="text"

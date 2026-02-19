@@ -1,4 +1,5 @@
 "use client";
+"use no memo";
 
 import {
   Alert02Icon,
@@ -449,6 +450,7 @@ export function PropertyNotionTable({
 
                   {header.column.getCanResize() && (
                     <div
+                      aria-label="Resize column"
                       className={cn(
                         "absolute right-0 top-0 h-full w-1 cursor-col-resize select-none touch-none",
                         "hover:bg-primary/30",
@@ -457,6 +459,7 @@ export function PropertyNotionTable({
                       onDoubleClick={() => header.column.resetSize()}
                       onMouseDown={header.getResizeHandler()}
                       onTouchStart={header.getResizeHandler()}
+                      role="separator"
                     />
                   )}
                 </TableHead>

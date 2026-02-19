@@ -21,21 +21,20 @@ export function SendGuestPortalLink({
   async function handleSend() {
     setLoading(true);
     setError("");
+    const fallbackMsg = isEn ? "Failed to send link." : "No se pudo enviar el enlace.";
     try {
       await authedFetch<{ message: string }>(
         `/reservations/${encodeURIComponent(reservationId)}/guest-portal-link`,
         { method: "POST" }
       );
       setSent(true);
+      setLoading(false);
     } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : isEn
-            ? "Failed to send link."
-            : "No se pudo enviar el enlace."
-      );
-    } finally {
+      let msg = fallbackMsg;
+      if (err instanceof Error) {
+        msg = err.message;
+      }
+      setError(msg);
       setLoading(false);
     }
   }

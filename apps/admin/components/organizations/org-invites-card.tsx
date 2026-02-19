@@ -209,23 +209,25 @@ export function OrgInvitesCard({
         {canManage ? (
           <div className="rounded-lg border bg-card p-4">
             <div className="flex flex-col gap-3 md:flex-row md:items-end">
-              <label className="block flex-1">
+              <label className="block flex-1" htmlFor="invite-email">
                 <span className="mb-1 block font-medium text-muted-foreground text-xs">
                   Email
                 </span>
                 <Input
                   autoComplete="email"
+                  id="invite-email"
                   onChange={(event) => setEmail(event.target.value)}
                   placeholder="usuario@correo.com"
                   type="email"
                   value={email}
                 />
               </label>
-              <label className="block md:w-56">
+              <label className="block md:w-56" htmlFor="invite-role">
                 <span className="mb-1 block font-medium text-muted-foreground text-xs">
                   Rol
                 </span>
                 <Select
+                  id="invite-role"
                   onChange={(event) => {
                     const next = normalizeRole(event.target.value);
                     if (next) setRole(next);

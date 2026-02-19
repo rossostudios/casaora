@@ -145,26 +145,42 @@ export function DocumentsManager({
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setSubmitting(true);
+    const entityType = formEntityType ? formEntityType : "general";
+    const entityId = formEntityId ? formEntityId : undefined;
+    const category = formCategory ? formCategory : "other";
+    const mimeType = formMimeType ? formMimeType : undefined;
     try {
       await authedFetch("/documents", {
         method: "POST",
         body: JSON.stringify({
           organization_id: orgId,
-          entity_type: formEntityType || "general",
-          entity_id: formEntityId || undefined,
+          entity_type: entityType,
+          entity_id: entityId,
           file_name: formFileName,
           file_url: formFileUrl,
-          category: formCategory || "other",
-          mime_type: formMimeType || undefined,
+          category: category,
+          mime_type: mimeType,
         }),
       });
-      toast.success(isEn ? "Document saved" : "Documento guardado");
+      let savedMsg: string;
+      if (isEn) {
+        savedMsg = "Document saved";
+      } else {
+        savedMsg = "Documento guardado";
+      }
+      toast.success(savedMsg);
       setShowForm(false);
       resetForm();
       router.refresh();
+      setSubmitting(false);
     } catch {
-      toast.error(isEn ? "Failed to save document" : "Error al guardar documento");
-    } finally {
+      let saveErrMsg: string;
+      if (isEn) {
+        saveErrMsg = "Failed to save document";
+      } else {
+        saveErrMsg = "Error al guardar documento";
+      }
+      toast.error(saveErrMsg);
       setSubmitting(false);
     }
   }
@@ -174,10 +190,22 @@ export function DocumentsManager({
       return;
     try {
       await authedFetch(`/documents/${docId}`, { method: "DELETE" });
-      toast.success(isEn ? "Document deleted" : "Documento eliminado");
+      let delMsg: string;
+      if (isEn) {
+        delMsg = "Document deleted";
+      } else {
+        delMsg = "Documento eliminado";
+      }
+      toast.success(delMsg);
       router.refresh();
     } catch {
-      toast.error(isEn ? "Delete failed" : "Error al eliminar");
+      let delErrMsg: string;
+      if (isEn) {
+        delErrMsg = "Delete failed";
+      } else {
+        delErrMsg = "Error al eliminar";
+      }
+      toast.error(delErrMsg);
     }
   }
 
@@ -351,6 +379,14 @@ export function DocumentsManager({
                 className="flex cursor-pointer items-center justify-between gap-3 px-4 py-3 transition-colors hover:bg-muted/30"
                 key={id}
                 onClick={() => setPreviewDoc(doc)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    setPreviewDoc(doc);
+                  }
+                }}
+                role="button"
+                tabIndex={0}
               >
                 <div className="min-w-0 flex-1">
                   <p className="truncate font-medium text-foreground">
@@ -367,7 +403,7 @@ export function DocumentsManager({
                     {asString(doc.created_at).slice(0, 10)}
                   </p>
                 </div>
-                <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()} role="presentation">
                   <StatusBadge
                     label={asString(doc.category)}
                     value={asString(doc.category)}

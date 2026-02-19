@@ -11,7 +11,7 @@ import {
 } from "@hugeicons/core-free-icons";
 import type { IconSvgElement } from "@hugeicons/react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useCallback } from "react";
+import { Suspense, useCallback } from "react";
 import { cn } from "@/lib/utils";
 
 type Category = {
@@ -82,6 +82,14 @@ function resolveActiveKey(searchParams: URLSearchParams): string {
 }
 
 export function CategoryPills({ locale }: { locale: "es-PY" | "en-US" }) {
+  return (
+    <Suspense fallback={null}>
+      <CategoryPillsInner locale={locale} />
+    </Suspense>
+  );
+}
+
+function CategoryPillsInner({ locale }: { locale: "es-PY" | "en-US" }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const activeKey = resolveActiveKey(searchParams);

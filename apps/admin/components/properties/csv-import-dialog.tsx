@@ -69,28 +69,29 @@ export function CsvImportDialog({
       setError("");
       setResult(null);
 
+      const emptyRowsMsg = isEn
+        ? "No data rows found. Ensure CSV has a header row and at least one data row."
+        : "No se encontraron filas. Asegúrate de que el CSV tiene un encabezado y al menos una fila de datos.";
+      const parseFailMsg = isEn
+        ? "Failed to parse CSV file."
+        : "Error al leer el archivo CSV.";
+      const missingColMsgPrefix = isEn
+        ? 'Missing required column "name". Found: '
+        : 'Falta columna requerida "name". Encontradas: ';
+
       try {
         const text = await file.text();
         const rows = parseCsv(text);
         if (rows.length === 0) {
-          setError(
-            isEn
-              ? "No data rows found. Ensure CSV has a header row and at least one data row."
-              : "No se encontraron filas. Asegúrate de que el CSV tiene un encabezado y al menos una fila de datos."
-          );
+          setError(emptyRowsMsg);
           setStatus("idle");
           return;
         }
 
         const firstRow = rows[0];
         if (!("name" in firstRow)) {
-          setError(
-            isEn
-              ? 'Missing required column "name". Found: ' +
-                Object.keys(firstRow).join(", ")
-              : 'Falta columna requerida "name". Encontradas: ' +
-                Object.keys(firstRow).join(", ")
-          );
+          const errorMsg = `${missingColMsgPrefix}${Object.keys(firstRow).join(", ")}`;
+          setError(errorMsg);
           setStatus("idle");
           return;
         }
@@ -98,9 +99,7 @@ export function CsvImportDialog({
         setParsedRows(rows);
         setStatus("idle");
       } catch {
-        setError(
-          isEn ? "Failed to parse CSV file." : "Error al leer el archivo CSV."
-        );
+        setError(parseFailMsg);
         setStatus("idle");
       }
     },
@@ -113,32 +112,74 @@ export function CsvImportDialog({
     setStatus("importing");
     setError("");
 
-    try {
-      const apiBase =
-        process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000/v1";
+    let apiBase: string;
+    if (process.env.NEXT_PUBLIC_API_BASE_URL != null) {
+      apiBase = process.env.NEXT_PUBLIC_API_BASE_URL;
+    } else {
+      apiBase = "http://localhost:8000/v1";
+    }
 
+    const importFailedMsg = isEn ? "Import failed" : "Falló la importación";
+    const networkErrorMsg = isEn
+      ? "Network error during import."
+      : "Error de red durante la importación.";
+
+    const mappedRows = parsedRows.map((row) => {
+      const mapped: Record<string, string | undefined> = {};
+      if (row.name) {
+        mapped.name = row.name;
+      } else {
+        mapped.name = "";
+      }
+      if (row.code) {
+        mapped.code = row.code;
+      } else {
+        mapped.code = undefined;
+      }
+      if (row.address_line1) {
+        mapped.address_line1 = row.address_line1;
+      } else if (row.address) {
+        mapped.address_line1 = row.address;
+      } else {
+        mapped.address_line1 = undefined;
+      }
+      if (row.city) {
+        mapped.city = row.city;
+      } else {
+        mapped.city = undefined;
+      }
+      if (row.country_code) {
+        mapped.country_code = row.country_code;
+      } else if (row.country) {
+        mapped.country_code = row.country;
+      } else {
+        mapped.country_code = undefined;
+      }
+      return mapped;
+    });
+
+    try {
       const res = await fetch(`${apiBase}/properties/import-csv`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
         body: JSON.stringify({
           organization_id: orgId,
-          rows: parsedRows.map((row) => ({
-            name: row.name || "",
-            code: row.code || undefined,
-            address_line1: row.address_line1 || row.address || undefined,
-            city: row.city || undefined,
-            country_code: row.country_code || row.country || undefined,
-          })),
+          rows: mappedRows,
         }),
       });
 
       if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        setError(
-          (body as { message?: string }).message ??
-            (isEn ? "Import failed" : "Falló la importación")
-        );
+        let errorMsg = importFailedMsg;
+        try {
+          const body = (await res.json()) as { message?: string };
+          if (body.message != null) {
+            errorMsg = body.message;
+          }
+        } catch {
+          // JSON parse failed, use default message
+        }
+        setError(errorMsg);
         setStatus("done");
         return;
       }
@@ -147,12 +188,12 @@ export function CsvImportDialog({
       setResult(data);
       setStatus("done");
       if (data.failed === 0) {
-        onComplete?.();
+        if (onComplete) {
+          onComplete();
+        }
       }
     } catch {
-      setError(
-        isEn ? "Network error during import." : "Error de red durante la importación."
-      );
+      setError(networkErrorMsg);
       setStatus("done");
     }
   }, [parsedRows, orgId, isEn, onComplete]);
@@ -232,7 +273,7 @@ export function CsvImportDialog({
                   </thead>
                   <tbody>
                     {parsedRows.slice(0, 10).map((row, i) => (
-                      <tr className="border-b last:border-b-0" key={i}>
+                      <tr className="border-b last:border-b-0" key={EXPECTED_COLUMNS.map((col) => row[col] ?? "").join("|")}>
                         <td className="px-2 py-1 text-muted-foreground">
                           {i + 1}
                         </td>

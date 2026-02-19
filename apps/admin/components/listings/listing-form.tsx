@@ -180,25 +180,32 @@ export function ListingForm({
     form.setValue("public_slug", generated);
   }, [titleValue, slugManual, form]);
 
-  useEffect(() => {
-    if (slugTimerRef.current) clearTimeout(slugTimerRef.current);
+  const [prevSlugValue, setPrevSlugValue] = useState(slugValue);
+  if (slugValue !== prevSlugValue) {
+    setPrevSlugValue(slugValue);
     if (!slugValue?.trim()) {
       setSlugAvailable(null);
       setSlugChecking(false);
-      return;
+    } else {
+      setSlugChecking(true);
     }
-    setSlugChecking(true);
+  }
+
+  useEffect(() => {
+    if (slugTimerRef.current) clearTimeout(slugTimerRef.current);
+    if (!slugValue?.trim()) return;
+    const editingId = editing?.id;
     slugTimerRef.current = setTimeout(async () => {
       try {
         const res = await fetchSlugAvailable(
           slugValue,
           orgId,
-          editing?.id
+          editingId
         );
         setSlugAvailable(res.available);
+        setSlugChecking(false);
       } catch {
         setSlugAvailable(null);
-      } finally {
         setSlugChecking(false);
       }
     }, 500);
@@ -269,9 +276,30 @@ export function ListingForm({
     optNum("minimum_lease_months", values.minimum_lease_months);
     optNum("maintenance_fee", values.maintenance_fee);
 
-    payload.gallery_image_urls = values.gallery_image_urls ?? [];
-    payload.amenities = values.amenities ?? [];
-    payload.furnished = values.furnished ?? false;
+    if (values.gallery_image_urls != null) {
+      payload.gallery_image_urls = values.gallery_image_urls;
+    } else {
+      payload.gallery_image_urls = [];
+    }
+    if (values.amenities != null) {
+      payload.amenities = values.amenities;
+    } else {
+      payload.amenities = [];
+    }
+    if (values.furnished != null) {
+      payload.furnished = values.furnished;
+    } else {
+      payload.furnished = false;
+    }
+
+    const successMsg = isEditing
+      ? isEn
+        ? "Listing updated"
+        : "Anuncio actualizado"
+      : isEn
+        ? "Listing created"
+        : "Anuncio creado";
+    const errorTitle = isEn ? "Could not save" : "No se pudo guardar";
 
     try {
       let resultId: string;
@@ -290,21 +318,17 @@ export function ListingForm({
       }
 
       queryClient.invalidateQueries({ queryKey: ["listings"] });
-      toast.success(
-        isEditing
-          ? isEn
-            ? "Listing updated"
-            : "Anuncio actualizado"
-          : isEn
-            ? "Listing created"
-            : "Anuncio creado"
-      );
+      toast.success(successMsg);
       setSavedListingId(resultId);
+      setSubmitting(false);
     } catch (err) {
-      toast.error(isEn ? "Could not save" : "No se pudo guardar", {
-        description: err instanceof Error ? err.message : String(err),
-      });
-    } finally {
+      let description: string;
+      if (err instanceof Error) {
+        description = err.message;
+      } else {
+        description = String(err);
+      }
+      toast.error(errorTitle, { description });
       setSubmitting(false);
     }
   }

@@ -24,6 +24,10 @@ export function UseOrgButton({
 
   const onClick = async () => {
     setBusy(true);
+    const errTitle = isEn
+      ? "Could not switch organization"
+      : "No se pudo cambiar la organización";
+    const fallbackDesc = isEn ? "Request failed" : "Falló la solicitud";
     try {
       const response = await fetch("/api/org", {
         method: "POST",
@@ -35,28 +39,22 @@ export function UseOrgButton({
       });
       if (!response.ok) {
         const text = await response.text().catch(() => "");
-        toast.error(
-          isEn
-            ? "Could not switch organization"
-            : "No se pudo cambiar la organización",
-          {
-            description:
-              text || (isEn ? "Request failed" : "Falló la solicitud"),
-          }
-        );
+        let desc = fallbackDesc;
+        if (text) {
+          desc = text;
+        }
+        toast.error(errTitle, { description: desc });
+        setBusy(false);
         return;
       }
       router.refresh();
+      setBusy(false);
     } catch (err) {
-      toast.error(
-        isEn
-          ? "Could not switch organization"
-          : "No se pudo cambiar la organización",
-        {
-          description: err instanceof Error ? err.message : String(err),
-        }
-      );
-    } finally {
+      let desc = String(err);
+      if (err instanceof Error) {
+        desc = err.message;
+      }
+      toast.error(errTitle, { description: desc });
       setBusy(false);
     }
   };

@@ -150,18 +150,21 @@ export function WorkflowRulesManager({
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setSubmitting(true);
-    try {
-      let config: Record<string, unknown>;
-      if (rawJsonMode) {
-        try {
-          config = JSON.parse(rawJson);
-        } catch {
-          config = {};
-        }
-      } else {
-        config = formConfig;
-      }
 
+    let config: Record<string, unknown>;
+    if (rawJsonMode) {
+      try {
+        config = JSON.parse(rawJson);
+      } catch {
+        config = {};
+      }
+    } else {
+      config = formConfig;
+    }
+    const delayVal = Number(formDelay);
+    const delayMinutes = Number.isFinite(delayVal) ? delayVal : 0;
+
+    try {
       await authedFetch("/workflow-rules", {
         method: "POST",
         body: JSON.stringify({
@@ -170,16 +173,16 @@ export function WorkflowRulesManager({
           trigger_event: formTrigger,
           action_type: formAction,
           action_config: config,
-          delay_minutes: Number(formDelay) || 0,
+          delay_minutes: delayMinutes,
           is_active: true,
         }),
       });
       setShowForm(false);
       resetForm();
       router.refresh();
+      setSubmitting(false);
     } catch {
       /* ignore */
-    } finally {
       setSubmitting(false);
     }
   }
@@ -211,12 +214,13 @@ export function WorkflowRulesManager({
 
   async function handleApplyTemplate(template: WorkflowTemplate) {
     setApplyingTemplate(template.name_en);
+    const templateName = isEn ? template.name_en : template.name_es;
     try {
       await authedFetch("/workflow-rules", {
         method: "POST",
         body: JSON.stringify({
           organization_id: orgId,
-          name: isEn ? template.name_en : template.name_es,
+          name: templateName,
           trigger_event: template.trigger_event,
           action_type: template.action_type,
           action_config: template.action_config,
@@ -226,9 +230,9 @@ export function WorkflowRulesManager({
       });
       router.refresh();
       setShowTemplates(false);
+      setApplyingTemplate(null);
     } catch {
       /* ignore */
-    } finally {
       setApplyingTemplate(null);
     }
   }

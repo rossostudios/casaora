@@ -57,6 +57,17 @@ function isExcelFile(name: string): boolean {
   return /\.xlsx$/i.test(name);
 }
 
+/** Dynamic import helpers — extracted to module scope so the React Compiler can optimize the component. */
+async function loadPapaParse() {
+  const mod = await import("papaparse");
+  return mod.default;
+}
+
+async function loadReadExcelFile() {
+  const mod = await import("read-excel-file");
+  return { readXlsxFile: mod.default, readSheetNames: mod.readSheetNames };
+}
+
 function resolvePropertyId(
   value: string,
   properties: Array<{ id: string; name: string; code?: string }>
@@ -151,27 +162,40 @@ export function DataImportSheet({
   /** Parse an Excel sheet by index. */
   const parseExcelSheet = useCallback(
     async (file: File, sheetIndex?: number) => {
-      try {
-        const readXlsxFile = (await import("read-excel-file")).default;
+      const emptySheetMsg = isEn ? "Sheet is empty" : "La hoja está vacía";
+      const protectedFileEn = "This file is password-protected. Please remove the password and try again.";
+      const protectedFileEs = "Este archivo está protegido con contraseña. Elimina la contraseña e intenta de nuevo.";
+      const passwordMsg = isEn ? protectedFileEn : protectedFileEs;
+      const readErrorPrefixEn = "Could not read Excel file: ";
+      const readErrorPrefixEs = "No se pudo leer el archivo Excel: ";
 
-        // Check for multi-sheet: read sheet names first
-        const { readSheetNames } = await import("read-excel-file");
+      let sheet: number;
+      if (sheetIndex != null) {
+        sheet = sheetIndex;
+      } else {
+        sheet = 1; // read-excel-file uses 1-based index
+      }
+
+      const { readXlsxFile, readSheetNames } = await loadReadExcelFile();
+
+      try {
         const names = await readSheetNames(file);
 
-        if (names.length > 1 && sheetIndex === undefined) {
-          // Show sheet picker
-          setPendingFile(file);
-          setSheetNames(names);
-          setPickingSheet(true);
-          setFileName(file.name);
-          return;
+        if (names.length > 1) {
+          if (sheetIndex === undefined) {
+            // Show sheet picker
+            setPendingFile(file);
+            setSheetNames(names);
+            setPickingSheet(true);
+            setFileName(file.name);
+            return;
+          }
         }
 
-        const sheet = sheetIndex ?? 1; // read-excel-file uses 1-based index
         const rows = await readXlsxFile(file, { sheet });
 
         if (rows.length === 0) {
-          setParseError(isEn ? "Sheet is empty" : "La hoja está vacía");
+          setParseError(emptySheetMsg);
           return;
         }
 
@@ -187,20 +211,26 @@ export function DataImportSheet({
 
         finalizeParse(fileHeaders, dataRows, file.name);
       } catch (err) {
-        const message =
-          err instanceof Error ? err.message : String(err);
-        if (message.includes("password") || message.includes("encrypted")) {
-          setParseError(
-            isEn
-              ? "This file is password-protected. Please remove the password and try again."
-              : "Este archivo está protegido con contraseña. Elimina la contraseña e intenta de nuevo."
-          );
+        let message: string;
+        if (err instanceof Error) {
+          message = err.message;
         } else {
-          setParseError(
-            isEn
-              ? `Could not read Excel file: ${message}`
-              : `No se pudo leer el archivo Excel: ${message}`
-          );
+          message = String(err);
+        }
+        let isPasswordProtected = false;
+        if (message.includes("password")) {
+          isPasswordProtected = true;
+        }
+        if (message.includes("encrypted")) {
+          isPasswordProtected = true;
+        }
+        if (isPasswordProtected) {
+          setParseError(passwordMsg);
+        } else {
+          const errorDetail = isEn
+            ? readErrorPrefixEn + message
+            : readErrorPrefixEs + message;
+          setParseError(errorDetail);
         }
       }
     },
@@ -233,7 +263,7 @@ export function DataImportSheet({
       }
 
       // CSV / TSV parsing via PapaParse (dynamically loaded)
-      const PapaParse = (await import("papaparse")).default;
+      const PapaParse = await loadPapaParse();
       PapaParse.parse<DataRow>(file, {
         header: true,
         skipEmptyLines: true,
@@ -242,7 +272,12 @@ export function DataImportSheet({
             setParseError(result.errors[0].message);
             return;
           }
-          const fileHeaders = result.meta.fields ?? Object.keys(result.data[0]);
+          let fileHeaders: string[];
+          if (result.meta.fields != null) {
+            fileHeaders = result.meta.fields;
+          } else {
+            fileHeaders = Object.keys(result.data[0]);
+          }
           finalizeParse(fileHeaders, result.data, file.name);
         },
         error: (err) => {
@@ -491,7 +526,7 @@ export function DataImportSheet({
               {sheetNames.map((name, i) => (
                 <button
                   className="flex items-center gap-2 rounded-lg border border-border/70 bg-muted/20 px-4 py-3 text-left text-sm font-medium transition-colors hover:border-primary/40 hover:bg-primary/5"
-                  key={i}
+                  key={name}
                   onClick={() => handleSheetSelect(i)}
                   type="button"
                 >
@@ -571,8 +606,8 @@ export function DataImportSheet({
                       </tr>
                     </thead>
                     <tbody>
-                      {previewRows.map((row, i) => (
-                        <tr className="border-b" key={i}>
+                      {previewRows.map((row) => (
+                        <tr className="border-b" key={headers.map((h) => row[h] ?? "").join("|")}>
                           {headers.map((h) => (
                             <td className="px-2 py-1.5" key={h}>
                               {row[h] || "\u2014"}

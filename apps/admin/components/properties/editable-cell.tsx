@@ -57,7 +57,8 @@ export function EditableCell({
       setState("saving");
       try {
         await onCommit(trimmed);
-      } finally {
+        setState("display");
+      } catch {
         setState("display");
       }
     },

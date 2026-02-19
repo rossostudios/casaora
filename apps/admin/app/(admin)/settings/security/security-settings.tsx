@@ -25,6 +25,63 @@ type TotpFactor = {
   created_at: string;
 };
 
+async function performMfaVerify(
+  factorId: string,
+  verifyCode: string
+): Promise<TotpFactor[]> {
+  const supabase = getSupabaseBrowserClient();
+  const challenge = await supabase.auth.mfa.challenge({ factorId });
+  if (challenge.error) {
+    throw challenge.error;
+  }
+
+  const verify = await supabase.auth.mfa.verify({
+    factorId,
+    challengeId: challenge.data.id,
+    code: verifyCode.trim(),
+  });
+
+  if (verify.error) {
+    throw verify.error;
+  }
+
+  const refreshed = await supabase.auth.mfa.listFactors();
+  const refreshedData = refreshed.data;
+  let rawTotp: unknown[];
+  if (refreshedData != null) {
+    if (refreshedData.totp != null) {
+      rawTotp = refreshedData.totp;
+    } else {
+      rawTotp = [];
+    }
+  } else {
+    rawTotp = [];
+  }
+  const mappedFactors: TotpFactor[] = [];
+  const totpArr = rawTotp as Array<{
+    id: string;
+    friendly_name?: string;
+    status: string;
+    created_at: string;
+  }>;
+  for (let i = 0; i < totpArr.length; i++) {
+    const f = totpArr[i];
+    let friendlyName: string;
+    if (f.friendly_name != null) {
+      friendlyName = f.friendly_name;
+    } else {
+      friendlyName = "";
+    }
+    mappedFactors.push({
+      id: f.id,
+      friendly_name: friendlyName,
+      status: f.status,
+      created_at: f.created_at,
+    });
+  }
+  return mappedFactors;
+}
+
 export function SecuritySettings({
   totpFactors: initialFactors,
   userEmail,
@@ -32,6 +89,7 @@ export function SecuritySettings({
   totpFactors: TotpFactor[];
   userEmail: string;
 }) {
+  "use no memo";
   const locale = useActiveLocale();
   const isEn = locale === "en-US";
 
@@ -48,6 +106,8 @@ export function SecuritySettings({
     setEnrolling(true);
     setBusy(true);
 
+    const enrollErrMsg = isEn ? "Could not start enrollment" : "No se pudo iniciar la inscripción";
+    const enrollFailMsg = isEn ? "Enrollment failed" : "Falló la inscripción";
     try {
       const supabase = getSupabaseBrowserClient();
       const { data, error } = await supabase.auth.mfa.enroll({
@@ -56,10 +116,7 @@ export function SecuritySettings({
       });
 
       if (error) {
-        toast.error(
-          isEn ? "Could not start enrollment" : "No se pudo iniciar la inscripción",
-          { description: error.message }
-        );
+        toast.error(enrollErrMsg, { description: error.message });
         setEnrolling(false);
         setBusy(false);
         return;
@@ -67,98 +124,57 @@ export function SecuritySettings({
 
       setQrUri(data.totp.qr_code);
       setFactorId(data.id);
+      setBusy(false);
     } catch {
-      toast.error(isEn ? "Enrollment failed" : "Falló la inscripción");
-    } finally {
+      toast.error(enrollFailMsg);
       setBusy(false);
     }
   }, [isEn]);
 
   const handleVerify = useCallback(async () => {
-    if (!factorId || !verifyCode.trim()) return;
-
+    if (!factorId) return;
+    if (!verifyCode.trim()) return;
+    const errMsg = isEn ? "Verification failed" : "Falló la verificación";
+    const successMsg = isEn
+      ? "Two-factor authentication enabled"
+      : "Autenticación de dos factores activada";
     setBusy(true);
     try {
-      const supabase = getSupabaseBrowserClient();
-      const challenge = await supabase.auth.mfa.challenge({ factorId });
-      if (challenge.error) {
-        toast.error(
-          isEn ? "Challenge failed" : "Falló el desafío",
-          { description: challenge.error.message }
-        );
-        setBusy(false);
-        return;
-      }
-
-      const verify = await supabase.auth.mfa.verify({
-        factorId,
-        challengeId: challenge.data.id,
-        code: verifyCode.trim(),
-      });
-
-      if (verify.error) {
-        toast.error(
-          isEn ? "Verification failed" : "Falló la verificación",
-          { description: verify.error.message }
-        );
-        setBusy(false);
-        return;
-      }
-
-      toast.success(
-        isEn
-          ? "Two-factor authentication enabled"
-          : "Autenticación de dos factores activada"
-      );
-
-      // Refresh factors list
-      const refreshed = await supabase.auth.mfa.listFactors();
-      setFactors(
-        (refreshed.data?.totp ?? []).map((f) => ({
-          id: f.id,
-          friendly_name: f.friendly_name ?? "",
-          status: f.status,
-          created_at: f.created_at,
-        }))
-      );
-
+      const newFactors = await performMfaVerify(factorId, verifyCode);
+      setFactors(newFactors);
+      toast.success(successMsg);
       setEnrolling(false);
       setQrUri("");
       setFactorId("");
       setVerifyCode("");
     } catch {
-      toast.error(isEn ? "Verification failed" : "Falló la verificación");
-    } finally {
-      setBusy(false);
+      toast.error(errMsg);
     }
+    setBusy(false);
   }, [factorId, verifyCode, isEn]);
 
   const handleUnenroll = useCallback(
     async (id: string) => {
+      const removeErrMsg = isEn ? "Could not remove factor" : "No se pudo eliminar el factor";
+      const removeFailMsg = isEn ? "Remove failed" : "Error al eliminar";
+      const tfaRemovedMsg = isEn
+        ? "Two-factor authentication removed"
+        : "Autenticación de dos factores eliminada";
       setBusy(true);
       try {
         const supabase = getSupabaseBrowserClient();
         const { error } = await supabase.auth.mfa.unenroll({ factorId: id });
         if (error) {
-          toast.error(
-            isEn ? "Could not remove factor" : "No se pudo eliminar el factor",
-            { description: error.message }
-          );
+          toast.error(removeErrMsg, { description: error.message });
           setBusy(false);
           return;
         }
-
-        toast.success(
-          isEn
-            ? "Two-factor authentication removed"
-            : "Autenticación de dos factores eliminada"
-        );
+        toast.success(tfaRemovedMsg);
         setFactors((prev) => prev.filter((f) => f.id !== id));
       } catch {
-        toast.error(isEn ? "Remove failed" : "Error al eliminar");
-      } finally {
-        setBusy(false);
+        toast.error(removeFailMsg);
       }
+      setBusy(false);
     },
     [isEn]
   );

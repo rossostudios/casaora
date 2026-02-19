@@ -50,19 +50,25 @@ export function Combobox({
   allowCustom = false,
   customLabel = (text) => `Use: "${text}"`,
 }: ComboboxProps) {
-  const [internalValue, setInternalValue] = useState(defaultValue ?? "");
+  let initialValue = "";
+  if (defaultValue != null) { initialValue = defaultValue; }
+  const [internalValue, setInternalValue] = useState(initialValue);
   const [inputText, setInputText] = useState("");
 
   const isControlled = value !== undefined;
-  const resolvedValue = isControlled ? value : internalValue;
+  let resolvedValue: string;
+  if (isControlled) { resolvedValue = value; } else { resolvedValue = internalValue; }
 
   const items = useMemo(() => {
-    if (!allowCustom || !inputText.trim()) return options;
+    if (!allowCustom) return options;
+    if (!inputText.trim()) return options;
     const trimmed = inputText.trim();
     const lc = trimmed.toLowerCase();
-    const exactMatch = options.some(
-      (o) => o.value.toLowerCase() === lc || o.label.toLowerCase() === lc
-    );
+    let exactMatch = false;
+    for (const o of options) {
+      if (o.value.toLowerCase() === lc) { exactMatch = true; break; }
+      if (o.label.toLowerCase() === lc) { exactMatch = true; break; }
+    }
     if (exactMatch) return options;
     return [
       { value: trimmed, label: customLabel(trimmed) },
@@ -71,19 +77,25 @@ export function Combobox({
   }, [options, allowCustom, inputText, customLabel]);
 
   const selectedOption = useMemo(() => {
-    return items.find((option) => option.value === resolvedValue) ?? null;
+    const found = items.find((option) => option.value === resolvedValue);
+    if (found != null) { return found; }
+    return null;
   }, [items, resolvedValue]);
 
   function update(next: string) {
     if (!isControlled) {
       setInternalValue(next);
     }
-    onValueChange?.(next);
+    if (onValueChange) {
+      onValueChange(next);
+    }
   }
 
   const displayLabel = useMemo(() => {
     if (selectedOption) return selectedOption.label;
-    if (allowCustom && resolvedValue) return resolvedValue;
+    if (allowCustom) {
+      if (resolvedValue) return resolvedValue;
+    }
     return null;
   }, [selectedOption, allowCustom, resolvedValue]);
 
@@ -94,10 +106,22 @@ export function Combobox({
         autoHighlight
         disabled={disabled}
         items={items}
-        itemToStringLabel={(item) => item?.label ?? ""}
-        itemToStringValue={(item) => item?.value ?? ""}
-        onInputValueChange={(val) => setInputText(val ?? "")}
-        onValueChange={(next) => update(next?.value ?? "")}
+        itemToStringLabel={(item) => {
+          if (item != null) { return item.label; }
+          return "";
+        }}
+        itemToStringValue={(item) => {
+          if (item != null) { return item.value; }
+          return "";
+        }}
+        onInputValueChange={(val) => {
+          if (val != null) { setInputText(val); } else { setInputText(""); }
+        }}
+        onValueChange={(next) => {
+          let nextVal = "";
+          if (next != null) { nextVal = next.value; }
+          update(nextVal);
+        }}
         value={selectedOption}
       >
         <BaseCombobox.Trigger
@@ -110,7 +134,10 @@ export function Combobox({
           id={id}
         >
           <BaseCombobox.Value placeholder={placeholder}>
-            {() => displayLabel ?? placeholder}
+            {() => {
+              if (displayLabel != null) { return displayLabel; }
+              return placeholder;
+            }}
           </BaseCombobox.Value>
           <Icon
             className="text-muted-foreground"

@@ -3,6 +3,7 @@ import { GeistPixelSquare } from "geist/font/pixel";
 import { GeistSans } from "geist/font/sans";
 import type { Metadata } from "next";
 import { Playfair_Display } from "next/font/google";
+import Script from "next/script";
 
 const playfair = Playfair_Display({
   subsets: ["latin"],
@@ -99,8 +100,9 @@ export default async function RootLayout({
         data-base-ui-root
         suppressHydrationWarning
       >
-        {/* biome-ignore lint/security/noDangerouslySetInnerHtml: needed to prevent theme flash before hydration */}
-        <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
+        <Script id="theme-init" strategy="beforeInteractive">
+          {THEME_INIT_SCRIPT}
+        </Script>
         <LocaleProvider initialLocale={locale}>
           <QueryProvider>{children}</QueryProvider>
         </LocaleProvider>

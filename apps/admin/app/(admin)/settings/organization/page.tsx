@@ -62,18 +62,37 @@ export default async function OrganizationSettingsPage() {
   }
 
   let org: OrgRecord | null = null;
+  const orgApiFailTitle = isEn ? "API connection failed" : "Fallo de conexión a la API";
+  const orgApiFailDesc = isEn
+    ? "Could not load organization details."
+    : "No se pudieron cargar los datos de la organización.";
+  const orgBackendLabel = isEn ? "Backend base URL" : "URL base del backend";
 
   try {
     const raw = await fetchJson<Record<string, unknown>>(
       `/organizations/${encodeURIComponent(orgId)}`
     );
+    const currencyVal = asStr(raw.default_currency);
+    const timezoneVal = asStr(raw.timezone);
+    let resolvedCurrency: string;
+    if (currencyVal) {
+      resolvedCurrency = currencyVal;
+    } else {
+      resolvedCurrency = "PYG";
+    }
+    let resolvedTimezone: string;
+    if (timezoneVal) {
+      resolvedTimezone = timezoneVal;
+    } else {
+      resolvedTimezone = "America/Asuncion";
+    }
     org = {
       id: asStr(raw.id),
       name: asStr(raw.name),
       legal_name: asOpt(raw.legal_name),
       ruc: asOpt(raw.ruc),
-      default_currency: asStr(raw.default_currency) || "PYG",
-      timezone: asStr(raw.timezone) || "America/Asuncion",
+      default_currency: resolvedCurrency,
+      timezone: resolvedTimezone,
       bank_name: asOpt(raw.bank_name),
       bank_account_number: asOpt(raw.bank_account_number),
       bank_account_holder: asOpt(raw.bank_account_holder),
@@ -89,18 +108,12 @@ export default async function OrganizationSettingsPage() {
     return (
       <Card>
         <CardHeader>
-          <CardTitle>
-            {isEn ? "API connection failed" : "Fallo de conexión a la API"}
-          </CardTitle>
-          <CardDescription>
-            {isEn
-              ? "Could not load organization details."
-              : "No se pudieron cargar los datos de la organización."}
-          </CardDescription>
+          <CardTitle>{orgApiFailTitle}</CardTitle>
+          <CardDescription>{orgApiFailDesc}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-2 text-muted-foreground text-sm">
           <p>
-            {isEn ? "Backend base URL" : "URL base del backend"}:{" "}
+            {orgBackendLabel}:{" "}
             <code className="rounded bg-muted px-1 py-0.5">
               {getApiBaseUrl()}
             </code>
