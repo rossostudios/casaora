@@ -12,7 +12,7 @@ const SEQUENCE_MAP: Record<string, string> = {
   t: "/module/operations?tab=tasks",
   e: "/module/expenses",
   l: "/module/leases",
-  a: "/module/reservations?view=calendar",
+  a: "/module/calendar",
   s: "/settings",
 };
 

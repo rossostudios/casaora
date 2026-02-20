@@ -68,7 +68,7 @@ export const SHORTCUTS: ShortcutEntry[] = [
   {
     id: "go-calendar",
     keys: ["G", "A"],
-    label: { en: "Go to Calendar View", es: "Ir a Vista Calendario" },
+    label: { en: "Go to Calendar", es: "Ir a Calendario" },
     category: "navigation",
   },
   {
@@ -103,8 +103,20 @@ export const SHORTCUTS: ShortcutEntry[] = [
     label: { en: "Close overlay / go back", es: "Cerrar overlay / volver" },
     category: "global",
   },
+  {
+    id: "submit-form",
+    keys: ["Mod", "Enter"],
+    label: { en: "Submit form", es: "Enviar formulario" },
+    category: "global",
+  },
 
   // Table
+  {
+    id: "table-search",
+    keys: ["/"],
+    label: { en: "Focus search / filter", es: "Enfocar búsqueda / filtro" },
+    category: "table",
+  },
   {
     id: "table-next",
     keys: ["J", "↓"],
@@ -171,7 +183,7 @@ export const SHORTCUT_BY_HREF: Record<string, string[]> = {
   "/module/operations?tab=tasks": ["G", "T"],
   "/module/expenses": ["G", "E"],
   "/module/leases": ["G", "L"],
-  "/module/reservations?view=calendar": ["G", "A"],
+  "/module/calendar": ["G", "A"],
   "/settings": ["G", "S"],
 };
 

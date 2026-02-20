@@ -1,16 +1,18 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
-
-import { OrgAccessChanged } from "@/components/shell/org-access-changed";
-import { RecordRecent } from "@/components/shell/record-recent";
+import { AccompanyingGuests } from "@/components/reservations/accompanying-guests";
 import {
   FinancialBreakdownCard,
   FinancialKpiRow,
 } from "@/components/reservations/reservation-financials";
-import { AccompanyingGuests } from "@/components/reservations/accompanying-guests";
 import { ReservationGuestCard } from "@/components/reservations/reservation-guest-card";
 import { ReservationHero } from "@/components/reservations/reservation-hero";
 import { ReservationStatusTimeline } from "@/components/reservations/reservation-status-timeline";
 import { ReservationStayDetails } from "@/components/reservations/reservation-stay-details";
+import { SendGuestPortalLink } from "@/components/reservations/send-guest-portal-link";
+import { OrgAccessChanged } from "@/components/shell/org-access-changed";
+import { RecordRecent } from "@/components/shell/record-recent";
+import { buttonVariants } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -18,25 +20,22 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { CopyButton } from "@/components/ui/copy-button";
-import { SendGuestPortalLink } from "@/components/reservations/send-guest-portal-link";
-import { fetchJson, fetchList } from "@/lib/api";
-import { errorMessage, isOrgMembershipError } from "@/lib/errors";
-import {
-  toGuestSummary,
-  toReservationDetail,
-  type GuestSummary,
-  type ReservationDetail,
-} from "@/lib/features/reservations/types";
-import { getActiveLocale } from "@/lib/i18n/server";
-import { getActiveOrgId } from "@/lib/org";
 import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
-import Link from "next/link";
-import { buttonVariants } from "@/components/ui/button";
+import { CopyButton } from "@/components/ui/copy-button";
+import { fetchJson, fetchList } from "@/lib/api";
+import { errorMessage, isOrgMembershipError } from "@/lib/errors";
+import {
+  type GuestSummary,
+  type ReservationDetail,
+  toGuestSummary,
+  toReservationDetail,
+} from "@/lib/features/reservations/types";
+import { getActiveLocale } from "@/lib/i18n/server";
+import { getActiveOrgId } from "@/lib/org";
 import { cn } from "@/lib/utils";
 
 type PageProps = {
@@ -44,11 +43,19 @@ type PageProps = {
 };
 
 type FetchResult =
-  | { kind: "ok"; reservation: ReservationDetail; guest: GuestSummary | null; listingSlug: string | null }
+  | {
+      kind: "ok";
+      reservation: ReservationDetail;
+      guest: GuestSummary | null;
+      listingSlug: string | null;
+    }
   | { kind: "not_found" }
   | { kind: "error"; message: string; membershipError?: boolean };
 
-async function loadReservation(id: string, orgId: string): Promise<FetchResult> {
+async function loadReservation(
+  id: string,
+  orgId: string
+): Promise<FetchResult> {
   try {
     const raw = await fetchJson<Record<string, unknown>>(
       `/reservations/${encodeURIComponent(id)}`
@@ -216,15 +223,12 @@ export default async function ReservationDetailPage({ params }: PageProps) {
                     buttonVariants({ variant: "outline", size: "sm" }),
                     "w-full justify-start"
                   )}
-                  href={`/module/reservations?view=calendar`}
+                  href={"/module/calendar"}
                 >
                   {isEn ? "Calendar" : "Calendario"}
                 </Link>
               ) : null}
-              <SendGuestPortalLink
-                isEn={isEn}
-                reservationId={r.id}
-              />
+              <SendGuestPortalLink isEn={isEn} reservationId={r.id} />
               {listingSlug ? (
                 <Link
                   className={cn(

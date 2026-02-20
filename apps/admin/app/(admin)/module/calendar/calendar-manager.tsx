@@ -1,13 +1,21 @@
 "use client";
 
-import { PlusSignIcon } from "@hugeicons/core-free-icons";
-import { useMemo, useState } from "react";
+import {
+  Calendar02Icon,
+  Calendar03Icon,
+  LeftToRightListBulletIcon,
+  PlusSignIcon,
+} from "@hugeicons/core-free-icons";
+import { useMemo, useState, useRef, useCallback } from "react";
+import { useHotkey } from "@tanstack/react-hotkeys";
+import { isInputFocused } from "@/lib/hotkeys/is-input-focused";
+import { useFormSubmitHotkey } from "@/lib/hotkeys/use-form-hotkeys";
 
 import {
   createCalendarBlockAction,
   deleteCalendarBlockAction,
 } from "@/app/(admin)/module/calendar/actions";
-import { MonthlyTimeline } from "@/components/calendar/monthly-timeline";
+import { TimelineCalendar } from "@/components/calendar/timeline-calendar";
 import { Button } from "@/components/ui/button";
 import { DataTable, type DataTableRow } from "@/components/ui/data-table";
 import { DatePicker } from "@/components/ui/date-picker";
@@ -77,7 +85,6 @@ function overlapsRange(options: {
   const rangeStart = windowFrom ?? start;
   const rangeEnd = windowTo ?? end;
 
-  // Inclusive-exclusive semantics: [start, end)
   return !(end <= rangeStart || start >= rangeEnd);
 }
 
@@ -123,25 +130,49 @@ function CalendarBlockRowActions({ row }: { row: DataTableRow }) {
   );
 }
 
+type ViewMode = "month" | "week" | "list";
+
 export function CalendarManager({
   orgId,
   reservations,
   blocks,
   units,
+  defaultUnitId,
+  defaultView,
 }: {
   orgId: string;
   reservations: Record<string, unknown>[];
   blocks: Record<string, unknown>[];
   units: Record<string, unknown>[];
+  defaultUnitId?: string;
+  defaultView?: ViewMode;
 }) {
   const locale = useActiveLocale();
   const isEn = locale === "en-US";
 
   const [open, setOpen] = useState(false);
-  const [viewMode, setViewMode] = useState<"timeline" | "list">("timeline");
+  const [viewMode, setViewMode] = useState<ViewMode>(defaultView ?? "month");
+
+  // Pre-fill state for the block creation sheet
+  const [prefillUnitId, setPrefillUnitId] = useState<string | undefined>(
+    undefined
+  );
+  const [prefillStartDate, setPrefillStartDate] = useState<string | undefined>(
+    undefined
+  );
+
+  const formRef = useRef<HTMLFormElement>(null);
+  useFormSubmitHotkey(formRef);
+
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  useHotkey("/", (e) => {
+    if (isInputFocused() || viewMode !== "list") return;
+    e.preventDefault();
+    searchInputRef.current?.focus();
+  });
 
   const [query, setQuery] = useState("");
-  const [unitId, setUnitId] = useState("all");
+  const [unitId, setUnitId] = useState(defaultUnitId ?? "all");
   const [reservationStatus, setReservationStatus] = useState("active");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
@@ -273,95 +304,51 @@ export function CalendarManager({
       .filter((row) => row.id);
   }, [blocks, from, query, to, unitId]);
 
-  const timelineUnits = useMemo(() => {
-    return unitOptions.map((u) => ({ id: u.id, label: u.label }));
-  }, [unitOptions]);
+  const handleTimelineClickDay = useCallback(
+    (clickUnitId: string, date: string) => {
+      setPrefillUnitId(clickUnitId);
+      setPrefillStartDate(date);
+      setOpen(true);
+    },
+    []
+  );
 
-  const timelineEvents = useMemo(() => {
-    const events: Array<{
-      id: string;
-      unitId: string;
-      startDate: string;
-      endDate: string;
-      label: string;
-      type: "reservation" | "block";
-      status?: string | null;
-    }> = [];
-
-    for (const row of reservations as ReservationRow[]) {
-      const rowId = asString(row.id).trim();
-      const rowUnitId = asString(row.unit_id).trim();
-      const checkIn = isIsoDate(row.check_in_date) ? row.check_in_date : null;
-      const checkOut = isIsoDate(row.check_out_date) ? row.check_out_date : null;
-      const status = asString(row.status).trim();
-
-      if (rowId && rowUnitId && checkIn && checkOut) {
-        const guestName = asString(row.guest_name).trim();
-        events.push({
-          id: `res-${rowId}`,
-          unitId: rowUnitId,
-          startDate: checkIn,
-          endDate: checkOut,
-          label: guestName || status || rowId.slice(0, 8),
-          type: "reservation",
-          status,
-        });
-      }
+  const handleSheetClose = useCallback((isOpen: boolean) => {
+    setOpen(isOpen);
+    if (!isOpen) {
+      setPrefillUnitId(undefined);
+      setPrefillStartDate(undefined);
     }
-
-    for (const block of blocks as BlockRow[]) {
-      const blockId = asString(block.id).trim();
-      const blockUnitId = asString(block.unit_id).trim();
-      const startsOn = isIsoDate(block.starts_on) ? block.starts_on : null;
-      const endsOn = isIsoDate(block.ends_on) ? block.ends_on : null;
-
-      if (blockId && blockUnitId && startsOn && endsOn) {
-        const reason = asString(block.reason).trim();
-        events.push({
-          id: `blk-${blockId}`,
-          unitId: blockUnitId,
-          startDate: startsOn,
-          endDate: endsOn,
-          label: reason || (isEn ? "Blocked" : "Bloqueado"),
-          type: "block",
-        });
-      }
-    }
-
-    return events;
-  }, [reservations, blocks, isEn]);
-
-  function handleTimelineClickDay(clickUnitId: string, date: string) {
-    // Pre-fill the create block sheet with the clicked unit and date
-    setOpen(true);
-  }
+  }, []);
 
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-1 rounded-lg border p-0.5">
-          <button
-            className={`rounded-md px-3 py-1 text-sm font-medium transition-colors ${
-              viewMode === "timeline"
-                ? "bg-primary/10 text-primary"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-            onClick={() => setViewMode("timeline")}
-            type="button"
+        <div className="inline-flex items-center gap-1 rounded-xl border border-border/40 bg-background/40 p-1">
+          <Button
+            className="h-8 w-8 rounded-lg p-0 transition-all"
+            onClick={() => setViewMode("month")}
+            size="sm"
+            variant={viewMode === "month" ? "secondary" : "ghost"}
           >
-            {isEn ? "Timeline" : "Línea de tiempo"}
-          </button>
-          <button
-            className={`rounded-md px-3 py-1 text-sm font-medium transition-colors ${
-              viewMode === "list"
-                ? "bg-primary/10 text-primary"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
+            <Icon icon={Calendar03Icon} size={14} />
+          </Button>
+          <Button
+            className="h-8 w-8 rounded-lg p-0 transition-all"
+            onClick={() => setViewMode("week")}
+            size="sm"
+            variant={viewMode === "week" ? "secondary" : "ghost"}
+          >
+            <Icon icon={Calendar02Icon} size={14} />
+          </Button>
+          <Button
+            className="h-8 w-8 rounded-lg p-0 transition-all"
             onClick={() => setViewMode("list")}
-            type="button"
+            size="sm"
+            variant={viewMode === "list" ? "secondary" : "ghost"}
           >
-            {isEn ? "List" : "Lista"}
-          </button>
+            <Icon icon={LeftToRightListBulletIcon} size={14} />
+          </Button>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <div className="text-muted-foreground text-sm">
@@ -379,13 +366,27 @@ export function CalendarManager({
         </div>
       </div>
 
-      {viewMode === "timeline" ? (
-        <MonthlyTimeline
-          events={timelineEvents}
+      {viewMode === "month" ? (
+        <TimelineCalendar
+          blocks={blocks}
           isEn={isEn}
           locale={locale}
+          mode="month"
           onClickDay={handleTimelineClickDay}
-          units={timelineUnits}
+          reservations={reservations}
+          units={unitOptions}
+        />
+      ) : null}
+
+      {viewMode === "week" ? (
+        <TimelineCalendar
+          blocks={blocks}
+          isEn={isEn}
+          locale={locale}
+          mode="week"
+          onClickDay={handleTimelineClickDay}
+          reservations={reservations}
+          units={unitOptions}
         />
       ) : null}
 
@@ -398,6 +399,7 @@ export function CalendarManager({
                   {isEn ? "Search" : "Buscar"}
                 </span>
                 <Input
+                  ref={searchInputRef}
                   onChange={(event) => setQuery(event.target.value)}
                   placeholder={
                     isEn
@@ -413,14 +415,10 @@ export function CalendarManager({
                   {isEn ? "Reservation status" : "Estado de reserva"}
                 </span>
                 <Select
-                  onChange={(event) =>
-                    setReservationStatus(event.target.value)
-                  }
+                  onChange={(event) => setReservationStatus(event.target.value)}
                   value={reservationStatus}
                 >
-                  <option value="active">
-                    {isEn ? "Active" : "Activas"}
-                  </option>
+                  <option value="active">{isEn ? "Active" : "Activas"}</option>
                   <option value="all">{isEn ? "All" : "Todas"}</option>
                   <option value="pending">pending</option>
                   <option value="confirmed">confirmed</option>
@@ -439,9 +437,7 @@ export function CalendarManager({
                   onChange={(event) => setUnitId(event.target.value)}
                   value={unitId}
                 >
-                  <option value="all">
-                    {isEn ? "All units" : "Todas"}
-                  </option>
+                  <option value="all">{isEn ? "All units" : "Todas"}</option>
                   {unitOptions.map((unit) => (
                     <option key={unit.id} value={unit.id}>
                       {unit.label}
@@ -478,40 +474,46 @@ export function CalendarManager({
           </div>
 
           <div className="grid gap-4 lg:grid-cols-2">
-        <section className="space-y-3">
-          <div className="flex items-center justify-between gap-2">
-            <p className="font-medium">{isEn ? "Reservations" : "Reservas"}</p>
-            <p className="text-muted-foreground text-sm">
-              {reservationRows.length} {isEn ? "records" : "registros"}
-            </p>
-          </div>
-          <DataTable
-            data={reservationRows}
-            rowHrefBase="/module/reservations"
-            searchPlaceholder={
-              isEn ? "Filter reservations..." : "Filtrar reservas..."
-            }
-          />
-        </section>
+            <section className="space-y-3">
+              <div className="flex items-center justify-between gap-2">
+                <p className="font-medium">
+                  {isEn ? "Reservations" : "Reservas"}
+                </p>
+                <p className="text-muted-foreground text-sm">
+                  {reservationRows.length} {isEn ? "records" : "registros"}
+                </p>
+              </div>
+              <DataTable
+                data={reservationRows}
+                rowHrefBase="/module/reservations"
+                searchPlaceholder={
+                  isEn ? "Filter reservations..." : "Filtrar reservas..."
+                }
+              />
+            </section>
 
-        <section className="space-y-3">
-          <div className="flex items-center justify-between gap-2">
-            <p className="font-medium">{isEn ? "Calendar" : "Calendario"}</p>
-            <p className="text-muted-foreground text-sm">
-              {blockRows.length} {isEn ? "records" : "registros"}
-            </p>
+            <section className="space-y-3">
+              <div className="flex items-center justify-between gap-2">
+                <p className="font-medium">
+                  {isEn ? "Calendar" : "Calendario"}
+                </p>
+                <p className="text-muted-foreground text-sm">
+                  {blockRows.length} {isEn ? "records" : "registros"}
+                </p>
+              </div>
+              <DataTable
+                data={blockRows}
+                renderRowActions={(row) => (
+                  <CalendarBlockRowActions row={row} />
+                )}
+                rowActionsHeader={isEn ? "Actions" : "Acciones"}
+                rowHrefBase="/module/calendar"
+                searchPlaceholder={
+                  isEn ? "Filter blocks..." : "Filtrar bloqueos..."
+                }
+              />
+            </section>
           </div>
-          <DataTable
-            data={blockRows}
-            renderRowActions={(row) => <CalendarBlockRowActions row={row} />}
-            rowActionsHeader={isEn ? "Actions" : "Acciones"}
-            rowHrefBase="/module/calendar"
-            searchPlaceholder={
-              isEn ? "Filter blocks..." : "Filtrar bloqueos..."
-            }
-          />
-        </section>
-      </div>
         </>
       ) : null}
 
@@ -521,18 +523,23 @@ export function CalendarManager({
             ? "Create a manual availability block (maintenance, owner use, etc.)."
             : "Crea un bloqueo manual de disponibilidad (mantenimiento, uso del propietario, etc.)."
         }
-        onOpenChange={setOpen}
+        onOpenChange={handleSheetClose}
         open={open}
         title={isEn ? "New calendar block" : "Nuevo bloqueo"}
       >
-        <Form action={createCalendarBlockAction} className="space-y-4">
+        <Form ref={formRef} action={createCalendarBlockAction} className="space-y-4">
           <input name="organization_id" type="hidden" value={orgId} />
 
           <label className="block space-y-1">
             <span className="block font-medium text-muted-foreground text-xs">
               {isEn ? "Unit" : "Unidad"}
             </span>
-            <Select defaultValue="" name="unit_id" required>
+            <Select
+              defaultValue={prefillUnitId ?? ""}
+              key={prefillUnitId ?? "empty"}
+              name="unit_id"
+              required
+            >
               <option disabled value="">
                 {isEn ? "Select a unit" : "Selecciona una unidad"}
               </option>
@@ -549,7 +556,12 @@ export function CalendarManager({
               <span className="block font-medium text-muted-foreground text-xs">
                 {isEn ? "Starts" : "Inicio"}
               </span>
-              <DatePicker locale={locale} name="starts_on" />
+              <DatePicker
+                key={`start-${prefillStartDate ?? "empty"}`}
+                defaultValue={prefillStartDate}
+                locale={locale}
+                name="starts_on"
+              />
             </label>
             <label className="block space-y-1">
               <span className="block font-medium text-muted-foreground text-xs">
@@ -581,12 +593,8 @@ export function CalendarManager({
               <option value="">
                 {isEn ? "No recurrence" : "Sin recurrencia"}
               </option>
-              <option value="FREQ=DAILY">
-                {isEn ? "Daily" : "Diario"}
-              </option>
-              <option value="FREQ=WEEKLY">
-                {isEn ? "Weekly" : "Semanal"}
-              </option>
+              <option value="FREQ=DAILY">{isEn ? "Daily" : "Diario"}</option>
+              <option value="FREQ=WEEKLY">{isEn ? "Weekly" : "Semanal"}</option>
               <option value="FREQ=MONTHLY">
                 {isEn ? "Monthly" : "Mensual"}
               </option>
@@ -595,14 +603,16 @@ export function CalendarManager({
 
           <label className="block space-y-1">
             <span className="block font-medium text-muted-foreground text-xs">
-              {isEn ? "Recurrence end date (optional)" : "Fin de recurrencia (opcional)"}
+              {isEn
+                ? "Recurrence end date (optional)"
+                : "Fin de recurrencia (opcional)"}
             </span>
             <DatePicker locale={locale} name="recurrence_end_date" />
           </label>
 
           <div className="flex flex-wrap justify-end gap-2">
             <Button
-              onClick={() => setOpen(false)}
+              onClick={() => handleSheetClose(false)}
               type="button"
               variant="outline"
             >

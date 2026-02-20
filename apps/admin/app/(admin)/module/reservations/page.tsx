@@ -1,3 +1,4 @@
+import dynamic from "next/dynamic";
 import { OrgAccessChanged } from "@/components/shell/org-access-changed";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -13,11 +14,10 @@ import { errorMessage, isOrgMembershipError } from "@/lib/errors";
 import { getActiveLocale } from "@/lib/i18n/server";
 import { getActiveOrgId } from "@/lib/org";
 
-import dynamic from "next/dynamic";
-
 const ReservationsManager = dynamic(() =>
   import("./reservations-manager").then((m) => m.ReservationsManager)
 );
+
 import { ReservationHeaderButtons } from "./reservations-page-client";
 
 type PageProps = {
@@ -26,7 +26,6 @@ type PageProps = {
     error?: string;
     guest_id?: string;
     guestId?: string;
-    view?: string;
   }>;
 };
 
@@ -92,24 +91,16 @@ export default async function ReservationsModulePage({
   }
 
   let reservations: Record<string, unknown>[] = [];
-  let blocks: Record<string, unknown>[] = [];
   let units: Record<string, unknown>[] = [];
 
   const reservationExtra = guestFilter ? { guest_id: guestFilter } : undefined;
   try {
-    const [reservationRows, blockRows, unitRows] = await Promise.all([
-      fetchList(
-        "/reservations",
-        orgId,
-        1000,
-        reservationExtra
-      ),
-      fetchList("/calendar/blocks", orgId, 1000),
+    const [reservationRows, unitRows] = await Promise.all([
+      fetchList("/reservations", orgId, 1000, reservationExtra),
       fetchList("/units", orgId, 500),
     ]);
 
     reservations = reservationRows as Record<string, unknown>[];
-    blocks = blockRows as Record<string, unknown>[];
     units = unitRows as Record<string, unknown>[];
   } catch (err) {
     const message = errorMessage(err);
@@ -194,8 +185,6 @@ export default async function ReservationsModulePage({
           ) : null}
 
           <ReservationsManager
-            blocks={blocks}
-            defaultView={sp.view === "calendar" ? "calendar" : "list"}
             orgId={orgId}
             reservations={reservations}
             units={units}

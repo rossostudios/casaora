@@ -1,13 +1,9 @@
 "use client";
 
-import { PlusSignIcon } from "@hugeicons/core-free-icons";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import {
-  bulkTransitionReservationStatusAction,
-} from "@/app/(admin)/module/reservations/actions";
-import { ReservationBlockSheet } from "@/app/(admin)/module/reservations/reservation-block-sheet";
+import { bulkTransitionReservationStatusAction } from "@/app/(admin)/module/reservations/actions";
 import { ReservationFormSheet } from "@/app/(admin)/module/reservations/reservation-form-sheet";
 import { ReservationsFilters } from "@/app/(admin)/module/reservations/reservations-filters";
 import { ReservationsStats } from "@/app/(admin)/module/reservations/reservations-stats";
@@ -23,28 +19,20 @@ import {
   type ReservationRow,
   type UnitRow,
 } from "@/app/(admin)/module/reservations/reservations-types";
-import { MonthlyCalendar } from "@/app/(admin)/module/reservations/monthly-calendar";
-import { WeeklyCalendar } from "@/app/(admin)/module/reservations/weekly-calendar";
-import { Button } from "@/components/ui/button";
-import { type ChartConfig } from "@/components/ui/chart";
-import { type DataTableRow } from "@/components/ui/data-table";
-import { Icon } from "@/components/ui/icon";
-import { useNewBookingToast } from "@/lib/features/reservations/use-new-booking-toast";
+import type { ChartConfig } from "@/components/ui/chart";
+import type { DataTableRow } from "@/components/ui/data-table";
 import {
-  type ReservationSavedView,
   getAllViews,
+  type ReservationSavedView,
 } from "@/lib/features/reservations/saved-views";
+import { useNewBookingToast } from "@/lib/features/reservations/use-new-booking-toast";
 import { useActiveLocale } from "@/lib/i18n/client";
 
 export function ReservationsManager({
-  blocks,
-  defaultView = "list",
   orgId,
   reservations,
   units,
 }: {
-  blocks: Record<string, unknown>[];
-  defaultView?: "list" | "calendar" | "month";
   orgId: string;
   reservations: Record<string, unknown>[];
   units: Record<string, unknown>[];
@@ -56,10 +44,8 @@ export function ReservationsManager({
   useNewBookingToast({ enabled: true, isEn });
 
   const [open, setOpen] = useState(false);
-  const [blockSheetOpen, setBlockSheetOpen] = useState(false);
   const [selectedRows, setSelectedRows] = useState<DataTableRow[]>([]);
   const [bulkActionPending, setBulkActionPending] = useState(false);
-  const [viewMode, setViewMode] = useState<"list" | "calendar" | "month">(defaultView);
 
   useEffect(() => {
     const handler = () => setOpen(true);
@@ -192,14 +178,15 @@ export function ReservationsManager({
         if (co !== today || rowStatus !== "checked_in") return false;
       } else if (quickFilter === "in_house") {
         if (rowStatus !== "checked_in") return false;
-      } else if (quickFilter === "pending") {
-        if (rowStatus !== "pending") return false;
-      }
+      } else if (quickFilter === "pending" && rowStatus !== "pending")
+        return false;
 
-      if (quickFilter === "all") {
-        if (normalizedStatus !== "all" && rowStatus !== normalizedStatus) {
-          return false;
-        }
+      if (
+        quickFilter === "all" &&
+        normalizedStatus !== "all" &&
+        rowStatus !== normalizedStatus
+      ) {
+        return false;
       }
 
       const rowUnitId = asString(row.unit_id).trim();
@@ -209,9 +196,16 @@ export function ReservationsManager({
 
       if (sourceFilter !== "all") {
         const rowSource = asString(row.source).trim().toLowerCase();
-        if (sourceFilter === "direct_booking" && rowSource !== "direct_booking") return false;
-        if (sourceFilter === "manual" && rowSource !== "manual" && rowSource !== "") return false;
-        if (sourceFilter === "external" && rowSource !== "external") return false;
+        if (sourceFilter === "direct_booking" && rowSource !== "direct_booking")
+          return false;
+        if (
+          sourceFilter === "manual" &&
+          rowSource !== "manual" &&
+          rowSource !== ""
+        )
+          return false;
+        if (sourceFilter === "external" && rowSource !== "external")
+          return false;
       }
 
       const start = asString(row.check_in_date).trim();
@@ -238,7 +232,17 @@ export function ReservationsManager({
 
       return haystack.includes(needle);
     });
-  }, [allRows, from, query, quickFilter, sourceFilter, status, to, today, unitId]);
+  }, [
+    allRows,
+    from,
+    query,
+    quickFilter,
+    sourceFilter,
+    status,
+    to,
+    today,
+    unitId,
+  ]);
 
   const periodRevenue = useMemo(() => {
     let total = 0;
@@ -324,7 +328,9 @@ export function ReservationsManager({
 
   const handleBulkAction = useCallback(
     async (targetStatus: string) => {
-      const ids = selectedRows.map((r) => asString(r.id).trim()).filter(Boolean);
+      const ids = selectedRows
+        .map((r) => asString(r.id).trim())
+        .filter(Boolean);
       if (ids.length === 0) return;
       setBulkActionPending(true);
       try {
@@ -336,28 +342,13 @@ export function ReservationsManager({
         setBulkActionPending(false);
       }
     },
-    [selectedRows, router],
+    [selectedRows, router]
   );
 
-  const handleStatusChange = useCallback(
-    (value: string) => {
-      setStatus(value);
-      if (value !== "all") setQuickFilter("all");
-    },
-    [],
-  );
-
-  const filteredBlocks = useMemo(() => {
-    if (unitId === "all") return blocks;
-    return blocks.filter(
-      (b) => asString((b as Record<string, unknown>).unit_id).trim() === unitId
-    );
-  }, [blocks, unitId]);
-
-  const calendarReservations = useMemo(() => {
-    if (unitId === "all") return reservations;
-    return filteredRows.map((r) => r as unknown as Record<string, unknown>);
-  }, [unitId, reservations, filteredRows]);
+  const handleStatusChange = useCallback((value: string) => {
+    setStatus(value);
+    if (value !== "all") setQuickFilter("all");
+  }, []);
 
   return (
     <div className="space-y-4">
@@ -373,129 +364,52 @@ export function ReservationsManager({
         activeViewId={activeViewId}
         isEn={isEn}
         onApplySavedView={applySavedView}
-        onSetViewMode={setViewMode}
         savedViews={savedViews}
-        viewMode={viewMode}
       />
 
-      {viewMode === "list" ? (
-        <>
-          <ReservationsFilters
-            filteredRows={filteredRows}
-            from={from}
-            isEn={isEn}
-            locale={locale}
-            onFromChange={setFrom}
-            onQueryChange={setQuery}
-            onSourceFilterChange={setSourceFilter}
-            onStatusChange={handleStatusChange}
-            onToChange={setTo}
-            onUnitIdChange={setUnitId}
-            query={query}
-            sourceFilter={sourceFilter}
-            status={status}
-            to={to}
-            total={total}
-            unitId={unitId}
-            unitOptions={unitOptions}
-          />
+      <ReservationsFilters
+        filteredRows={filteredRows}
+        from={from}
+        isEn={isEn}
+        locale={locale}
+        onFromChange={setFrom}
+        onQueryChange={setQuery}
+        onSourceFilterChange={setSourceFilter}
+        onStatusChange={handleStatusChange}
+        onToChange={setTo}
+        onUnitIdChange={setUnitId}
+        query={query}
+        sourceFilter={sourceFilter}
+        status={status}
+        to={to}
+        total={total}
+        unitId={unitId}
+        unitOptions={unitOptions}
+      />
 
-          <ReservationsTrendChart
-            isEn={isEn}
-            trendConfig={reservationsTrendConfig}
-            trendData={reservationsTrendData}
-          />
+      <ReservationsTrendChart
+        isEn={isEn}
+        trendConfig={reservationsTrendConfig}
+        trendData={reservationsTrendData}
+      />
 
-          <ReservationsTable
-            bulkActionPending={bulkActionPending}
-            filteredRows={filteredRows}
-            isEn={isEn}
-            locale={locale}
-            onBulkAction={handleBulkAction}
-            onClearSelection={() => setSelectedRows([])}
-            onRowClick={handleRowClick}
-            onSelectionChange={setSelectedRows}
-            selectedRows={selectedRows}
-          />
-        </>
-      ) : null}
-
-      {viewMode === "calendar" ? (
-        <>
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
-              {unitId !== "all" ? (
-                <span className="text-muted-foreground text-sm">
-                  {isEn ? "Filtered by unit" : "Filtrado por unidad"}
-                </span>
-              ) : null}
-            </div>
-            <Button
-              onClick={() => setBlockSheetOpen(true)}
-              size="sm"
-              type="button"
-              variant="secondary"
-            >
-              <Icon icon={PlusSignIcon} size={14} />
-              {isEn ? "New block" : "Nuevo bloqueo"}
-            </Button>
-          </div>
-
-          <WeeklyCalendar
-            blocks={filteredBlocks}
-            isEn={isEn}
-            locale={locale}
-            reservations={calendarReservations}
-            units={unitOptions}
-          />
-        </>
-      ) : null}
-
-      {viewMode === "month" ? (
-        <>
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
-              {unitId !== "all" ? (
-                <span className="text-muted-foreground text-sm">
-                  {isEn ? "Filtered by unit" : "Filtrado por unidad"}
-                </span>
-              ) : null}
-            </div>
-            <Button
-              onClick={() => setBlockSheetOpen(true)}
-              size="sm"
-              type="button"
-              variant="secondary"
-            >
-              <Icon icon={PlusSignIcon} size={14} />
-              {isEn ? "New block" : "Nuevo bloqueo"}
-            </Button>
-          </div>
-
-          <MonthlyCalendar
-            blocks={filteredBlocks}
-            isEn={isEn}
-            locale={locale}
-            reservations={calendarReservations}
-            units={unitOptions}
-          />
-        </>
-      ) : null}
+      <ReservationsTable
+        bulkActionPending={bulkActionPending}
+        filteredRows={filteredRows}
+        isEn={isEn}
+        locale={locale}
+        onBulkAction={handleBulkAction}
+        onClearSelection={() => setSelectedRows([])}
+        onRowClick={handleRowClick}
+        onSelectionChange={setSelectedRows}
+        selectedRows={selectedRows}
+      />
 
       <ReservationFormSheet
         isEn={isEn}
         locale={locale}
         onOpenChange={setOpen}
         open={open}
-        orgId={orgId}
-        unitOptions={unitOptions}
-      />
-
-      <ReservationBlockSheet
-        isEn={isEn}
-        locale={locale}
-        onOpenChange={setBlockSheetOpen}
-        open={blockSheetOpen}
         orgId={orgId}
         unitOptions={unitOptions}
       />

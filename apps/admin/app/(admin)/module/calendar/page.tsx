@@ -20,6 +20,7 @@ type PageProps = {
     success?: string;
     error?: string;
     view?: string;
+    unit_id?: string;
   }>;
 };
 
@@ -36,7 +37,8 @@ export default async function CalendarModulePage({ searchParams }: PageProps) {
   const isEn = locale === "en-US";
 
   const orgId = await getActiveOrgId();
-  const { success, error } = await searchParams;
+  const sp = await searchParams;
+  const { success, error } = sp;
   const successLabel = success ? safeDecode(success).replaceAll("-", " ") : "";
   const errorLabel = error ? safeDecode(error) : "";
 
@@ -118,9 +120,7 @@ export default async function CalendarModulePage({ searchParams }: PageProps) {
                 </Badge>
               </div>
               <CardTitle className="text-2xl">
-                {isEn
-                  ? "Multi-Unit Calendar"
-                  : "Calendario Multi-Unidad"}
+                {isEn ? "Multi-Unit Calendar" : "Calendario Multi-Unidad"}
               </CardTitle>
               <CardDescription>
                 {isEn
@@ -151,6 +151,14 @@ export default async function CalendarModulePage({ searchParams }: PageProps) {
 
           <CalendarManager
             blocks={blocks}
+            defaultUnitId={sp.unit_id}
+            defaultView={
+              sp.view === "week"
+                ? "week"
+                : sp.view === "list"
+                  ? "list"
+                  : undefined
+            }
             orgId={orgId}
             reservations={reservations}
             units={units}
