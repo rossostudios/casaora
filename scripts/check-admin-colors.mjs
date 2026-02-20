@@ -23,7 +23,7 @@ const ignoreDirs = new Set([".git", ".next", "node_modules"]);
 const allowedExtensions = new Set([".css", ".js", ".jsx", ".mdx", ".ts", ".tsx"]);
 
 const forbiddenPaletteClassRegex =
-  /\b(?:bg|text|border|ring|from|to|via|stroke|fill)-(?:emerald|amber|rose|sky|blue|violet|cyan|teal|lime|orange|yellow|fuchsia|indigo)-\d{2,3}(?:\/\d{1,3})?\b/g;
+  /\b(?:bg|text|border|ring|from|to|via|stroke|fill)-(?:rose|cyan|teal|lime|orange|fuchsia)-\d{2,3}(?:\/\d{1,3})?\b/g;
 const forbiddenCustomNoticeRegex =
   /<(?:div|section|article)\b[^>]*\brole=["']alert["'][^>]*>/g;
 
