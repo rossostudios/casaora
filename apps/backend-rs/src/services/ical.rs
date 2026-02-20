@@ -1,7 +1,7 @@
 use chrono::{NaiveDate, Utc};
 use reqwest::Client;
 use serde_json::{Map, Value};
-use sha1::{Digest, Sha1};
+use sha2::{Digest, Sha256};
 use sqlx::PgPool;
 
 use crate::{
@@ -412,7 +412,7 @@ fn parse_ical_events(ics_text: &str) -> Vec<ICalEvent> {
                 summary_value,
                 desc_value
             );
-            let mut hasher = Sha1::new();
+            let mut hasher = Sha256::new();
             hasher.update(stable.as_bytes());
             format!("ical-{:x}", hasher.finalize())
         } else {

@@ -37,8 +37,10 @@ pub fn bearer_token(headers: &HeaderMap) -> Option<String> {
 }
 
 pub async fn current_user_id(state: &AppState, headers: &HeaderMap) -> Option<String> {
+    #[cfg(debug_assertions)]
     if state.config.auth_dev_overrides_enabled() {
         if let Some(x_user_id) = header_string(headers, "x-user-id") {
+            tracing::warn!(user_id = %x_user_id, "Dev override: using x-user-id header");
             return Some(x_user_id);
         }
     }
@@ -49,7 +51,11 @@ pub async fn current_user_id(state: &AppState, headers: &HeaderMap) -> Option<St
         }
     }
 
+    #[cfg(debug_assertions)]
     if state.config.auth_dev_overrides_enabled() {
+        if let Some(ref uid) = state.config.default_user_id {
+            tracing::warn!(user_id = %uid, "Dev override: using default_user_id");
+        }
         return state.config.default_user_id.clone();
     }
 
@@ -57,6 +63,7 @@ pub async fn current_user_id(state: &AppState, headers: &HeaderMap) -> Option<St
 }
 
 pub async fn current_supabase_user(state: &AppState, headers: &HeaderMap) -> Option<SupabaseUser> {
+    #[cfg(debug_assertions)]
     if state.config.auth_dev_overrides_enabled() && header_string(headers, "x-user-id").is_some() {
         return None;
     }
@@ -143,7 +150,13 @@ async fn validate_jwt_with_jwks(state: &AppState, token: &str) -> Option<Supabas
     validation.set_audience(&["authenticated"]);
     validation.set_issuer(&[&issuer]);
 
-    let token_data = decode::<JwtClaims>(token, &decoding_key, &validation).ok()?;
+    let token_data = match decode::<JwtClaims>(token, &decoding_key, &validation) {
+        Ok(data) => data,
+        Err(err) => {
+            tracing::warn!(error = %err, "JWT validation failed");
+            return None;
+        }
+    };
 
     Some(SupabaseUser {
         id: token_data.claims.sub,
@@ -167,8 +180,18 @@ async fn fetch_supabase_user_for_token(state: &AppState, token: &str) -> Option<
         .ok()?;
 
     if !response.status().is_success() {
+        tracing::warn!(
+            status = %response.status(),
+            "Supabase HTTP auth failed"
+        );
         return None;
     }
 
-    response.json::<SupabaseUser>().await.ok()
+    match response.json::<SupabaseUser>().await {
+        Ok(user) => Some(user),
+        Err(err) => {
+            tracing::warn!(error = %err, "Failed to parse Supabase user response");
+            None
+        }
+    }
 }

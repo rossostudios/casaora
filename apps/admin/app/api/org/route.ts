@@ -29,7 +29,7 @@ export async function POST(request: Request) {
   response.cookies.set(ORG_COOKIE_NAME, orgId, {
     path: "/",
     sameSite: "lax",
-    httpOnly: false,
+    httpOnly: true,
     secure: shouldUseSecureCookie(request.headers, request.url),
     maxAge: 60 * 60 * 24 * 365,
   });

@@ -8,12 +8,11 @@ use axum::{
 use chrono::{NaiveDate, Utc};
 use serde::Deserialize;
 use serde_json::{json, Map, Value};
-use sha1::Digest;
-
 use crate::{
     error::{AppError, AppResult},
     repository::table_service::{create_row, get_row, list_rows, update_row},
     schemas::clamp_limit_in_range,
+    services::token_hash::{hash_token, hash_token_sha1},
     state::AppState,
 };
 
@@ -130,7 +129,7 @@ async fn request_access(
 
     // Generate token
     let raw_token = uuid::Uuid::new_v4().to_string();
-    let token_hash = hex::encode(sha1::Sha1::digest(raw_token.as_bytes()));
+    let token_hash = hash_token(&raw_token);
 
     let mut record = Map::new();
     record.insert("owner_email".to_string(), Value::String(email.clone()));
@@ -164,11 +163,13 @@ async fn verify_token(
         return Err(AppError::BadRequest("token is required.".to_string()));
     }
 
-    let token_hash = hex::encode(sha1::Sha1::digest(raw_token.as_bytes()));
-
-    let token_record = get_row(pool, "owner_access_tokens", &token_hash, "token_hash")
-        .await
-        .map_err(|_| AppError::Unauthorized("Invalid or expired token.".to_string()))?;
+    // Try SHA-256 first, fall back to legacy SHA-1 for pre-migration tokens
+    let token_record = match get_row(pool, "owner_access_tokens", &hash_token(raw_token), "token_hash").await {
+        Ok(record) => record,
+        Err(_) => get_row(pool, "owner_access_tokens", &hash_token_sha1(raw_token), "token_hash")
+            .await
+            .map_err(|_| AppError::Unauthorized("Invalid or expired token.".to_string()))?,
+    };
 
     // Check expiry
     if let Some(expires_at) = token_record
@@ -196,12 +197,13 @@ async fn verify_token(
 
     let org_id = val_str(&token_record, "organization_id");
     let email = val_str(&token_record, "owner_email");
+    let stored_hash = val_str(&token_record, "token_hash");
 
     Ok(Json(json!({
         "authenticated": true,
         "organization_id": org_id,
         "email": email,
-        "token_hash": token_hash,
+        "token_hash": stored_hash,
     })))
 }
 
@@ -583,11 +585,13 @@ async fn require_owner<'a>(
         .filter(|s| !s.is_empty())
         .ok_or_else(|| AppError::Unauthorized("Missing x-owner-token header.".to_string()))?;
 
-    let token_hash = hex::encode(sha1::Sha1::digest(raw_token.as_bytes()));
-
-    let token_record = get_row(pool, "owner_access_tokens", &token_hash, "token_hash")
-        .await
-        .map_err(|_| AppError::Unauthorized("Invalid or expired token.".to_string()))?;
+    // Try SHA-256 first, fall back to legacy SHA-1 for pre-migration tokens
+    let token_record = match get_row(pool, "owner_access_tokens", &hash_token(raw_token), "token_hash").await {
+        Ok(record) => record,
+        Err(_) => get_row(pool, "owner_access_tokens", &hash_token_sha1(raw_token), "token_hash")
+            .await
+            .map_err(|_| AppError::Unauthorized("Invalid or expired token.".to_string()))?,
+    };
 
     // Check expiry
     if let Some(expires_at) = token_record
@@ -608,10 +612,4 @@ async fn require_owner<'a>(
     }
 
     Ok((pool, org_id))
-}
-
-mod hex {
-    pub fn encode(bytes: impl AsRef<[u8]>) -> String {
-        bytes.as_ref().iter().map(|b| format!("{b:02x}")).collect()
-    }
 }

@@ -17,6 +17,7 @@ use crate::state::AppState;
 
 const REFERRER_POLICY: HeaderName = HeaderName::from_static("referrer-policy");
 const PERMISSIONS_POLICY: HeaderName = HeaderName::from_static("permissions-policy");
+const CONTENT_SECURITY_POLICY: HeaderName = HeaderName::from_static("content-security-policy");
 
 pub async fn enforce_trusted_hosts(
     State(state): State<AppState>,
@@ -66,6 +67,11 @@ pub async fn enforce_trusted_hosts(
         response.headers_mut(),
         PERMISSIONS_POLICY,
         HeaderValue::from_static("camera=(), microphone=(), geolocation=()"),
+    );
+    insert_header_if_missing(
+        response.headers_mut(),
+        CONTENT_SECURITY_POLICY,
+        HeaderValue::from_static("default-src 'none'; frame-ancestors 'none'"),
     );
 
     if state.config.is_production() {

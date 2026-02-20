@@ -229,6 +229,13 @@ impl AppConfig {
         format!("{base}/chat/completions")
     }
 
+    pub fn rate_limit_enabled_runtime(&self) -> bool {
+        if self.is_production() {
+            return true;
+        }
+        self.rate_limit_enabled
+    }
+
     pub fn workflow_queue_enabled(&self) -> bool {
         self.workflow_engine_mode == WorkflowEngineMode::Queue
     }

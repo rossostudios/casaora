@@ -9,6 +9,7 @@ pub fn build_cors_layer(config: &AppConfig) -> CorsLayer {
     headers.push(axum::http::header::HeaderName::from_static(
         "x-tenant-token",
     ));
+    #[cfg(debug_assertions)]
     if config.auth_dev_overrides_enabled() {
         headers.push(axum::http::header::HeaderName::from_static("x-user-id"));
     }
@@ -24,11 +25,17 @@ pub fn build_cors_layer(config: &AppConfig) -> CorsLayer {
         ])
         .allow_headers(headers);
 
-    if config
+    let has_wildcard = config
         .cors_origins
         .iter()
-        .any(|origin| origin.trim() == "*")
-    {
+        .any(|origin| origin.trim() == "*");
+
+    if has_wildcard && config.is_production() {
+        tracing::error!(
+            "CORS_ORIGINS=* is not allowed in production — falling back to no cross-origin access"
+        );
+        // No allow_origin set = all cross-origin requests blocked
+    } else if has_wildcard {
         layer = layer.allow_origin(Any).allow_credentials(false);
     } else {
         let origins = config

@@ -7,18 +7,22 @@ import { getSupabaseAnonKey, getSupabaseUrl } from "@/lib/supabase/config";
 const ADMIN_URL = process.env.NEXT_PUBLIC_ADMIN_URL ?? "http://localhost:3000";
 
 function safeNext(value: string | null): string {
-  if (!value) return `${ADMIN_URL}/app`;
-  // Allow relative paths
-  if (value.startsWith("/")) return value;
-  // Allow redirects to admin app
+  const fallback = `${ADMIN_URL}/app`;
+  if (!value) return fallback;
+  // Block javascript: and other dangerous protocols
+  if (/^[a-z]+:/i.test(value) && !value.startsWith("http")) return fallback;
+  // Allow relative paths (but not protocol-relative //evil.com)
+  if (value.startsWith("/") && !value.startsWith("//")) return value;
+  // Allow redirects to admin app — reject embedded credentials
   try {
     const url = new URL(value);
+    if (url.username || url.password) return fallback;
     const adminOrigin = new URL(ADMIN_URL).origin;
     if (url.origin === adminOrigin) return value;
   } catch {
     // invalid URL
   }
-  return `${ADMIN_URL}/app`;
+  return fallback;
 }
 
 export async function GET(request: Request) {

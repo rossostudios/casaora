@@ -1,3 +1,5 @@
+#![recursion_limit = "512"]
+
 mod auth;
 mod config;
 mod db;
@@ -58,7 +60,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .layer(from_fn_with_state(state.clone(), enforce_trusted_hosts))
         .with_state(state.clone());
 
-    if state.config.rate_limit_enabled {
+    if state.config.rate_limit_enabled_runtime() {
         let governor_config = GovernorConfigBuilder::default()
             .per_second(state.config.rate_limit_per_second)
             .burst_size(state.config.rate_limit_burst_size)

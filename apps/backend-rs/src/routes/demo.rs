@@ -41,6 +41,12 @@ async fn seed_demo(
     headers: HeaderMap,
     Json(payload): Json<Value>,
 ) -> AppResult<impl IntoResponse> {
+    if state.config.is_production() {
+        return Err(AppError::BadRequest(
+            "Demo seeding is disabled in production.".to_string(),
+        ));
+    }
+
     let user_id = require_user_id(&state, &headers).await?;
     let pool = db_pool(&state)?;
 

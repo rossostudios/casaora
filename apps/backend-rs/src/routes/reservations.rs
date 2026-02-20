@@ -7,8 +7,6 @@ use axum::{
 use chrono::{Datelike, NaiveDate, NaiveTime, TimeZone, Timelike, Utc};
 use chrono_tz::Tz;
 use serde_json::{json, Map, Value};
-use sha1::Digest;
-
 use crate::{
     auth::require_user_id,
     error::{AppError, AppResult},
@@ -20,7 +18,7 @@ use crate::{
     },
     services::{
         audit::write_audit_log, enrichment::enrich_reservations, sequences::enroll_in_sequences,
-        workflows::fire_trigger,
+        token_hash::hash_token, workflows::fire_trigger,
     },
     state::AppState,
     tenancy::{assert_org_member, assert_org_role},
@@ -989,13 +987,7 @@ async fn send_guest_portal_link(
 
     // Generate a random token
     let raw_token = uuid::Uuid::new_v4().to_string();
-    let token_hash = {
-        let digest = sha1::Sha1::digest(raw_token.as_bytes());
-        digest
-            .iter()
-            .map(|b| format!("{b:02x}"))
-            .collect::<String>()
-    };
+    let token_hash = hash_token(&raw_token);
 
     let mut record = Map::new();
     record.insert(

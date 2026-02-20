@@ -18,4 +18,5 @@ pub mod plan_limits;
 pub mod pricing;
 pub mod readiness;
 pub mod sequences;
+pub mod token_hash;
 pub mod workflows;

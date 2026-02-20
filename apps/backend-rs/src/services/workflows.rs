@@ -3,7 +3,7 @@ use std::{collections::BTreeMap, env};
 use chrono::{DateTime, Duration, Utc};
 use serde::Serialize;
 use serde_json::{json, Map, Value};
-use sha1::{Digest, Sha1};
+use sha2::{Digest, Sha256};
 use tracing::{info, warn};
 use uuid::Uuid;
 
@@ -1531,7 +1531,7 @@ pub fn generate_dedupe_key(
         "context": canonicalize_json(&Value::Object(context.clone())),
     });
 
-    let mut hasher = Sha1::new();
+    let mut hasher = Sha256::new();
     hasher.update(payload.to_string().as_bytes());
     format!("wf:{}", hex_digest(&hasher.finalize()))
 }

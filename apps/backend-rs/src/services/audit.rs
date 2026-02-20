@@ -16,9 +16,19 @@ pub async fn write_audit_log(
         .map(str::trim)
         .filter(|value| !value.is_empty())
     else {
+        tracing::debug!(
+            action = action,
+            entity_name = entity_name,
+            "Audit log skipped: missing organization_id"
+        );
         return;
     };
     let Some(pool) = pool else {
+        tracing::debug!(
+            action = action,
+            entity_name = entity_name,
+            "Audit log skipped: no database pool"
+        );
         return;
     };
 

@@ -1,11 +1,10 @@
 use axum::{extract::State, http::HeaderMap, response::IntoResponse, Json};
 use chrono::Utc;
 use serde_json::{json, Map, Value};
-use sha1::Digest;
-
 use crate::{
     error::{AppError, AppResult},
     repository::table_service::{create_row, get_row, list_rows, update_row},
+    services::token_hash::{hash_token, hash_token_sha1},
     state::AppState,
 };
 
@@ -142,7 +141,7 @@ async fn request_access(
 
     // Generate a random token
     let raw_token = uuid::Uuid::new_v4().to_string();
-    let token_hash = hex::encode(sha1::Sha1::digest(raw_token.as_bytes()));
+    let token_hash = hash_token(&raw_token);
 
     let mut record = Map::new();
     record.insert("reservation_id".to_string(), Value::String(reservation_id));
@@ -205,11 +204,13 @@ async fn verify_token(
         return Err(AppError::BadRequest("token is required.".to_string()));
     }
 
-    let token_hash = hex::encode(sha1::Sha1::digest(raw_token.as_bytes()));
-
-    let token_record = get_row(pool, "guest_access_tokens", &token_hash, "token_hash")
-        .await
-        .map_err(|_| AppError::Unauthorized("Invalid or expired token.".to_string()))?;
+    // Try SHA-256 first, fall back to legacy SHA-1 for pre-migration tokens
+    let token_record = match get_row(pool, "guest_access_tokens", &hash_token(raw_token), "token_hash").await {
+        Ok(record) => record,
+        Err(_) => get_row(pool, "guest_access_tokens", &hash_token_sha1(raw_token), "token_hash")
+            .await
+            .map_err(|_| AppError::Unauthorized("Invalid or expired token.".to_string()))?,
+    };
 
     // Check expiry
     if let Some(expires_at) = token_record
@@ -237,12 +238,13 @@ async fn verify_token(
 
     let reservation_id = val_str(&token_record, "reservation_id");
     let guest_id = val_str(&token_record, "guest_id");
+    let stored_hash = val_str(&token_record, "token_hash");
 
     Ok(Json(json!({
         "authenticated": true,
         "reservation_id": reservation_id,
         "guest_id": guest_id,
-        "token_hash": token_hash,
+        "token_hash": stored_hash,
     })))
 }
 
@@ -430,11 +432,13 @@ async fn require_guest<'a>(
         .filter(|s| !s.is_empty())
         .ok_or_else(|| AppError::Unauthorized("Missing x-guest-token header.".to_string()))?;
 
-    let token_hash = hex::encode(sha1::Sha1::digest(raw_token.as_bytes()));
-
-    let token_record = get_row(pool, "guest_access_tokens", &token_hash, "token_hash")
-        .await
-        .map_err(|_| AppError::Unauthorized("Invalid or expired token.".to_string()))?;
+    // Try SHA-256 first, fall back to legacy SHA-1 for pre-migration tokens
+    let token_record = match get_row(pool, "guest_access_tokens", &hash_token(raw_token), "token_hash").await {
+        Ok(record) => record,
+        Err(_) => get_row(pool, "guest_access_tokens", &hash_token_sha1(raw_token), "token_hash")
+            .await
+            .map_err(|_| AppError::Unauthorized("Invalid or expired token.".to_string()))?,
+    };
 
     // Check expiry
     if let Some(expires_at) = token_record
@@ -475,10 +479,4 @@ fn val_str(row: &Value, key: &str) -> String {
         .filter(|value| !value.is_empty())
         .map(ToOwned::to_owned)
         .unwrap_or_default()
-}
-
-mod hex {
-    pub fn encode(bytes: impl AsRef<[u8]>) -> String {
-        bytes.as_ref().iter().map(|b| format!("{b:02x}")).collect()
-    }
 }

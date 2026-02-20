@@ -6,7 +6,7 @@ use axum::{
 };
 use chrono::Utc;
 use serde_json::{json, Map, Value};
-use sha1::Digest;
+use crate::services::token_hash::{hash_token, hash_token_sha1};
 
 use crate::{
     error::{AppError, AppResult},
@@ -112,7 +112,7 @@ async fn request_access(
 
     // Generate a random token
     let raw_token = uuid::Uuid::new_v4().to_string();
-    let token_hash = hex::encode(sha1::Sha1::digest(raw_token.as_bytes()));
+    let token_hash = hash_token(&raw_token);
 
     let mut record = Map::new();
     record.insert("lease_id".to_string(), Value::String(lease_id));
@@ -180,11 +180,13 @@ async fn verify_token(
         return Err(AppError::BadRequest("token is required.".to_string()));
     }
 
-    let token_hash = hex::encode(sha1::Sha1::digest(raw_token.as_bytes()));
-
-    let token_record = get_row(pool, "tenant_access_tokens", &token_hash, "token_hash")
-        .await
-        .map_err(|_| AppError::Unauthorized("Invalid or expired token.".to_string()))?;
+    // Try SHA-256 first, fall back to legacy SHA-1 for pre-migration tokens
+    let token_record = match get_row(pool, "tenant_access_tokens", &hash_token(raw_token), "token_hash").await {
+        Ok(record) => record,
+        Err(_) => get_row(pool, "tenant_access_tokens", &hash_token_sha1(raw_token), "token_hash")
+            .await
+            .map_err(|_| AppError::Unauthorized("Invalid or expired token.".to_string()))?,
+    };
 
     // Check expiry
     if let Some(expires_at) = token_record
@@ -212,12 +214,13 @@ async fn verify_token(
 
     let lease_id = val_str(&token_record, "lease_id");
     let email = val_str(&token_record, "email");
+    let stored_hash = val_str(&token_record, "token_hash");
 
     Ok(Json(json!({
         "authenticated": true,
         "lease_id": lease_id,
         "email": email,
-        "token_hash": token_hash,
+        "token_hash": stored_hash,
     })))
 }
 
@@ -842,11 +845,13 @@ async fn require_tenant<'a>(
         .filter(|s| !s.is_empty())
         .ok_or_else(|| AppError::Unauthorized("Missing x-tenant-token header.".to_string()))?;
 
-    let token_hash = hex::encode(sha1::Sha1::digest(raw_token.as_bytes()));
-
-    let token_record = get_row(pool, "tenant_access_tokens", &token_hash, "token_hash")
-        .await
-        .map_err(|_| AppError::Unauthorized("Invalid or expired token.".to_string()))?;
+    // Try SHA-256 first, fall back to legacy SHA-1 for pre-migration tokens
+    let token_record = match get_row(pool, "tenant_access_tokens", &hash_token(raw_token), "token_hash").await {
+        Ok(record) => record,
+        Err(_) => get_row(pool, "tenant_access_tokens", &hash_token_sha1(raw_token), "token_hash")
+            .await
+            .map_err(|_| AppError::Unauthorized("Invalid or expired token.".to_string()))?,
+    };
 
     // Check expiry
     if let Some(expires_at) = token_record
@@ -885,10 +890,4 @@ fn val_str(row: &Value, key: &str) -> String {
         .filter(|value| !value.is_empty())
         .map(ToOwned::to_owned)
         .unwrap_or_default()
-}
-
-mod hex {
-    pub fn encode(bytes: impl AsRef<[u8]>) -> String {
-        bytes.as_ref().iter().map(|b| format!("{b:02x}")).collect()
-    }
 }
