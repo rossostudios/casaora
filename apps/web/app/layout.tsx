@@ -3,9 +3,7 @@ import { GeistSans } from "geist/font/sans";
 import type { Metadata } from "next";
 import { Playfair_Display } from "next/font/google";
 import { ThemeProvider } from "next-themes";
-
-import { SiteFooter } from "@/components/layout/site-footer";
-import { SiteHeader } from "@/components/layout/site-header";
+import { Toaster } from "sonner";
 
 import "./globals.css";
 
@@ -55,9 +53,8 @@ export default function RootLayout({
           disableTransitionOnChange
           enableSystem
         >
-          <SiteHeader />
-          <main className="min-h-screen">{children}</main>
-          <SiteFooter />
+          {children}
+          <Toaster closeButton position="top-right" richColors />
         </ThemeProvider>
       </body>
     </html>

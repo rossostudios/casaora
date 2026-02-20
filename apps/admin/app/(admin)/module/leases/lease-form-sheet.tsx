@@ -22,8 +22,8 @@ import {
   type GuestResult,
   type LeaseRow,
   type PropertyOption,
-  type UnitOption,
   PY_RESIDENTIAL_IVA_RATE,
+  type UnitOption,
 } from "./lease-types";
 
 export function LeaseFormSheet({
@@ -195,29 +195,29 @@ export function LeaseFormSheet({
           )}
           <input name="next" type="hidden" value={nextPath} />
 
-          <Tabs defaultValue="tenant" className="w-full">
-            <TabsList className="grid w-full grid-cols-3 h-9 p-1 bg-muted/50 rounded-lg mb-6">
+          <Tabs className="w-full" defaultValue="tenant">
+            <TabsList className="mb-6 grid h-9 w-full grid-cols-3 rounded-lg bg-muted/50 p-1">
               <TabsTrigger
-                value="tenant"
                 className="text-xs data-[state=active]:shadow-sm"
+                value="tenant"
               >
                 {isEn ? "Tenant & Dates" : "Inquilino y Fechas"}
               </TabsTrigger>
               <TabsTrigger
-                value="financials"
                 className="text-xs data-[state=active]:shadow-sm"
+                value="financials"
               >
                 {isEn ? "Financials" : "Finanzas"}
               </TabsTrigger>
               <TabsTrigger
-                value="details"
                 className="text-xs data-[state=active]:shadow-sm"
+                value="details"
               >
                 {isEn ? "Details" : "Detalles"}
               </TabsTrigger>
             </TabsList>
 
-            <TabsContent value="tenant" className="m-0 space-y-6">
+            <TabsContent className="m-0 space-y-6" value="tenant">
               <div className="grid gap-4 md:grid-cols-2">
                 <div
                   className="relative space-y-1.5 text-sm md:col-span-2"
@@ -236,12 +236,12 @@ export function LeaseFormSheet({
                     onFocus={() => {
                       if (guestResults.length > 0) setShowGuestDropdown(true);
                     }}
+                    placeholder={isEn ? "e.g., John Doe" : "Ej: Juan Pérez"}
                     required
                     value={tenantName}
-                    placeholder={isEn ? "e.g., John Doe" : "Ej: Juan Pérez"}
                   />
                   {showGuestDropdown && guestResults.length > 0 && (
-                    <div className="absolute left-0 right-0 top-full z-50 mt-1 max-h-48 overflow-y-auto rounded-md border bg-popover shadow-md">
+                    <div className="absolute top-full right-0 left-0 z-50 mt-1 max-h-48 overflow-y-auto rounded-md border bg-popover shadow-md">
                       {guestResults.map((guest) => (
                         <button
                           className="flex w-full flex-col gap-0.5 px-3 py-2 text-left text-sm hover:bg-accent"
@@ -270,9 +270,9 @@ export function LeaseFormSheet({
                   <Input
                     name="tenant_email"
                     onChange={(e) => setTenantEmail(e.target.value)}
+                    placeholder="tenant@example.com"
                     type="email"
                     value={tenantEmail}
-                    placeholder="tenant@example.com"
                   />
                 </label>
 
@@ -289,19 +289,19 @@ export function LeaseFormSheet({
                 </label>
 
                 {!editing && (
-                  <label className="flex items-start gap-3 rounded-lg border p-3 shadow-sm md:col-span-2 hover:bg-muted/50 transition-colors cursor-pointer">
+                  <label className="flex cursor-pointer items-start gap-3 rounded-lg border p-3 shadow-sm transition-colors hover:bg-muted/50 md:col-span-2">
                     <Checkbox
                       checked={saveAsGuest}
+                      className="mt-1"
                       onCheckedChange={(checked) =>
                         setSaveAsGuest(checked === true)
                       }
-                      className="mt-1"
                     />
                     <div className="space-y-1">
-                      <p className="font-medium leading-none text-sm">
+                      <p className="font-medium text-sm leading-none">
                         {isEn ? "Save as guest" : "Guardar como huésped"}
                       </p>
-                      <p className="text-xs text-muted-foreground">
+                      <p className="text-muted-foreground text-xs">
                         {isEn
                           ? "Also save tenant as a guest in the database for future reference."
                           : `Tambi${"\u00E9"}n guardar inquilino como hu${"\u00E9"}sped en la base de datos para futura referencia.`}
@@ -316,8 +316,8 @@ export function LeaseFormSheet({
                 )}
               </div>
 
-              <div className="pt-4 border-t">
-                <h4 className="text-sm font-semibold mb-3">
+              <div className="border-t pt-4">
+                <h4 className="mb-3 font-semibold text-sm">
                   {isEn ? "Lease Term" : "Plazo del Contrato"}
                 </h4>
                 <div className="grid gap-4 md:grid-cols-2">
@@ -346,7 +346,7 @@ export function LeaseFormSheet({
               </div>
             </TabsContent>
 
-            <TabsContent value="financials" className="m-0 space-y-6">
+            <TabsContent className="m-0 space-y-6" value="financials">
               <div className="grid gap-4 md:grid-cols-2">
                 <label className="space-y-1.5 text-sm">
                   <span className="font-medium text-foreground">
@@ -362,8 +362,8 @@ export function LeaseFormSheet({
                 </label>
               </div>
 
-              <div className="pt-4 border-t">
-                <h4 className="text-sm font-semibold mb-3">
+              <div className="border-t pt-4">
+                <h4 className="mb-3 font-semibold text-sm">
                   {isEn ? "Monthly Charges" : "Cargos Mensuales"}
                 </h4>
                 <div className="grid gap-4 md:grid-cols-3">
@@ -375,11 +375,11 @@ export function LeaseFormSheet({
                       defaultValue={editing?.monthly_rent ?? ""}
                       min={0}
                       name="monthly_rent"
+                      placeholder="0.00"
                       ref={rentInputRef}
                       required
                       step="0.01"
                       type="number"
-                      placeholder="0.00"
                     />
                   </label>
 
@@ -387,7 +387,7 @@ export function LeaseFormSheet({
                     <div className="flex items-center gap-2">
                       <span className="font-medium text-foreground">IVA</span>
                       <button
-                        className="rounded border border-input px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                        className="rounded border border-input px-1.5 py-0.5 font-medium text-[10px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
                         onClick={autoCalcIva}
                         title={
                           isEn
@@ -403,10 +403,10 @@ export function LeaseFormSheet({
                       defaultValue={editing?.tax_iva ?? ""}
                       min={0}
                       name="tax_iva"
+                      placeholder="0.00"
                       ref={ivaInputRef}
                       step="0.01"
                       type="number"
-                      placeholder="0.00"
                     />
                   </div>
 
@@ -418,16 +418,16 @@ export function LeaseFormSheet({
                       defaultValue={editing?.service_fee_flat ?? ""}
                       min={0}
                       name="service_fee_flat"
+                      placeholder="0.00"
                       step="0.01"
                       type="number"
-                      placeholder="0.00"
                     />
                   </label>
                 </div>
               </div>
 
-              <div className="pt-4 border-t">
-                <h4 className="text-sm font-semibold mb-3">
+              <div className="border-t pt-4">
+                <h4 className="mb-3 font-semibold text-sm">
                   {isEn ? "Setup & Fees" : "Configuración y Tarifas"}
                 </h4>
                 <div className="grid gap-4 md:grid-cols-2">
@@ -441,9 +441,9 @@ export function LeaseFormSheet({
                       defaultValue={editing?.security_deposit ?? ""}
                       min={0}
                       name="security_deposit"
+                      placeholder="0.00"
                       step="0.01"
                       type="number"
-                      placeholder="0.00"
                     />
                   </label>
 
@@ -457,9 +457,9 @@ export function LeaseFormSheet({
                       defaultValue={editing?.guarantee_option_fee ?? ""}
                       min={0}
                       name="guarantee_option_fee"
+                      placeholder="0.00"
                       step="0.01"
                       type="number"
-                      placeholder="0.00"
                     />
                   </label>
 
@@ -471,17 +471,17 @@ export function LeaseFormSheet({
                       defaultValue={editing?.platform_fee ?? ""}
                       min={0}
                       name="platform_fee"
+                      placeholder="0.00"
                       step="0.01"
                       type="number"
-                      placeholder="0.00"
                     />
                   </label>
                 </div>
               </div>
 
-              {!editing ? (
-                <div className="pt-4 border-t">
-                  <h4 className="text-sm font-semibold mb-3">
+              {editing ? null : (
+                <div className="border-t pt-4">
+                  <h4 className="mb-3 font-semibold text-sm">
                     {isEn ? "Initial Collection" : "Cobro Inicial"}
                   </h4>
                   <div className="grid gap-4 md:grid-cols-2">
@@ -513,10 +513,10 @@ export function LeaseFormSheet({
                     </label>
                   </div>
                 </div>
-              ) : null}
+              )}
             </TabsContent>
 
-            <TabsContent value="details" className="m-0 space-y-6">
+            <TabsContent className="m-0 space-y-6" value="details">
               <div className="grid gap-4 md:grid-cols-2">
                 <label className="space-y-1.5 text-sm">
                   <span className="font-medium text-foreground">
@@ -553,7 +553,7 @@ export function LeaseFormSheet({
                   </Select>
                 </label>
 
-                {!editing ? (
+                {editing ? null : (
                   <label className="space-y-1.5 text-sm">
                     <span className="font-medium text-foreground">
                       {isEn ? "Lease status" : "Estado del contrato"}
@@ -567,10 +567,10 @@ export function LeaseFormSheet({
                       </option>
                     </Select>
                   </label>
-                ) : null}
+                )}
               </div>
 
-              <div className="pt-4 border-t">
+              <div className="border-t pt-4">
                 <label className="space-y-1.5 text-sm">
                   <span className="font-medium text-foreground">
                     {isEn ? "Notes" : "Notas"}
@@ -578,12 +578,12 @@ export function LeaseFormSheet({
                   <Textarea
                     defaultValue={editing?.notes ?? ""}
                     name="notes"
-                    rows={4}
                     placeholder={
                       isEn
                         ? "Additional lease details, special stipulations..."
                         : "Detalles adicionales, estipulaciones especiales..."
                     }
+                    rows={4}
                   />
                 </label>
               </div>
@@ -591,7 +591,7 @@ export function LeaseFormSheet({
           </Tabs>
         </div>
 
-        <div className="pt-4 mt-auto border-t flex justify-end shrink-0">
+        <div className="mt-auto flex shrink-0 justify-end border-t pt-4">
           <Button type="submit">
             {editing
               ? isEn

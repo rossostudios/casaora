@@ -1,4 +1,7 @@
-import { isRentalMode, type RentalMode } from "@/app/(admin)/setup/setup-components";
+import {
+  isRentalMode,
+  type RentalMode,
+} from "@/app/(admin)/setup/setup-components";
 import { AnomalyAlerts } from "@/components/dashboard/anomaly-alerts";
 import { DashboardCharts } from "@/components/dashboard/dashboard-charts";
 import {
@@ -13,18 +16,18 @@ import { DashboardHeroMetrics } from "@/components/dashboard/dashboard-hero-metr
 import { DashboardModuleCards } from "@/components/dashboard/dashboard-module-cards";
 import { DashboardNeedsAttention } from "@/components/dashboard/dashboard-needs-attention";
 import { DashboardOperations } from "@/components/dashboard/dashboard-operations";
-import { DashboardRentalKpis } from "@/components/dashboard/dashboard-rental-kpis";
 import { roleQuickActions } from "@/components/dashboard/dashboard-quick-actions";
+import { DashboardRentalKpis } from "@/components/dashboard/dashboard-rental-kpis";
+import { DashboardTabs } from "@/components/dashboard/dashboard-tabs";
 import {
   countByStatus,
+  type NeedsAttentionItem,
   normalizedRole,
   numberOrZero,
   roleGreeting,
   userDisplayName,
-  type NeedsAttentionItem,
 } from "@/components/dashboard/dashboard-utils";
 import { GettingStartedChecklist } from "@/components/dashboard/getting-started-checklist";
-import { DashboardTabs } from "@/components/dashboard/dashboard-tabs";
 import { OrgAccessChanged } from "@/components/shell/org-access-changed";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
@@ -36,12 +39,12 @@ import {
 } from "@/components/ui/card";
 import { TableCard } from "@/components/ui/table-card";
 import {
+  type AgentPerformanceStats,
   fetchAgentPerformance,
   fetchKpiDashboard,
   fetchList,
   fetchOccupancyForecast,
   fetchRevenueTrend,
-  type AgentPerformanceStats,
   type KpiDashboard,
   type OccupancyForecastResponse,
   type OperationsSummary,
@@ -181,7 +184,9 @@ export default async function DashboardPage({
               months: [],
             }) as OccupancyForecastResponse
         ),
-        fetchAgentPerformance(orgId).catch(() => null as AgentPerformanceStats | null),
+        fetchAgentPerformance(orgId).catch(
+          () => null as AgentPerformanceStats | null
+        ),
         fetchRevenueTrend(orgId).catch(
           () => ({ months: [] }) as RevenueTrendResponse
         ),
@@ -248,12 +253,12 @@ export default async function DashboardPage({
 
   const revenueSnapshot = apiAvailable
     ? {
-      periodLabel: isEn ? "This month" : "Este mes",
-      currency: "PYG",
-      gross: numberOrZero(summary.gross_revenue),
-      expenses: numberOrZero(summary.expenses),
-      net: numberOrZero(summary.net_payout),
-    }
+        periodLabel: isEn ? "This month" : "Este mes",
+        currency: "PYG",
+        gross: numberOrZero(summary.gross_revenue),
+        expenses: numberOrZero(summary.expenses),
+        net: numberOrZero(summary.net_payout),
+      }
     : null;
 
   const taskStatuses = countByStatus(tasks as unknown[], [
@@ -276,7 +281,9 @@ export default async function DashboardPage({
 
   const pendingApplications = (
     applications as Record<string, unknown>[]
-  ).filter((row) => String(row.status ?? "").toLowerCase() === "pending").length;
+  ).filter(
+    (row) => String(row.status ?? "").toLowerCase() === "pending"
+  ).length;
 
   const paidCollections = (collections as Record<string, unknown>[]).filter(
     (row) => String(row.status ?? "") === "paid"
@@ -328,13 +335,13 @@ export default async function DashboardPage({
     <div className="space-y-5">
       <DashboardHeader
         greetingTitle={greetingTitle}
+        isEn={isEn}
+        quickActions={quickActions}
         subtitle={
           isEn
             ? "Here is your portfolio pulse and what needs attention next."
             : "Aqui tienes el pulso de tu portafolio y lo que requiere atención ahora."
         }
-        quickActions={quickActions}
-        isEn={isEn}
       />
 
       {onboardingCompleted ? (
@@ -357,71 +364,36 @@ export default async function DashboardPage({
       ) : null}
 
       <DashboardTabs
-        isEn={isEn}
-        overviewContent={
-          <>
-            <DashboardHeroMetrics
-              isEn={isEn}
-              occupancyRate={occupancyRate}
-              occupancyHelper={
-                kpiDashboard.active_leases != null
-                  ? `${numberOrZero(kpiDashboard.active_leases)}/${numberOrZero(kpiDashboard.total_units)} ${isEn ? "units" : "unidades"}`
-                  : isEn
-                    ? "Current period"
-                    : "Periodo actual"
-              }
-              reportGross={reportGross}
-              revenueHelper={
-                revenueSnapshot
-                  ? `${isEn ? "Net" : "Neto"}: ${reportNet}`
-                  : isEn
-                    ? "Current month"
-                    : "Este mes"
-              }
-              collectionRate={collectionRate}
-              collectionHelper={`${paidCollections}/${collections.length} ${isEn ? "paid" : "pagados"}`}
-              pipelineValue={String(qualifiedApplications + pendingApplications)}
-              pipelineHelper={`${qualifiedApplications} ${isEn ? "qualified" : "calificados"} · ${pendingApplications} ${isEn ? "pending" : "pendientes"}`}
-            />
-
-            {apiAvailable ? (
-              <AnomalyAlerts orgId={orgId} locale={locale} />
-            ) : null}
-
-            <DashboardNeedsAttention items={needsAttention} isEn={isEn} />
-
-            <DashboardModuleCards locale={locale} isEn={isEn} />
-          </>
-        }
         financialsContent={
           <>
             {(orgRentalMode === "ltr" || orgRentalMode === "both") &&
-              apiAvailable ? (
+            apiAvailable ? (
               <DashboardRentalKpis
                 isEn={isEn}
-                locale={locale}
                 kpiDashboard={kpiDashboard}
+                locale={locale}
               />
             ) : null}
 
             <DashboardCharts
+              agentPerfData={agentPerfData}
+              apiAvailable={apiAvailable}
+              forecastData={forecastData}
               locale={locale}
               operationsKpis={operationsKpis}
               revenueSnapshot={revenueSnapshot}
-              taskStatuses={taskStatuses}
-              apiAvailable={apiAvailable}
-              forecastData={forecastData}
               revenueTrendData={revenueTrendData}
-              agentPerfData={agentPerfData}
+              taskStatuses={taskStatuses}
             />
           </>
         }
+        isEn={isEn}
         operationsContent={
           <>
             <DashboardOperations
               isEn={isEn}
-              propertiesCount={properties.length}
               operationsKpis={operationsKpis}
+              propertiesCount={properties.length}
             />
 
             <TableCard
@@ -430,6 +402,43 @@ export default async function DashboardPage({
               subtitle={isEn ? "Operations feed" : "Feed operativo"}
               title={isEn ? "Reservations summary" : "Resumen de reservas"}
             />
+          </>
+        }
+        overviewContent={
+          <>
+            <DashboardHeroMetrics
+              collectionHelper={`${paidCollections}/${collections.length} ${isEn ? "paid" : "pagados"}`}
+              collectionRate={collectionRate}
+              isEn={isEn}
+              occupancyHelper={
+                kpiDashboard.active_leases != null
+                  ? `${numberOrZero(kpiDashboard.active_leases)}/${numberOrZero(kpiDashboard.total_units)} ${isEn ? "units" : "unidades"}`
+                  : isEn
+                    ? "Current period"
+                    : "Periodo actual"
+              }
+              occupancyRate={occupancyRate}
+              pipelineHelper={`${qualifiedApplications} ${isEn ? "qualified" : "calificados"} · ${pendingApplications} ${isEn ? "pending" : "pendientes"}`}
+              pipelineValue={String(
+                qualifiedApplications + pendingApplications
+              )}
+              reportGross={reportGross}
+              revenueHelper={
+                revenueSnapshot
+                  ? `${isEn ? "Net" : "Neto"}: ${reportNet}`
+                  : isEn
+                    ? "Current month"
+                    : "Este mes"
+              }
+            />
+
+            {apiAvailable ? (
+              <AnomalyAlerts locale={locale} orgId={orgId} />
+            ) : null}
+
+            <DashboardNeedsAttention isEn={isEn} items={needsAttention} />
+
+            <DashboardModuleCards isEn={isEn} locale={locale} />
           </>
         }
       />
@@ -457,10 +466,10 @@ function buildNeedsAttention(
   const draftListingsOld = listings.filter((row) => {
     if (row.is_published) return false;
     const created = String(row.created_at ?? "").slice(0, 10);
-    if (!created || !/^\d{4}-\d{2}-\d{2}$/.test(created)) return false;
-    const sevenDaysAgo = new Date(
-      Date.now() - 7 * 86_400_000
-    ).toISOString().slice(0, 10);
+    if (!(created && /^\d{4}-\d{2}-\d{2}$/.test(created))) return false;
+    const sevenDaysAgo = new Date(Date.now() - 7 * 86_400_000)
+      .toISOString()
+      .slice(0, 10);
     return created < sevenDaysAgo;
   });
 
@@ -468,10 +477,10 @@ function buildNeedsAttention(
     const status = String(row.lease_status ?? "").toLowerCase();
     if (status !== "active") return false;
     const endsOn = String(row.ends_on ?? "");
-    if (!endsOn || !/^\d{4}-\d{2}-\d{2}$/.test(endsOn)) return false;
-    const thirtyDaysOut = new Date(
-      Date.now() + 30 * 86_400_000
-    ).toISOString().slice(0, 10);
+    if (!(endsOn && /^\d{4}-\d{2}-\d{2}$/.test(endsOn))) return false;
+    const thirtyDaysOut = new Date(Date.now() + 30 * 86_400_000)
+      .toISOString()
+      .slice(0, 10);
     return endsOn <= thirtyDaysOut && endsOn >= todayStr;
   });
 

@@ -163,8 +163,10 @@ export function DataImportSheet({
   const parseExcelSheet = useCallback(
     async (file: File, sheetIndex?: number) => {
       const emptySheetMsg = isEn ? "Sheet is empty" : "La hoja está vacía";
-      const protectedFileEn = "This file is password-protected. Please remove the password and try again.";
-      const protectedFileEs = "Este archivo está protegido con contraseña. Elimina la contraseña e intenta de nuevo.";
+      const protectedFileEn =
+        "This file is password-protected. Please remove the password and try again.";
+      const protectedFileEs =
+        "Este archivo está protegido con contraseña. Elimina la contraseña e intenta de nuevo.";
       const passwordMsg = isEn ? protectedFileEn : protectedFileEs;
       const readErrorPrefixEn = "Could not read Excel file: ";
       const readErrorPrefixEs = "No se pudo leer el archivo Excel: ";
@@ -181,15 +183,13 @@ export function DataImportSheet({
       try {
         const names = await readSheetNames(file);
 
-        if (names.length > 1) {
-          if (sheetIndex === undefined) {
-            // Show sheet picker
-            setPendingFile(file);
-            setSheetNames(names);
-            setPickingSheet(true);
-            setFileName(file.name);
-            return;
-          }
+        if (names.length > 1 && sheetIndex === undefined) {
+          // Show sheet picker
+          setPendingFile(file);
+          setSheetNames(names);
+          setPickingSheet(true);
+          setFileName(file.name);
+          return;
         }
 
         const rows = await readXlsxFile(file, { sheet });
@@ -358,7 +358,10 @@ export function DataImportSheet({
     } else if (mode === "leases") {
       const leasePayloads = mappedRows.map((row) => {
         const unitName = row.unit_name ?? "";
-        const unitId = resolvePropertyId(unitName, units.map((u) => ({ id: u.id, name: u.name, code: u.code })));
+        const unitId = resolvePropertyId(
+          unitName,
+          units.map((u) => ({ id: u.id, name: u.name, code: u.code }))
+        );
         return {
           unit_id: unitId ?? "",
           tenant_full_name: row.tenant_full_name ?? "",
@@ -368,8 +371,12 @@ export function DataImportSheet({
           ends_on: row.ends_on,
           monthly_rent: row.monthly_rent ? Number(row.monthly_rent) : 0,
           currency: row.currency || "PYG",
-          security_deposit: row.security_deposit ? Number(row.security_deposit) : undefined,
-          service_fee_flat: row.service_fee_flat ? Number(row.service_fee_flat) : undefined,
+          security_deposit: row.security_deposit
+            ? Number(row.security_deposit)
+            : undefined,
+          service_fee_flat: row.service_fee_flat
+            ? Number(row.service_fee_flat)
+            : undefined,
           notes: row.notes,
         };
       });
@@ -457,19 +464,19 @@ export function DataImportSheet({
       <div className="space-y-5">
         {/* Download templates */}
         <div className="flex items-center justify-between rounded-lg border border-border/70 bg-muted/20 px-3 py-2">
-          <span className="text-sm text-muted-foreground">
+          <span className="text-muted-foreground text-sm">
             {isEn ? "Download template" : "Descargar plantilla"}
           </span>
           <div className="flex items-center gap-3">
             <a
-              className="text-sm font-medium text-primary hover:underline"
+              className="font-medium text-primary text-sm hover:underline"
               download
               href={csvTemplateUrl}
             >
               CSV
             </a>
             <a
-              className="text-sm font-medium text-primary hover:underline"
+              className="font-medium text-primary text-sm hover:underline"
               download
               href={xlsxTemplateUrl}
             >
@@ -481,22 +488,26 @@ export function DataImportSheet({
         {/* File drop zone */}
         {showDropZone ? (
           <div
-            className="flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed border-border/70 bg-muted/10 px-4 py-10 text-center transition-colors hover:border-primary/30 hover:bg-muted/20"
+            className="flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-border/70 border-dashed bg-muted/10 px-4 py-10 text-center transition-colors hover:border-primary/30 hover:bg-muted/20"
             onDragOver={(e) => e.preventDefault()}
             onDrop={onDrop}
           >
-            <Icon className="text-muted-foreground" icon={Upload01Icon} size={32} />
+            <Icon
+              className="text-muted-foreground"
+              icon={Upload01Icon}
+              size={32}
+            />
             <div>
-              <p className="text-sm font-medium text-foreground">
+              <p className="font-medium text-foreground text-sm">
                 {isEn
                   ? "Drop your CSV or Excel file here"
                   : "Suelta tu archivo CSV o Excel aquí"}
               </p>
-              <p className="mt-1 text-xs text-muted-foreground">
+              <p className="mt-1 text-muted-foreground text-xs">
                 {isEn ? "or click to select" : "o haz clic para seleccionar"}
               </p>
             </div>
-            <label className="cursor-pointer rounded-md border bg-background px-3 py-1.5 text-sm font-medium hover:bg-muted/50">
+            <label className="cursor-pointer rounded-md border bg-background px-3 py-1.5 font-medium text-sm hover:bg-muted/50">
               {isEn ? "Select file" : "Seleccionar archivo"}
               <input
                 accept=".csv,.tsv,.txt,.xlsx"
@@ -517,7 +528,7 @@ export function DataImportSheet({
                 {sheetNames.length} {isEn ? "sheets" : "hojas"}
               </span>
             </div>
-            <p className="text-xs font-medium text-muted-foreground">
+            <p className="font-medium text-muted-foreground text-xs">
               {isEn
                 ? "This file has multiple sheets. Select one to import:"
                 : "Este archivo tiene varias hojas. Selecciona una para importar:"}
@@ -525,12 +536,12 @@ export function DataImportSheet({
             <div className="grid gap-2">
               {sheetNames.map((name, i) => (
                 <button
-                  className="flex items-center gap-2 rounded-lg border border-border/70 bg-muted/20 px-4 py-3 text-left text-sm font-medium transition-colors hover:border-primary/40 hover:bg-primary/5"
+                  className="flex items-center gap-2 rounded-lg border border-border/70 bg-muted/20 px-4 py-3 text-left font-medium text-sm transition-colors hover:border-primary/40 hover:bg-primary/5"
                   key={name}
                   onClick={() => handleSheetSelect(i)}
                   type="button"
                 >
-                  <span className="flex h-6 w-6 items-center justify-center rounded-md bg-primary/10 text-xs font-semibold text-primary">
+                  <span className="flex h-6 w-6 items-center justify-center rounded-md bg-primary/10 font-semibold text-primary text-xs">
                     {i + 1}
                   </span>
                   {name}
@@ -576,7 +587,7 @@ export function DataImportSheet({
                   {isEn ? "Mapping issues" : "Problemas de mapeo"}
                 </AlertTitle>
                 <AlertDescription>
-                  <ul className="list-disc pl-4 space-y-0.5">
+                  <ul className="list-disc space-y-0.5 pl-4">
                     {validationErrors.map((err) => (
                       <li key={err}>{err}</li>
                     ))}
@@ -588,8 +599,10 @@ export function DataImportSheet({
             {/* Preview table */}
             {previewRows.length > 0 ? (
               <div className="space-y-1.5">
-                <p className="text-xs font-medium text-muted-foreground">
-                  {isEn ? "Preview (first 5 rows)" : "Vista previa (primeras 5 filas)"}
+                <p className="font-medium text-muted-foreground text-xs">
+                  {isEn
+                    ? "Preview (first 5 rows)"
+                    : "Vista previa (primeras 5 filas)"}
                 </p>
                 <div className="max-h-48 overflow-auto rounded-lg border">
                   <table className="w-full text-xs">
@@ -607,7 +620,10 @@ export function DataImportSheet({
                     </thead>
                     <tbody>
                       {previewRows.map((row) => (
-                        <tr className="border-b" key={headers.map((h) => row[h] ?? "").join("|")}>
+                        <tr
+                          className="border-b"
+                          key={headers.map((h) => row[h] ?? "").join("|")}
+                        >
                           {headers.map((h) => (
                             <td className="px-2 py-1.5" key={h}>
                               {row[h] || "\u2014"}
@@ -622,11 +638,7 @@ export function DataImportSheet({
             ) : null}
 
             <div className="flex justify-end gap-2">
-              <Button
-                onClick={reset}
-                type="button"
-                variant="outline"
-              >
+              <Button onClick={reset} type="button" variant="outline">
                 {isEn ? "Cancel" : "Cancelar"}
               </Button>
               <Button
@@ -636,7 +648,7 @@ export function DataImportSheet({
               >
                 {importing ? (
                   <>
-                    <Spinner size="sm" className="text-primary-foreground" />
+                    <Spinner className="text-primary-foreground" size="sm" />
                     {isEn ? "Importing..." : "Importando..."}
                   </>
                 ) : (
@@ -660,11 +672,7 @@ export function DataImportSheet({
               total={data.length}
             />
             <div className="flex justify-end gap-2">
-              <Button
-                onClick={reset}
-                type="button"
-                variant="outline"
-              >
+              <Button onClick={reset} type="button" variant="outline">
                 {isEn ? "Import more" : "Importar más"}
               </Button>
               <Button

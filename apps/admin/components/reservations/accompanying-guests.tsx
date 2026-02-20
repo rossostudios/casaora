@@ -75,18 +75,22 @@ export function AccompanyingGuests({
     let cancelled = false;
     authedFetch<{ data: ReservationGuest[] }>(
       `/reservations/${reservationId}/guests`
-    ).then((res) => {
-      if (cancelled) return;
-      const data = res.data;
-      if (data != null) {
-        setLinked(data);
-      } else {
-        setLinked([]);
-      }
-    }).catch(() => {
-      // Silently fail on load
-    });
-    return () => { cancelled = true; };
+    )
+      .then((res) => {
+        if (cancelled) return;
+        const data = res.data;
+        if (data != null) {
+          setLinked(data);
+        } else {
+          setLinked([]);
+        }
+      })
+      .catch(() => {
+        // Silently fail on load
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [reservationId]);
 
   // Search org guests on input change
@@ -113,11 +117,17 @@ export function AccompanyingGuests({
           const gEmail = g.email;
           const gPhone = g.phone_e164;
           let name = "";
-          if (gName != null) { name = gName.toLowerCase(); }
+          if (gName != null) {
+            name = gName.toLowerCase();
+          }
           let email = "";
-          if (gEmail != null) { email = gEmail.toLowerCase(); }
+          if (gEmail != null) {
+            email = gEmail.toLowerCase();
+          }
           let phone = "";
-          if (gPhone != null) { phone = gPhone.toLowerCase(); }
+          if (gPhone != null) {
+            phone = gPhone.toLowerCase();
+          }
           if (name.includes(query)) return true;
           if (email.includes(query)) return true;
           if (phone.includes(query)) return true;
@@ -140,10 +150,7 @@ export function AccompanyingGuests({
   // Close dropdown on outside click
   useEffect(() => {
     function handleClick(e: MouseEvent) {
-      if (
-        searchRef.current &&
-        !searchRef.current.contains(e.target as Node)
-      ) {
+      if (searchRef.current && !searchRef.current.contains(e.target as Node)) {
         setShowResults(false);
       }
     }
@@ -153,7 +160,9 @@ export function AccompanyingGuests({
 
   function handleAdd(guestId: string) {
     const successMsg = isEn ? "Guest added" : "Huésped agregado";
-    const fallbackMsg = isEn ? "Failed to add guest" : "Error al agregar huésped";
+    const fallbackMsg = isEn
+      ? "Failed to add guest"
+      : "Error al agregar huésped";
     startTransition(async () => {
       try {
         await authedFetch(`/reservations/${reservationId}/guests`, {
@@ -176,7 +185,9 @@ export function AccompanyingGuests({
 
   function handleRemove(reservationGuestId: string) {
     const successMsg = isEn ? "Guest removed" : "Huésped removido";
-    const fallbackMsg = isEn ? "Failed to remove guest" : "Error al remover huésped";
+    const fallbackMsg = isEn
+      ? "Failed to remove guest"
+      : "Error al remover huésped";
     startTransition(async () => {
       try {
         await authedFetch(
@@ -212,8 +223,8 @@ export function AccompanyingGuests({
           <ul className="space-y-2">
             {linked.map((rg) => (
               <li
-                key={rg.id}
                 className="flex items-center justify-between gap-2 rounded-md border bg-muted/10 px-3 py-2"
+                key={rg.id}
               >
                 <div className="min-w-0">
                   <p className="truncate font-medium text-sm">
@@ -245,7 +256,7 @@ export function AccompanyingGuests({
           </p>
         )}
 
-        <div ref={searchRef} className="relative">
+        <div className="relative" ref={searchRef}>
           <Input
             onChange={(e) => {
               const next = e.target.value;
@@ -269,8 +280,8 @@ export function AccompanyingGuests({
             <ul className="absolute z-10 mt-1 max-h-56 w-full overflow-auto rounded-md border bg-background shadow-md">
               {searchResults.map((g) => (
                 <li
-                  key={g.id}
                   className="flex items-center justify-between gap-2 px-3 py-2 hover:bg-muted/20"
+                  key={g.id}
                 >
                   <div className="min-w-0">
                     <p className="truncate font-medium text-sm">
@@ -297,7 +308,9 @@ export function AccompanyingGuests({
           )}
           {showResults && search.trim() && searchResults.length === 0 && (
             <div className="absolute z-10 mt-1 w-full rounded-md border bg-background p-3 text-muted-foreground text-sm shadow-md">
-              {isEn ? "No matching guests found." : "No se encontraron huéspedes."}
+              {isEn
+                ? "No matching guests found."
+                : "No se encontraron huéspedes."}
             </div>
           )}
         </div>

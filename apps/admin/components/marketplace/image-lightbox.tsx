@@ -1,12 +1,12 @@
 "use client";
 
-import Image from "next/image";
-import { useCallback, useEffect, useState } from "react";
 import {
   ArrowLeft01Icon,
   ArrowRight01Icon,
   Cancel01Icon,
 } from "@hugeicons/core-free-icons";
+import Image from "next/image";
+import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 
 import { Icon } from "@/components/ui/icon";

@@ -257,8 +257,7 @@ export function computeBars(
     if (!(b.starts_on && b.ends_on && b.unit_id)) continue;
     if (b.ends_on <= windowStart || b.starts_on >= windowEnd) continue;
 
-    const clampedStart =
-      b.starts_on < windowStart ? windowStart : b.starts_on;
+    const clampedStart = b.starts_on < windowStart ? windowStart : b.starts_on;
     const clampedEnd = b.ends_on > windowEnd ? windowEnd : b.ends_on;
 
     const startDay =

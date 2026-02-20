@@ -18,7 +18,7 @@ export default async function OwnerLayout({
   const locale = await getActiveLocale();
 
   return (
-    <div className="bg-background flex min-h-dvh flex-col">
+    <div className="flex min-h-dvh flex-col bg-background">
       <PublicHeader locale={locale} />
       <main className="mx-auto w-full max-w-4xl flex-1 px-4 py-8">
         {children}

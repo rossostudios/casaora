@@ -22,7 +22,7 @@ export default async function GuestLayout({
   const locale = await getActiveLocale();
 
   return (
-    <div className="bg-background flex min-h-dvh flex-col">
+    <div className="flex min-h-dvh flex-col bg-background">
       <PublicHeader locale={locale} />
       <main className="mx-auto w-full max-w-2xl flex-1 px-4 py-8">
         {children}

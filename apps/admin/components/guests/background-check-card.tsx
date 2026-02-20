@@ -76,7 +76,9 @@ export function BackgroundCheckCard({
       background_check_status: newStatus,
       background_check_date: new Date().toISOString().slice(0, 10),
       ...(trimmedNotes ? { background_check_notes: trimmedNotes } : {}),
-      ...(trimmedReportUrl ? { background_check_report_url: trimmedReportUrl } : {}),
+      ...(trimmedReportUrl
+        ? { background_check_report_url: trimmedReportUrl }
+        : {}),
       ...extra,
     });
 
@@ -119,7 +121,7 @@ export function BackgroundCheckCard({
                 : "Solicita y rastrea el estado de verificación de antecedentes."}
             </CardDescription>
           </div>
-          <StatusBadge value={statusLabel} tone={bgStatusTone(status)} />
+          <StatusBadge tone={bgStatusTone(status)} value={statusLabel} />
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -174,7 +176,11 @@ export function BackgroundCheckCard({
                   target="_blank"
                 >
                   <Image
-                    alt={isEn ? "Background check report" : "Reporte de antecedentes"}
+                    alt={
+                      isEn
+                        ? "Background check report"
+                        : "Reporte de antecedentes"
+                    }
                     className="h-32 w-full object-cover"
                     height={256}
                     sizes="(max-width: 768px) 100vw, 50vw"
@@ -240,7 +246,9 @@ export function BackgroundCheckCard({
                 target="_blank"
               >
                 <Image
-                  alt={isEn ? "Background check report" : "Reporte de antecedentes"}
+                  alt={
+                    isEn ? "Background check report" : "Reporte de antecedentes"
+                  }
                   className="h-32 w-full object-cover"
                   height={256}
                   sizes="(max-width: 768px) 100vw, 50vw"

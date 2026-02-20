@@ -42,8 +42,12 @@ function humanizeSegment(value: string): string {
 
 function buildCrumbs(pathname: string, locale: Locale): Crumb[] {
   const isEn = locale === "en-US";
-  const parts = pathname.split("/").filter(Boolean);
-  if (parts.length === 0 || (parts.length === 1 && parts[0] === "app")) {
+  const rawParts = pathname.split("/").filter(Boolean);
+  const isAppScoped = rawParts[0] === "app";
+  const parts = isAppScoped ? rawParts.slice(1) : rawParts;
+  const pathPrefix = isAppScoped ? "/app" : "";
+
+  if (parts.length === 0) {
     return [{ label: isEn ? "Dashboard" : "Panel", current: true }];
   }
 
@@ -82,7 +86,7 @@ function buildCrumbs(pathname: string, locale: Locale): Crumb[] {
       label: moduleDef?.label
         ? getModuleLabel(moduleDef, locale)
         : humanizeSegment(slug || (isEn ? "Module" : "Módulo")),
-      href: slug ? `/module/${slug}` : undefined,
+      href: slug ? `${pathPrefix}/module/${slug}` : undefined,
       current: !id,
     });
     if (id) {
@@ -98,7 +102,7 @@ function buildCrumbs(pathname: string, locale: Locale): Crumb[] {
   const collected: string[] = [];
   for (const [index, part] of parts.entries()) {
     collected.push(part);
-    const href = `/${collected.join("/")}`;
+    const href = `${pathPrefix}/${collected.join("/")}`;
     crumbs.push({
       label: humanizeSegment(part),
       href: index === parts.length - 1 ? undefined : href,
@@ -128,7 +132,7 @@ export function AppBreadcrumbs({
     <Breadcrumb className={className}>
       <BreadcrumbList>
         {crumbs.map((crumb, index) => (
-          <Fragment key={crumb.href ?? crumb.label}>
+          <Fragment key={`${crumb.href ?? "label"}:${crumb.label}:${index}`}>
             <BreadcrumbItem>
               {crumb.current ? (
                 <BreadcrumbPage>{crumb.label}</BreadcrumbPage>

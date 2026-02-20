@@ -1,8 +1,4 @@
-import Link from "next/link";
 import { OrgAccessChanged } from "@/components/shell/org-access-changed";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
-import { buttonVariants } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -15,7 +11,6 @@ import type { components } from "@/lib/api/types";
 import { errorMessage, isOrgMembershipError } from "@/lib/errors";
 import { getActiveDictionary } from "@/lib/i18n/server";
 import { getActiveOrgId } from "@/lib/org";
-import { cn } from "@/lib/utils";
 import { PropertiesManager } from "./properties-manager";
 
 type Property = components["schemas"]["Property"];
@@ -111,17 +106,17 @@ export default async function PropertiesModulePage({
   return (
     <PropertiesManager
       collections={collections}
-      leases={leases}
-      orgId={orgId}
-      properties={properties}
-      tasks={tasks}
-      units={units}
       dictionary={{
         title: dict.title,
         description: dict.description,
       }}
       error={errorLabel}
+      leases={leases}
+      orgId={orgId}
+      properties={properties}
       success={successMessage}
+      tasks={tasks}
+      units={units}
     />
   );
 }

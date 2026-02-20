@@ -1,8 +1,8 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { useState, useCallback, useMemo } from "react";
-import type { SortingState, PaginationState } from "@tanstack/react-table";
+import type { PaginationState, SortingState } from "@tanstack/react-table";
+import { useCallback, useMemo, useState } from "react";
 
 import {
   fetchListingsPaginated,
@@ -49,8 +49,7 @@ export function useListingsQuery(orgId: string): ListingsQueryState {
       sort_by: sort?.id || "created_at",
       sort_order: (sort?.desc ? "desc" : "asc") as "asc" | "desc",
       q: globalFilter || undefined,
-      status:
-        statusFilter === "all" ? undefined : statusFilter,
+      status: statusFilter === "all" ? undefined : statusFilter,
     };
   }, [orgId, sorting, pagination, globalFilter, statusFilter]);
 

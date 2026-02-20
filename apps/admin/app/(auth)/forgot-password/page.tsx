@@ -65,7 +65,9 @@ export default function ForgotPasswordPage() {
 
     setBusy(true);
     const redirectTo = `${getSiteUrl()}/auth/callback?next=${encodeURIComponent("/reset-password")}`;
-    const sendErr = isEn ? "Could not send link" : "No se pudo enviar el enlace";
+    const sendErr = isEn
+      ? "Could not send link"
+      : "No se pudo enviar el enlace";
     const checkTitle = isEn ? "Check your email" : "Revisa tu correo";
     const checkDesc = isEn
       ? "We sent a password reset link (if the account exists)."

@@ -11,6 +11,10 @@
  * audit which recharts primitives we depend on.
  */
 
+export type {
+  TooltipContentProps,
+  TooltipProps,
+} from "recharts";
 export {
   Area,
   AreaChart,
@@ -26,11 +30,6 @@ export {
   Tooltip,
   XAxis,
   YAxis,
-} from "recharts";
-
-export type {
-  TooltipContentProps,
-  TooltipProps,
 } from "recharts";
 
 export type {

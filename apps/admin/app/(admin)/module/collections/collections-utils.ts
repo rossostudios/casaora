@@ -90,7 +90,12 @@ export function computeSummaries(rows: CollectionRow[]): SummaryData {
   const ensure = (cur: string): SummaryByCurrency => {
     let s = byCurrency.get(cur);
     if (!s) {
-      s = { outstanding: 0, overdue: 0, collectedThisMonth: 0, totalThisMonth: 0 };
+      s = {
+        outstanding: 0,
+        overdue: 0,
+        collectedThisMonth: 0,
+        totalThisMonth: 0,
+      };
       byCurrency.set(cur, s);
     }
     return s;
@@ -178,8 +183,19 @@ export function computeAgingRows(rows: CollectionRow[]): AgingRow[] {
   return Array.from(map.values()).sort((a, b) => b.total - a.total);
 }
 
-export function exportCollectionsCsv(rows: CollectionRow[], today: string): void {
-  const headers = ["due_date", "tenant", "status", "amount", "currency", "payment_method", "paid_at"];
+export function exportCollectionsCsv(
+  rows: CollectionRow[],
+  today: string
+): void {
+  const headers = [
+    "due_date",
+    "tenant",
+    "status",
+    "amount",
+    "currency",
+    "payment_method",
+    "paid_at",
+  ];
   const csvRows = [headers.join(",")];
   for (const row of rows) {
     csvRows.push(

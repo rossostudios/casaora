@@ -1,10 +1,9 @@
 "use client";
 
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-
-import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -58,7 +57,7 @@ export function TenantDashboard({ locale }: { locale: string }) {
   if (loading) {
     return (
       <div className="flex min-h-[50vh] items-center justify-center">
-        <p className="text-muted-foreground animate-pulse">
+        <p className="animate-pulse text-muted-foreground">
           {isEn ? "Loading..." : "Cargando..."}
         </p>
       </div>
@@ -83,7 +82,10 @@ export function TenantDashboard({ locale }: { locale: string }) {
     try {
       const res = await fetch(`${API_BASE}/leases/${leaseId}/renewal-accept`, {
         method: "POST",
-        headers: { "x-tenant-token": token, "Content-Type": "application/json" },
+        headers: {
+          "x-tenant-token": token,
+          "Content-Type": "application/json",
+        },
         body: "{}",
       });
       if (res.ok) {
@@ -96,7 +98,7 @@ export function TenantDashboard({ locale }: { locale: string }) {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold">
+      <h1 className="font-bold text-2xl">
         {isEn ? "Welcome" : "Bienvenido"},{" "}
         {asString(lease.tenant_full_name) || (isEn ? "Tenant" : "Inquilino")}
       </h1>
@@ -110,29 +112,48 @@ export function TenantDashboard({ locale }: { locale: string }) {
         <CardContent>
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
-              <p className="text-muted-foreground text-xs">{isEn ? "Property" : "Propiedad"}</p>
+              <p className="text-muted-foreground text-xs">
+                {isEn ? "Property" : "Propiedad"}
+              </p>
               <p className="font-medium">{asString(property.name) || "-"}</p>
             </div>
             <div>
-              <p className="text-muted-foreground text-xs">{isEn ? "Unit" : "Unidad"}</p>
+              <p className="text-muted-foreground text-xs">
+                {isEn ? "Unit" : "Unidad"}
+              </p>
               <p className="font-medium">{asString(unit.name) || "-"}</p>
             </div>
             <div>
-              <p className="text-muted-foreground text-xs">{isEn ? "Monthly Rent" : "Alquiler Mensual"}</p>
+              <p className="text-muted-foreground text-xs">
+                {isEn ? "Monthly Rent" : "Alquiler Mensual"}
+              </p>
               <p className="font-medium">
-                {formatCurrency(asNumber(lease.monthly_rent), asString(lease.currency) || "PYG", locale)}
+                {formatCurrency(
+                  asNumber(lease.monthly_rent),
+                  asString(lease.currency) || "PYG",
+                  locale
+                )}
               </p>
             </div>
             <div>
-              <p className="text-muted-foreground text-xs">{isEn ? "Status" : "Estado"}</p>
-              <StatusBadge label={asString(lease.lease_status)} value={asString(lease.lease_status)} />
+              <p className="text-muted-foreground text-xs">
+                {isEn ? "Status" : "Estado"}
+              </p>
+              <StatusBadge
+                label={asString(lease.lease_status)}
+                value={asString(lease.lease_status)}
+              />
             </div>
             <div>
-              <p className="text-muted-foreground text-xs">{isEn ? "Start" : "Inicio"}</p>
+              <p className="text-muted-foreground text-xs">
+                {isEn ? "Start" : "Inicio"}
+              </p>
               <p className="font-medium">{asString(lease.starts_on) || "-"}</p>
             </div>
             <div>
-              <p className="text-muted-foreground text-xs">{isEn ? "End" : "Fin"}</p>
+              <p className="text-muted-foreground text-xs">
+                {isEn ? "End" : "Fin"}
+              </p>
               <p className="font-medium">{asString(lease.ends_on) || "-"}</p>
             </div>
           </div>
@@ -147,7 +168,7 @@ export function TenantDashboard({ locale }: { locale: string }) {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            <p className="text-sm text-muted-foreground">
+            <p className="text-muted-foreground text-sm">
               {isEn
                 ? "Your landlord has sent a renewal offer for your lease."
                 : "Tu arrendador ha enviado una oferta de renovación para tu contrato."}
@@ -156,12 +177,16 @@ export function TenantDashboard({ locale }: { locale: string }) {
               <p className="text-sm">
                 {isEn ? "Proposed rent:" : "Renta propuesta:"}{" "}
                 <span className="font-semibold">
-                  {formatCurrency(renewalOfferedRent, asString(lease.currency) || "PYG", locale)}
+                  {formatCurrency(
+                    renewalOfferedRent,
+                    asString(lease.currency) || "PYG",
+                    locale
+                  )}
                 </span>
               </p>
             )}
             {renewalNotes && (
-              <p className="text-sm text-muted-foreground">{renewalNotes}</p>
+              <p className="text-muted-foreground text-sm">{renewalNotes}</p>
             )}
             <div className="flex gap-2">
               <Button onClick={handleAcceptRenewal} variant="default">
@@ -175,22 +200,31 @@ export function TenantDashboard({ locale }: { locale: string }) {
       {nextPayment && (
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-lg">{isEn ? "Next Payment" : "Próximo Pago"}</CardTitle>
+            <CardTitle className="text-lg">
+              {isEn ? "Next Payment" : "Próximo Pago"}
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-2xl font-bold">
-                  {formatCurrency(asNumber(nextPayment.amount), asString(nextPayment.currency) || "PYG", locale)}
+                <p className="font-bold text-2xl">
+                  {formatCurrency(
+                    asNumber(nextPayment.amount),
+                    asString(nextPayment.currency) || "PYG",
+                    locale
+                  )}
                 </p>
                 <p className="text-muted-foreground text-sm">
                   {isEn ? "Due:" : "Vence:"} {asString(nextPayment.due_date)}
                 </p>
               </div>
-              <StatusBadge label={asString(nextPayment.status)} value={asString(nextPayment.status)} />
+              <StatusBadge
+                label={asString(nextPayment.status)}
+                value={asString(nextPayment.status)}
+              />
             </div>
             {upcomingCount > 1 && (
-              <p className="text-muted-foreground mt-2 text-sm">
+              <p className="mt-2 text-muted-foreground text-sm">
                 {upcomingCount - 1} {isEn ? "more upcoming" : "más por venir"}
               </p>
             )}
@@ -200,28 +234,30 @@ export function TenantDashboard({ locale }: { locale: string }) {
 
       <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3">
         <Link href="/tenant/payments">
-          <Card className="hover:border-primary cursor-pointer transition-colors">
+          <Card className="cursor-pointer transition-colors hover:border-primary">
             <CardContent className="p-4 text-center">
               <p className="font-medium">{isEn ? "Payments" : "Pagos"}</p>
             </CardContent>
           </Card>
         </Link>
         <Link href="/tenant/maintenance">
-          <Card className="hover:border-primary cursor-pointer transition-colors">
+          <Card className="cursor-pointer transition-colors hover:border-primary">
             <CardContent className="p-4 text-center">
-              <p className="font-medium">{isEn ? "Maintenance" : "Mantenimiento"}</p>
+              <p className="font-medium">
+                {isEn ? "Maintenance" : "Mantenimiento"}
+              </p>
             </CardContent>
           </Card>
         </Link>
         <Link href="/tenant/documents">
-          <Card className="hover:border-primary cursor-pointer transition-colors">
+          <Card className="cursor-pointer transition-colors hover:border-primary">
             <CardContent className="p-4 text-center">
               <p className="font-medium">{isEn ? "Documents" : "Documentos"}</p>
             </CardContent>
           </Card>
         </Link>
         <Link href="/tenant/messages">
-          <Card className="hover:border-primary cursor-pointer transition-colors">
+          <Card className="cursor-pointer transition-colors hover:border-primary">
             <CardContent className="p-4 text-center">
               <p className="font-medium">{isEn ? "Messages" : "Mensajes"}</p>
             </CardContent>
@@ -229,7 +265,10 @@ export function TenantDashboard({ locale }: { locale: string }) {
         </Link>
         <Button
           className="h-auto"
-          onClick={() => { localStorage.clear(); router.push("/tenant/login"); }}
+          onClick={() => {
+            localStorage.clear();
+            router.push("/tenant/login");
+          }}
           variant="outline"
         >
           {isEn ? "Sign Out" : "Cerrar Sesión"}

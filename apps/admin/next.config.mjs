@@ -1,7 +1,7 @@
-import bundleAnalyzer from "@next/bundle-analyzer";
-import { withSentryConfig } from "@sentry/nextjs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import bundleAnalyzer from "@next/bundle-analyzer";
+import { withSentryConfig } from "@sentry/nextjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const workspaceRoot = resolve(__dirname, "../..");

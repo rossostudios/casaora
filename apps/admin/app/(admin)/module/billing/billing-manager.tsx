@@ -1,8 +1,8 @@
 "use client";
 
+import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -110,7 +110,7 @@ export function BillingManager({
         <div className="rounded-lg border p-4">
           <div className="mb-3 flex items-center justify-between">
             <div>
-              <h3 className="text-lg font-semibold">
+              <h3 className="font-semibold text-lg">
                 {isEn ? "Current Plan" : "Plan Actual"}: {planName}
               </h3>
               <StatusBadge label={status} value={status} />
@@ -128,7 +128,7 @@ export function BillingManager({
           </div>
 
           {asString(subscription.trial_ends_at) && status === "trialing" && (
-            <p className="text-muted-foreground mb-3 text-sm">
+            <p className="mb-3 text-muted-foreground text-sm">
               {isEn ? "Trial ends:" : "Prueba termina:"}{" "}
               {asString(subscription.trial_ends_at).slice(0, 10)}
             </p>
@@ -157,7 +157,7 @@ export function BillingManager({
           </div>
         </div>
       ) : (
-        <div className="bg-muted/50 rounded-lg border p-4 text-center">
+        <div className="rounded-lg border bg-muted/50 p-4 text-center">
           <p className="text-muted-foreground">
             {isEn
               ? "No active subscription. Choose a plan below."
@@ -168,7 +168,7 @@ export function BillingManager({
 
       {/* Plans grid */}
       <div>
-        <h3 className="mb-3 text-lg font-semibold">
+        <h3 className="mb-3 font-semibold text-lg">
           {isEn ? "Available Plans" : "Planes Disponibles"}
         </h3>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -181,17 +181,17 @@ export function BillingManager({
 
             return (
               <div
-                className={`rounded-lg border p-4 ${isCurrent ? "border-primary ring-primary/20 ring-2" : ""}`}
+                className={`rounded-lg border p-4 ${isCurrent ? "border-primary ring-2 ring-primary/20" : ""}`}
                 key={id}
               >
-                <h4 className="text-lg font-bold">{name}</h4>
-                <p className="text-2xl font-semibold">
+                <h4 className="font-bold text-lg">{name}</h4>
+                <p className="font-semibold text-2xl">
                   {priceUsd === 0
                     ? isEn
                       ? "Free"
                       : "Gratis"
                     : formatCurrency(priceUsd, "USD", locale)}
-                  <span className="text-muted-foreground text-sm font-normal">
+                  <span className="font-normal text-muted-foreground text-sm">
                     {priceUsd > 0 && (isEn ? "/mo" : "/mes")}
                   </span>
                 </p>
@@ -200,9 +200,10 @@ export function BillingManager({
                     ≈ {formatCurrency(pricePyg, "PYG", locale)}
                   </p>
                 )}
-                <ul className="text-muted-foreground mt-3 space-y-1 text-sm">
+                <ul className="mt-3 space-y-1 text-muted-foreground text-sm">
                   <li>
-                    {asNumber(plan.max_properties)} {isEn ? "properties" : "propiedades"}
+                    {asNumber(plan.max_properties)}{" "}
+                    {isEn ? "properties" : "propiedades"}
                   </li>
                   <li>
                     {asNumber(plan.max_units)} {isEn ? "units" : "unidades"}
@@ -288,10 +289,10 @@ function ReferralCard({ orgId, isEn }: { orgId: string; isEn: boolean }) {
 
   return (
     <div className="rounded-lg border p-4">
-      <h3 className="mb-2 text-lg font-semibold">
+      <h3 className="mb-2 font-semibold text-lg">
         {isEn ? "Refer & Earn" : "Refiere y Gana"}
       </h3>
-      <p className="text-muted-foreground mb-3 text-sm">
+      <p className="mb-3 text-muted-foreground text-sm">
         {isEn
           ? "Share your referral code with other property managers. When they subscribe, both of you earn 1 free month."
           : "Comparte tu código de referido con otros administradores. Cuando se suscriban, ambos ganan 1 mes gratis."}
@@ -324,19 +325,21 @@ function ReferralCard({ orgId, isEn }: { orgId: string; isEn: boolean }) {
 
       {redemptions.length > 0 && (
         <div className="mt-4">
-          <h4 className="mb-1 text-sm font-medium">
-            {isEn ? "Referral History" : "Historial de Referidos"} ({redemptions.length})
+          <h4 className="mb-1 font-medium text-sm">
+            {isEn ? "Referral History" : "Historial de Referidos"} (
+            {redemptions.length})
           </h4>
-          <ul className="text-muted-foreground space-y-1 text-sm">
+          <ul className="space-y-1 text-muted-foreground text-sm">
             {redemptions.map((r) => (
-              <li className="flex items-center gap-2" key={`${String(r.created_at)}-${String(r.status)}`}>
+              <li
+                className="flex items-center gap-2"
+                key={`${String(r.created_at)}-${String(r.status)}`}
+              >
                 <StatusBadge
                   label={String(r.status ?? "pending")}
                   value={String(r.status ?? "pending")}
                 />
-                <span>
-                  {String(r.created_at ?? "").slice(0, 10)}
-                </span>
+                <span>{String(r.created_at ?? "").slice(0, 10)}</span>
               </li>
             ))}
           </ul>
@@ -368,7 +371,7 @@ function UsageMeter({
       </div>
       <Progress value={percent} />
       {percent >= 90 && (
-        <p className="mt-1 text-xs text-amber-600">
+        <p className="mt-1 text-amber-600 text-xs">
           {isEn ? "Approaching limit" : "Acercándose al límite"}
         </p>
       )}

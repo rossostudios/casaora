@@ -138,9 +138,7 @@ export function useExpenseColumns(
         header: isEn ? "Approval" : "Aprobación",
         cell: ({ getValue }) => {
           const status = asString(getValue()).trim() || "pending";
-          return (
-            <StatusBadge value={status} tone={approvalTone(status)} />
-          );
+          return <StatusBadge tone={approvalTone(status)} value={status} />;
         },
       },
       {

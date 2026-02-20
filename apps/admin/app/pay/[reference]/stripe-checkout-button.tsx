@@ -77,7 +77,7 @@ export function StripeCheckoutButton({
             ? `Pay ${formattedAmount} with Card`
             : `Pagar ${formattedAmount} con Tarjeta`}
       </Button>
-      {error && <p className="text-center text-sm text-red-600">{error}</p>}
+      {error && <p className="text-center text-red-600 text-sm">{error}</p>}
     </div>
   );
 }

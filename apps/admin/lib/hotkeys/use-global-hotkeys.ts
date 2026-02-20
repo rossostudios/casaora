@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useHotkey } from "@tanstack/react-hotkeys";
 import { isInputFocused } from "@/lib/hotkeys/is-input-focused";
 
 type GlobalHotkeyHandlers = {
@@ -12,29 +12,22 @@ export function useGlobalHotkeys({
   onShowHelp,
   onEscape,
 }: GlobalHotkeyHandlers): void {
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      // Mod+K — always fires, even in inputs
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
-        event.preventDefault();
-        onCommandPalette();
-        return;
-      }
+  useHotkey("Mod+K", (e) => {
+    e.preventDefault();
+    onCommandPalette();
+  });
 
-      // ? — only outside inputs
-      if (event.key === "?" && !isInputFocused() && !event.metaKey && !event.ctrlKey) {
-        event.preventDefault();
-        onShowHelp();
-        return;
-      }
+  useHotkey({ key: "?" }, (e) => {
+    if (!isInputFocused()) {
+      e.preventDefault();
+      onShowHelp();
+    }
+  });
 
-      // Global Escape fallback (lowest priority — overlays handle their own)
-      if (event.key === "Escape") {
-        onEscape();
-      }
-    };
-
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [onCommandPalette, onShowHelp, onEscape]);
+  useHotkey("Escape", (e) => {
+    // Only invoke global escape if we aren't in a focused input that might need it
+    if (!isInputFocused()) {
+      onEscape();
+    }
+  });
 }

@@ -32,15 +32,15 @@ export function PublicFooter({ locale }: { locale: "es-PY" | "en-US" }) {
         <div className="grid gap-12 sm:grid-cols-2 lg:grid-cols-4">
           {/* Brand */}
           <div className="space-y-4">
-            <span className="text-lg font-bold tracking-tight text-[#faf8f5]">
+            <span className="font-bold text-[#faf8f5] text-lg tracking-tight">
               CASAORA
             </span>
-            <p className="font-serif text-sm italic text-[#faf8f5]/50">
+            <p className="font-serif text-[#faf8f5]/50 text-sm italic">
               {isEn
                 ? "Where transparency meets home."
                 : "Donde la transparencia encuentra hogar."}
             </p>
-            <p className="max-w-xs text-sm leading-relaxed text-[#faf8f5]/60">
+            <p className="max-w-xs text-[#faf8f5]/60 text-sm leading-relaxed">
               {isEn
                 ? "Transparent long-term rental marketplace for Paraguay — designed for locals, expats, and investors."
                 : "Marketplace transparente de alquileres a largo plazo en Paraguay — para locales, expatriados e inversores."}
@@ -63,7 +63,7 @@ export function PublicFooter({ locale }: { locale: "es-PY" | "en-US" }) {
 
           {/* Quick Links */}
           <div className="space-y-4">
-            <h3 className="font-serif text-sm font-medium text-[#faf8f5]/80">
+            <h3 className="font-medium font-serif text-[#faf8f5]/80 text-sm">
               {isEn ? "Quick Links" : "Enlaces"}
             </h3>
             <ul className="space-y-2.5 text-sm">
@@ -104,7 +104,7 @@ export function PublicFooter({ locale }: { locale: "es-PY" | "en-US" }) {
 
           {/* Popular Cities */}
           <div className="space-y-4">
-            <h3 className="font-serif text-sm font-medium text-[#faf8f5]/80">
+            <h3 className="font-medium font-serif text-[#faf8f5]/80 text-sm">
               {isEn ? "Popular Cities" : "Ciudades populares"}
             </h3>
             <ul className="space-y-2.5 text-sm">
@@ -123,11 +123,13 @@ export function PublicFooter({ locale }: { locale: "es-PY" | "en-US" }) {
 
           {/* Contact */}
           <div className="space-y-4">
-            <h3 className="font-serif text-sm font-medium text-[#faf8f5]/80">
+            <h3 className="font-medium font-serif text-[#faf8f5]/80 text-sm">
               {isEn ? "Contact" : "Contacto"}
             </h3>
-            <p className="text-sm text-[#faf8f5]/50">
-              {isEn ? "Questions? We're here to help." : "¿Preguntas? Estamos para ayudarte."}
+            <p className="text-[#faf8f5]/50 text-sm">
+              {isEn
+                ? "Questions? We're here to help."
+                : "¿Preguntas? Estamos para ayudarte."}
             </p>
             <ul className="space-y-2.5 text-sm">
               <li>
@@ -155,16 +157,22 @@ export function PublicFooter({ locale }: { locale: "es-PY" | "en-US" }) {
         </div>
 
         {/* Bottom bar */}
-        <div className="mt-14 flex flex-col items-center justify-between gap-3 border-t border-[#faf8f5]/10 pt-8 sm:flex-row">
-          <p className="text-xs text-[#faf8f5]/40">
+        <div className="mt-14 flex flex-col items-center justify-between gap-3 border-[#faf8f5]/10 border-t pt-8 sm:flex-row">
+          <p className="text-[#faf8f5]/40 text-xs">
             &copy; {new Date().getFullYear()} Casaora.{" "}
             {isEn ? "All rights reserved." : "Todos los derechos reservados."}
           </p>
-          <div className="flex items-center gap-5 text-xs text-[#faf8f5]/40">
-            <Link className="transition-colors hover:text-[#faf8f5]/60" href="/privacy">
+          <div className="flex items-center gap-5 text-[#faf8f5]/40 text-xs">
+            <Link
+              className="transition-colors hover:text-[#faf8f5]/60"
+              href="/privacy"
+            >
               {isEn ? "Privacy Policy" : "Política de privacidad"}
             </Link>
-            <Link className="transition-colors hover:text-[#faf8f5]/60" href="/terms">
+            <Link
+              className="transition-colors hover:text-[#faf8f5]/60"
+              href="/terms"
+            >
               {isEn ? "Terms of Service" : "Términos de servicio"}
             </Link>
           </div>

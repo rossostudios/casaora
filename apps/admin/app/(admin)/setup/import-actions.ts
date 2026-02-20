@@ -102,7 +102,11 @@ export async function batchCreateLeases(
       continue;
     }
     if (!row.unit_id) {
-      results.push({ index: i, ok: false, error: "Unit could not be resolved" });
+      results.push({
+        index: i,
+        ok: false,
+        error: "Unit could not be resolved",
+      });
       continue;
     }
     if (!row.starts_on) {
@@ -173,8 +177,12 @@ export async function batchCreateUnits(
     const row = rows[i];
     const code = row.code?.trim();
     const name = row.name?.trim();
-    if (!code || !name) {
-      results.push({ index: i, ok: false, error: "Code and name are required" });
+    if (!(code && name)) {
+      results.push({
+        index: i,
+        ok: false,
+        error: "Code and name are required",
+      });
       continue;
     }
     if (!row.property_id) {

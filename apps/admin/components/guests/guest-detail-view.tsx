@@ -1,9 +1,6 @@
 "use client";
 
-import {
-  Delete02Icon,
-  PencilEdit01Icon,
-} from "@hugeicons/core-free-icons";
+import { Delete02Icon, PencilEdit01Icon } from "@hugeicons/core-free-icons";
 import Image from "next/image";
 
 import { Button } from "@/components/ui/button";
@@ -11,7 +8,7 @@ import { Form } from "@/components/ui/form";
 import { Icon } from "@/components/ui/icon";
 import { formatCurrency } from "@/lib/format";
 
-import { type GuestCrmRow, asDateLabel } from "./guests-crm-types";
+import { asDateLabel, type GuestCrmRow } from "./guests-crm-types";
 
 function ContactLine({
   label,
@@ -59,8 +56,14 @@ export function GuestDetailView({
   deleteAction: (formData: FormData) => void;
   t: (en: string, es: string) => string;
 }) {
-  const viewNextStayLabel = asDateLabel(locale, record.next_stay_start) != null ? asDateLabel(locale, record.next_stay_start)! : "-";
-  const viewLastStayLabel = asDateLabel(locale, record.last_stay_end) != null ? asDateLabel(locale, record.last_stay_end)! : "-";
+  const viewNextStayLabel =
+    asDateLabel(locale, record.next_stay_start) != null
+      ? asDateLabel(locale, record.next_stay_start)!
+      : "-";
+  const viewLastStayLabel =
+    asDateLabel(locale, record.last_stay_end) != null
+      ? asDateLabel(locale, record.last_stay_end)!
+      : "-";
 
   let viewAddressValue: string | null = null;
   const addrPart = record.address != null ? record.address.trim() : "";
@@ -71,14 +74,21 @@ export function GuestDetailView({
   }
 
   let showEmergencyContact = false;
-  const ecName = record.emergency_contact_name != null ? record.emergency_contact_name.trim() : "";
-  const ecPhone = record.emergency_contact_phone != null ? record.emergency_contact_phone.trim() : "";
+  const ecName =
+    record.emergency_contact_name != null
+      ? record.emergency_contact_name.trim()
+      : "";
+  const ecPhone =
+    record.emergency_contact_phone != null
+      ? record.emergency_contact_phone.trim()
+      : "";
   if (ecName || ecPhone) {
     showEmergencyContact = true;
   }
 
   let showIdDocument = false;
-  const idUrl = record.id_document_url != null ? record.id_document_url.trim() : "";
+  const idUrl =
+    record.id_document_url != null ? record.id_document_url.trim() : "";
   if (idUrl) {
     showIdDocument = true;
   }
@@ -112,17 +122,13 @@ export function GuestDetailView({
           <p className="text-muted-foreground text-xs uppercase tracking-wide">
             {t("Next stay", "Próxima estancia")}
           </p>
-          <p className="mt-1 font-medium text-sm">
-            {viewNextStayLabel}
-          </p>
+          <p className="mt-1 font-medium text-sm">{viewNextStayLabel}</p>
         </div>
         <div className="rounded-lg border bg-muted/10 p-3">
           <p className="text-muted-foreground text-xs uppercase tracking-wide">
             {t("Last stay", "Última estancia")}
           </p>
-          <p className="mt-1 font-medium text-sm">
-            {viewLastStayLabel}
-          </p>
+          <p className="mt-1 font-medium text-sm">{viewLastStayLabel}</p>
         </div>
       </div>
 
@@ -131,10 +137,7 @@ export function GuestDetailView({
           {t("Contact", "Contacto")}
         </p>
         <div className="grid gap-2">
-          <ContactLine
-            label={t("Email", "Correo")}
-            value={record.email}
-          />
+          <ContactLine label={t("Email", "Correo")} value={record.email} />
           <ContactLine
             label={t("Phone", "Teléfono")}
             value={record.phone_e164}
@@ -146,8 +149,10 @@ export function GuestDetailView({
           <ContactLine
             label={t("Document", "Documento")}
             value={(() => {
-              const docType = record.document_type != null ? record.document_type : "";
-              const docNum = record.document_number != null ? record.document_number : "";
+              const docType =
+                record.document_type != null ? record.document_type : "";
+              const docNum =
+                record.document_number != null ? record.document_number : "";
               const joined = [docType.trim(), docNum.trim()]
                 .filter(Boolean)
                 .join(" ");

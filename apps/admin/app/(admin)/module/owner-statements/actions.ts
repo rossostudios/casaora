@@ -42,10 +42,7 @@ function withParams(
   return suffix ? `${base}?${suffix}` : base;
 }
 
-function statementsUrl(params?: {
-  success?: string;
-  error?: string;
-}): string {
+function statementsUrl(params?: { success?: string; error?: string }): string {
   return withParams("/module/owner-statements", params ?? {});
 }
 
@@ -69,7 +66,7 @@ export async function createStatementAction(formData: FormData) {
   if (!property_id) {
     redirect(withParams(next, { error: "property_id is required" }));
   }
-  if (!period_start || !period_end) {
+  if (!(period_start && period_end)) {
     redirect(withParams(next, { error: "Period dates are required" }));
   }
 

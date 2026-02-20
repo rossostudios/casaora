@@ -21,8 +21,10 @@ import { useActiveLocale } from "@/lib/i18n/client";
 const CHANNELS = ["whatsapp", "email", "sms"] as const;
 
 function channelColor(ch: string) {
-  if (ch === "whatsapp") return "border-emerald-200/60 bg-emerald-50/60 text-emerald-700 dark:border-emerald-800/40 dark:bg-emerald-950/30 dark:text-emerald-400";
-  if (ch === "sms") return "border-amber-200/60 bg-amber-50/60 text-amber-700 dark:border-amber-800/40 dark:bg-amber-950/30 dark:text-amber-400";
+  if (ch === "whatsapp")
+    return "border-emerald-200/60 bg-emerald-50/60 text-emerald-700 dark:border-emerald-800/40 dark:bg-emerald-950/30 dark:text-emerald-400";
+  if (ch === "sms")
+    return "border-amber-200/60 bg-amber-50/60 text-amber-700 dark:border-amber-800/40 dark:bg-amber-950/30 dark:text-amber-400";
   return "border-blue-200/60 bg-blue-50/60 text-blue-700 dark:border-blue-800/40 dark:bg-blue-950/30 dark:text-blue-400";
 }
 
@@ -80,20 +82,20 @@ export function TemplateEditor({
               key={tpl.id}
             >
               <div className="mb-2 flex items-center justify-between gap-2">
-                <p className="truncate text-sm font-semibold">{tpl.name}</p>
+                <p className="truncate font-semibold text-sm">{tpl.name}</p>
                 <Badge
-                  className={`shrink-0 border px-1.5 py-px text-[10px] font-semibold ${channelColor(tpl.channel)}`}
+                  className={`shrink-0 border px-1.5 py-px font-semibold text-[10px] ${channelColor(tpl.channel)}`}
                   variant="outline"
                 >
                   {tpl.channel}
                 </Badge>
               </div>
               {tpl.subject ? (
-                <p className="mb-1 truncate text-xs text-muted-foreground">
+                <p className="mb-1 truncate text-muted-foreground text-xs">
                   {isEn ? "Subject:" : "Asunto:"} {tpl.subject}
                 </p>
               ) : null}
-              <p className="line-clamp-3 text-[13px] leading-relaxed text-muted-foreground whitespace-pre-wrap">
+              <p className="line-clamp-3 whitespace-pre-wrap text-[13px] text-muted-foreground leading-relaxed">
                 {tpl.body}
               </p>
 
@@ -151,7 +153,13 @@ export function TemplateEditor({
             <span className="font-medium text-muted-foreground">
               {isEn ? "Template name" : "Nombre de plantilla"}
             </span>
-            <Input name="name" required placeholder={isEn ? "e.g. Check-in reminder" : "ej. Recordatorio de check-in"} />
+            <Input
+              name="name"
+              placeholder={
+                isEn ? "e.g. Check-in reminder" : "ej. Recordatorio de check-in"
+              }
+              required
+            />
           </label>
 
           <label className="block space-y-1 text-sm">
@@ -171,7 +179,10 @@ export function TemplateEditor({
             <span className="font-medium text-muted-foreground">
               {isEn ? "Subject (email only)" : "Asunto (solo email)"}
             </span>
-            <Input name="subject" placeholder={isEn ? "Optional" : "Opcional"} />
+            <Input
+              name="subject"
+              placeholder={isEn ? "Optional" : "Opcional"}
+            />
           </label>
 
           <label className="block space-y-1 text-sm">
@@ -206,7 +217,11 @@ export function TemplateEditor({
           </label>
 
           <div className="flex flex-wrap justify-end gap-2">
-            <Button onClick={() => setOpen(false)} type="button" variant="outline">
+            <Button
+              onClick={() => setOpen(false)}
+              type="button"
+              variant="outline"
+            >
               {isEn ? "Cancel" : "Cancelar"}
             </Button>
             <Button type="submit" variant="secondary">

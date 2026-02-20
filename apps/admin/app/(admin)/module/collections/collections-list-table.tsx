@@ -5,9 +5,9 @@ import { useMemo } from "react";
 
 import { generatePaymentLinkAction } from "@/app/(admin)/module/collections/actions";
 import { Button } from "@/components/ui/button";
-import { type DataTableRow } from "@/components/ui/data-table";
-import { NotionDataTable } from "@/components/ui/notion-data-table";
+import type { DataTableRow } from "@/components/ui/data-table";
 import { Form } from "@/components/ui/form";
+import { NotionDataTable } from "@/components/ui/notion-data-table";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { formatCurrency } from "@/lib/format";
 
@@ -105,9 +105,7 @@ export function CollectionsListTable({
         const id = asString(row.id);
         const status = asString(row.status).trim().toLowerCase();
         if (status === "paid") {
-          return (
-            <StatusBadge label={isEn ? "Paid" : "Pagado"} value="paid" />
-          );
+          return <StatusBadge label={isEn ? "Paid" : "Pagado"} value="paid" />;
         }
 
         return (

@@ -314,7 +314,8 @@ export function buildPropertyPortfolioSummary(
     0
   );
   const totalVacantUnits = totalUnits - totalActiveLeases;
-  const vacancyCostPyg = totalVacantUnits > 0 ? totalVacantUnits * averageRentPyg : 0;
+  const vacancyCostPyg =
+    totalVacantUnits > 0 ? totalVacantUnits * averageRentPyg : 0;
 
   return {
     totalAssetValuePyg,

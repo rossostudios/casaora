@@ -37,8 +37,10 @@ export function isRentalMode(value: unknown): value is RentalMode {
 }
 
 export function rentalModeLabel(value: RentalMode, isEn: boolean): string {
-  if (value === "str") return isEn ? "Short-term rentals" : "Alquileres temporarios";
-  if (value === "ltr") return isEn ? "Long-term rentals" : "Alquileres a largo plazo";
+  if (value === "str")
+    return isEn ? "Short-term rentals" : "Alquileres temporarios";
+  if (value === "ltr")
+    return isEn ? "Long-term rentals" : "Alquileres a largo plazo";
   return isEn ? "Both" : "Ambos";
 }
 
@@ -87,11 +89,11 @@ export function ProgressStepper({ steps }: { steps: StepDef[] }) {
   return (
     <div className="flex items-start justify-center gap-0">
       {steps.map((step, i) => (
-        <div key={step.number} className="flex items-start">
+        <div className="flex items-start" key={step.number}>
           <div className="flex flex-col items-center gap-1.5">
             <div
               className={cn(
-                "flex h-9 w-9 items-center justify-center rounded-full border-2 text-sm font-semibold transition-colors",
+                "flex h-9 w-9 items-center justify-center rounded-full border-2 font-semibold text-sm transition-colors",
                 step.done
                   ? "border-primary bg-primary text-primary-foreground"
                   : step.active
@@ -99,15 +101,11 @@ export function ProgressStepper({ steps }: { steps: StepDef[] }) {
                     : "border-border bg-muted text-muted-foreground"
               )}
             >
-              {step.done ? (
-                <Icon icon={Tick01Icon} size={16} />
-              ) : (
-                step.number
-              )}
+              {step.done ? <Icon icon={Tick01Icon} size={16} /> : step.number}
             </div>
             <span
               className={cn(
-                "text-xs font-medium text-center max-w-[5rem]",
+                "max-w-[5rem] text-center font-medium text-xs",
                 step.done || step.active
                   ? "text-foreground"
                   : "text-muted-foreground"
@@ -119,7 +117,7 @@ export function ProgressStepper({ steps }: { steps: StepDef[] }) {
           {i < steps.length - 1 ? (
             <div
               className={cn(
-                "mt-4 h-0.5 w-12 sm:w-16 md:w-20 shrink-0",
+                "mt-4 h-0.5 w-12 shrink-0 sm:w-16 md:w-20",
                 steps[i + 1].done || steps[i + 1].active
                   ? "bg-primary/40"
                   : "bg-border"
@@ -151,12 +149,10 @@ export function CompletedStepRow({
         <Icon icon={Tick01Icon} size={14} />
       </div>
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium text-foreground">
-          {title}
-        </p>
-        <p className="truncate text-xs text-muted-foreground">{summary}</p>
+        <p className="truncate font-medium text-foreground text-sm">{title}</p>
+        <p className="truncate text-muted-foreground text-xs">{summary}</p>
       </div>
-      <Badge variant="secondary" className="shrink-0 text-[10px]">
+      <Badge className="shrink-0 text-[10px]" variant="secondary">
         {stepNumber}/3
       </Badge>
     </div>
@@ -182,14 +178,14 @@ export function LockedStepRow({
         <Icon icon={LockKeyIcon} size={13} />
       </div>
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium text-muted-foreground">
+        <p className="truncate font-medium text-muted-foreground text-sm">
           {title}
         </p>
-        <p className="truncate text-xs text-muted-foreground/70">
+        <p className="truncate text-muted-foreground/70 text-xs">
           {description}
         </p>
       </div>
-      <Badge variant="outline" className="shrink-0 text-[10px]">
+      <Badge className="shrink-0 text-[10px]" variant="outline">
         {stepNumber}/3
       </Badge>
     </div>
@@ -215,15 +211,15 @@ export function ActiveStepCard({
     <div className="rounded-2xl border-2 border-primary/25 bg-card p-5 shadow-sm">
       <div className="mb-4 flex items-start justify-between gap-3">
         <div className="flex items-start gap-3">
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 border-primary bg-primary/10 text-sm font-bold text-primary">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 border-primary bg-primary/10 font-bold text-primary text-sm">
             {stepNumber}
           </div>
           <div>
             <p className="font-semibold text-foreground">{title}</p>
-            <p className="text-sm text-muted-foreground">{description}</p>
+            <p className="text-muted-foreground text-sm">{description}</p>
           </div>
         </div>
-        <Badge variant="outline" className="shrink-0">
+        <Badge className="shrink-0" variant="outline">
           {stepNumber}/3
         </Badge>
       </div>
@@ -250,18 +246,21 @@ export function OptionalStepCard({
   isEn: boolean;
 }) {
   return (
-    <div className="rounded-2xl border-2 border-dashed border-border/40 bg-card p-5">
+    <div className="rounded-2xl border-2 border-border/40 border-dashed bg-card p-5">
       <div className="mb-4 flex items-start justify-between gap-3">
         <div className="flex items-start gap-3">
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 border-dashed border-border bg-muted/30 text-sm font-bold text-muted-foreground">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 border-border border-dashed bg-muted/30 font-bold text-muted-foreground text-sm">
             {stepNumber}
           </div>
           <div>
             <p className="font-semibold text-foreground">{title}</p>
-            <p className="text-sm text-muted-foreground">{description}</p>
+            <p className="text-muted-foreground text-sm">{description}</p>
           </div>
         </div>
-        <Badge variant="outline" className="shrink-0 text-[10px] text-muted-foreground">
+        <Badge
+          className="shrink-0 text-[10px] text-muted-foreground"
+          variant="outline"
+        >
           {isEn ? "Optional" : "Opcional"}
         </Badge>
       </div>
@@ -283,11 +282,15 @@ export function OrganizationProfileInputs({
 }) {
   return (
     <fieldset className="grid gap-2">
-      <legend className="mb-1 text-xs font-medium text-muted-foreground">
+      <legend className="mb-1 font-medium text-muted-foreground text-xs">
         {isEn ? "Organization profile" : "Perfil de organización"}
       </legend>
       <div className="grid gap-2 sm:grid-cols-2">
-        <label aria-label="Owner-operator" className="group relative flex cursor-pointer items-start gap-3 rounded-xl border border-border/70 bg-background px-4 py-3 text-sm transition-colors has-[:checked]:border-primary/50 has-[:checked]:bg-primary/5" htmlFor="profile_type_owner_operator">
+        <label
+          aria-label="Owner-operator"
+          className="group relative flex cursor-pointer items-start gap-3 rounded-xl border border-border/70 bg-background px-4 py-3 text-sm transition-colors has-[:checked]:border-primary/50 has-[:checked]:bg-primary/5"
+          htmlFor="profile_type_owner_operator"
+        >
           <input
             className="mt-0.5 accent-[var(--primary)]"
             defaultChecked={defaultValue === "owner_operator"}
@@ -301,14 +304,18 @@ export function OrganizationProfileInputs({
             <span className="font-medium text-foreground">
               {isEn ? "Owner-operator" : "Propietario-operador"}
             </span>
-            <span className="mt-0.5 block text-xs text-muted-foreground">
+            <span className="mt-0.5 block text-muted-foreground text-xs">
               {isEn
                 ? "You own and manage your properties."
                 : "Eres dueño y administras tus propiedades."}
             </span>
           </div>
         </label>
-        <label aria-label="Management company" className="group relative flex cursor-pointer items-start gap-3 rounded-xl border border-border/70 bg-background px-4 py-3 text-sm transition-colors has-[:checked]:border-primary/50 has-[:checked]:bg-primary/5" htmlFor="profile_type_management_company">
+        <label
+          aria-label="Management company"
+          className="group relative flex cursor-pointer items-start gap-3 rounded-xl border border-border/70 bg-background px-4 py-3 text-sm transition-colors has-[:checked]:border-primary/50 has-[:checked]:bg-primary/5"
+          htmlFor="profile_type_management_company"
+        >
           <input
             className="mt-0.5 accent-[var(--primary)]"
             defaultChecked={defaultValue === "management_company"}
@@ -322,7 +329,7 @@ export function OrganizationProfileInputs({
             <span className="font-medium text-foreground">
               {isEn ? "Management company" : "Empresa administradora"}
             </span>
-            <span className="mt-0.5 block text-xs text-muted-foreground">
+            <span className="mt-0.5 block text-muted-foreground text-xs">
               {isEn
                 ? "You manage properties on behalf of owners."
                 : "Administras propiedades en nombre de propietarios."}
@@ -343,11 +350,15 @@ export function RentalModeInputs({
 }) {
   return (
     <fieldset className="grid gap-2">
-      <legend className="mb-1 text-xs font-medium text-muted-foreground">
+      <legend className="mb-1 font-medium text-muted-foreground text-xs">
         {isEn ? "What do you manage?" : "¿Qué administras?"}
       </legend>
       <div className="grid gap-2 sm:grid-cols-3">
-        <label aria-label="Short-term rentals" className="group relative flex cursor-pointer items-start gap-3 rounded-xl border border-border/70 bg-background px-4 py-3 text-sm transition-colors has-[:checked]:border-primary/50 has-[:checked]:bg-primary/5" htmlFor="rental_mode_str">
+        <label
+          aria-label="Short-term rentals"
+          className="group relative flex cursor-pointer items-start gap-3 rounded-xl border border-border/70 bg-background px-4 py-3 text-sm transition-colors has-[:checked]:border-primary/50 has-[:checked]:bg-primary/5"
+          htmlFor="rental_mode_str"
+        >
           <input
             className="mt-0.5 accent-[var(--primary)]"
             defaultChecked={defaultValue === "str"}
@@ -361,14 +372,18 @@ export function RentalModeInputs({
             <span className="font-medium text-foreground">
               {isEn ? "Short-term rentals" : "Alquileres temporarios"}
             </span>
-            <span className="mt-0.5 block text-xs text-muted-foreground">
+            <span className="mt-0.5 block text-muted-foreground text-xs">
               {isEn
                 ? "Airbnb, Booking.com, VRBO."
                 : "Airbnb, Booking.com, VRBO."}
             </span>
           </div>
         </label>
-        <label aria-label="Long-term rentals" className="group relative flex cursor-pointer items-start gap-3 rounded-xl border border-border/70 bg-background px-4 py-3 text-sm transition-colors has-[:checked]:border-primary/50 has-[:checked]:bg-primary/5" htmlFor="rental_mode_ltr">
+        <label
+          aria-label="Long-term rentals"
+          className="group relative flex cursor-pointer items-start gap-3 rounded-xl border border-border/70 bg-background px-4 py-3 text-sm transition-colors has-[:checked]:border-primary/50 has-[:checked]:bg-primary/5"
+          htmlFor="rental_mode_ltr"
+        >
           <input
             className="mt-0.5 accent-[var(--primary)]"
             defaultChecked={defaultValue === "ltr"}
@@ -382,14 +397,18 @@ export function RentalModeInputs({
             <span className="font-medium text-foreground">
               {isEn ? "Long-term rentals" : "Alquileres a largo plazo"}
             </span>
-            <span className="mt-0.5 block text-xs text-muted-foreground">
+            <span className="mt-0.5 block text-muted-foreground text-xs">
               {isEn
                 ? "Leases, contracts, collections."
                 : "Contratos, arriendos, cobranzas."}
             </span>
           </div>
         </label>
-        <label aria-label="Both rental types" className="group relative flex cursor-pointer items-start gap-3 rounded-xl border border-border/70 bg-background px-4 py-3 text-sm transition-colors has-[:checked]:border-primary/50 has-[:checked]:bg-primary/5" htmlFor="rental_mode_both">
+        <label
+          aria-label="Both rental types"
+          className="group relative flex cursor-pointer items-start gap-3 rounded-xl border border-border/70 bg-background px-4 py-3 text-sm transition-colors has-[:checked]:border-primary/50 has-[:checked]:bg-primary/5"
+          htmlFor="rental_mode_both"
+        >
           <input
             className="mt-0.5 accent-[var(--primary)]"
             defaultChecked={defaultValue === "both"}
@@ -403,7 +422,7 @@ export function RentalModeInputs({
             <span className="font-medium text-foreground">
               {isEn ? "Both" : "Ambos"}
             </span>
-            <span className="mt-0.5 block text-xs text-muted-foreground">
+            <span className="mt-0.5 block text-muted-foreground text-xs">
               {isEn
                 ? "Short-term and long-term."
                 : "Temporarios y largo plazo."}
@@ -431,7 +450,7 @@ export function OrganizationCoreFields({
   return (
     <>
       <label className="grid gap-1" htmlFor="setup-org-name">
-        <span className="text-xs font-medium text-muted-foreground">
+        <span className="font-medium text-muted-foreground text-xs">
           {isEn ? "Name" : "Nombre"}
         </span>
         <Input
@@ -443,7 +462,7 @@ export function OrganizationCoreFields({
         />
       </label>
       <label className="grid gap-1" htmlFor="setup-org-legal-name">
-        <span className="text-xs font-medium text-muted-foreground">
+        <span className="font-medium text-muted-foreground text-xs">
           {isEn ? "Legal name" : "Razón social"}
         </span>
         <Input
@@ -454,7 +473,7 @@ export function OrganizationCoreFields({
         />
       </label>
       <label className="grid gap-1" htmlFor="setup-org-ruc">
-        <span className="text-xs font-medium text-muted-foreground">
+        <span className="font-medium text-muted-foreground text-xs">
           {isEn ? "Tax ID (RUC)" : "RUC"}
         </span>
         <Input
@@ -466,7 +485,7 @@ export function OrganizationCoreFields({
       </label>
       <div className="grid gap-3 sm:grid-cols-2">
         <label className="grid gap-1" htmlFor="setup-org-currency">
-          <span className="text-xs font-medium text-muted-foreground">
+          <span className="font-medium text-muted-foreground text-xs">
             {isEn ? "Default currency" : "Moneda predeterminada"}
           </span>
           <select
@@ -480,7 +499,7 @@ export function OrganizationCoreFields({
           </select>
         </label>
         <label className="grid gap-1" htmlFor="setup-org-timezone">
-          <span className="text-xs font-medium text-muted-foreground">
+          <span className="font-medium text-muted-foreground text-xs">
             {isEn ? "Timezone" : "Zona horaria"}
           </span>
           <Input
@@ -520,7 +539,7 @@ export function DemoSeedCallout({
                 ? "Quick start with demo data"
                 : "Inicio rápido con datos demo"}
             </p>
-            <p className="mt-0.5 text-sm text-muted-foreground">
+            <p className="mt-0.5 text-muted-foreground text-sm">
               {isEn
                 ? "Seed properties, units, reservations, tasks, and an owner statement to explore all modules instantly."
                 : "Carga propiedades, unidades, reservas, tareas y un estado de propietario para explorar todos los módulos."}
@@ -528,15 +547,15 @@ export function DemoSeedCallout({
           </div>
         </div>
         <Button
-          type="button"
-          size="sm"
           className="shrink-0 sm:min-w-[8rem]"
           disabled={submitting}
           onClick={onSeed}
+          size="sm"
+          type="button"
         >
           {submitting ? (
             <>
-              <Spinner size="sm" className="text-primary-foreground" />
+              <Spinner className="text-primary-foreground" size="sm" />
               {isEn ? "Loading..." : "Cargando..."}
             </>
           ) : isEn ? (
@@ -584,10 +603,10 @@ export function CompletionCard({
       <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-full bg-primary text-primary-foreground">
         <Icon icon={CheckmarkCircle02Icon} size={28} />
       </div>
-      <h3 className="text-lg font-semibold text-foreground">
+      <h3 className="font-semibold text-foreground text-lg">
         {isEn ? "Onboarding complete!" : "¡Onboarding completado!"}
       </h3>
-      <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
+      <p className="mx-auto mt-1 max-w-md text-muted-foreground text-sm">
         {description}
       </p>
       <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
@@ -632,25 +651,25 @@ export function TechnicalDetails({
   return (
     <Collapsible>
       <div className="flex items-center gap-2">
-        <CollapsibleTrigger className="text-xs font-medium text-muted-foreground hover:text-foreground transition-colors">
+        <CollapsibleTrigger className="font-medium text-muted-foreground text-xs transition-colors hover:text-foreground">
           {isEn ? "Technical details" : "Detalles técnicos"}
         </CollapsibleTrigger>
       </div>
       <CollapsibleContent>
         <div className="mt-2 grid gap-2 text-muted-foreground text-sm md:grid-cols-2">
           <div className="rounded-lg border border-border/60 bg-muted/30 px-3 py-2">
-            <span className="block text-[10px] uppercase tracking-wider text-muted-foreground/70">
+            <span className="block text-[10px] text-muted-foreground/70 uppercase tracking-wider">
               {isEn ? "API base URL" : "URL base de la API"}
             </span>
-            <span className="font-mono text-xs text-foreground">
+            <span className="font-mono text-foreground text-xs">
               {apiBaseUrl}
             </span>
           </div>
           <div className="rounded-lg border border-border/60 bg-muted/30 px-3 py-2">
-            <span className="block text-[10px] uppercase tracking-wider text-muted-foreground/70">
+            <span className="block text-[10px] text-muted-foreground/70 uppercase tracking-wider">
               {isEn ? "Organization" : "Organización"}
             </span>
-            <span className="font-mono text-xs text-foreground">
+            <span className="font-mono text-foreground text-xs">
               {orgId ?? (isEn ? "Not selected" : "No seleccionada")}
             </span>
             {profileType ? (
@@ -698,9 +717,7 @@ export function ExistingOrganizations({
           >
             <div className="min-w-0">
               <p className="truncate font-medium text-foreground text-sm">
-                {String(
-                  org.name ?? (isEn ? "Organization" : "Organización")
-                )}
+                {String(org.name ?? (isEn ? "Organization" : "Organización"))}
               </p>
               <p className="truncate font-mono text-[11px] text-muted-foreground">
                 {String(org.id)}

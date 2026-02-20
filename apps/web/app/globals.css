@@ -14,96 +14,122 @@
   --popover: #ffffff;
   --popover-foreground: #0f0f10;
 
-  /* ── Primary (Casaora Blue) ── */
-  --primary: #1a6df0;
+  /* ── Primary (Orange - Innovation, Energy) ── */
+  --primary: #ea580c;
   --primary-foreground: #ffffff;
 
-  /* ── Secondary / Muted ── */
-  --secondary: #f4f4f5;
-  --secondary-foreground: #1a1a1b;
-  --muted: #f4f4f5;
-  --muted-foreground: #737378;
+  /* ── Secondary / Muted (Warm Beige/Sand Tones) ── */
+  --secondary: #f5f5dc;
+  --secondary-foreground: #171717;
+  --muted: #f5f5f3;
+  --muted-foreground: #737373;
 
-  /* ── Accent ── */
-  --accent: #f4f4f5;
-  --accent-foreground: #1a1a1b;
+  /* ── Accent (Soft Terracotta - Energy, Action) ── */
+  --accent: #e27d60;
+  --accent-foreground: #ffffff;
 
   /* ── Destructive ── */
-  --destructive: oklch(0.577 0.245 27.325);
-  --destructive-foreground: oklch(0.985 0 0);
+  --destructive: #ef4444;
+  --destructive-foreground: #ffffff;
 
   /* ── Borders ── */
-  --border: #e4e4e7;
-  --input: #e4e4e7;
-  --ring: #1a6df0;
+  --border: #e5e5e5;
+  --input: #e5e5e5;
+  --ring: #ea580c;
 
   /* ── Marketing-specific ── */
-  --hero-glow: radial-gradient(ellipse 80% 60% at 50% 0%,
-      rgba(26, 109, 240, 0.06) 0%,
-      transparent 70%);
+  --hero-glow: radial-gradient(
+    ellipse 80% 60% at 50% 0%,
+    rgba(234, 88, 12, 0.08) 0%,
+    transparent 70%
+  );
   --section-alt: #fafafa;
-  --surface-subtle: #f9f9fa;
+  --surface-subtle: #fdfdfd;
 
-  --radius: 0.625rem;
+  --radius: 0.75rem;
+
+  /* ── Marketplace ── */
+  --marketplace-bg: #faf8f5;
+  --marketplace-bg-muted: #f5f2ed;
+  --marketplace-surface: var(--marketplace-bg-muted);
+  --marketplace-surface-muted: #faf8f5;
+  --marketplace-text: #1a1a1a;
+  --marketplace-text-muted: #6b6560;
+  --marketplace-hero-glow: #f5ede8;
+  --marketplace-hero-gradient: linear-gradient(
+    135deg,
+    #faf8f5 0%,
+    #f5ede8 50%,
+    #faf8f5 100%
+  );
+  --marketplace-card-shadow:
+    0 2px 8px rgba(0, 0, 0, 0.04), 0 12px 40px rgba(0, 0, 0, 0.06);
+  --marketplace-card-hover-shadow:
+    0 8px 24px rgba(0, 0, 0, 0.08), 0 24px 48px rgba(0, 0, 0, 0.1);
+  --marketplace-map-road: rgba(146, 162, 188, 0.24);
+  --marketplace-map-road-strong: rgba(113, 130, 160, 0.25);
 }
 
 .dark {
   color-scheme: dark;
 
-  --background: #09090b;
-  --foreground: #fafafa;
+  --background: #0a0a0a;
+  --foreground: #ededed;
 
-  --card: #09090b;
-  --card-foreground: #fafafa;
-  --popover: #09090b;
-  --popover-foreground: #fafafa;
+  --card: #121212;
+  --card-foreground: #ededed;
+  --popover: #121212;
+  --popover-foreground: #ededed;
 
-  --primary: #1a6df0;
+  --primary: #f97316;
   --primary-foreground: #ffffff;
 
-  --secondary: #1c1c1f;
-  --secondary-foreground: #fafafa;
-  --muted: #1c1c1f;
-  --muted-foreground: #a1a1aa;
+  --secondary: #1f1f1f;
+  --secondary-foreground: #ededed;
+  --muted: #1f1f1f;
+  --muted-foreground: #a3a3a3;
 
-  --accent: #1c1c1f;
-  --accent-foreground: #fafafa;
+  --accent: #d97757;
+  --accent-foreground: #ffffff;
 
-  --destructive: oklch(0.67 0.2 25);
-  --destructive-foreground: oklch(0.985 0 0);
+  --destructive: #7f1d1d;
+  --destructive-foreground: #ffffff;
 
-  --border: #27272a;
-  --input: #27272a;
-  --ring: #1a6df0;
+  --border: #262626;
+  --input: #262626;
+  --ring: #f97316;
 
-  --hero-glow: radial-gradient(ellipse 80% 60% at 50% 0%,
-      rgba(26, 109, 240, 0.1) 0%,
-      transparent 70%);
-  --section-alt: #0f0f12;
-  --surface-subtle: #111113;
+  --hero-glow: radial-gradient(
+    ellipse 80% 60% at 50% 0%,
+    rgba(249, 115, 22, 0.15) 0%,
+    transparent 70%
+  );
+  --section-alt: #0d0d0d;
+  --surface-subtle: #111111;
+
+  /* ── Marketplace (dark) ── */
+  --marketplace-bg: #0a0a0a;
+  --marketplace-bg-muted: #1f1f1f;
+  --marketplace-surface: #1f1f1f;
+  --marketplace-surface-muted: #111111;
+  --marketplace-text: #ededed;
+  --marketplace-text-muted: #a3a3a3;
+  --marketplace-hero-glow: #221a1c;
+  --marketplace-hero-gradient: linear-gradient(
+    135deg,
+    #191817 0%,
+    #1e1a1b 40%,
+    #221a1c 100%
+  );
+  --marketplace-card-shadow:
+    0 2px 8px rgba(0, 0, 0, 0.2), 0 12px 40px rgba(0, 0, 0, 0.3);
+  --marketplace-card-hover-shadow:
+    0 8px 24px rgba(0, 0, 0, 0.3), 0 24px 48px rgba(0, 0, 0, 0.4);
+  --marketplace-map-road: rgba(180, 180, 180, 0.08);
+  --marketplace-map-road-strong: rgba(200, 200, 200, 0.1);
 }
 
 @theme inline {
-  --font-sans: var(--font-geist-sans,
-      ui-sans-serif,
-      system-ui,
-      -apple-system,
-      BlinkMacSystemFont,
-      "Segoe UI",
-      sans-serif);
-  --font-serif: var(--font-playfair,
-      "Playfair Display",
-      Georgia,
-      "Times New Roman",
-      serif);
-  --font-mono: var(--font-geist-mono,
-      ui-monospace,
-      SFMono-Regular,
-      Menlo,
-      Monaco,
-      Consolas,
-      "Liberation Mono",
-      monospace);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -137,31 +163,40 @@
   body {
     @apply bg-background text-foreground antialiased;
   }
+
+  .pa-marketplace-root {
+    background: var(--marketplace-bg);
+    color: var(--marketplace-text);
+  }
+
+  .pa-marketplace-panel {
+    background: var(--marketplace-surface-muted);
+  }
 }
 
 @layer utilities {
   .bg-casaora-gradient {
-    background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%);
+    background: linear-gradient(135deg, #c2410c 0%, #ea580c 100%);
   }
 
   .bg-casaora-gradient-warm {
-    background: linear-gradient(135deg, #1d4ed8 0%, #1a6df0 100%);
+    background: linear-gradient(135deg, #ea580c 0%, #d97757 100%);
   }
 
   .bg-casaora-gradient-hero {
-    background: linear-gradient(to right, #1d4ed8, #1a6df0);
+    background: linear-gradient(to right, #c2410c, #ea580c);
   }
 
   .bg-casaora-gradient-subtle {
-    background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+    background: linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%);
   }
 
   .dark .bg-casaora-gradient-subtle {
-    background: linear-gradient(135deg, #0f172a 0%, #1e3a8a 100%);
+    background: linear-gradient(135deg, #431407 0%, #7c2d12 100%);
   }
 
   .text-casaora-gradient {
-    background: linear-gradient(135deg, #2563eb, #1a6df0);
+    background: linear-gradient(135deg, #ea580c, #f97316);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
@@ -169,19 +204,18 @@
 
   .shadow-casaora {
     box-shadow:
-      0 0 0 1px rgba(26, 109, 240, 0.08),
-      0 2px 8px rgba(26, 109, 240, 0.1);
+      0 0 0 1px rgba(234, 88, 12, 0.08),
+      0 4px 12px rgba(234, 88, 12, 0.08);
   }
 
   .dark .shadow-casaora {
     box-shadow:
-      0 0 0 1px rgba(26, 109, 240, 0.12),
-      0 2px 8px rgba(26, 109, 240, 0.08);
+      0 0 0 1px rgba(249, 115, 22, 0.12),
+      0 4px 12px rgba(249, 115, 22, 0.1);
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-
   *,
   *::before,
   *::after {

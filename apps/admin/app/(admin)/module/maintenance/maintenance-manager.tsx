@@ -1,8 +1,8 @@
 "use client";
 
-import { useOptimistic, useMemo, useState, useTransition } from "react";
-import { toast } from "sonner";
 import type { ColumnDef } from "@tanstack/react-table";
+import { useMemo, useOptimistic, useState, useTransition } from "react";
+import { toast } from "sonner";
 
 import { updateMaintenanceRequestAction } from "@/app/(admin)/module/maintenance/actions";
 import { Badge } from "@/components/ui/badge";
@@ -138,7 +138,10 @@ export function MaintenanceManager({
     return (members as Record<string, unknown>[])
       .map((m) => {
         const id = asString(m.user_id).trim();
-        const appUser = m.app_users as Record<string, unknown> | null | undefined;
+        const appUser = m.app_users as
+          | Record<string, unknown>
+          | null
+          | undefined;
         const name =
           asString(m.full_name).trim() ||
           (appUser ? asString(appUser.full_name).trim() : "") ||
@@ -282,7 +285,7 @@ export function MaintenanceManager({
         header: isEn ? "Status" : "Estado",
         cell: ({ getValue }) => {
           const status = String(getValue());
-          return <StatusBadge value={status} tone={statusTone(status)} />;
+          return <StatusBadge tone={statusTone(status)} value={status} />;
         },
       },
       {
@@ -291,7 +294,7 @@ export function MaintenanceManager({
         cell: ({ getValue }) => {
           const urgency = String(getValue() ?? "");
           if (!urgency) return <span className="text-muted-foreground">—</span>;
-          return <StatusBadge value={urgency} tone={urgencyTone(urgency)} />;
+          return <StatusBadge tone={urgencyTone(urgency)} value={urgency} />;
         },
       },
       {
@@ -311,10 +314,8 @@ export function MaintenanceManager({
         header: isEn ? "Property" : "Propiedad",
         cell: ({ getValue, row }) => {
           const prop = String(getValue() ?? "");
-          const unit = String(
-            (row.original as MaintenanceRow).unit_name ?? ""
-          );
-          if (!prop && !unit)
+          const unit = String((row.original as MaintenanceRow).unit_name ?? "");
+          if (!(prop || unit))
             return <span className="text-muted-foreground">—</span>;
           return (
             <span className="text-sm">
@@ -412,7 +413,7 @@ export function MaintenanceManager({
           <p className="text-muted-foreground text-xs">
             {isEn ? "Total requests" : "Total solicitudes"}
           </p>
-          <p className="text-2xl font-semibold tabular-nums">
+          <p className="font-semibold text-2xl tabular-nums">
             {summaries.total}
           </p>
         </div>
@@ -420,7 +421,7 @@ export function MaintenanceManager({
           <p className="text-muted-foreground text-xs">
             {isEn ? "New" : "Nuevas"}
           </p>
-          <p className="text-2xl font-semibold tabular-nums">
+          <p className="font-semibold text-2xl tabular-nums">
             {summaries.newCount}
           </p>
         </div>
@@ -428,7 +429,7 @@ export function MaintenanceManager({
           <p className="text-muted-foreground text-xs">
             {isEn ? "In progress" : "En progreso"}
           </p>
-          <p className="text-2xl font-semibold tabular-nums">
+          <p className="font-semibold text-2xl tabular-nums">
             {summaries.inProgress}
           </p>
         </div>
@@ -436,7 +437,7 @@ export function MaintenanceManager({
           <p className="text-muted-foreground text-xs">
             {isEn ? "Emergency" : "Emergencia"}
           </p>
-          <p className="text-2xl font-semibold tabular-nums text-red-600">
+          <p className="font-semibold text-2xl text-red-600 tabular-nums">
             {summaries.emergency}
           </p>
         </div>
@@ -469,7 +470,9 @@ export function MaintenanceManager({
             <option value="all">
               {isEn ? "All urgencies" : "Todas las urgencias"}
             </option>
-            <option value="emergency">{isEn ? "Emergency" : "Emergencia"}</option>
+            <option value="emergency">
+              {isEn ? "Emergency" : "Emergencia"}
+            </option>
             <option value="high">{isEn ? "High" : "Alta"}</option>
             <option value="medium">{isEn ? "Medium" : "Media"}</option>
             <option value="low">{isEn ? "Low" : "Baja"}</option>
@@ -489,8 +492,7 @@ export function MaintenanceManager({
           </Select>
         </div>
         <div className="text-muted-foreground text-sm">
-          {optimisticRows.length}{" "}
-          {isEn ? "requests" : "solicitudes"}
+          {optimisticRows.length} {isEn ? "requests" : "solicitudes"}
         </div>
       </div>
 
@@ -572,9 +574,7 @@ export function MaintenanceManager({
                 defaultValue={editing.assigned_user_id ?? ""}
                 name="assigned_user_id"
               >
-                <option value="">
-                  {isEn ? "Unassigned" : "Sin asignar"}
-                </option>
+                <option value="">{isEn ? "Unassigned" : "Sin asignar"}</option>
                 {memberOptions.map((m) => (
                   <option key={m.id} value={m.id}>
                     {m.label}

@@ -122,8 +122,7 @@ export function useApplicationsData({
         monthly_income: asNumber(application.monthly_income),
         first_response_minutes: asNumber(application.first_response_minutes),
         created_at: asString(application.created_at).trim(),
-        assigned_user_id:
-          asString(application.assigned_user_id).trim() || null,
+        assigned_user_id: asString(application.assigned_user_id).trim() || null,
         assigned_user_name:
           asString(application.assigned_user_name).trim() || null,
         response_sla_status: asString(application.response_sla_status).trim(),

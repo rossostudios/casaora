@@ -5,8 +5,7 @@ import {
   PlusSignIcon,
   Upload04Icon,
 } from "@hugeicons/core-free-icons";
-import { useState } from "react";
-
+import { useRef, useState } from "react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Form } from "@/components/ui/form";
@@ -15,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import type { ExpenseRow } from "@/lib/features/expenses/types";
 import { asNumber, asString, safeIsoDate } from "@/lib/features/expenses/utils";
+import { useFormSubmitHotkey } from "@/lib/hotkeys/use-form-hotkeys";
 import { cn } from "@/lib/utils";
 
 type PropertyOption = { id: string; label: string };
@@ -104,8 +104,11 @@ export function ExpenseForm({
 
   const reservationLocked = reservationId.trim().length > 0;
 
+  const formRef = useRef<HTMLFormElement>(null);
+  useFormSubmitHotkey(formRef);
+
   return (
-    <Form action={action} className="space-y-4">
+    <Form action={action} className="space-y-4" ref={formRef}>
       {isEdit && editing ? (
         <input name="expense_id" type="hidden" value={editing.id} />
       ) : (

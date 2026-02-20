@@ -4,7 +4,6 @@ import { Add01Icon, Upload01Icon } from "@hugeicons/core-free-icons";
 import { useMemo, useState } from "react";
 import { createUnitFromUnitsModuleAction } from "@/app/(admin)/module/units/actions";
 import { DataImportSheet } from "@/components/import/data-import-sheet";
-import { UnitNotionTable, type UnitRow } from "@/components/units/unit-notion-table";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -13,6 +12,10 @@ import { Icon } from "@/components/ui/icon";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Sheet } from "@/components/ui/sheet";
+import {
+  UnitNotionTable,
+  type UnitRow,
+} from "@/components/units/unit-notion-table";
 import { useActiveLocale } from "@/lib/i18n/client";
 
 type PropertyRow = {
@@ -160,7 +163,7 @@ export function UnitsManager({
   // Validate createPropertyId: if it no longer exists in options, clear it.
   const validatedCreatePropertyId =
     createPropertyId &&
-      propertyOptions.some((row) => row.id === createPropertyId)
+    propertyOptions.some((row) => row.id === createPropertyId)
       ? createPropertyId
       : "";
 
@@ -181,8 +184,9 @@ export function UnitsManager({
   }, [validatedCreatePropertyId, draftCode, unitCodesByProperty]);
   const selectedPropertyLabel = useMemo(() => {
     if (!validatedCreatePropertyId) return null;
-    return propertyOptions.find((property) => property.id === validatedCreatePropertyId)
-      ?.label;
+    return propertyOptions.find(
+      (property) => property.id === validatedCreatePropertyId
+    )?.label;
   }, [validatedCreatePropertyId, propertyOptions]);
   const existingUnitsInSelectedProperty = useMemo(() => {
     if (!validatedCreatePropertyId) return 0;
@@ -229,8 +233,15 @@ export function UnitsManager({
               </option>
             ))}
           </Select>
-          <span className="text-muted-foreground text-sm whitespace-nowrap">
-            {rows.length} {isEn ? (rows.length === 1 ? "record" : "records") : (rows.length === 1 ? "registro" : "registros")}
+          <span className="whitespace-nowrap text-muted-foreground text-sm">
+            {rows.length}{" "}
+            {isEn
+              ? rows.length === 1
+                ? "record"
+                : "records"
+              : rows.length === 1
+                ? "registro"
+                : "registros"}
           </span>
         </div>
 
@@ -378,7 +389,7 @@ export function UnitsManager({
                     : "Elige otro código antes de crear la unidad."}
                 </p>
                 {duplicateDraftCode.suggestion &&
-                  normalizeCode(duplicateDraftCode.suggestion) !==
+                normalizeCode(duplicateDraftCode.suggestion) !==
                   normalizeCode(draftCode) ? (
                   <Button
                     onClick={() => setDraftCode(duplicateDraftCode.suggestion)}

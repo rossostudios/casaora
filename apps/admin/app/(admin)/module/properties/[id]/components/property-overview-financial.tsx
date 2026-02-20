@@ -1,7 +1,6 @@
 import {
   Calendar03Icon,
   ChartIcon,
-  Invoice03Icon,
   Task01Icon,
 } from "@hugeicons/core-free-icons";
 import Link from "next/link";
@@ -37,12 +36,12 @@ export function PropertyOverviewFinancial({
   const hasIncome = overview.monthIncomePyg > 0;
   const expenseRatio = hasIncome
     ? Math.max(
-      0,
-      Math.min(
-        100,
-        Math.round((overview.monthExpensePyg / overview.monthIncomePyg) * 100)
+        0,
+        Math.min(
+          100,
+          Math.round((overview.monthExpensePyg / overview.monthIncomePyg) * 100)
+        )
       )
-    )
     : 0;
   const occupancyValue = Math.max(
     0,
@@ -80,7 +79,7 @@ export function PropertyOverviewFinancial({
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="rounded-3xl border border-border/40 bg-background/50 p-5 transition-shadow duration-300 hover:shadow-[var(--shadow-soft)]">
-            <p className="font-semibold text-[11px] uppercase tracking-widest text-muted-foreground">
+            <p className="font-semibold text-[11px] text-muted-foreground uppercase tracking-widest">
               {isEn ? "Net income" : "Ingreso neto"}
             </p>
             <p className="my-1 font-bold text-4xl tabular-nums tracking-tight">
@@ -105,13 +104,13 @@ export function PropertyOverviewFinancial({
           </div>
 
           {overview.collectedThisMonthPyg > 0 ||
-            overview.overdueCollectionAmountPyg > 0 ? (
+          overview.overdueCollectionAmountPyg > 0 ? (
             <div className="grid gap-3 sm:grid-cols-2">
-              <div className="rounded-3xl border border-border/40 bg-muted/10 p-5 transition-shadow duration-300 hover:shadow-sm hover:bg-card">
-                <p className="font-semibold text-[10px] uppercase tracking-widest text-muted-foreground">
+              <div className="rounded-3xl border border-border/40 bg-muted/10 p-5 transition-shadow duration-300 hover:bg-card hover:shadow-sm">
+                <p className="font-semibold text-[10px] text-muted-foreground uppercase tracking-widest">
                   {isEn ? "Collected this month" : "Cobrado este mes"}
                 </p>
-                <p className="mt-1 font-bold text-2xl tabular-nums text-[var(--status-success-fg)]">
+                <p className="mt-1 font-bold text-2xl text-[var(--status-success-fg)] tabular-nums">
                   {formatCurrency(
                     overview.collectedThisMonthPyg,
                     "PYG",
@@ -121,7 +120,7 @@ export function PropertyOverviewFinancial({
               </div>
               <div
                 className={cn(
-                  "rounded-3xl border p-5 transition-shadow duration-300 hover:shadow-sm hover:bg-card",
+                  "rounded-3xl border p-5 transition-shadow duration-300 hover:bg-card hover:shadow-sm",
                   overview.overdueCollectionAmountPyg > 0
                     ? "border-[var(--status-danger-border)] bg-[var(--status-danger-bg)]/50"
                     : "border-border/40 bg-muted/10"
@@ -159,16 +158,16 @@ export function PropertyOverviewFinancial({
           ) : null}
 
           <div className="grid gap-3 sm:grid-cols-2">
-            <div className="rounded-3xl border border-border/40 bg-muted/10 p-5 transition-shadow duration-300 hover:shadow-sm hover:bg-card">
-              <p className="font-semibold text-[10px] uppercase tracking-widest text-muted-foreground">
+            <div className="rounded-3xl border border-border/40 bg-muted/10 p-5 transition-shadow duration-300 hover:bg-card hover:shadow-sm">
+              <p className="font-semibold text-[10px] text-muted-foreground uppercase tracking-widest">
                 {isEn ? "Income" : "Ingreso"}
               </p>
               <p className="mt-1 font-bold text-2xl tabular-nums">
                 {formatCurrency(overview.monthIncomePyg, "PYG", locale)}
               </p>
             </div>
-            <div className="rounded-3xl border border-border/40 bg-muted/10 p-5 transition-shadow duration-300 hover:shadow-sm hover:bg-card">
-              <p className="font-semibold text-[10px] uppercase tracking-widest text-muted-foreground">
+            <div className="rounded-3xl border border-border/40 bg-muted/10 p-5 transition-shadow duration-300 hover:bg-card hover:shadow-sm">
+              <p className="font-semibold text-[10px] text-muted-foreground uppercase tracking-widest">
                 {isEn ? "Expenses" : "Gastos"}
               </p>
               <p className="mt-1 font-bold text-2xl tabular-nums">
@@ -202,7 +201,7 @@ export function PropertyOverviewFinancial({
 
           {overview.expenseCategoryBreakdown.length ? (
             <div className="space-y-4 rounded-3xl border border-border/40 bg-muted/10 p-5">
-              <p className="font-semibold text-[11px] uppercase tracking-widest text-muted-foreground">
+              <p className="font-semibold text-[11px] text-muted-foreground uppercase tracking-widest">
                 {isEn ? "Expense breakdown" : "Desglose de gastos"}
               </p>
               {overview.expenseCategoryBreakdown.map((row) => {
@@ -229,9 +228,12 @@ export function PropertyOverviewFinancial({
                   </div>
                 );
               })}
-              {overview.totalExpenseCategoryCount > overview.expenseCategoryBreakdown.length ? (
+              {overview.totalExpenseCategoryCount >
+              overview.expenseCategoryBreakdown.length ? (
                 <p className="text-muted-foreground text-xs">
-                  +{overview.totalExpenseCategoryCount - overview.expenseCategoryBreakdown.length}{" "}
+                  +
+                  {overview.totalExpenseCategoryCount -
+                    overview.expenseCategoryBreakdown.length}{" "}
                   {isEn ? "more categories" : "categorias mas"}
                 </p>
               ) : null}
@@ -241,7 +243,7 @@ export function PropertyOverviewFinancial({
           {overview.latestStatement ? (
             <div className="rounded-3xl border border-border/40 bg-muted/10 p-5">
               <div className="mb-2 flex items-center justify-between gap-2">
-                <p className="font-semibold text-[11px] uppercase tracking-widest text-muted-foreground">
+                <p className="font-semibold text-[11px] text-muted-foreground uppercase tracking-widest">
                   {isEn
                     ? "Latest owner statement"
                     : "Último estado del propietario"}
@@ -293,7 +295,7 @@ export function PropertyOverviewFinancial({
                     : "status-tone-info";
               return (
                 <article
-                  className="rounded-3xl border border-border/40 bg-background/50 p-4 transition-all duration-300 hover:shadow-[var(--shadow-soft)] hover:bg-card hover:border-border/60"
+                  className="rounded-3xl border border-border/40 bg-background/50 p-4 transition-all duration-300 hover:border-border/60 hover:bg-card hover:shadow-[var(--shadow-soft)]"
                   key={item.id}
                 >
                   <div className="flex items-start justify-between gap-3">
@@ -368,7 +370,7 @@ export function PropertyOverviewFinancial({
                     : "status-tone-info";
               return (
                 <div
-                  className="flex items-center justify-between rounded-2xl border border-border/40 bg-background/50 p-4 transition-all duration-300 hover:shadow-[var(--shadow-soft)] hover:bg-card"
+                  className="flex items-center justify-between rounded-2xl border border-border/40 bg-background/50 p-4 transition-all duration-300 hover:bg-card hover:shadow-[var(--shadow-soft)]"
                   key={lease.leaseId}
                 >
                   <div className="min-w-0 space-y-0.5">
@@ -381,7 +383,7 @@ export function PropertyOverviewFinancial({
                   </div>
                   <span
                     className={cn(
-                      "inline-flex shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-medium",
+                      "inline-flex shrink-0 rounded-full border px-2 py-0.5 font-medium text-[11px]",
                       urgencyColor
                     )}
                   >

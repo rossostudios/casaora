@@ -40,9 +40,7 @@ export function CollectionsAgingTable({
                 className="px-3 py-6 text-center text-muted-foreground"
                 colSpan={7}
               >
-                {isEn
-                  ? "No outstanding collections"
-                  : "Sin cobros pendientes"}
+                {isEn ? "No outstanding collections" : "Sin cobros pendientes"}
               </td>
             </tr>
           ) : (
@@ -53,9 +51,7 @@ export function CollectionsAgingTable({
               >
                 <td className="px-3 py-2">
                   <p className="font-medium">{r.tenant}</p>
-                  <p className="text-muted-foreground text-xs">
-                    {r.currency}
-                  </p>
+                  <p className="text-muted-foreground text-xs">{r.currency}</p>
                 </td>
                 <td className="px-3 py-2 text-right tabular-nums">
                   {r.current > 0
@@ -77,7 +73,7 @@ export function CollectionsAgingTable({
                     ? formatCurrency(r.d61_90, r.currency, locale)
                     : "-"}
                 </td>
-                <td className="px-3 py-2 text-right tabular-nums text-destructive">
+                <td className="px-3 py-2 text-right text-destructive tabular-nums">
                   {r.d90plus > 0
                     ? formatCurrency(r.d90plus, r.currency, locale)
                     : "-"}

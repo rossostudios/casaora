@@ -2,18 +2,18 @@
 
 import { SparklesIcon } from "@hugeicons/core-free-icons";
 import { useCallback, useState } from "react";
-import { getModuleLabel, MODULE_BY_SLUG, MODULES } from "@/lib/modules";
 import type { Locale } from "@/lib/i18n";
+import { getModuleLabel, MODULE_BY_SLUG, MODULES } from "@/lib/modules";
 import {
   COLLAPSED_SECTIONS_KEY,
   HOME_TAB_HIDDEN_MODULE_SLUGS,
   SECTIONS,
 } from "./sidebar-constants";
 import {
-  MODULE_ICONS,
   type ChatAgentItem,
   type ChatSummaryItem,
   type MemberRole,
+  MODULE_ICONS,
   type PrimaryTabKey,
   type ResolvedLink,
   type ResolvedSection,
@@ -141,8 +141,13 @@ function readCollapsedFromStorage(): Set<SectionKey> {
   return new Set();
 }
 
-export function useCollapsedSections(): [Set<SectionKey>, (key: SectionKey) => void] {
-  const [collapsed, setCollapsed] = useState<Set<SectionKey>>(readCollapsedFromStorage);
+export function useCollapsedSections(): [
+  Set<SectionKey>,
+  (key: SectionKey) => void,
+] {
+  const [collapsed, setCollapsed] = useState<Set<SectionKey>>(
+    readCollapsedFromStorage
+  );
 
   const toggle = useCallback((key: SectionKey) => {
     setCollapsed((prev) => {

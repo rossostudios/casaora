@@ -20,10 +20,7 @@ function safeFileName(name: string): string {
 function initials(value: string | null): string {
   if (!value) return "?";
   const normalized = value.includes("@") ? value.split("@")[0] : value;
-  const words = normalized
-    .trim()
-    .split(WHITESPACE_REGEX)
-    .filter(Boolean);
+  const words = normalized.trim().split(WHITESPACE_REGEX).filter(Boolean);
   if (words.length >= 2) {
     return `${words[0]?.[0] ?? ""}${words[1]?.[0] ?? ""}`.toUpperCase();
   }
@@ -47,7 +44,9 @@ export function AccountAvatarField({
 
   async function uploadFile(file: File) {
     if (!file.type.startsWith("image/")) {
-      toast.error(isEn ? "Please choose an image file." : "Selecciona una imagen.");
+      toast.error(
+        isEn ? "Please choose an image file." : "Selecciona una imagen."
+      );
       return;
     }
     if (file.size > MAX_AVATAR_BYTES) {
@@ -61,7 +60,9 @@ export function AccountAvatarField({
 
     setUploading(true);
     const errorLabel = isEn ? "Avatar upload failed" : "Error al subir avatar";
-    const noUrlMsg = isEn ? "Could not resolve uploaded image URL." : "No se pudo obtener la URL de la imagen.";
+    const noUrlMsg = isEn
+      ? "Could not resolve uploaded image URL."
+      : "No se pudo obtener la URL de la imagen.";
     try {
       const supabase = getSupabaseBrowserClient();
       const key = `profiles/${userId}/avatar/${crypto.randomUUID()}-${safeFileName(file.name)}`;
@@ -140,7 +141,9 @@ export function AccountAvatarField({
                 : "Subir imagen"}
           </Button>
           <Button
-            aria-label={isEn ? "Remove avatar image" : "Quitar imagen de avatar"}
+            aria-label={
+              isEn ? "Remove avatar image" : "Quitar imagen de avatar"
+            }
             disabled={!avatarUrl || uploading}
             onClick={() => setAvatarUrl("")}
             size="sm"

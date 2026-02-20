@@ -179,8 +179,7 @@ export async function wizardCreateIntegration(payload: {
   if (!payload.unit_id)
     return { ok: false, error: "El ID de la unidad es obligatorio." };
   const kind = payload.kind.trim();
-  if (!kind)
-    return { ok: false, error: "El tipo de canal es obligatorio." };
+  if (!kind) return { ok: false, error: "El tipo de canal es obligatorio." };
   const channel_name = payload.channel_name.trim();
   if (!channel_name)
     return { ok: false, error: "El nombre del canal es obligatorio." };
@@ -749,9 +748,7 @@ export async function updateIntegrationAction(formData: FormData) {
   const is_active = toStringValue(formData.get("is_active"));
 
   if (!id)
-    redirect(
-      setupUrl({ tab, error: "El ID del canal es obligatorio." })
-    );
+    redirect(setupUrl({ tab, error: "El ID del canal es obligatorio." }));
   if (!public_name)
     redirect(setupUrl({ tab, error: "El nombre público es obligatorio." }));
 
@@ -778,9 +775,7 @@ export async function syncIntegrationIcalAction(formData: FormData) {
   const tab = toStringValue(formData.get("tab")) || undefined;
   const id = toStringValue(formData.get("id"));
   if (!id)
-    redirect(
-      setupUrl({ tab, error: "El ID del canal es obligatorio." })
-    );
+    redirect(setupUrl({ tab, error: "El ID del canal es obligatorio." }));
 
   try {
     await postJson(`/integrations/${id}/sync-ical`, {});
@@ -814,9 +809,7 @@ export async function deleteIntegrationAction(formData: FormData) {
   const tab = toStringValue(formData.get("tab")) || undefined;
   const id = toStringValue(formData.get("id"));
   if (!id)
-    redirect(
-      setupUrl({ tab, error: "El ID del canal es obligatorio." })
-    );
+    redirect(setupUrl({ tab, error: "El ID del canal es obligatorio." }));
 
   try {
     await deleteJson(`/integrations/${id}`);

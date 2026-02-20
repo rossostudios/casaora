@@ -176,14 +176,14 @@ export function IntegrationsManager({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex rounded-md border">
           <button
-            className={`px-3 py-1 text-xs font-medium transition-colors ${tab === "channels" ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}
+            className={`px-3 py-1 font-medium text-xs transition-colors ${tab === "channels" ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}
             onClick={() => setTab("channels")}
             type="button"
           >
             {isEn ? "Channels" : "Canales"}
           </button>
           <button
-            className={`px-3 py-1 text-xs font-medium transition-colors ${tab === "events" ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}
+            className={`px-3 py-1 font-medium text-xs transition-colors ${tab === "events" ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}
             onClick={() => setTab("events")}
             type="button"
           >
@@ -246,8 +246,12 @@ export function IntegrationsManager({
                           variant="outline"
                         >
                           {syncingId === id
-                            ? isEn ? "Syncing..." : "Sincronizando..."
-                            : isEn ? "Sync iCal" : "Sincronizar"}
+                            ? isEn
+                              ? "Syncing..."
+                              : "Sincronizando..."
+                            : isEn
+                              ? "Sync iCal"
+                              : "Sincronizar"}
                         </Button>
                       )}
                       <Button
@@ -290,10 +294,14 @@ export function IntegrationsManager({
                       <p className="font-medium">
                         {provider || "—"}
                         {" \u00b7 "}
-                        <span className="text-muted-foreground">{eventType}</span>
+                        <span className="text-muted-foreground">
+                          {eventType}
+                        </span>
                       </p>
                       <p className="text-muted-foreground text-xs">
-                        {createdAt ? createdAt.slice(0, 16).replace("T", " ") : ""}
+                        {createdAt
+                          ? createdAt.slice(0, 16).replace("T", " ")
+                          : ""}
                         {asString(evt.external_event_id)
                           ? ` \u00b7 ${asString(evt.external_event_id)}`
                           : ""}
@@ -363,7 +371,9 @@ export function IntegrationsManager({
 
           {formKind === "ical" && (
             <label className="space-y-1 text-sm">
-              <span>{isEn ? "iCal import URL" : "URL de importación iCal"}</span>
+              <span>
+                {isEn ? "iCal import URL" : "URL de importación iCal"}
+              </span>
               <Input
                 onChange={(e) => setFormIcalUrl(e.target.value)}
                 placeholder="https://..."
@@ -374,7 +384,9 @@ export function IntegrationsManager({
           )}
 
           <label className="space-y-1 text-sm">
-            <span>{isEn ? "External listing ID" : "ID del listado externo"}</span>
+            <span>
+              {isEn ? "External listing ID" : "ID del listado externo"}
+            </span>
             <Input
               onChange={(e) => setFormExternalId(e.target.value)}
               placeholder={isEn ? "Optional" : "Opcional"}
@@ -385,8 +397,12 @@ export function IntegrationsManager({
           <div className="flex justify-end">
             <Button disabled={submitting} type="submit">
               {submitting
-                ? isEn ? "Creating..." : "Creando..."
-                : isEn ? "Create" : "Crear"}
+                ? isEn
+                  ? "Creating..."
+                  : "Creando..."
+                : isEn
+                  ? "Create"
+                  : "Crear"}
             </Button>
           </div>
         </form>

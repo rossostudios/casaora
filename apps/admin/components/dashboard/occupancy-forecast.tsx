@@ -1,6 +1,5 @@
 "use client";
 
-import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from "@/lib/recharts";
 import { Badge } from "@/components/ui/badge";
 import {
   Card,
@@ -18,6 +17,7 @@ import {
 import { useMounted } from "@/lib/hooks/use-mounted";
 import type { Locale } from "@/lib/i18n";
 import { useActiveLocale } from "@/lib/i18n/client";
+import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from "@/lib/recharts";
 
 type ForecastMonth = {
   month: string;
@@ -74,8 +74,12 @@ export function OccupancyForecast({
         <ChartContainer className="h-56 w-full" config={chartConfig}>
           <AreaChart data={data} margin={{ left: 12, right: 12 }}>
             <defs>
-              <linearGradient id="occupancyGrad" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="var(--chart-1)" stopOpacity={0.3} />
+              <linearGradient id="occupancyGrad" x1="0" x2="0" y1="0" y2="1">
+                <stop
+                  offset="5%"
+                  stopColor="var(--chart-1)"
+                  stopOpacity={0.3}
+                />
                 <stop offset="95%" stopColor="var(--chart-1)" stopOpacity={0} />
               </linearGradient>
             </defs>

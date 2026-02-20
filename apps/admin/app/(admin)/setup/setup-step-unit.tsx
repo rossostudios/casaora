@@ -97,12 +97,7 @@ export function SetupStepUnit({
               <span className="font-medium text-muted-foreground text-xs">
                 {isEn ? "Max guests" : "Máx. huéspedes"}
               </span>
-              <Input
-                defaultValue={2}
-                min={1}
-                name="max_guests"
-                type="number"
-              />
+              <Input defaultValue={2} min={1} name="max_guests" type="number" />
             </label>
             <label className="grid gap-1">
               <span className="font-medium text-muted-foreground text-xs">

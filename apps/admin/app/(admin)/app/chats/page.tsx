@@ -1,7 +1,4 @@
-import { AgentInbox } from "@/components/agent/agent-inbox";
-import { ApprovalPolicies } from "@/components/agent/approval-policies";
-import { ApprovalQueue } from "@/components/agent/approval-queue";
-import { ChatHistory } from "@/components/agent/chat-history";
+import { ChatsWorkspace } from "@/components/agent/chats-workspace";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getActiveLocale } from "@/lib/i18n/server";
@@ -50,15 +47,10 @@ export default async function ChatsPage({ searchParams }: PageProps) {
   }
 
   return (
-    <div className="space-y-4">
-      <AgentInbox locale={locale} orgId={orgId} />
-      <ApprovalQueue locale={locale} orgId={orgId} />
-      <ApprovalPolicies locale={locale} orgId={orgId} />
-      <ChatHistory
-        defaultArchived={isTruthy(params.archived)}
-        locale={locale}
-        orgId={orgId}
-      />
-    </div>
+    <ChatsWorkspace
+      defaultArchived={isTruthy(params.archived)}
+      locale={locale}
+      orgId={orgId}
+    />
   );
 }

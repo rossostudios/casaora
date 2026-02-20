@@ -1,11 +1,17 @@
 "use client";
 
+import { useHotkey } from "@tanstack/react-hotkeys";
+import { useRef } from "react";
+import {
+  humanizeStatus,
+  type UnitOption,
+} from "@/app/(admin)/module/reservations/reservations-types";
 import { ReservationsExportButton } from "@/components/reservations/reservations-export-button";
+import type { DataTableRow } from "@/components/ui/data-table";
 import { DatePicker } from "@/components/ui/date-picker";
-import { type DataTableRow } from "@/components/ui/data-table";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
-import { humanizeStatus, type UnitOption } from "@/app/(admin)/module/reservations/reservations-types";
+import { isInputFocused } from "@/lib/hotkeys/is-input-focused";
 import type { Locale } from "@/lib/i18n";
 
 export function ReservationsFilters({
@@ -45,6 +51,14 @@ export function ReservationsFilters({
   unitId: string;
   unitOptions: UnitOption[];
 }) {
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  useHotkey("/", (e) => {
+    if (isInputFocused()) return;
+    e.preventDefault();
+    searchInputRef.current?.focus();
+  });
+
   return (
     <div className="space-y-3">
       <div className="grid w-full gap-2 md:grid-cols-5">
@@ -58,6 +72,7 @@ export function ReservationsFilters({
             placeholder={
               isEn ? "Guest, unit, status..." : "Huésped, unidad, estado..."
             }
+            ref={searchInputRef}
             value={query}
           />
         </label>
@@ -85,9 +100,7 @@ export function ReservationsFilters({
             <option value="cancelled">
               {humanizeStatus("cancelled", isEn)}
             </option>
-            <option value="no_show">
-              {humanizeStatus("no_show", isEn)}
-            </option>
+            <option value="no_show">{humanizeStatus("no_show", isEn)}</option>
           </Select>
         </label>
 
@@ -155,19 +168,34 @@ export function ReservationsFilters({
 
       <div className="flex items-center justify-end gap-2">
         <span className="text-muted-foreground text-sm">
-          {total} {isEn ? (total === 1 ? "record" : "records") : (total === 1 ? "registro" : "registros")}
+          {total}{" "}
+          {isEn
+            ? total === 1
+              ? "record"
+              : "records"
+            : total === 1
+              ? "registro"
+              : "registros"}
         </span>
         <ReservationsExportButton
           format="csv"
           isEn={isEn}
           locale={locale}
-          rows={filteredRows as Parameters<typeof ReservationsExportButton>[0]["rows"]}
+          rows={
+            filteredRows as Parameters<
+              typeof ReservationsExportButton
+            >[0]["rows"]
+          }
         />
         <ReservationsExportButton
           format="pdf"
           isEn={isEn}
           locale={locale}
-          rows={filteredRows as Parameters<typeof ReservationsExportButton>[0]["rows"]}
+          rows={
+            filteredRows as Parameters<
+              typeof ReservationsExportButton
+            >[0]["rows"]
+          }
         />
       </div>
     </div>

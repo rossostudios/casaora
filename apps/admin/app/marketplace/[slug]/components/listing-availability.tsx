@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
 import { Calendar02Icon } from "@hugeicons/core-free-icons";
+import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
 import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
 
@@ -17,12 +17,32 @@ type CalendarDay = {
 };
 
 const MONTH_NAMES_EN = [
-  "January", "February", "March", "April", "May", "June",
-  "July", "August", "September", "October", "November", "December",
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
 ];
 const MONTH_NAMES_ES = [
-  "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
-  "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
+  "Enero",
+  "Febrero",
+  "Marzo",
+  "Abril",
+  "Mayo",
+  "Junio",
+  "Julio",
+  "Agosto",
+  "Septiembre",
+  "Octubre",
+  "Noviembre",
+  "Diciembre",
 ];
 const DAY_LABELS_EN = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"];
 const DAY_LABELS_ES = ["Lu", "Ma", "Mi", "Ju", "Vi", "Sá", "Do"];
@@ -60,7 +80,7 @@ export function ListingAvailability({
 
   return (
     <section>
-      <h2 className="mb-4 font-serif text-xl font-medium tracking-tight text-[var(--marketplace-text)]">
+      <h2 className="mb-4 font-medium font-serif text-[var(--marketplace-text)] text-xl tracking-tight">
         {isEn ? "Availability" : "Disponibilidad"}
       </h2>
       <div className="h-px bg-[#e8e4df]" />
@@ -69,7 +89,7 @@ export function ListingAvailability({
           <Icon className="text-primary" icon={Calendar02Icon} size={18} />
         </span>
         <div>
-          <p className="font-medium text-sm text-[var(--marketplace-text)]">
+          <p className="font-medium text-[var(--marketplace-text)] text-sm">
             {isAvailableNow
               ? isEn
                 ? "Available now"
@@ -79,7 +99,7 @@ export function ListingAvailability({
                 : `Disponible desde ${availableFrom}`}
           </p>
           {minimumLeaseMonths ? (
-            <p className="text-xs text-[var(--marketplace-text-muted)]">
+            <p className="text-[var(--marketplace-text-muted)] text-xs">
               {isEn
                 ? `Minimum lease: ${minimumLeaseMonths} months`
                 : `Contrato mínimo: ${minimumLeaseMonths} meses`}
@@ -97,13 +117,7 @@ export function ListingAvailability({
   );
 }
 
-function ListingCalendar({
-  slug,
-  isEn,
-}: {
-  slug: string;
-  isEn: boolean;
-}) {
+function ListingCalendar({ slug, isEn }: { slug: string; isEn: boolean }) {
   const [currentMonth, setCurrentMonth] = useState(() => new Date());
 
   const monthKey = toMonthKey(currentMonth);
@@ -134,17 +148,21 @@ function ListingCalendar({
       <div className="mb-2 flex items-center justify-between">
         <button
           className="rounded px-2 py-0.5 text-sm hover:bg-[#f5f0eb]"
-          onClick={() => { setCurrentMonth(addMonths(currentMonth, -1)); }}
+          onClick={() => {
+            setCurrentMonth(addMonths(currentMonth, -1));
+          }}
           type="button"
         >
           &larr;
         </button>
-        <span className="text-sm font-medium text-[var(--marketplace-text)]">
+        <span className="font-medium text-[var(--marketplace-text)] text-sm">
           {monthNames[monthNum]} {yearNum}
         </span>
         <button
           className="rounded px-2 py-0.5 text-sm hover:bg-[#f5f0eb]"
-          onClick={() => { setCurrentMonth(addMonths(currentMonth, 1)); }}
+          onClick={() => {
+            setCurrentMonth(addMonths(currentMonth, 1));
+          }}
           type="button"
         >
           &rarr;
@@ -152,7 +170,7 @@ function ListingCalendar({
       </div>
 
       {/* Day labels */}
-      <div className="grid grid-cols-7 gap-px text-center text-[10px] font-medium text-[var(--marketplace-text-muted)]">
+      <div className="grid grid-cols-7 gap-px text-center font-medium text-[10px] text-[var(--marketplace-text-muted)]">
         {dayLabels.map((label) => (
           <div className="py-0.5" key={label}>
             {label}
@@ -163,7 +181,7 @@ function ListingCalendar({
       {/* Grid */}
       {loading ? (
         <div className="flex h-32 items-center justify-center">
-          <p className="animate-pulse text-xs text-[var(--marketplace-text-muted)]">
+          <p className="animate-pulse text-[var(--marketplace-text-muted)] text-xs">
             {isEn ? "Loading..." : "Cargando..."}
           </p>
         </div>
@@ -191,9 +209,9 @@ function ListingCalendar({
                       "bg-emerald-400/20 text-emerald-700 dark:text-emerald-400",
                     day.status === "booked" &&
                       "bg-red-400/20 text-red-600 dark:text-red-400",
-                    day.status === "blocked" &&
-                      "bg-gray-300/30 text-gray-400",
-                    day.status === "past" && "text-[var(--marketplace-text-muted)]/40"
+                    day.status === "blocked" && "bg-gray-300/30 text-gray-400",
+                    day.status === "past" &&
+                      "text-[var(--marketplace-text-muted)]/40"
                   )}
                 >
                   {dayNum}

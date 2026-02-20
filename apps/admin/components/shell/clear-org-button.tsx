@@ -22,7 +22,9 @@ export function ClearOrgButton({
 
   const onClick = async () => {
     setBusy(true);
-    const errTitle = isEn ? "Could not clear selection" : "No se pudo borrar la selección";
+    const errTitle = isEn
+      ? "Could not clear selection"
+      : "No se pudo borrar la selección";
     const fallbackDesc = isEn ? "Request failed" : "Falló la solicitud";
     const successTitle = isEn ? "Selection cleared" : "Selección borrada";
     const successDesc = isEn

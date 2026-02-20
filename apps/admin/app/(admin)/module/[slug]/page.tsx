@@ -35,7 +35,7 @@ import { cn } from "@/lib/utils";
 /** Helper to parse search params into extra query params — extracted from
  * the component so the React Compiler doesn't see value blocks in try/catch. */
 async function buildExtraQuery(
-  searchParams: Promise<Record<string, string | string[] | undefined>>,
+  searchParams: Promise<Record<string, string | string[] | undefined>>
 ): Promise<Record<string, string>> {
   const rawSearchParams = await searchParams;
   const extraQuery: Record<string, string> = {};
@@ -51,10 +51,8 @@ async function buildExtraQuery(
     if (key === "limit") continue;
     if (typeof value === "string") {
       extraQuery[key] = value;
-    } else if (Array.isArray(value)) {
-      if (typeof value[0] === "string") {
-        extraQuery[key] = value[0];
-      }
+    } else if (Array.isArray(value) && typeof value[0] === "string") {
+      extraQuery[key] = value[0];
     }
   }
   return extraQuery;
@@ -183,11 +181,15 @@ export default async function ModulePage({
   }
 
   if (moduleDef.kind === "report") {
-    const reportApiTitle = isEn ? "API connection failed" : "Fallo de conexión a la API";
+    const reportApiTitle = isEn
+      ? "API connection failed"
+      : "Fallo de conexión a la API";
     const reportApiDesc = isEn
       ? "Could not load report data from the backend."
       : "No se pudieron cargar los datos del informe desde el backend.";
-    const reportBackendLabel = isEn ? "Backend base URL" : "URL base del backend";
+    const reportBackendLabel = isEn
+      ? "Backend base URL"
+      : "URL base del backend";
     const reportBackendHint = isEn
       ? "Make sure the backend is running (`cd apps/backend-rs && cargo run`)"
       : "Asegúrate de que el backend esté ejecutándose (`cd apps/backend-rs && cargo run`)";
@@ -279,7 +281,9 @@ export default async function ModulePage({
   }
 
   let rows: Record<string, unknown>[] = [];
-  const modApiTitle = isEn ? "API connection failed" : "Fallo de conexión a la API";
+  const modApiTitle = isEn
+    ? "API connection failed"
+    : "Fallo de conexión a la API";
   const modApiDesc = isEn
     ? "Could not load module data from the backend."
     : "No se pudieron cargar los datos del módulo desde el backend.";

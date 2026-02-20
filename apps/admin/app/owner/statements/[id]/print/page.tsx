@@ -3,9 +3,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { useParams, useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
-
-import { Button } from "@/components/ui/button";
 import { StatementPrintView } from "@/components/statements/statement-print-view";
+import { Button } from "@/components/ui/button";
 
 const API_BASE =
   process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000/v1";
@@ -56,11 +55,13 @@ export default function OwnerStatementPrintPage() {
   const collections = useMemo(
     () =>
       statement
-        ? ((statement.collections ?? []) as Record<string, unknown>[]).map((c) => ({
-            id: asString(c.id),
-            label: asString(c.label) || asString(c.due_date),
-            amount: asNumber(c.amount),
-          }))
+        ? ((statement.collections ?? []) as Record<string, unknown>[]).map(
+            (c) => ({
+              id: asString(c.id),
+              label: asString(c.label) || asString(c.due_date),
+              amount: asNumber(c.amount),
+            })
+          )
         : [],
     [statement]
   );
@@ -68,11 +69,13 @@ export default function OwnerStatementPrintPage() {
   const expenses = useMemo(
     () =>
       statement
-        ? ((statement.expenses ?? []) as Record<string, unknown>[]).map((e) => ({
-            id: asString(e.id),
-            label: asString(e.description) || asString(e.expense_date),
-            amount: asNumber(e.amount),
-          }))
+        ? ((statement.expenses ?? []) as Record<string, unknown>[]).map(
+            (e) => ({
+              id: asString(e.id),
+              label: asString(e.description) || asString(e.expense_date),
+              amount: asNumber(e.amount),
+            })
+          )
         : [],
     [statement]
   );
@@ -106,10 +109,7 @@ export default function OwnerStatementPrintPage() {
         >
           Volver
         </Button>
-        <Button
-          onClick={() => window.print()}
-          size="sm"
-        >
+        <Button onClick={() => window.print()} size="sm">
           Imprimir
         </Button>
       </div>
@@ -121,7 +121,9 @@ export default function OwnerStatementPrintPage() {
         locale={locale}
         netPayout={asNumber(statement.net_payout)}
         orgName={asString(statement.organization_name)}
-        periodLabel={asString(statement.period_label) || asString(statement.month)}
+        periodLabel={
+          asString(statement.period_label) || asString(statement.month)
+        }
         totalExpenses={asNumber(statement.total_expenses)}
         totalRevenue={asNumber(statement.total_revenue)}
       />

@@ -1,12 +1,12 @@
 "use client";
 
-import Link from "next/link";
 import {
   Add01Icon,
   Delete02Icon,
   EyeIcon,
   PencilEdit01Icon,
 } from "@hugeicons/core-free-icons";
+import Link from "next/link";
 import { type ReactNode, useCallback, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
@@ -43,11 +43,7 @@ import {
   updateUnitAction,
 } from "./actions";
 
-type SetupTab =
-  | "organizations"
-  | "properties"
-  | "units"
-  | "integrations";
+type SetupTab = "organizations" | "properties" | "units" | "integrations";
 
 type SetupManagerProps = {
   orgId: string;
@@ -316,8 +312,8 @@ export function SetupManager({
         ? { base: "Organización", create: "Nueva organización" }
         : sheetKind === "property"
           ? { base: "Propiedad", create: "Nueva propiedad" }
-            : sheetKind === "unit"
-              ? { base: "Unidad", create: "Nueva unidad" }
+          : sheetKind === "unit"
+            ? { base: "Unidad", create: "Nueva unidad" }
             : { base: "Canal", create: "Nuevo canal" };
 
     if (sheetMode === "create") return labels.create;
@@ -668,7 +664,12 @@ export function SetupManager({
               <form action={createOrganizationAction} className="grid gap-3">
                 <input name="tab" type="hidden" value={tab} />
                 <div className="grid gap-1">
-                  <label className="font-medium text-xs" htmlFor="create-org-name">Nombre</label>
+                  <label
+                    className="font-medium text-xs"
+                    htmlFor="create-org-name"
+                  >
+                    Nombre
+                  </label>
                   <Input
                     id="create-org-name"
                     name="name"
@@ -677,18 +678,37 @@ export function SetupManager({
                   />
                 </div>
                 <div className="grid gap-1">
-                  <label className="font-medium text-xs" htmlFor="create-org-legal-name">
+                  <label
+                    className="font-medium text-xs"
+                    htmlFor="create-org-legal-name"
+                  >
                     Razón social (opcional)
                   </label>
-                  <Input id="create-org-legal-name" name="legal_name" placeholder="Casaora S.A." />
+                  <Input
+                    id="create-org-legal-name"
+                    name="legal_name"
+                    placeholder="Casaora S.A."
+                  />
                 </div>
                 <div className="grid gap-1">
-                  <label className="font-medium text-xs" htmlFor="create-org-ruc">RUC (opcional)</label>
-                  <Input id="create-org-ruc" name="ruc" placeholder="80012345-6" />
+                  <label
+                    className="font-medium text-xs"
+                    htmlFor="create-org-ruc"
+                  >
+                    RUC (opcional)
+                  </label>
+                  <Input
+                    id="create-org-ruc"
+                    name="ruc"
+                    placeholder="80012345-6"
+                  />
                 </div>
                 <div className="grid gap-3 md:grid-cols-2">
                   <div className="grid gap-1">
-                    <label className="font-medium text-xs" htmlFor="create-org-currency">
+                    <label
+                      className="font-medium text-xs"
+                      htmlFor="create-org-currency"
+                    >
                       Moneda predeterminada
                     </label>
                     <select
@@ -702,12 +722,24 @@ export function SetupManager({
                     </select>
                   </div>
                   <div className="grid gap-1">
-                    <label className="font-medium text-xs" htmlFor="create-org-timezone">Zona horaria</label>
-                    <Input defaultValue="America/Asuncion" id="create-org-timezone" name="timezone" />
+                    <label
+                      className="font-medium text-xs"
+                      htmlFor="create-org-timezone"
+                    >
+                      Zona horaria
+                    </label>
+                    <Input
+                      defaultValue="America/Asuncion"
+                      id="create-org-timezone"
+                      name="timezone"
+                    />
                   </div>
                 </div>
                 <div className="grid gap-1">
-                  <label className="font-medium text-xs" htmlFor="create-org-profile-type">
+                  <label
+                    className="font-medium text-xs"
+                    htmlFor="create-org-profile-type"
+                  >
                     Tipo de organización
                   </label>
                   <select
@@ -732,26 +764,57 @@ export function SetupManager({
                 <input name="tab" type="hidden" value={tab} />
                 <input name="organization_id" type="hidden" value={orgId} />
                 <div className="grid gap-1">
-                  <label className="font-medium text-xs" htmlFor="create-prop-name">Nombre</label>
-                  <Input id="create-prop-name" name="name" placeholder="Villa Morra HQ" required />
+                  <label
+                    className="font-medium text-xs"
+                    htmlFor="create-prop-name"
+                  >
+                    Nombre
+                  </label>
+                  <Input
+                    id="create-prop-name"
+                    name="name"
+                    placeholder="Villa Morra HQ"
+                    required
+                  />
                 </div>
                 <div className="grid gap-1">
-                  <label className="font-medium text-xs" htmlFor="create-prop-code">
+                  <label
+                    className="font-medium text-xs"
+                    htmlFor="create-prop-code"
+                  >
                     Código (opcional)
                   </label>
-                  <Input id="create-prop-code" name="code" placeholder="VM-HQ" />
+                  <Input
+                    id="create-prop-code"
+                    name="code"
+                    placeholder="VM-HQ"
+                  />
                 </div>
                 <div className="grid gap-1">
-                  <label className="font-medium text-xs" htmlFor="create-prop-address">
+                  <label
+                    className="font-medium text-xs"
+                    htmlFor="create-prop-address"
+                  >
                     Dirección (opcional)
                   </label>
-                  <Input id="create-prop-address" name="address_line1" placeholder="Av. Example 123" />
+                  <Input
+                    id="create-prop-address"
+                    name="address_line1"
+                    placeholder="Av. Example 123"
+                  />
                 </div>
                 <div className="grid gap-1">
-                  <label className="font-medium text-xs" htmlFor="create-prop-city">
+                  <label
+                    className="font-medium text-xs"
+                    htmlFor="create-prop-city"
+                  >
                     Ciudad (opcional)
                   </label>
-                  <Input id="create-prop-city" name="city" placeholder="Asunción" />
+                  <Input
+                    id="create-prop-city"
+                    name="city"
+                    placeholder="Asunción"
+                  />
                 </div>
                 <Button type="submit">Crear propiedad</Button>
               </form>
@@ -762,7 +825,12 @@ export function SetupManager({
                 <input name="tab" type="hidden" value={tab} />
                 <input name="organization_id" type="hidden" value={orgId} />
                 <div className="grid gap-1">
-                  <label className="font-medium text-xs" htmlFor="create-unit-property">Propiedad</label>
+                  <label
+                    className="font-medium text-xs"
+                    htmlFor="create-unit-property"
+                  >
+                    Propiedad
+                  </label>
                   <select
                     className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
                     defaultValue={propertyOptions[0]?.id ?? ""}
@@ -781,20 +849,39 @@ export function SetupManager({
                   </select>
                 </div>
                 <div className="grid gap-1">
-                  <label className="font-medium text-xs" htmlFor="create-unit-code">
+                  <label
+                    className="font-medium text-xs"
+                    htmlFor="create-unit-code"
+                  >
                     Código de unidad
                   </label>
-                  <Input id="create-unit-code" name="code" placeholder="A1" required />
+                  <Input
+                    id="create-unit-code"
+                    name="code"
+                    placeholder="A1"
+                    required
+                  />
                 </div>
                 <div className="grid gap-1">
-                  <label className="font-medium text-xs" htmlFor="create-unit-name">
+                  <label
+                    className="font-medium text-xs"
+                    htmlFor="create-unit-name"
+                  >
                     Nombre de unidad
                   </label>
-                  <Input id="create-unit-name" name="name" placeholder="Departamento A1" required />
+                  <Input
+                    id="create-unit-name"
+                    name="name"
+                    placeholder="Departamento A1"
+                    required
+                  />
                 </div>
                 <div className="grid gap-3 md:grid-cols-3">
                   <div className="grid gap-1">
-                    <label className="font-medium text-xs" htmlFor="create-unit-max-guests">
+                    <label
+                      className="font-medium text-xs"
+                      htmlFor="create-unit-max-guests"
+                    >
                       Máx. huéspedes
                     </label>
                     <Input
@@ -806,7 +893,12 @@ export function SetupManager({
                     />
                   </div>
                   <div className="grid gap-1">
-                    <label className="font-medium text-xs" htmlFor="create-unit-bedrooms">Dormitorios</label>
+                    <label
+                      className="font-medium text-xs"
+                      htmlFor="create-unit-bedrooms"
+                    >
+                      Dormitorios
+                    </label>
                     <Input
                       defaultValue={1}
                       id="create-unit-bedrooms"
@@ -816,7 +908,12 @@ export function SetupManager({
                     />
                   </div>
                   <div className="grid gap-1">
-                    <label className="font-medium text-xs" htmlFor="create-unit-bathrooms">Baños</label>
+                    <label
+                      className="font-medium text-xs"
+                      htmlFor="create-unit-bathrooms"
+                    >
+                      Baños
+                    </label>
                     <Input
                       defaultValue={1}
                       id="create-unit-bathrooms"
@@ -858,7 +955,12 @@ export function SetupManager({
                 <input name="organization_id" type="hidden" value={orgId} />
 
                 <div className="grid gap-1">
-                  <label className="font-medium text-xs" htmlFor="create-integ-unit">Unidad</label>
+                  <label
+                    className="font-medium text-xs"
+                    htmlFor="create-integ-unit"
+                  >
+                    Unidad
+                  </label>
                   <select
                     className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
                     defaultValue={unitOptions[0]?.id ?? ""}
@@ -878,7 +980,12 @@ export function SetupManager({
                 </div>
 
                 <div className="grid gap-1">
-                  <label className="font-medium text-xs" htmlFor="create-integ-kind">Tipo</label>
+                  <label
+                    className="font-medium text-xs"
+                    htmlFor="create-integ-kind"
+                  >
+                    Tipo
+                  </label>
                   <select
                     className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
                     defaultValue="airbnb"
@@ -895,14 +1002,27 @@ export function SetupManager({
                 </div>
 
                 <div className="grid gap-1">
-                  <label className="font-medium text-xs" htmlFor="create-integ-channel-name">
+                  <label
+                    className="font-medium text-xs"
+                    htmlFor="create-integ-channel-name"
+                  >
                     Nombre del canal
                   </label>
-                  <Input id="create-integ-channel-name" name="channel_name" placeholder="Airbnb" required />
+                  <Input
+                    id="create-integ-channel-name"
+                    name="channel_name"
+                    placeholder="Airbnb"
+                    required
+                  />
                 </div>
 
                 <div className="grid gap-1">
-                  <label className="font-medium text-xs" htmlFor="create-integ-public-name">Nombre público</label>
+                  <label
+                    className="font-medium text-xs"
+                    htmlFor="create-integ-public-name"
+                  >
+                    Nombre público
+                  </label>
                   <Input
                     id="create-integ-public-name"
                     name="public_name"
@@ -912,14 +1032,24 @@ export function SetupManager({
                 </div>
 
                 <div className="grid gap-1">
-                  <label className="font-medium text-xs" htmlFor="create-integ-external-id">
+                  <label
+                    className="font-medium text-xs"
+                    htmlFor="create-integ-external-id"
+                  >
                     ID externo del anuncio (opcional)
                   </label>
-                  <Input id="create-integ-external-id" name="external_listing_id" placeholder="1234567890" />
+                  <Input
+                    id="create-integ-external-id"
+                    name="external_listing_id"
+                    placeholder="1234567890"
+                  />
                 </div>
 
                 <div className="grid gap-1">
-                  <label className="font-medium text-xs" htmlFor="create-integ-ical-url">
+                  <label
+                    className="font-medium text-xs"
+                    htmlFor="create-integ-ical-url"
+                  >
                     URL de importación iCal (opcional)
                   </label>
                   <Input
@@ -929,18 +1059,15 @@ export function SetupManager({
                   />
                 </div>
 
-                <Button
-                  disabled={unitOptions.length === 0}
-                  type="submit"
-                >
+                <Button disabled={unitOptions.length === 0} type="submit">
                   Crear canal
                 </Button>
 
                 {unitOptions.length === 0 ? (
                   <div className="space-y-2 rounded-md border bg-muted/20 p-3 text-sm">
                     <p className="text-muted-foreground">
-                      Los canales conectan una unidad con un canal externo.
-                      Crea una unidad primero.
+                      Los canales conectan una unidad con un canal externo. Crea
+                      una unidad primero.
                     </p>
                     <Button
                       onClick={() => {
@@ -980,7 +1107,12 @@ export function SetupManager({
                 <input name="tab" type="hidden" value={tab} />
                 <input name="id" type="hidden" value={recordId} />
                 <div className="grid gap-1">
-                  <label className="font-medium text-xs" htmlFor="edit-org-name">Nombre</label>
+                  <label
+                    className="font-medium text-xs"
+                    htmlFor="edit-org-name"
+                  >
+                    Nombre
+                  </label>
                   <Input
                     defaultValue={asString(record.name)}
                     id="edit-org-name"
@@ -989,7 +1121,12 @@ export function SetupManager({
                   />
                 </div>
                 <div className="grid gap-1">
-                  <label className="font-medium text-xs" htmlFor="edit-org-legal-name">Razón social</label>
+                  <label
+                    className="font-medium text-xs"
+                    htmlFor="edit-org-legal-name"
+                  >
+                    Razón social
+                  </label>
                   <Input
                     defaultValue={asString(record.legal_name)}
                     id="edit-org-legal-name"
@@ -997,11 +1134,20 @@ export function SetupManager({
                   />
                 </div>
                 <div className="grid gap-1">
-                  <label className="font-medium text-xs" htmlFor="edit-org-ruc">RUC</label>
-                  <Input defaultValue={asString(record.ruc)} id="edit-org-ruc" name="ruc" />
+                  <label className="font-medium text-xs" htmlFor="edit-org-ruc">
+                    RUC
+                  </label>
+                  <Input
+                    defaultValue={asString(record.ruc)}
+                    id="edit-org-ruc"
+                    name="ruc"
+                  />
                 </div>
                 <div className="grid gap-1">
-                  <label className="font-medium text-xs" htmlFor="edit-org-profile-type">
+                  <label
+                    className="font-medium text-xs"
+                    htmlFor="edit-org-profile-type"
+                  >
                     Tipo de organización
                   </label>
                   <select
@@ -1021,7 +1167,10 @@ export function SetupManager({
                 </div>
                 <div className="grid gap-3 md:grid-cols-2">
                   <div className="grid gap-1">
-                    <label className="font-medium text-xs" htmlFor="edit-org-currency">
+                    <label
+                      className="font-medium text-xs"
+                      htmlFor="edit-org-currency"
+                    >
                       Moneda predeterminada
                     </label>
                     <select
@@ -1035,7 +1184,12 @@ export function SetupManager({
                     </select>
                   </div>
                   <div className="grid gap-1">
-                    <label className="font-medium text-xs" htmlFor="edit-org-timezone">Zona horaria</label>
+                    <label
+                      className="font-medium text-xs"
+                      htmlFor="edit-org-timezone"
+                    >
+                      Zona horaria
+                    </label>
                     <Input
                       defaultValue={
                         asString(record.timezone) || "America/Asuncion"
@@ -1054,7 +1208,12 @@ export function SetupManager({
                 <input name="tab" type="hidden" value={tab} />
                 <input name="id" type="hidden" value={recordId} />
                 <div className="grid gap-1">
-                  <label className="font-medium text-xs" htmlFor="edit-prop-name">Nombre</label>
+                  <label
+                    className="font-medium text-xs"
+                    htmlFor="edit-prop-name"
+                  >
+                    Nombre
+                  </label>
                   <Input
                     defaultValue={asString(record.name)}
                     id="edit-prop-name"
@@ -1063,7 +1222,12 @@ export function SetupManager({
                   />
                 </div>
                 <div className="grid gap-1">
-                  <label className="font-medium text-xs" htmlFor="edit-prop-status">Estado</label>
+                  <label
+                    className="font-medium text-xs"
+                    htmlFor="edit-prop-status"
+                  >
+                    Estado
+                  </label>
                   <select
                     className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
                     defaultValue={asString(record.status) || "active"}
@@ -1076,7 +1240,12 @@ export function SetupManager({
                   </select>
                 </div>
                 <div className="grid gap-1">
-                  <label className="font-medium text-xs" htmlFor="edit-prop-address">Dirección</label>
+                  <label
+                    className="font-medium text-xs"
+                    htmlFor="edit-prop-address"
+                  >
+                    Dirección
+                  </label>
                   <Input
                     defaultValue={asString(record.address_line1)}
                     id="edit-prop-address"
@@ -1084,8 +1253,17 @@ export function SetupManager({
                   />
                 </div>
                 <div className="grid gap-1">
-                  <label className="font-medium text-xs" htmlFor="edit-prop-city">Ciudad</label>
-                  <Input defaultValue={asString(record.city)} id="edit-prop-city" name="city" />
+                  <label
+                    className="font-medium text-xs"
+                    htmlFor="edit-prop-city"
+                  >
+                    Ciudad
+                  </label>
+                  <Input
+                    defaultValue={asString(record.city)}
+                    id="edit-prop-city"
+                    name="city"
+                  />
                 </div>
                 <Button type="submit">Guardar cambios</Button>
               </form>
@@ -1096,7 +1274,12 @@ export function SetupManager({
                 <input name="tab" type="hidden" value={tab} />
                 <input name="id" type="hidden" value={recordId} />
                 <div className="grid gap-1">
-                  <label className="font-medium text-xs" htmlFor="edit-unit-name">Nombre</label>
+                  <label
+                    className="font-medium text-xs"
+                    htmlFor="edit-unit-name"
+                  >
+                    Nombre
+                  </label>
                   <Input
                     defaultValue={asString(record.name)}
                     id="edit-unit-name"
@@ -1106,7 +1289,10 @@ export function SetupManager({
                 </div>
                 <div className="grid gap-3 md:grid-cols-3">
                   <div className="grid gap-1">
-                    <label className="font-medium text-xs" htmlFor="edit-unit-max-guests">
+                    <label
+                      className="font-medium text-xs"
+                      htmlFor="edit-unit-max-guests"
+                    >
                       Máx. huéspedes
                     </label>
                     <Input
@@ -1118,7 +1304,12 @@ export function SetupManager({
                     />
                   </div>
                   <div className="grid gap-1">
-                    <label className="font-medium text-xs" htmlFor="edit-unit-bedrooms">Dormitorios</label>
+                    <label
+                      className="font-medium text-xs"
+                      htmlFor="edit-unit-bedrooms"
+                    >
+                      Dormitorios
+                    </label>
                     <Input
                       defaultValue={asString(record.bedrooms) || "1"}
                       id="edit-unit-bedrooms"
@@ -1128,7 +1319,12 @@ export function SetupManager({
                     />
                   </div>
                   <div className="grid gap-1">
-                    <label className="font-medium text-xs" htmlFor="edit-unit-bathrooms">Baños</label>
+                    <label
+                      className="font-medium text-xs"
+                      htmlFor="edit-unit-bathrooms"
+                    >
+                      Baños
+                    </label>
                     <Input
                       defaultValue={asString(record.bathrooms) || "1"}
                       id="edit-unit-bathrooms"
@@ -1167,7 +1363,12 @@ export function SetupManager({
                 <input name="id" type="hidden" value={recordId} />
 
                 <div className="grid gap-1">
-                  <label className="font-medium text-xs" htmlFor="edit-integ-kind">Tipo</label>
+                  <label
+                    className="font-medium text-xs"
+                    htmlFor="edit-integ-kind"
+                  >
+                    Tipo
+                  </label>
                   <select
                     className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
                     defaultValue={asString(record.kind) || "airbnb"}
@@ -1184,7 +1385,10 @@ export function SetupManager({
                 </div>
 
                 <div className="grid gap-1">
-                  <label className="font-medium text-xs" htmlFor="edit-integ-channel-name">
+                  <label
+                    className="font-medium text-xs"
+                    htmlFor="edit-integ-channel-name"
+                  >
                     Nombre del canal
                   </label>
                   <Input
@@ -1196,7 +1400,12 @@ export function SetupManager({
                 </div>
 
                 <div className="grid gap-1">
-                  <label className="font-medium text-xs" htmlFor="edit-integ-public-name">Nombre público</label>
+                  <label
+                    className="font-medium text-xs"
+                    htmlFor="edit-integ-public-name"
+                  >
+                    Nombre público
+                  </label>
                   <Input
                     defaultValue={asString(record.public_name)}
                     id="edit-integ-public-name"
@@ -1206,7 +1415,10 @@ export function SetupManager({
                 </div>
 
                 <div className="grid gap-1">
-                  <label className="font-medium text-xs" htmlFor="edit-integ-account-ref">
+                  <label
+                    className="font-medium text-xs"
+                    htmlFor="edit-integ-account-ref"
+                  >
                     Ref. de cuenta externa
                   </label>
                   <Input
@@ -1217,7 +1429,10 @@ export function SetupManager({
                 </div>
 
                 <div className="grid gap-1">
-                  <label className="font-medium text-xs" htmlFor="edit-integ-external-id">
+                  <label
+                    className="font-medium text-xs"
+                    htmlFor="edit-integ-external-id"
+                  >
                     ID externo del anuncio
                   </label>
                   <Input
@@ -1228,7 +1443,10 @@ export function SetupManager({
                 </div>
 
                 <div className="grid gap-1">
-                  <label className="font-medium text-xs" htmlFor="edit-integ-ical-import">
+                  <label
+                    className="font-medium text-xs"
+                    htmlFor="edit-integ-ical-import"
+                  >
                     URL de importación iCal
                   </label>
                   <Input
@@ -1239,7 +1457,10 @@ export function SetupManager({
                 </div>
 
                 <div className="grid gap-1">
-                  <label className="font-medium text-xs" htmlFor="edit-integ-ical-export">
+                  <label
+                    className="font-medium text-xs"
+                    htmlFor="edit-integ-ical-export"
+                  >
                     URL de exportación iCal
                   </label>
                   {listingExportUrl ? (
@@ -1257,8 +1478,8 @@ export function SetupManager({
                 </div>
 
                 <p className="text-muted-foreground text-xs">
-                  Tip: Solicitar una sincronización creará un evento de
-                  canal que puedes revisar en{" "}
+                  Tip: Solicitar una sincronización creará un evento de canal
+                  que puedes revisar en{" "}
                   <span className="font-mono">Eventos de canal</span>.
                 </p>
 

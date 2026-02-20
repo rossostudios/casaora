@@ -7,8 +7,8 @@ import {
   Search01Icon,
   SlidersHorizontalIcon,
 } from "@hugeicons/core-free-icons";
+import type { VisibilityState } from "@tanstack/react-table";
 import { useEffect, useRef, useState } from "react";
-
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -22,20 +22,19 @@ import {
 import { Icon } from "@/components/ui/icon";
 import { Input } from "@/components/ui/input";
 import {
+  PopoverContent,
   PopoverRoot,
   PopoverTrigger,
-  PopoverContent,
 } from "@/components/ui/popover";
 import {
-  type SavedView,
+  deleteCustomView,
+  getCustomViews,
   PRESET_VIEWS,
   PRESET_VIEWS_ES,
-  getCustomViews,
+  type SavedView,
   saveCustomView,
-  deleteCustomView,
 } from "@/lib/features/listings/saved-views";
 import { cn } from "@/lib/utils";
-import type { VisibilityState } from "@tanstack/react-table";
 
 export type ListingStatusFilter = "all" | "published" | "draft";
 export type ListingReadinessFilter =
@@ -136,7 +135,7 @@ export function ListingsFilterBar({
             <div className="group relative" key={view.id}>
               <button
                 className={cn(
-                  "inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs font-medium transition-colors",
+                  "inline-flex items-center gap-1 rounded-full border px-3 py-1 font-medium text-xs transition-colors",
                   activeViewId === view.id
                     ? "border-primary/30 bg-primary/10 text-primary"
                     : "border-border/50 bg-background/80 text-muted-foreground hover:bg-muted"
@@ -147,12 +146,12 @@ export function ListingsFilterBar({
                 {view.preset
                   ? isEn
                     ? view.name
-                    : PRESET_VIEWS_ES[view.id] ?? view.name
+                    : (PRESET_VIEWS_ES[view.id] ?? view.name)
                   : view.name}
               </button>
-              {!view.preset ? (
+              {view.preset ? null : (
                 <button
-                  className="absolute -right-1 -top-1 hidden h-4 w-4 items-center justify-center rounded-full bg-destructive text-destructive-foreground group-hover:flex"
+                  className="absolute -top-1 -right-1 hidden h-4 w-4 items-center justify-center rounded-full bg-destructive text-destructive-foreground group-hover:flex"
                   onClick={(e) => {
                     e.stopPropagation();
                     handleDeleteView(view.id);
@@ -161,11 +160,11 @@ export function ListingsFilterBar({
                 >
                   <Icon icon={Cancel01Icon} size={8} />
                 </button>
-              ) : null}
+              )}
             </div>
           ))}
           <button
-            className="inline-flex items-center gap-1 rounded-full border border-dashed border-border/50 px-2.5 py-1 text-xs text-muted-foreground hover:bg-muted transition-colors"
+            className="inline-flex items-center gap-1 rounded-full border border-border/50 border-dashed px-2.5 py-1 text-muted-foreground text-xs transition-colors hover:bg-muted"
             onClick={handleSaveView}
             type="button"
           >
@@ -178,7 +177,7 @@ export function ListingsFilterBar({
       <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-border/40 bg-card/30 p-2 shadow-sm backdrop-blur-sm">
         <div className="relative min-w-[14rem] flex-1">
           <Icon
-            className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground"
+            className="pointer-events-none absolute top-1/2 left-3.5 -translate-y-1/2 text-muted-foreground"
             icon={Search01Icon}
             size={15}
           />
@@ -216,7 +215,10 @@ export function ListingsFilterBar({
               {isEn ? "Status" : "Estado"}
             </DropdownMenuLabel>
             <DropdownMenuItem
-              className={cn("m-1 rounded-lg", statusFilter === "all" && "bg-muted")}
+              className={cn(
+                "m-1 rounded-lg",
+                statusFilter === "all" && "bg-muted"
+              )}
               onClick={() => onStatusFilterChange("all")}
             >
               {isEn ? "All statuses" : "Todos los estados"}
@@ -303,8 +305,8 @@ export function ListingsFilterBar({
                 return (
                   <label
                     className={cn(
-                      "flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm hover:bg-muted cursor-pointer",
-                      responsiveHidden && "opacity-40 pointer-events-none"
+                      "flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-sm hover:bg-muted",
+                      responsiveHidden && "pointer-events-none opacity-40"
                     )}
                     key={col.id}
                   >

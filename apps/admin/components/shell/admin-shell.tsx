@@ -2,7 +2,14 @@
 
 import dynamic from "next/dynamic";
 import { usePathname, useSearchParams } from "next/navigation";
-import { type ReactNode, Suspense, useCallback, useEffect, useRef, useState } from "react";
+import {
+  type ReactNode,
+  Suspense,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import type { PanelImperativeHandle } from "react-resizable-panels";
 import { AppFooter } from "@/components/shell/app-footer";
 import { CommandPalette } from "@/components/shell/command-palette";
@@ -95,10 +102,7 @@ function useShellHotkeys(locale: Locale) {
   const { gPressed } = useNavigationHotkeys();
 
   useGlobalHotkeys({
-    onCommandPalette: useCallback(
-      () => setCmdPaletteOpen((prev) => !prev),
-      []
-    ),
+    onCommandPalette: useCallback(() => setCmdPaletteOpen((prev) => !prev), []),
     onShowHelp: useCallback(() => setHelpOpen((prev) => !prev), []),
     onEscape: useCallback(() => {}, []),
   });
@@ -123,7 +127,7 @@ function useShellHotkeys(locale: Locale) {
         showTrigger={false}
       />
       {gPressed && (
-        <div className="pointer-events-none fixed bottom-4 left-4 z-50 animate-in fade-in rounded-lg border border-border/80 bg-popover/95 px-3 py-1.5 font-mono text-sm text-foreground shadow-lg backdrop-blur">
+        <div className="fade-in pointer-events-none fixed bottom-4 left-4 z-50 animate-in rounded-lg border border-border/80 bg-popover/95 px-3 py-1.5 font-mono text-foreground text-sm shadow-lg backdrop-blur">
           G…
         </div>
       )}
@@ -242,9 +246,9 @@ function AdminShellV2({
       <DesktopResizableShell
         contentColumn={contentColumn}
         locale={locale}
+        onboardingProgress={onboardingProgress}
         onMobileDrawerOpenChange={setIsMobileDrawerOpen}
         onSidebarCollapsedChange={setSidebarCollapsed}
-        onboardingProgress={onboardingProgress}
         orgId={orgId}
         overlays={overlays}
         role={role}

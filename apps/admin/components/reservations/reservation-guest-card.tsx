@@ -4,12 +4,7 @@ import Link from "next/link";
 
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { GuestSummary } from "@/lib/features/reservations/types";
 import { cn } from "@/lib/utils";
 
@@ -24,7 +19,7 @@ function countryFlag(code: string | null): string {
   if (!code || code.length !== 2) return "";
   const upper = code.toUpperCase();
   return String.fromCodePoint(
-    ...Array.from(upper).map((c) => 0x1f1e6 + c.charCodeAt(0) - 65)
+    ...Array.from(upper).map((c) => 0x1_f1_e6 + c.charCodeAt(0) - 65)
   );
 }
 
@@ -42,7 +37,8 @@ export function ReservationGuestCard({
   guestId,
   isEn,
 }: ReservationGuestCardProps) {
-  const displayName = guest?.full_name ?? guestName ?? (isEn ? "Guest" : "Huésped");
+  const displayName =
+    guest?.full_name ?? guestName ?? (isEn ? "Guest" : "Huésped");
 
   return (
     <Card>
@@ -72,7 +68,9 @@ export function ReservationGuestCard({
         <div className="space-y-2 text-sm">
           {guest?.email ? (
             <div className="flex items-center justify-between gap-2">
-              <span className="text-muted-foreground">{isEn ? "Email" : "Email"}</span>
+              <span className="text-muted-foreground">
+                {isEn ? "Email" : "Email"}
+              </span>
               <a
                 className="truncate text-primary hover:underline"
                 href={`mailto:${guest.email}`}
@@ -84,9 +82,11 @@ export function ReservationGuestCard({
 
           {guest?.phone_e164 ? (
             <div className="flex items-center justify-between gap-2">
-              <span className="text-muted-foreground">{isEn ? "Phone" : "Teléfono"}</span>
+              <span className="text-muted-foreground">
+                {isEn ? "Phone" : "Teléfono"}
+              </span>
               <a
-                className="tabular-nums text-primary hover:underline"
+                className="text-primary tabular-nums hover:underline"
                 href={`tel:${guest.phone_e164}`}
               >
                 {guest.phone_e164}

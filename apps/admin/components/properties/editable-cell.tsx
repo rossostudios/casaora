@@ -74,7 +74,7 @@ export function EditableCell({
     return (
       <button
         className={cn(
-          "group/cell flex w-full min-h-[28px] items-center gap-1.5 rounded px-1 -mx-1 text-left transition-colors hover:bg-primary/[0.04]",
+          "group/cell -mx-1 flex min-h-[28px] w-full items-center gap-1.5 rounded px-1 text-left transition-colors hover:bg-primary/[0.04]",
           className
         )}
         onClick={() => {
@@ -122,7 +122,7 @@ export function EditableCell({
     <input
       className={cn(
         "h-7 w-full rounded border border-ring/40 bg-transparent px-1.5 text-sm outline-none ring-1 ring-ring/20 focus:ring-ring/50",
-        state === "saving" && "opacity-60 pointer-events-none"
+        state === "saving" && "pointer-events-none opacity-60"
       )}
       disabled={state === "saving"}
       onBlur={() => commit(draft)}

@@ -12,7 +12,7 @@ export default function Loading() {
           </div>
           <div className="grid w-full gap-2 sm:grid-cols-3 md:w-auto md:min-w-[40rem]">
             {Array.from({ length: 3 }).map((_, i) => (
-              <Skeleton key={i} className="h-[72px] rounded-2xl" />
+              <Skeleton className="h-[72px] rounded-2xl" key={i} />
             ))}
           </div>
         </div>
@@ -21,7 +21,7 @@ export default function Loading() {
       {/* Hero metrics skeleton */}
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         {Array.from({ length: 4 }).map((_, i) => (
-          <Skeleton key={i} className="h-[100px] rounded-xl" />
+          <Skeleton className="h-[100px] rounded-xl" key={i} />
         ))}
       </div>
 
@@ -30,7 +30,7 @@ export default function Loading() {
         <Skeleton className="mb-3 h-3 w-24" />
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {Array.from({ length: 3 }).map((_, i) => (
-            <Skeleton key={i} className="h-[100px] rounded-xl" />
+            <Skeleton className="h-[100px] rounded-xl" key={i} />
           ))}
         </div>
       </div>
@@ -38,7 +38,7 @@ export default function Loading() {
       {/* Charts skeleton */}
       <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
         {Array.from({ length: 3 }).map((_, i) => (
-          <Skeleton key={i} className="h-[280px] rounded-xl" />
+          <Skeleton className="h-[280px] rounded-xl" key={i} />
         ))}
       </div>
     </div>

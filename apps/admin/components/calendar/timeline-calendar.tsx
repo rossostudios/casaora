@@ -5,11 +5,9 @@ import {
   ArrowRight02Icon,
   Calendar02Icon,
 } from "@hugeicons/core-free-icons";
+import { useHotkey } from "@tanstack/react-hotkeys";
 import Link from "next/link";
 import { useCallback, useMemo, useState } from "react";
-import { useHotkey } from "@tanstack/react-hotkeys";
-import { isInputFocused } from "@/lib/hotkeys/is-input-focused";
-
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import {
@@ -17,22 +15,23 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { isInputFocused } from "@/lib/hotkeys/is-input-focused";
 
 import {
-  type CalendarBar,
-  type UnitOption,
   addDays,
   buildVisibleUnits,
+  type CalendarBar,
   computeBars,
   daysInMonth,
   getMonday,
   humanizeStatus,
   normalizeBlocks,
   normalizeReservations,
+  STATUS_COLORS,
   shortDate,
   statusColor,
-  STATUS_COLORS,
   toIso,
+  type UnitOption,
 } from "./calendar-shared";
 
 /* ------------------------------------------------------------------ */
@@ -123,10 +122,7 @@ export function TimelineCalendar({
     [rawReservations]
   );
 
-  const blockRows = useMemo(
-    () => normalizeBlocks(rawBlocks),
-    [rawBlocks]
-  );
+  const blockRows = useMemo(() => normalizeBlocks(rawBlocks), [rawBlocks]);
 
   const visibleUnits = useMemo(
     () => buildVisibleUnits(units, reservations, blockRows),
@@ -209,7 +205,7 @@ export function TimelineCalendar({
         </div>
 
         <span
-          className={`font-medium text-muted-foreground text-sm ${!isWeek ? "capitalize" : ""}`}
+          className={`font-medium text-muted-foreground text-sm ${isWeek ? "" : "capitalize"}`}
         >
           {navLabel}
         </span>
@@ -322,7 +318,7 @@ export function TimelineCalendar({
                       >
                         {windowDays.map((day) => (
                           <button
-                            className="h-full w-full hover:bg-primary/[0.04] transition-colors"
+                            className="h-full w-full transition-colors hover:bg-primary/[0.04]"
                             key={day}
                             onClick={() => onClickDay(unit.id, day)}
                             title={day}

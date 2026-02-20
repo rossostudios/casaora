@@ -54,8 +54,8 @@ export function DashboardCharts({
       {apiAvailable ? (
         <section className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
           <LazyOccupancyForecast
-            data={forecastData.months}
             avgPct={forecastData.historical_avg_occupancy_pct}
+            data={forecastData.months}
             locale={locale}
           />
           <LazyRevenueTrend data={revenueTrendData.months} locale={locale} />

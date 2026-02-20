@@ -85,7 +85,10 @@ export function useSetupWizard({
   const activeStep = orgDone ? (propertyDone ? (unitDone ? 0 : 3) : 2) : 1;
   const step4Complete = step4Skipped || step4Done || leaseDone;
   const showDemoSeed =
-    orgDone && properties.length === 0 && units.length === 0 && integrations.length === 0;
+    orgDone &&
+    properties.length === 0 &&
+    units.length === 0 &&
+    integrations.length === 0;
 
   const propertyOptions = properties
     .map((row) => ({
@@ -119,7 +122,9 @@ export function useSetupWizard({
 
     if (!result.ok) {
       toast.error(
-        isEn ? "Could not create organization" : "No se pudo crear la organización",
+        isEn
+          ? "Could not create organization"
+          : "No se pudo crear la organización",
         { description: result.error }
       );
       setSubmitting(null);
@@ -132,7 +137,9 @@ export function useSetupWizard({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ org_id: result.data.id }),
       });
-    } catch { /* Cookie was already set server-side in the action */ }
+    } catch {
+      /* Cookie was already set server-side in the action */
+    }
 
     setOrgId(result.data.id);
     setOrgName(result.data.name);
@@ -147,8 +154,12 @@ export function useSetupWizard({
 
     if (initialPlanId && result.data.id) {
       const planSuccessTitle = isEn ? "Plan activated" : "Plan activado";
-      const planSuccessDesc = isEn ? "Your trial period has started." : "Tu período de prueba ha comenzado.";
-      const planErrorTitle = isEn ? "Could not activate plan" : "No se pudo activar el plan";
+      const planSuccessDesc = isEn
+        ? "Your trial period has started."
+        : "Tu período de prueba ha comenzado.";
+      const planErrorTitle = isEn
+        ? "Could not activate plan"
+        : "No se pudo activar el plan";
       const planErrorDesc = isEn
         ? "You can activate it later from Settings → Billing."
         : "Puedes activarlo después desde Ajustes → Facturación.";
@@ -157,7 +168,10 @@ export function useSetupWizard({
         const subscribeRes = await fetch(`${apiBaseUrl}/billing/subscribe`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ organization_id: result.data.id, plan_id: initialPlanId }),
+          body: JSON.stringify({
+            organization_id: result.data.id,
+            plan_id: initialPlanId,
+          }),
         });
         if (subscribeRes.ok) {
           toast.success(planSuccessTitle, { description: planSuccessDesc });
@@ -188,13 +202,21 @@ export function useSetupWizard({
     });
 
     if (!result.ok) {
-      toast.error(isEn ? "Could not create property" : "No se pudo crear la propiedad", { description: result.error });
+      toast.error(
+        isEn ? "Could not create property" : "No se pudo crear la propiedad",
+        { description: result.error }
+      );
       setSubmitting(null);
       return;
     }
 
-    setProperties((prev) => [...prev, { id: result.data.id, name: result.data.name }]);
-    toast.success(isEn ? "Property created" : "Propiedad creada", { description: result.data.name });
+    setProperties((prev) => [
+      ...prev,
+      { id: result.data.id, name: result.data.name },
+    ]);
+    toast.success(isEn ? "Property created" : "Propiedad creada", {
+      description: result.data.name,
+    });
     setSubmitting(null);
   };
 
@@ -215,17 +237,25 @@ export function useSetupWizard({
     });
 
     if (!result.ok) {
-      toast.error(isEn ? "Could not create unit" : "No se pudo crear la unidad", { description: result.error });
+      toast.error(
+        isEn ? "Could not create unit" : "No se pudo crear la unidad",
+        { description: result.error }
+      );
       setSubmitting(null);
       return;
     }
 
-    setUnits((prev) => [...prev, { id: result.data.id, name: fd(form, "name"), code: fd(form, "code") }]);
+    setUnits((prev) => [
+      ...prev,
+      { id: result.data.id, name: fd(form, "name"), code: fd(form, "code") },
+    ]);
     toast.success(isEn ? "Unit created" : "Unidad creada");
     setSubmitting(null);
   };
 
-  const handleCreateIntegrationStep4 = async (e: FormEvent<HTMLFormElement>) => {
+  const handleCreateIntegrationStep4 = async (
+    e: FormEvent<HTMLFormElement>
+  ) => {
     e.preventDefault();
     if (submitting || !orgId) return;
     setSubmitting("integration");
@@ -241,13 +271,18 @@ export function useSetupWizard({
     });
 
     if (!result.ok) {
-      toast.error(isEn ? "Could not create channel" : "No se pudo crear el canal", { description: result.error });
+      toast.error(
+        isEn ? "Could not create channel" : "No se pudo crear el canal",
+        { description: result.error }
+      );
       setSubmitting(null);
       return;
     }
 
     setStep4Done(true);
-    toast.success(isEn ? "Channel created" : "Canal creado", { description: result.data.name });
+    toast.success(isEn ? "Channel created" : "Canal creado", {
+      description: result.data.name,
+    });
     setSubmitting(null);
   };
 
@@ -272,7 +307,10 @@ export function useSetupWizard({
     });
 
     if (!result.ok) {
-      toast.error(isEn ? "Could not create lease" : "No se pudo crear el contrato", { description: result.error });
+      toast.error(
+        isEn ? "Could not create lease" : "No se pudo crear el contrato",
+        { description: result.error }
+      );
       setSubmitting(null);
       return;
     }
@@ -293,7 +331,10 @@ export function useSetupWizard({
 
     const result = await wizardSeedDemoData({ organization_id: orgId });
     if (!result.ok) {
-      toast.error(isEn ? "Could not load demo data" : "No se pudieron cargar datos demo", { description: result.error });
+      toast.error(
+        isEn ? "Could not load demo data" : "No se pudieron cargar datos demo",
+        { description: result.error }
+      );
       setSubmitting(null);
       return;
     }

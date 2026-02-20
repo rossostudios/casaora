@@ -9,7 +9,6 @@ import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
-import { Sheet } from "@/components/ui/sheet";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { authedFetch } from "@/lib/api-client";
 import { useActiveLocale } from "@/lib/i18n/client";
@@ -38,7 +37,11 @@ const CATEGORIES = [
   { value: "invoice", en: "Invoice", es: "Factura" },
   { value: "receipt", en: "Receipt", es: "Recibo" },
   { value: "photo", en: "Photo", es: "Foto" },
-  { value: "inspection_report", en: "Inspection Report", es: "Informe de inspección" },
+  {
+    value: "inspection_report",
+    en: "Inspection Report",
+    es: "Informe de inspección",
+  },
   { value: "other", en: "Other", es: "Otro" },
 ];
 
@@ -90,9 +93,8 @@ export function DocumentsManager({
 
   const filtered = useMemo(() => {
     return data.filter((doc) => {
-      if (categoryFilter) {
-        if (asString(doc.category) !== categoryFilter) return false;
-      }
+      if (categoryFilter && asString(doc.category) !== categoryFilter)
+        return false;
       if (!filter) return true;
       const q = filter.toLowerCase();
       const name = asString(doc.file_name).toLowerCase();
@@ -118,7 +120,10 @@ export function DocumentsManager({
     if (formEntityType === "guest") {
       return guests.map((g) => ({
         id: asString(g.id),
-        label: [asString(g.first_name), asString(g.last_name)].filter(Boolean).join(" ") || asString(g.id).slice(0, 8),
+        label:
+          [asString(g.first_name), asString(g.last_name)]
+            .filter(Boolean)
+            .join(" ") || asString(g.id).slice(0, 8),
       }));
     }
     return [];
@@ -158,7 +163,7 @@ export function DocumentsManager({
           entity_id: entityId,
           file_name: formFileName,
           file_url: formFileUrl,
-          category: category,
+          category,
           mime_type: mimeType,
         }),
       });
@@ -228,8 +233,12 @@ export function DocumentsManager({
         >
           <Icon icon={PlusSignIcon} size={16} />
           {showForm
-            ? isEn ? "Cancel" : "Cancelar"
-            : isEn ? "Add Document" : "Agregar Documento"}
+            ? isEn
+              ? "Cancel"
+              : "Cancelar"
+            : isEn
+              ? "Add Document"
+              : "Agregar Documento"}
         </Button>
       </div>
 
@@ -237,10 +246,10 @@ export function DocumentsManager({
       <div className="flex flex-wrap items-center gap-1.5">
         <button
           className={cn(
-            "rounded-full border px-3 py-1 text-xs font-medium transition-colors",
-            !categoryFilter
-              ? "border-primary/30 bg-primary/10 text-foreground"
-              : "bg-background text-muted-foreground hover:text-foreground"
+            "rounded-full border px-3 py-1 font-medium text-xs transition-colors",
+            categoryFilter
+              ? "bg-background text-muted-foreground hover:text-foreground"
+              : "border-primary/30 bg-primary/10 text-foreground"
           )}
           onClick={() => setCategoryFilter("")}
           type="button"
@@ -250,13 +259,15 @@ export function DocumentsManager({
         {CATEGORIES.map((cat) => (
           <button
             className={cn(
-              "rounded-full border px-3 py-1 text-xs font-medium transition-colors",
+              "rounded-full border px-3 py-1 font-medium text-xs transition-colors",
               categoryFilter === cat.value
                 ? "border-primary/30 bg-primary/10 text-foreground"
                 : "bg-background text-muted-foreground hover:text-foreground"
             )}
             key={cat.value}
-            onClick={() => setCategoryFilter(cat.value === categoryFilter ? "" : cat.value)}
+            onClick={() =>
+              setCategoryFilter(cat.value === categoryFilter ? "" : cat.value)
+            }
             type="button"
           >
             {isEn ? cat.en : cat.es}
@@ -267,7 +278,7 @@ export function DocumentsManager({
       {/* Create form */}
       {showForm && (
         <form
-          className="bg-muted/50 space-y-3 rounded-lg border p-4"
+          className="space-y-3 rounded-lg border bg-muted/50 p-4"
           onSubmit={handleSubmit}
         >
           <DocumentUpload isEn={isEn} onUploaded={handleUpload} orgId={orgId} />
@@ -359,8 +370,12 @@ export function DocumentsManager({
 
           <Button disabled={submitting || !formFileUrl} size="sm" type="submit">
             {submitting
-              ? isEn ? "Saving..." : "Guardando..."
-              : isEn ? "Save" : "Guardar"}
+              ? isEn
+                ? "Saving..."
+                : "Guardando..."
+              : isEn
+                ? "Save"
+                : "Guardar"}
           </Button>
         </form>
       )}
@@ -403,7 +418,11 @@ export function DocumentsManager({
                     {asString(doc.created_at).slice(0, 10)}
                   </p>
                 </div>
-                <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()} role="presentation">
+                <div
+                  className="flex items-center gap-2"
+                  onClick={(e) => e.stopPropagation()}
+                  role="presentation"
+                >
                   <StatusBadge
                     label={asString(doc.category)}
                     value={asString(doc.category)}

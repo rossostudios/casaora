@@ -44,15 +44,17 @@ export default async function BillingPage({ searchParams }: PageProps) {
   let billingData: Record<string, unknown> = {};
   let plans: Record<string, unknown>[] = [];
   try {
-    billingData = (await fetchJson<Record<string, unknown>>(
-      `/billing/current?org_id=${orgId}`
-    )) ?? {};
+    billingData =
+      (await fetchJson<Record<string, unknown>>(
+        `/billing/current?org_id=${orgId}`
+      )) ?? {};
     const plansRes = await fetchJson<{ data: Record<string, unknown>[] }>(
-      `/subscription-plans`
+      "/subscription-plans"
     );
     plans = plansRes?.data ?? [];
   } catch (err) {
-    if (isOrgMembershipError(errorMessage(err))) return <OrgAccessChanged orgId={orgId} />;
+    if (isOrgMembershipError(errorMessage(err)))
+      return <OrgAccessChanged orgId={orgId} />;
     return (
       <Card>
         <CardHeader>
@@ -74,7 +76,9 @@ export default async function BillingPage({ searchParams }: PageProps) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>{isEn ? "Billing & Subscription" : "Facturación y Suscripción"}</CardTitle>
+        <CardTitle>
+          {isEn ? "Billing & Subscription" : "Facturación y Suscripción"}
+        </CardTitle>
         <CardDescription>
           {isEn
             ? "Manage your subscription plan and usage."

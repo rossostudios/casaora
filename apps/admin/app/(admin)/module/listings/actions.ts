@@ -51,10 +51,7 @@ export async function publishListingAction(formData: FormData) {
   );
 
   try {
-    await postJson(
-      `/listings/${encodeURIComponent(listing_id)}/publish`,
-      {}
-    );
+    await postJson(`/listings/${encodeURIComponent(listing_id)}/publish`, {});
     revalidatePath("/module/listings");
     revalidatePath("/marketplace");
     redirect(withParams(next, { success: "listing-published" }));
@@ -105,10 +102,9 @@ export async function unpublishListingAction(formData: FormData) {
   );
 
   try {
-    await patchJson(
-      `/listings/${encodeURIComponent(listing_id)}`,
-      { is_published: false }
-    );
+    await patchJson(`/listings/${encodeURIComponent(listing_id)}`, {
+      is_published: false,
+    });
     revalidatePath("/module/listings");
     revalidatePath("/marketplace");
     redirect(withParams(next, { success: "listing-unpublished" }));

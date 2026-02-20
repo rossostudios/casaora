@@ -8,7 +8,9 @@ type PageProps = {
   params: Promise<{ orgSlug: string }>;
 };
 
-export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
+export async function generateMetadata({
+  params,
+}: PageProps): Promise<Metadata> {
   const { orgSlug } = await params;
   return {
     title: `Book | ${orgSlug}`,

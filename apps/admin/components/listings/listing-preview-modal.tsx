@@ -50,14 +50,12 @@ export function ListingPreviewModal({
       {/* Top bar */}
       <div className="flex items-center justify-between border-b px-4 py-3">
         <div className="flex items-center gap-3">
-          <span className="text-sm font-medium">
+          <span className="font-medium text-sm">
             {isEn ? "Preview" : "Vista previa"} &mdash;{" "}
             <span className="text-muted-foreground">casaora.co/{slug}</span>
           </span>
           {!isPublished && (
-            <Badge variant="outline">
-              {isEn ? "DRAFT" : "BORRADOR"}
-            </Badge>
+            <Badge variant="outline">{isEn ? "DRAFT" : "BORRADOR"}</Badge>
           )}
         </div>
         <Button onClick={onClose} size="sm" variant="ghost">
@@ -76,9 +74,7 @@ export function ListingPreviewModal({
         ) : error ? (
           <div className="flex items-center justify-center py-20">
             <p className="text-destructive">
-              {isEn
-                ? "Failed to load listing"
-                : "Error al cargar anuncio"}
+              {isEn ? "Failed to load listing" : "Error al cargar anuncio"}
             </p>
           </div>
         ) : listing ? (
@@ -94,7 +90,7 @@ export function ListingPreviewModal({
                   .map((url, i) => (
                     <div
                       className={`relative overflow-hidden rounded-lg ${
-                        i === 0 ? "sm:col-span-2 h-64 sm:h-80" : "h-64"
+                        i === 0 ? "h-64 sm:col-span-2 sm:h-80" : "h-64"
                       }`}
                       key={url}
                     >
@@ -128,14 +124,10 @@ export function ListingPreviewModal({
                 )}
 
                 {listing.amenities.length > 0 && (
-                  <ListingAmenities
-                    amenities={listing.amenities}
-                    isEn={isEn}
-                  />
+                  <ListingAmenities amenities={listing.amenities} isEn={isEn} />
                 )}
 
-                {(listing.availableFrom ||
-                  listing.minimumLeaseMonths) && (
+                {(listing.availableFrom || listing.minimumLeaseMonths) && (
                   <ListingAvailability
                     availableFrom={listing.availableFrom}
                     isEn={isEn}
@@ -146,11 +138,7 @@ export function ListingPreviewModal({
 
               <div className="space-y-4">
                 <ListingFeesCard isEn={isEn} listing={listing} />
-                <ListingMoveInCard
-                  isEn={isEn}
-                  listing={listing}
-                  slug={slug}
-                />
+                <ListingMoveInCard isEn={isEn} listing={listing} slug={slug} />
               </div>
             </div>
           </div>

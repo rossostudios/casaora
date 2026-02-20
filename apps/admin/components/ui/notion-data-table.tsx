@@ -1,6 +1,7 @@
 "use client";
 "use no memo";
 
+import { useHotkey } from "@tanstack/react-hotkeys";
 import {
   type ColumnDef,
   flexRender,
@@ -13,8 +14,7 @@ import {
   type SortingState,
   useReactTable,
 } from "@tanstack/react-table";
-import { type ReactNode, useCallback, useMemo, useState } from "react";
-
+import { type ReactNode, useCallback, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -27,6 +27,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { isInputFocused } from "@/lib/hotkeys/is-input-focused";
 import { cn } from "@/lib/utils";
 
 type NotionDataTableProps<TRow> = {
@@ -45,7 +46,13 @@ type NotionDataTableProps<TRow> = {
   getRowId?: (row: TRow) => string;
 };
 
-function RowActionsCell<TRow>({ row, render }: { row: TRow; render: (row: TRow) => ReactNode }) {
+function RowActionsCell<TRow>({
+  row,
+  render,
+}: {
+  row: TRow;
+  render: (row: TRow) => ReactNode;
+}) {
   return <div className="flex justify-end">{render(row)}</div>;
 }
 
@@ -74,7 +81,11 @@ export function NotionDataTable<TRow>({
   });
 
   const handleRowSelectionChange = useCallback(
-    (updater: RowSelectionState | ((prev: RowSelectionState) => RowSelectionState)) => {
+    (
+      updater:
+        | RowSelectionState
+        | ((prev: RowSelectionState) => RowSelectionState)
+    ) => {
       setRowSelection((prev) => {
         const next = typeof updater === "function" ? updater(prev) : updater;
         if (onSelectionChange) {
@@ -87,7 +98,7 @@ export function NotionDataTable<TRow>({
         return next;
       });
     },
-    [data, onSelectionChange],
+    [data, onSelectionChange]
   );
 
   const columns = useMemo(() => {
@@ -132,7 +143,7 @@ export function NotionDataTable<TRow>({
         enableSorting: false,
         enableResizing: false,
         cell: ({ row }) => (
-          <RowActionsCell row={row.original} render={renderRowActions} />
+          <RowActionsCell render={renderRowActions} row={row.original} />
         ),
       });
     }
@@ -151,7 +162,9 @@ export function NotionDataTable<TRow>({
     onSortingChange: setSorting,
     onGlobalFilterChange: setGlobalFilter,
     onPaginationChange: setPagination,
-    onRowSelectionChange: enableSelection ? handleRowSelectionChange : undefined,
+    onRowSelectionChange: enableSelection
+      ? handleRowSelectionChange
+      : undefined,
     enableRowSelection: enableSelection,
     getRowId: getRowId ? (row: TRow) => getRowId(row) : undefined,
     getCoreRowModel: getCoreRowModel(),
@@ -163,6 +176,14 @@ export function NotionDataTable<TRow>({
   const filteredCount = table.getFilteredRowModel().rows.length;
   const totalCount = data.length;
 
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useHotkey("/", (e) => {
+    if (isInputFocused() || hideSearch) return;
+    e.preventDefault();
+    inputRef.current?.focus();
+  });
+
   return (
     <div className="min-w-0 space-y-3">
       {!hideSearch && (
@@ -173,6 +194,7 @@ export function NotionDataTable<TRow>({
             placeholder={
               searchPlaceholder ?? (isEn ? "Filter..." : "Filtrar...")
             }
+            ref={inputRef}
             value={globalFilter}
           />
           {globalFilter && (
@@ -188,13 +210,16 @@ export function NotionDataTable<TRow>({
       )}
 
       <div className="overflow-x-auto rounded-md border">
-        <Table className="table-fixed w-full" style={{ minWidth: table.getTotalSize() }}>
+        <Table
+          className="w-full table-fixed"
+          style={{ minWidth: table.getTotalSize() }}
+        >
           <TableHeader>
             {table.getHeaderGroups().map((hg) => (
               <TableRow key={hg.id}>
                 {hg.headers.map((header) => (
                   <TableHead
-                    className="relative whitespace-nowrap select-none text-[11px] uppercase tracking-wider"
+                    className="relative select-none whitespace-nowrap text-[11px] uppercase tracking-wider"
                     grid
                     key={header.id}
                     style={{ width: header.getSize() }}
@@ -226,7 +251,7 @@ export function NotionDataTable<TRow>({
                       <div
                         aria-label="Resize column"
                         className={cn(
-                          "absolute right-0 top-0 h-full w-1 cursor-col-resize select-none touch-none",
+                          "absolute top-0 right-0 h-full w-1 cursor-col-resize touch-none select-none",
                           "hover:bg-primary/30",
                           header.column.getIsResizing() && "bg-primary/50"
                         )}
@@ -291,9 +316,7 @@ export function NotionDataTable<TRow>({
             )}
           </TableBody>
 
-          {footer ? (
-            <TableFooter>{footer}</TableFooter>
-          ) : null}
+          {footer ? <TableFooter>{footer}</TableFooter> : null}
         </Table>
       </div>
 

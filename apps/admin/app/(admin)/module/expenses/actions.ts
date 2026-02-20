@@ -123,9 +123,7 @@ export async function createExpenseAction(formData: FormData) {
       ...(reservation_id ? {} : unit_id ? { unit_id } : {}),
       ...(reservation_id ? {} : property_id ? { property_id } : {}),
       iva_applicable,
-      ...(iva_applicable && iva_amount !== undefined
-        ? { iva_amount }
-        : {}),
+      ...(iva_applicable && iva_amount !== undefined ? { iva_amount } : {}),
     });
 
     revalidatePath("/module/expenses");

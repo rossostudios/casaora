@@ -1,4 +1,8 @@
-import type { OrganizationProfileType, RentalMode, Row } from "./setup-components";
+import type {
+  OrganizationProfileType,
+  RentalMode,
+  Row,
+} from "./setup-components";
 
 export type SubmittingState =
   | null
@@ -28,7 +32,11 @@ export function fd(form: HTMLFormElement, name: string): string {
   return typeof val === "string" ? val.trim() : "";
 }
 
-export function fdNum(form: HTMLFormElement, name: string, fallback: number): number {
+export function fdNum(
+  form: HTMLFormElement,
+  name: string,
+  fallback: number
+): number {
   const raw = fd(form, name);
   if (!raw) return fallback;
   const n = Number(raw);

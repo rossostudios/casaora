@@ -1,6 +1,6 @@
 import { AdminShell } from "@/components/shell/admin-shell";
-import type { MemberRole } from "@/components/shell/sidebar-new";
 import { OrgBootstrap } from "@/components/shell/org-bootstrap";
+import type { MemberRole } from "@/components/shell/sidebar-new";
 import { fetchMe } from "@/lib/api";
 import { getActiveLocale } from "@/lib/i18n/server";
 import { getOnboardingProgress } from "@/lib/onboarding";
@@ -14,15 +14,11 @@ const VALID_ROLES = new Set<MemberRole>([
   "viewer",
 ]);
 
-async function getActiveRole(
-  orgId: string | null
-): Promise<MemberRole | null> {
+async function getActiveRole(orgId: string | null): Promise<MemberRole | null> {
   if (!orgId) return null;
   try {
     const me = await fetchMe();
-    const membership = me.memberships?.find(
-      (m) => m.organization_id === orgId
-    );
+    const membership = me.memberships?.find((m) => m.organization_id === orgId);
     const role = membership?.role?.trim().toLowerCase() as
       | MemberRole
       | undefined;

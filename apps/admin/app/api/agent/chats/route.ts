@@ -6,6 +6,7 @@ type CreateChatPayload = {
   org_id?: string;
   agent_slug?: string;
   title?: string;
+  preferred_model?: string | null;
 };
 
 export function GET(request: Request) {
@@ -61,6 +62,10 @@ export async function POST(request: Request) {
       org_id: orgId,
       agent_slug: agentSlug,
       title: typeof payload.title === "string" ? payload.title : undefined,
+      preferred_model:
+        typeof payload.preferred_model === "string"
+          ? payload.preferred_model
+          : null,
     }),
   });
 }

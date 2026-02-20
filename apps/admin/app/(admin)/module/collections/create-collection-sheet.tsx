@@ -62,11 +62,7 @@ export function CreateCollectionSheet({
         <div className="grid gap-3 md:grid-cols-2">
           <label className="space-y-1 text-sm">
             <span>{isEn ? "Due date" : "Fecha de vencimiento"}</span>
-            <DatePicker
-              defaultValue={today}
-              locale={locale}
-              name="due_date"
-            />
+            <DatePicker defaultValue={today} locale={locale} name="due_date" />
           </label>
 
           <label className="space-y-1 text-sm">
@@ -88,9 +84,7 @@ export function CreateCollectionSheet({
               <option value="scheduled">
                 {isEn ? "Scheduled" : "Programado"}
               </option>
-              <option value="pending">
-                {isEn ? "Pending" : "Pendiente"}
-              </option>
+              <option value="pending">{isEn ? "Pending" : "Pendiente"}</option>
             </Select>
           </label>
 

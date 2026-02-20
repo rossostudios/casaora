@@ -7,10 +7,9 @@ import {
   Ticket01Icon,
 } from "@hugeicons/core-free-icons";
 import Link from "next/link";
-
+import type { DataTableRow } from "@/components/ui/data-table";
 import { Icon } from "@/components/ui/icon";
 import { StatusBadge } from "@/components/ui/status-badge";
-import type { DataTableRow } from "@/components/ui/data-table";
 import {
   asNumber,
   asString,
@@ -116,10 +115,7 @@ function BoardCard({
   const automationSource = asString(row.automation_source).trim();
   const checklistTotal = asNumber(row.checklist_total);
   const checklistCompleted = asNumber(row.checklist_completed);
-  const dueLabel = formatDueLabel(
-    locale,
-    asString(row.due_at).trim() || null
-  );
+  const dueLabel = formatDueLabel(locale, asString(row.due_at).trim() || null);
   const reservationId = asString(row.reservation_id).trim();
   const assignee = asString(row.assigned_user_id).trim();
 

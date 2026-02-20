@@ -8,10 +8,19 @@ import { getSupabaseBrowserClient } from "@/lib/supabase/browser";
 type DocumentUploadProps = {
   orgId: string;
   isEn: boolean;
-  onUploaded: (file: { url: string; name: string; mimeType: string; size: number }) => void;
+  onUploaded: (file: {
+    url: string;
+    name: string;
+    mimeType: string;
+    size: number;
+  }) => void;
 };
 
-export function DocumentUpload({ orgId, isEn, onUploaded }: DocumentUploadProps) {
+export function DocumentUpload({
+  orgId,
+  isEn,
+  onUploaded,
+}: DocumentUploadProps) {
   const [uploading, setUploading] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -36,7 +45,9 @@ export function DocumentUpload({ orgId, isEn, onUploaded }: DocumentUploadProps)
         }
         const { data } = supabase.storage.from("documents").getPublicUrl(key);
         if (!data.publicUrl) {
-          toast.error(errorLabel, { description: "Could not resolve public URL." });
+          toast.error(errorLabel, {
+            description: "Could not resolve public URL.",
+          });
           setUploading(false);
           return;
         }
@@ -102,6 +113,11 @@ export function DocumentUpload({ orgId, isEn, onUploaded }: DocumentUploadProps)
       }`}
       onClick={() => inputRef.current?.click()}
       onDragLeave={() => setDragOver(false)}
+      onDragOver={(e) => {
+        e.preventDefault();
+        setDragOver(true);
+      }}
+      onDrop={handleDrop}
       onKeyDown={(e) => {
         if (e.key === "Enter" || e.key === " ") {
           e.preventDefault();
@@ -110,11 +126,6 @@ export function DocumentUpload({ orgId, isEn, onUploaded }: DocumentUploadProps)
       }}
       role="button"
       tabIndex={0}
-      onDragOver={(e) => {
-        e.preventDefault();
-        setDragOver(true);
-      }}
-      onDrop={handleDrop}
     >
       <p className="text-muted-foreground">
         {uploading

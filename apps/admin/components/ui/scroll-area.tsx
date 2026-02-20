@@ -42,10 +42,7 @@ export function ScrollArea({
         </ScrollAreaPrimitive.Content>
       </ScrollAreaPrimitive.Viewport>
 
-      <ScrollAreaPrimitive.Scrollbar
-        className="hidden"
-        orientation="vertical"
-      >
+      <ScrollAreaPrimitive.Scrollbar className="hidden" orientation="vertical">
         <ScrollAreaPrimitive.Thumb />
       </ScrollAreaPrimitive.Scrollbar>
     </ScrollAreaPrimitive.Root>

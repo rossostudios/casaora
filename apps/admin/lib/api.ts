@@ -680,6 +680,7 @@ export type AgentChatSummary = {
   agent_name: string;
   agent_icon_key?: string;
   title: string;
+  preferred_model?: string | null;
   is_archived: boolean;
   last_message_at: string;
   created_at: string;
@@ -702,6 +703,11 @@ export type AgentChatMessage = {
   model_used?: string | null;
   fallback_used?: boolean;
   created_at: string;
+};
+
+export type AgentModelOption = {
+  model: string;
+  is_primary: boolean;
 };
 
 export type AgentApproval = {
@@ -760,6 +766,7 @@ export function createAgentChat(payload: {
   org_id: string;
   agent_slug: string;
   title?: string;
+  preferred_model?: string | null;
 }): Promise<AgentChatSummary> {
   return postJson("/agent/chats", payload) as Promise<AgentChatSummary>;
 }
@@ -797,6 +804,18 @@ export function sendAgentChatMessage(
     confirm_write?: boolean;
   }
 ): Promise<Record<string, unknown>> {
+  const writeFlags: {
+    allow_mutations?: boolean;
+    confirm_write?: boolean;
+  } = {};
+
+  if (typeof payload.allow_mutations === "boolean") {
+    writeFlags.allow_mutations = payload.allow_mutations;
+  }
+  if (typeof payload.confirm_write === "boolean") {
+    writeFlags.confirm_write = payload.confirm_write;
+  }
+
   return fetchJson(
     `/agent/chats/${encodeURIComponent(chatId)}/messages`,
     { org_id: orgId },
@@ -807,8 +826,41 @@ export function sendAgentChatMessage(
       },
       body: JSON.stringify({
         message: payload.message,
-        allow_mutations: payload.allow_mutations === true,
-        confirm_write: payload.confirm_write === true,
+        ...writeFlags,
+      }),
+    }
+  );
+}
+
+export function fetchAgentModels(orgId: string): Promise<{
+  organization_id?: string;
+  data?: AgentModelOption[];
+}> {
+  return fetchJson("/agent/models", { org_id: orgId });
+}
+
+export function updateAgentChatPreferences(
+  orgId: string,
+  chatId: string,
+  payload: { preferred_model?: string | null }
+): Promise<{
+  organization_id?: string;
+  chat_id?: string;
+  chat?: AgentChatSummary;
+}> {
+  return fetchJson(
+    `/agent/chats/${encodeURIComponent(chatId)}/preferences`,
+    { org_id: orgId },
+    {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        preferred_model:
+          typeof payload.preferred_model === "string"
+            ? payload.preferred_model
+            : null,
       }),
     }
   );

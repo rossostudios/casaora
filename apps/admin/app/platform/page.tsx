@@ -98,14 +98,14 @@ export default async function PlatformAdminPage() {
           value={String(asNumber(stats.total_users))}
         />
         <StatCard
+          helper={`${asNumber(stats.trialing_subscriptions)} ${isEn ? "trialing" : "en prueba"}`}
           label={isEn ? "Active subscriptions" : "Suscripciones activas"}
           value={String(asNumber(stats.active_subscriptions))}
-          helper={`${asNumber(stats.trialing_subscriptions)} ${isEn ? "trialing" : "en prueba"}`}
         />
         <StatCard
+          helper={`${asNumber(stats.cancelled_subscriptions)} ${isEn ? "cancelled" : "canceladas"}`}
           label={isEn ? "Conversion rate" : "Tasa de conversión"}
           value={`${(asNumber(stats.conversion_rate) * 100).toFixed(1)}%`}
-          helper={`${asNumber(stats.cancelled_subscriptions)} ${isEn ? "cancelled" : "canceladas"}`}
         />
       </section>
 

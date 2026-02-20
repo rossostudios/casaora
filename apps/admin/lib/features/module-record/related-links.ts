@@ -77,9 +77,7 @@ export function buildRelatedLinks(
   if (slug === "units") {
     links.push({
       href: `/module/channels?${q("unit_id", recordId)}`,
-      label: isEn
-        ? "Channels for this unit"
-        : "Canales de esta unidad",
+      label: isEn ? "Channels for this unit" : "Canales de esta unidad",
     });
     links.push({
       href: `/module/reservations?${q("unit_id", recordId)}`,
@@ -109,9 +107,7 @@ export function buildRelatedLinks(
   if (slug === "integrations") {
     links.push({
       href: `/module/reservations?${q("integration_id", recordId)}`,
-      label: isEn
-        ? "Reservations for this channel"
-        : "Reservas de este canal",
+      label: isEn ? "Reservations for this channel" : "Reservas de este canal",
     });
     return links;
   }

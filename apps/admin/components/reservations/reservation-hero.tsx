@@ -43,7 +43,7 @@ export function ReservationHero({
   locale,
 }: ReservationHeroProps) {
   const href = `/module/reservations/${r.id}`;
-  const nightsLabel = `${r.nights} ${r.nights === 1 ? (isEn ? "night" : "noche") : (isEn ? "nights" : "noches")}`;
+  const nightsLabel = `${r.nights} ${r.nights === 1 ? (isEn ? "night" : "noche") : isEn ? "nights" : "noches"}`;
   const subtitle = [r.unit_name, r.property_name, nightsLabel]
     .filter(Boolean)
     .join(" \u00B7 ");

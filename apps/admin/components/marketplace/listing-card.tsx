@@ -69,7 +69,7 @@ export function MarketplaceListingCard({
 
   return (
     <IntentPrefetchLink
-      className="group block overflow-hidden rounded-xl bg-white transition-all duration-300 ease-out shadow-[var(--marketplace-card-shadow)] hover:shadow-[var(--marketplace-card-hover-shadow)] hover:-translate-y-0.5"
+      className="group block overflow-hidden rounded-xl bg-white shadow-[var(--marketplace-card-shadow)] transition-all duration-300 ease-out hover:-translate-y-0.5 hover:shadow-[var(--marketplace-card-hover-shadow)]"
       href={`/marketplace/${encodeURIComponent(slug)}`}
     >
       <div className="relative aspect-[3/2] overflow-hidden bg-[var(--marketplace-bg-muted)]">
@@ -92,7 +92,7 @@ export function MarketplaceListingCard({
         <div className="pointer-events-none absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-black/20 to-transparent" />
 
         {availableFrom ? (
-          <span className="absolute top-3 left-3 rounded-lg bg-white/85 px-2.5 py-1 text-[11px] font-medium text-[var(--marketplace-text)] shadow-sm backdrop-blur-sm">
+          <span className="absolute top-3 left-3 rounded-lg bg-white/85 px-2.5 py-1 font-medium text-[11px] text-[var(--marketplace-text)] shadow-sm backdrop-blur-sm">
             {isEn ? "Available now" : "Disponible"}
           </span>
         ) : null}
@@ -101,29 +101,29 @@ export function MarketplaceListingCard({
       </div>
 
       <div className="space-y-2 p-4">
-        <p className="text-xs font-medium uppercase tracking-wider text-[var(--marketplace-text-muted)]">
+        <p className="font-medium text-[var(--marketplace-text-muted)] text-xs uppercase tracking-wider">
           {neighborhood ? `${neighborhood} · ${cityLabel}` : cityLabel}
         </p>
 
-        <h3 className="line-clamp-1 font-serif text-lg font-medium tracking-tight text-[var(--marketplace-text)]">
+        <h3 className="line-clamp-1 font-medium font-serif text-[var(--marketplace-text)] text-lg tracking-tight">
           {title}
         </h3>
 
         {specs ? (
-          <p className="text-sm tabular-nums text-[var(--marketplace-text-muted)]">
+          <p className="text-[var(--marketplace-text-muted)] text-sm tabular-nums">
             {specs}
           </p>
         ) : null}
 
         {propertyType ? (
-          <p className="text-xs text-[var(--marketplace-text-muted)]">
+          <p className="text-[var(--marketplace-text-muted)] text-xs">
             {propertyType}
           </p>
         ) : null}
 
         <div className="flex items-end justify-between gap-2 pt-1">
           <div className="min-w-0">
-            <p className="text-xl font-semibold tracking-tight text-[var(--marketplace-text)]">
+            <p className="font-semibold text-[var(--marketplace-text)] text-xl tracking-tight">
               {monthlyRecurring}
               <span className="font-normal text-[var(--marketplace-text-muted)] text-xs">
                 {" "}
@@ -131,7 +131,7 @@ export function MarketplaceListingCard({
               </span>
             </p>
             {monthlyUsdApprox ? (
-              <p className="text-xs text-[var(--marketplace-text-muted)]">
+              <p className="text-[var(--marketplace-text-muted)] text-xs">
                 {monthlyUsdApprox}
               </p>
             ) : null}

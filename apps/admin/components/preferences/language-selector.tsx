@@ -5,9 +5,7 @@ import { Globe02Icon, Tick01Icon } from "@hugeicons/core-free-icons";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
-
-import { buttonVariants } from "@/components/ui/button";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { LOCALE_STORAGE_KEY, type Locale, localeLabel } from "@/lib/i18n";
 import { dispatchLocaleChange, useActiveLocale } from "@/lib/i18n/client";

@@ -11,7 +11,10 @@ import { cityToCoordinates, jitter } from "./geo";
 /** Default fallback PYG → USD rate. Overridden by live FX when available. */
 export const PYG_TO_USD_FALLBACK = 7500;
 
-function formatUsdApprox(pyg: number, rate = PYG_TO_USD_FALLBACK): string | null {
+function formatUsdApprox(
+  pyg: number,
+  rate = PYG_TO_USD_FALLBACK
+): string | null {
   if (pyg <= 0 || rate <= 0) return null;
   const usd = Math.round(pyg / rate);
   return `~$${usd.toLocaleString("en-US")} USD`;
@@ -104,7 +107,9 @@ export function marketplaceSpecsText(params: {
     );
   }
   if (squareMeters !== null) {
-    chunks.push(style === "short" ? `${squareMeters} m2` : `${squareMeters} m²`);
+    chunks.push(
+      style === "short" ? `${squareMeters} m2` : `${squareMeters} m²`
+    );
   }
 
   return chunks.join(" · ");
@@ -117,7 +122,8 @@ export function toMarketplaceListingViewModel(params: {
   usdPygRate?: number;
 }): MarketplaceListingViewModel {
   const { listing, locale, index = 0, usdPygRate } = params;
-  const fxRate = usdPygRate && usdPygRate > 0 ? usdPygRate : PYG_TO_USD_FALLBACK;
+  const fxRate =
+    usdPygRate && usdPygRate > 0 ? usdPygRate : PYG_TO_USD_FALLBACK;
   const isEn = locale === "en-US";
 
   const currency = asText(listing.currency) || "PYG";
@@ -129,19 +135,21 @@ export function toMarketplaceListingViewModel(params: {
     ? (listing.fee_lines as Record<string, unknown>[])
     : [];
 
-  const feeLines: MarketplaceFeeLineViewModel[] = rawFeeLines.map((line, index) => {
-    const feeType = asText(line.fee_type);
-    const label = asText(line.label);
-    const amount = asNumber(line.amount);
-    return {
-      key: `${feeType}:${label}:${amount}:${index}`,
-      label,
-      feeType,
-      feeTypeLabel: humanizeKey(feeType),
-      amount,
-      amountLabel: formatCurrency(amount, currency, locale),
-    };
-  });
+  const feeLines: MarketplaceFeeLineViewModel[] = rawFeeLines.map(
+    (line, index) => {
+      const feeType = asText(line.fee_type);
+      const label = asText(line.label);
+      const amount = asNumber(line.amount);
+      return {
+        key: `${feeType}:${label}:${amount}:${index}`,
+        label,
+        feeType,
+        feeTypeLabel: humanizeKey(feeType),
+        amount,
+        amountLabel: formatCurrency(amount, currency, locale),
+      };
+    }
+  );
 
   const amenities = Array.isArray(listing.amenities)
     ? (listing.amenities as unknown[])

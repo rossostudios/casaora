@@ -102,7 +102,9 @@ async function saveSequenceAndSteps(opts: {
   }
 
   if (!sequenceId) {
-    const msg = opts.isEn ? "Failed to save sequence" : "Error al guardar secuencia";
+    const msg = opts.isEn
+      ? "Failed to save sequence"
+      : "Error al guardar secuencia";
     throw new Error(msg);
   }
 
@@ -149,28 +151,23 @@ async function saveSequenceAndSteps(opts: {
           }),
         });
       } else {
-        await authedFetch(
-          "/communication-sequences/" + sequenceId + "/steps",
-          {
-            method: "POST",
-            body: JSON.stringify({
-              step_order: step.step_order,
-              delay_hours: step.delay_hours,
-              channel: step.channel,
-              subject: subjectVal,
-              body_template: step.body_template,
-              template_id: templateIdVal,
-            }),
-          }
-        );
+        await authedFetch("/communication-sequences/" + sequenceId + "/steps", {
+          method: "POST",
+          body: JSON.stringify({
+            step_order: step.step_order,
+            delay_hours: step.delay_hours,
+            channel: step.channel,
+            subject: subjectVal,
+            body_template: step.body_template,
+            template_id: templateIdVal,
+          }),
+        });
       }
     }
   } else {
     for (let i = 0; i < opts.steps.length; i++) {
       const step = opts.steps[i];
-      if (!step.body_template) {
-        if (!step.template_id) continue;
-      }
+      if (!(step.body_template || step.template_id)) continue;
       let templateIdVal: string | undefined;
       if (step.template_id) {
         templateIdVal = step.template_id;
@@ -183,20 +180,17 @@ async function saveSequenceAndSteps(opts: {
       } else {
         subjectVal = undefined;
       }
-      await authedFetch(
-        "/communication-sequences/" + sequenceId + "/steps",
-        {
-          method: "POST",
-          body: JSON.stringify({
-            step_order: step.step_order,
-            delay_hours: step.delay_hours,
-            channel: step.channel,
-            subject: subjectVal,
-            body_template: step.body_template,
-            template_id: templateIdVal,
-          }),
-        }
-      );
+      await authedFetch("/communication-sequences/" + sequenceId + "/steps", {
+        method: "POST",
+        body: JSON.stringify({
+          step_order: step.step_order,
+          delay_hours: step.delay_hours,
+          channel: step.channel,
+          subject: subjectVal,
+          body_template: step.body_template,
+          template_id: templateIdVal,
+        }),
+      });
     }
   }
 
@@ -362,7 +356,9 @@ export function SequencesManager({
     e.preventDefault();
     setSubmitting(true);
 
-    const errMsg = isEn ? "Failed to save sequence" : "Error al guardar secuencia";
+    const errMsg = isEn
+      ? "Failed to save sequence"
+      : "Error al guardar secuencia";
     try {
       const successMsg = await saveSequenceAndSteps({
         editingId,
@@ -433,9 +429,7 @@ export function SequencesManager({
 
       {sequences.length === 0 ? (
         <p className="text-muted-foreground text-sm">
-          {isEn
-            ? "No sequences defined yet."
-            : "No hay secuencias definidas."}
+          {isEn ? "No sequences defined yet." : "No hay secuencias definidas."}
         </p>
       ) : (
         <div className="grid gap-3 sm:grid-cols-2">
@@ -459,7 +453,15 @@ export function SequencesManager({
                     </p>
                   </div>
                   <StatusBadge
-                    label={isActive ? (isEn ? "Active" : "Activo") : (isEn ? "Inactive" : "Inactivo")}
+                    label={
+                      isActive
+                        ? isEn
+                          ? "Active"
+                          : "Activo"
+                        : isEn
+                          ? "Inactive"
+                          : "Inactivo"
+                    }
                     value={isActive ? "active" : "inactive"}
                   />
                 </div>
@@ -479,8 +481,12 @@ export function SequencesManager({
                     variant="outline"
                   >
                     {isActive
-                      ? isEn ? "Disable" : "Desactivar"
-                      : isEn ? "Enable" : "Activar"}
+                      ? isEn
+                        ? "Disable"
+                        : "Desactivar"
+                      : isEn
+                        ? "Enable"
+                        : "Activar"}
                   </Button>
                   <Button
                     onClick={() => handleDelete(id)}
@@ -502,8 +508,12 @@ export function SequencesManager({
         contentClassName="max-w-xl"
         description={
           editingId
-            ? isEn ? "Edit sequence and its steps." : "Edita la secuencia y sus pasos."
-            : isEn ? "Create a multi-step automated messaging sequence." : "Crea una secuencia automatizada de mensajería."
+            ? isEn
+              ? "Edit sequence and its steps."
+              : "Edita la secuencia y sus pasos."
+            : isEn
+              ? "Create a multi-step automated messaging sequence."
+              : "Crea una secuencia automatizada de mensajería."
         }
         onOpenChange={(open) => {
           if (!open) {
@@ -512,7 +522,15 @@ export function SequencesManager({
           }
         }}
         open={sheetOpen}
-        title={editingId ? (isEn ? "Edit Sequence" : "Editar Secuencia") : (isEn ? "New Sequence" : "Nueva Secuencia")}
+        title={
+          editingId
+            ? isEn
+              ? "Edit Sequence"
+              : "Editar Secuencia"
+            : isEn
+              ? "New Sequence"
+              : "Nueva Secuencia"
+        }
       >
         <form className="space-y-4" onSubmit={handleSubmit}>
           <label className="space-y-1 text-sm">
@@ -551,10 +569,15 @@ export function SequencesManager({
           {/* Steps editor */}
           <div className="space-y-3">
             <div className="flex items-center justify-between">
-              <h3 className="text-sm font-medium">
+              <h3 className="font-medium text-sm">
                 {isEn ? "Steps" : "Pasos"}
               </h3>
-              <Button onClick={addStep} size="sm" type="button" variant="outline">
+              <Button
+                onClick={addStep}
+                size="sm"
+                type="button"
+                variant="outline"
+              >
                 <Icon icon={PlusSignIcon} size={14} />
                 {isEn ? "Add step" : "Agregar paso"}
               </Button>
@@ -572,7 +595,7 @@ export function SequencesManager({
                     key={step.id ?? `step-${step.step_order}`}
                   >
                     <div className="flex items-center justify-between">
-                      <span className="text-xs font-semibold text-muted-foreground">
+                      <span className="font-semibold text-muted-foreground text-xs">
                         {isEn ? "Step" : "Paso"} {idx + 1}
                       </span>
                       {steps.length > 1 && (
@@ -588,7 +611,9 @@ export function SequencesManager({
 
                     <div className="grid gap-2 sm:grid-cols-3">
                       <label className="space-y-1 text-xs">
-                        <span>{isEn ? "Delay (hours)" : "Retraso (horas)"}</span>
+                        <span>
+                          {isEn ? "Delay (hours)" : "Retraso (horas)"}
+                        </span>
                         <Input
                           min={0}
                           onChange={(e) =>
@@ -650,7 +675,9 @@ export function SequencesManager({
                     )}
 
                     <label className="space-y-1 text-xs">
-                      <span>{isEn ? "Message body" : "Cuerpo del mensaje"}</span>
+                      <span>
+                        {isEn ? "Message body" : "Cuerpo del mensaje"}
+                      </span>
                       <Textarea
                         onChange={(e) =>
                           updateStep(idx, { body_template: e.target.value })
@@ -668,10 +695,16 @@ export function SequencesManager({
           <div className="flex justify-end">
             <Button disabled={submitting} type="submit">
               {submitting
-                ? isEn ? "Saving..." : "Guardando..."
+                ? isEn
+                  ? "Saving..."
+                  : "Guardando..."
                 : editingId
-                  ? isEn ? "Update" : "Actualizar"
-                  : isEn ? "Create" : "Crear"}
+                  ? isEn
+                    ? "Update"
+                    : "Actualizar"
+                  : isEn
+                    ? "Create"
+                    : "Crear"}
             </Button>
           </div>
         </form>

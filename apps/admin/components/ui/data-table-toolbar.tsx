@@ -1,12 +1,13 @@
 "use client";
 
+import { useHotkey } from "@tanstack/react-hotkeys";
 import type { Table as ReactTable } from "@tanstack/react-table";
-
+import { useRef } from "react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { humanizeKey } from "@/lib/format";
+import { isInputFocused } from "@/lib/hotkeys/is-input-focused";
 import { cn } from "@/lib/utils";
-
 import type { DataTableRow } from "./data-table-types";
 
 export function DataTableToolbar<TRow extends DataTableRow>({
@@ -28,6 +29,14 @@ export function DataTableToolbar<TRow extends DataTableRow>({
   searchPlaceholder: string;
   isEn: boolean;
 }) {
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useHotkey("/", (e) => {
+    if (isInputFocused() || hideSearch) return;
+    e.preventDefault();
+    inputRef.current?.focus();
+  });
+
   return (
     <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
       <div className="flex min-w-0 flex-1 items-center gap-2">
@@ -36,6 +45,7 @@ export function DataTableToolbar<TRow extends DataTableRow>({
             <Input
               onChange={(event) => setGlobalFilter(event.target.value)}
               placeholder={searchPlaceholder}
+              ref={inputRef}
               value={globalFilter}
             />
             {active ? (

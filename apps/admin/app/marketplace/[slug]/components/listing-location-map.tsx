@@ -17,7 +17,7 @@ export function ListingLocationMap({
 
   useEffect(() => {
     const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN || "";
-    if (!containerRef.current || !token) return;
+    if (!(containerRef.current && token)) return;
 
     mapboxgl.accessToken = token;
 

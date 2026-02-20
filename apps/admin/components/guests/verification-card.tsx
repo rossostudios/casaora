@@ -54,13 +54,14 @@ export function VerificationCard({
   const [notes, setNotes] = useState("");
 
   async function handleReview(decision: "verified" | "rejected") {
-    const successMsg = decision === "verified"
-      ? isEn
-        ? "Guest verified"
-        : "Huésped verificado"
-      : isEn
-        ? "Verification rejected"
-        : "Verificación rechazada";
+    const successMsg =
+      decision === "verified"
+        ? isEn
+          ? "Guest verified"
+          : "Huésped verificado"
+        : isEn
+          ? "Verification rejected"
+          : "Verificación rechazada";
     const fallbackErrMsg = isEn ? "Review failed" : "Error en la revisión";
     const trimmedNotes = notes.trim();
     const body = JSON.stringify({
@@ -125,13 +126,13 @@ export function VerificationCard({
           </div>
           {verificationStatus ? (
             <StatusBadge
-              value={verificationStatus}
               tone={statusTone(verificationStatus)}
+              value={verificationStatus}
             />
           ) : (
             <StatusBadge
-              value={isEn ? "not submitted" : "no enviado"}
               tone="neutral"
+              value={isEn ? "not submitted" : "no enviado"}
             />
           )}
         </div>

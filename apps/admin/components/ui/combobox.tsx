@@ -51,13 +51,19 @@ export function Combobox({
   customLabel = (text) => `Use: "${text}"`,
 }: ComboboxProps) {
   let initialValue = "";
-  if (defaultValue != null) { initialValue = defaultValue; }
+  if (defaultValue != null) {
+    initialValue = defaultValue;
+  }
   const [internalValue, setInternalValue] = useState(initialValue);
   const [inputText, setInputText] = useState("");
 
   const isControlled = value !== undefined;
   let resolvedValue: string;
-  if (isControlled) { resolvedValue = value; } else { resolvedValue = internalValue; }
+  if (isControlled) {
+    resolvedValue = value;
+  } else {
+    resolvedValue = internalValue;
+  }
 
   const items = useMemo(() => {
     if (!allowCustom) return options;
@@ -66,19 +72,24 @@ export function Combobox({
     const lc = trimmed.toLowerCase();
     let exactMatch = false;
     for (const o of options) {
-      if (o.value.toLowerCase() === lc) { exactMatch = true; break; }
-      if (o.label.toLowerCase() === lc) { exactMatch = true; break; }
+      if (o.value.toLowerCase() === lc) {
+        exactMatch = true;
+        break;
+      }
+      if (o.label.toLowerCase() === lc) {
+        exactMatch = true;
+        break;
+      }
     }
     if (exactMatch) return options;
-    return [
-      { value: trimmed, label: customLabel(trimmed) },
-      ...options,
-    ];
+    return [{ value: trimmed, label: customLabel(trimmed) }, ...options];
   }, [options, allowCustom, inputText, customLabel]);
 
   const selectedOption = useMemo(() => {
     const found = items.find((option) => option.value === resolvedValue);
-    if (found != null) { return found; }
+    if (found != null) {
+      return found;
+    }
     return null;
   }, [items, resolvedValue]);
 
@@ -93,9 +104,7 @@ export function Combobox({
 
   const displayLabel = useMemo(() => {
     if (selectedOption) return selectedOption.label;
-    if (allowCustom) {
-      if (resolvedValue) return resolvedValue;
-    }
+    if (allowCustom && resolvedValue) return resolvedValue;
     return null;
   }, [selectedOption, allowCustom, resolvedValue]);
 
@@ -107,19 +116,29 @@ export function Combobox({
         disabled={disabled}
         items={items}
         itemToStringLabel={(item) => {
-          if (item != null) { return item.label; }
+          if (item != null) {
+            return item.label;
+          }
           return "";
         }}
         itemToStringValue={(item) => {
-          if (item != null) { return item.value; }
+          if (item != null) {
+            return item.value;
+          }
           return "";
         }}
         onInputValueChange={(val) => {
-          if (val != null) { setInputText(val); } else { setInputText(""); }
+          if (val != null) {
+            setInputText(val);
+          } else {
+            setInputText("");
+          }
         }}
         onValueChange={(next) => {
           let nextVal = "";
-          if (next != null) { nextVal = next.value; }
+          if (next != null) {
+            nextVal = next.value;
+          }
           update(nextVal);
         }}
         value={selectedOption}
@@ -135,7 +154,9 @@ export function Combobox({
         >
           <BaseCombobox.Value placeholder={placeholder}>
             {() => {
-              if (displayLabel != null) { return displayLabel; }
+              if (displayLabel != null) {
+                return displayLabel;
+              }
               return placeholder;
             }}
           </BaseCombobox.Value>

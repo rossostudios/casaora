@@ -142,10 +142,7 @@ export function priorityTone(priority: string): StatusTone {
   return "neutral";
 }
 
-export function localizedTaskTypeLabel(
-  isEn: boolean,
-  value: string
-): string {
+export function localizedTaskTypeLabel(isEn: boolean, value: string): string {
   const normalized = value.trim().toLowerCase();
   if (isEn) return humanizeKey(normalized);
   if (normalized === "cleaning") return "Limpieza";
@@ -182,7 +179,12 @@ export const BOARD_LANES = [
   { key: "done", status: "done" },
 ] as const;
 
-export const STATUS_OPTIONS = ["todo", "in_progress", "done", "cancelled"] as const;
+export const STATUS_OPTIONS = [
+  "todo",
+  "in_progress",
+  "done",
+  "cancelled",
+] as const;
 
 export const TYPE_OPTIONS = [
   "cleaning",

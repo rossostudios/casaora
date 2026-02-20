@@ -22,28 +22,32 @@ import {
 } from "@hugeicons/core-free-icons";
 import {
   type ColumnDef,
-  type PaginationState,
-  type SortingState,
-  type VisibilityState,
   flexRender,
   getCoreRowModel,
+  type PaginationState,
+  type SortingState,
   useReactTable,
+  type VisibilityState,
 } from "@tanstack/react-table";
-import { useCallback, useEffect, useMemo, useOptimistic, useState, useTransition } from "react";
+import {
+  useCallback,
+  useMemo,
+  useOptimistic,
+  useState,
+  useTransition,
+} from "react";
 import { toast } from "sonner";
 
 import type { ListingRow } from "@/app/(admin)/module/listings/listings-manager";
-import { EditableCell } from "@/components/properties/editable-cell";
 import {
-  ListingsFilterBar,
   type ListingReadinessFilter,
   type ListingStatusFilter,
+  ListingsFilterBar,
 } from "@/components/listings/listings-filter-bar";
-import type { SavedView } from "@/lib/features/listings/saved-views";
 import { ReadinessRing } from "@/components/listings/readiness-ring";
+import { EditableCell } from "@/components/properties/editable-cell";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { buttonVariants } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   DropdownMenu,
@@ -55,16 +59,6 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Icon } from "@/components/ui/icon";
 import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
-import {
-  readColumnVisibility,
-  writeColumnVisibility,
-  type ColumnVisibilityMap,
-} from "@/lib/features/listings/column-visibility";
-import {
   Table,
   TableBody,
   TableCell,
@@ -73,6 +67,17 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
+  type ColumnVisibilityMap,
+  readColumnVisibility,
+  writeColumnVisibility,
+} from "@/lib/features/listings/column-visibility";
+import type { SavedView } from "@/lib/features/listings/saved-views";
 import { PROPERTY_TYPES } from "@/lib/features/marketplace/constants";
 import { formatCurrency } from "@/lib/format";
 import { useMediaQuery } from "@/lib/hooks/use-media-query";
@@ -114,14 +119,62 @@ const READINESS_DIMENSIONS: {
   weight: number;
   critical: boolean;
 }[] = [
-  { field: "cover_image", label: "Cover Image", labelEs: "Imagen de portada", weight: 25, critical: true },
-  { field: "fee_lines", label: "Fee Breakdown", labelEs: "Desglose de cuotas", weight: 25, critical: true },
-  { field: "amenities", label: "Amenities", labelEs: "Amenidades", weight: 15, critical: false },
-  { field: "bedrooms", label: "Bedrooms", labelEs: "Habitaciones", weight: 10, critical: false },
-  { field: "square_meters", label: "Area (m²)", labelEs: "Área (m²)", weight: 10, critical: false },
-  { field: "available_from", label: "Available From", labelEs: "Disponible desde", weight: 5, critical: false },
-  { field: "minimum_lease", label: "Minimum Lease", labelEs: "Contrato mínimo", weight: 5, critical: false },
-  { field: "description", label: "Description", labelEs: "Descripción", weight: 5, critical: false },
+  {
+    field: "cover_image",
+    label: "Cover Image",
+    labelEs: "Imagen de portada",
+    weight: 25,
+    critical: true,
+  },
+  {
+    field: "fee_lines",
+    label: "Fee Breakdown",
+    labelEs: "Desglose de cuotas",
+    weight: 25,
+    critical: true,
+  },
+  {
+    field: "amenities",
+    label: "Amenities",
+    labelEs: "Amenidades",
+    weight: 15,
+    critical: false,
+  },
+  {
+    field: "bedrooms",
+    label: "Bedrooms",
+    labelEs: "Habitaciones",
+    weight: 10,
+    critical: false,
+  },
+  {
+    field: "square_meters",
+    label: "Area (m²)",
+    labelEs: "Área (m²)",
+    weight: 10,
+    critical: false,
+  },
+  {
+    field: "available_from",
+    label: "Available From",
+    labelEs: "Disponible desde",
+    weight: 5,
+    critical: false,
+  },
+  {
+    field: "minimum_lease",
+    label: "Minimum Lease",
+    labelEs: "Contrato mínimo",
+    weight: 5,
+    critical: false,
+  },
+  {
+    field: "description",
+    label: "Description",
+    labelEs: "Descripción",
+    weight: 5,
+    critical: false,
+  },
 ];
 
 function readinessLevel(score: number): "green" | "yellow" | "red" {
@@ -129,7 +182,6 @@ function readinessLevel(score: number): "green" | "yellow" | "red" {
   if (score >= 50) return "yellow";
   return "red";
 }
-
 
 /* ---------- types ---------- */
 
@@ -229,12 +281,12 @@ export function ListingNotionTable({
 
       const result = await onCommitEdit(listingId, field, next);
 
-      if (!result.ok) {
+      if (result.ok) {
+        toast.success(isEn ? "Saved" : "Guardado");
+      } else {
         toast.error(isEn ? "Failed to save" : "Error al guardar", {
           description: result.error,
         });
-      } else {
-        toast.success(isEn ? "Saved" : "Guardado");
       }
     },
     [addOptimistic, isEn, startTransition, onCommitEdit]
@@ -252,8 +304,8 @@ export function ListingNotionTable({
   }, [optimisticRows, readinessFilter]);
 
   /* --- user column visibility (persisted) --- */
-  const [userColumnPrefs, setUserColumnPrefs] = useState<ColumnVisibilityMap>(() =>
-    readColumnVisibility()
+  const [userColumnPrefs, setUserColumnPrefs] = useState<ColumnVisibilityMap>(
+    () => readColumnVisibility()
   );
 
   const toggleColumnPref = useCallback((colId: string) => {
@@ -269,16 +321,19 @@ export function ListingNotionTable({
   const isMd = useMediaQuery("(min-width: 768px)");
   const isLg = useMediaQuery("(min-width: 1024px)");
 
-  const responsiveDefaults = useMemo<VisibilityState>(() => ({
-    city: isSm,
-    monthly_recurring_total: isSm,
-    property_type: isMd,
-    bedrooms: isMd,
-    bathrooms: isMd,
-    square_meters: isMd,
-    readiness: isLg,
-    pipeline: isLg,
-  }), [isSm, isMd, isLg]);
+  const responsiveDefaults = useMemo<VisibilityState>(
+    () => ({
+      city: isSm,
+      monthly_recurring_total: isSm,
+      property_type: isMd,
+      bedrooms: isMd,
+      bathrooms: isMd,
+      square_meters: isMd,
+      readiness: isLg,
+      pipeline: isLg,
+    }),
+    [isSm, isMd, isLg]
+  );
 
   const columnVisibility = useMemo<VisibilityState>(() => {
     const merged = { ...responsiveDefaults };
@@ -301,9 +356,7 @@ export function ListingNotionTable({
         enableResizing: false,
         enableSorting: false,
         header: ({ table: t }) => {
-          const pageRowIds = t
-            .getRowModel()
-            .rows.map((r) => r.original.id);
+          const pageRowIds = t.getRowModel().rows.map((r) => r.original.id);
           const allPageSelected =
             pageRowIds.length > 0 &&
             pageRowIds.every((id) => selectedIds.has(id));
@@ -341,12 +394,12 @@ export function ListingNotionTable({
           return (
             <EditableCell
               displayNode={
-                <div className="flex flex-col min-w-0">
-                  <span className="font-medium text-foreground text-sm truncate">
+                <div className="flex min-w-0 flex-col">
+                  <span className="truncate font-medium text-foreground text-sm">
                     {data.title}
                   </span>
                   {subtitle ? (
-                    <span className="text-muted-foreground text-xs truncate">
+                    <span className="truncate text-muted-foreground text-xs">
                       {subtitle}
                     </span>
                   ) : null}
@@ -396,9 +449,9 @@ export function ListingNotionTable({
           return (
             <Tooltip>
               <TooltipTrigger>
-                <div className="inline-flex items-center gap-1.5 cursor-default">
+                <div className="inline-flex cursor-default items-center gap-1.5">
                   <ReadinessRing score={readiness_score} />
-                  <span className="tabular-nums text-xs font-medium">
+                  <span className="font-medium text-xs tabular-nums">
                     {readiness_score}%
                   </span>
                 </div>
@@ -418,7 +471,9 @@ export function ListingNotionTable({
                               ? "text-emerald-500"
                               : "text-muted-foreground/50"
                           }
-                          icon={satisfied ? CheckmarkCircle02Icon : Cancel01Icon}
+                          icon={
+                            satisfied ? CheckmarkCircle02Icon : Cancel01Icon
+                          }
                           size={12}
                         />
                         <span
@@ -430,7 +485,7 @@ export function ListingNotionTable({
                         >
                           {isEn ? dim.label : dim.labelEs}
                         </span>
-                        <span className="ml-auto text-muted-foreground/60 text-[10px]">
+                        <span className="ml-auto text-[10px] text-muted-foreground/60">
                           {dim.weight}pt
                         </span>
                       </li>
@@ -464,10 +519,7 @@ export function ListingNotionTable({
         size: 120,
         minSize: 90,
         header: () => (
-          <ColHeader
-            icon={Home01Icon}
-            label={isEn ? "Type" : "Tipo"}
-          />
+          <ColHeader icon={Home01Icon} label={isEn ? "Type" : "Tipo"} />
         ),
         cell: ({ row }) => {
           const data = row.original;
@@ -478,9 +530,7 @@ export function ListingNotionTable({
                   {propertyTypeLabel(data.property_type, isEn) || "\u00A0"}
                 </span>
               }
-              onCommit={(next) =>
-                commitEdit(data.id, "property_type", next)
-              }
+              onCommit={(next) => commitEdit(data.id, "property_type", next)}
               options={PROPERTY_TYPE_OPTIONS}
               type="select"
               value={data.property_type ?? ""}
@@ -548,7 +598,7 @@ export function ListingNotionTable({
           />
         ),
         cell: ({ row }) => (
-          <span className="tabular-nums text-sm">
+          <span className="text-sm tabular-nums">
             {formatCurrency(
               row.original.monthly_recurring_total,
               row.original.currency,
@@ -709,7 +759,7 @@ export function ListingNotionTable({
 
       <div className="overflow-x-auto rounded-md border">
         <Table
-          className="table-fixed w-full"
+          className="w-full table-fixed"
           style={{ minWidth: table.getTotalSize() }}
         >
           <TableHeader>
@@ -717,7 +767,7 @@ export function ListingNotionTable({
               <TableRow key={hg.id}>
                 {hg.headers.map((header) => (
                   <TableHead
-                    className="relative whitespace-nowrap select-none text-[11px] uppercase tracking-wider"
+                    className="relative select-none whitespace-nowrap text-[11px] uppercase tracking-wider"
                     grid
                     key={header.id}
                     style={{ width: header.getSize() }}
@@ -749,7 +799,7 @@ export function ListingNotionTable({
                       <div
                         aria-label="Resize column"
                         className={cn(
-                          "absolute right-0 top-0 h-full w-1 cursor-col-resize select-none touch-none",
+                          "absolute top-0 right-0 h-full w-1 cursor-col-resize touch-none select-none",
                           "hover:bg-primary/30",
                           header.column.getIsResizing() && "bg-primary/50"
                         )}

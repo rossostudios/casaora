@@ -42,12 +42,9 @@ export function useListingImageUpload(orgId: string) {
         description: safeName,
       });
     } catch (err) {
-      toast.error(
-        isEn ? "Image upload failed" : "Falló la subida de imagen",
-        {
-          description: err instanceof Error ? err.message : String(err),
-        }
-      );
+      toast.error(isEn ? "Image upload failed" : "Falló la subida de imagen", {
+        description: err instanceof Error ? err.message : String(err),
+      });
     } finally {
       setUploading(false);
     }

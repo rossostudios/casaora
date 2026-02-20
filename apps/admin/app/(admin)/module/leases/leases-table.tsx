@@ -15,10 +15,10 @@ import {
   type LeaseContractData,
 } from "@/components/reports/lease-contract-pdf";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { type DataTableRow } from "@/components/ui/data-table";
-import { NotionDataTable } from "@/components/ui/notion-data-table";
+import type { DataTableRow } from "@/components/ui/data-table";
 import { Form } from "@/components/ui/form";
 import { Icon } from "@/components/ui/icon";
+import { NotionDataTable } from "@/components/ui/notion-data-table";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { formatCurrency } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -213,19 +213,11 @@ function LeaseRowActions({
 
   return (
     <div className="flex flex-wrap justify-end gap-2">
-      <Button
-        size="sm"
-        variant="ghost"
-        onClick={() => onEdit(leaseRow)}
-      >
+      <Button onClick={() => onEdit(leaseRow)} size="sm" variant="ghost">
         <Icon icon={Edit02Icon} size={14} />
         {isEn ? "Edit" : "Editar"}
       </Button>
-      <Button
-        size="sm"
-        variant="ghost"
-        onClick={handleDownloadContract}
-      >
+      <Button onClick={handleDownloadContract} size="sm" variant="ghost">
         {isEn ? "Contract" : "Contrato"}
       </Button>
       <Link
@@ -234,20 +226,12 @@ function LeaseRowActions({
       >
         {isEn ? "Collections" : "Cobros"}
       </Link>
-      <Button
-        size="sm"
-        variant="ghost"
-        onClick={() => onGenerate(leaseRow)}
-      >
+      <Button onClick={() => onGenerate(leaseRow)} size="sm" variant="ghost">
         {isEn ? "Generate" : "Generar"}
       </Button>
 
       {canRenew(status) && !leaseRow.renewal_status ? (
-        <Button
-          size="sm"
-          variant="ghost"
-          onClick={() => onRenew(leaseRow)}
-        >
+        <Button onClick={() => onRenew(leaseRow)} size="sm" variant="ghost">
           {isEn ? "Renew" : "Renovar"}
         </Button>
       ) : null}
@@ -262,7 +246,8 @@ function LeaseRowActions({
         </Form>
       ) : null}
 
-      {leaseRow.renewal_status === "offered" || leaseRow.renewal_status === "pending" ? (
+      {leaseRow.renewal_status === "offered" ||
+      leaseRow.renewal_status === "pending" ? (
         <Form action={acceptRenewalAction}>
           <input name="lease_id" type="hidden" value={id} />
           <input name="next" type="hidden" value={nextPath} />

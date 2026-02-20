@@ -3,6 +3,7 @@ import { Suspense } from "react";
 
 import { PublicFooter } from "@/components/marketplace/public-footer";
 import { PublicHeader } from "@/components/marketplace/public-header";
+import { SavedSearches } from "@/components/marketplace/saved-searches";
 import { fetchPublicListings, fetchUsdPygRate } from "@/lib/api";
 import {
   countMarketplaceActiveFilters,
@@ -15,7 +16,6 @@ import {
   type MarketplaceListingViewModel,
   toMarketplaceListingViewModel,
 } from "@/lib/features/marketplace/view-model";
-import { SavedSearches } from "@/components/marketplace/saved-searches";
 import { getActiveLocale } from "@/lib/i18n/server";
 import { CategoryPills } from "./components/category-pills";
 import { FeaturedListings } from "./components/featured-listings";
@@ -127,8 +127,8 @@ export default async function MarketplacePage({
             <div className="flex gap-2 overflow-hidden">
               {Array.from({ length: 6 }).map((_, i) => (
                 <div
-                  key={i}
                   className="h-9 w-24 shrink-0 animate-pulse rounded-full bg-muted"
+                  key={i}
                 />
               ))}
             </div>

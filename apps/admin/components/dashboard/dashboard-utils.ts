@@ -1,6 +1,4 @@
-import type {
-  CalendarCheckIn01Icon,
-} from "@hugeicons/core-free-icons";
+import type { CalendarCheckIn01Icon } from "@hugeicons/core-free-icons";
 
 export function numberOrZero(value: unknown): number {
   const parsed = typeof value === "number" ? value : Number(value);
@@ -38,7 +36,11 @@ export function countByStatus(
   });
 }
 
-export type DashboardRole = "owner_admin" | "operator" | "accountant" | "viewer";
+export type DashboardRole =
+  | "owner_admin"
+  | "operator"
+  | "accountant"
+  | "viewer";
 
 export type QuickAction = {
   href: string;

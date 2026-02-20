@@ -29,12 +29,10 @@ export async function sendMessageAction(formData: FormData) {
   const guest_id = toStringValue(formData.get("guest_id")) || undefined;
   const reservation_id =
     toStringValue(formData.get("reservation_id")) || undefined;
-  const template_id =
-    toStringValue(formData.get("template_id")) || undefined;
+  const template_id = toStringValue(formData.get("template_id")) || undefined;
   const body = toStringValue(formData.get("body"));
   const subject = toStringValue(formData.get("subject")) || undefined;
-  const scheduled_at =
-    toStringValue(formData.get("scheduled_at")) || undefined;
+  const scheduled_at = toStringValue(formData.get("scheduled_at")) || undefined;
 
   if (!organization_id) {
     redirect(messagingUrl({ error: "Missing organization context." }));
@@ -45,10 +43,8 @@ export async function sendMessageAction(formData: FormData) {
   if (!recipient) {
     redirect(messagingUrl({ error: "Recipient is required." }));
   }
-  if (!body && !template_id) {
-    redirect(
-      messagingUrl({ error: "Message body or template is required." })
-    );
+  if (!(body || template_id)) {
+    redirect(messagingUrl({ error: "Message body or template is required." }));
   }
 
   try {
@@ -88,7 +84,9 @@ function extractVariables(body: string): string[] {
 export async function createTemplateAction(formData: FormData) {
   const organization_id = toStringValue(formData.get("organization_id"));
   if (!organization_id) {
-    redirect(messagingUrl({ error: "Missing organization context.", tab: "templates" }));
+    redirect(
+      messagingUrl({ error: "Missing organization context.", tab: "templates" })
+    );
   }
 
   const name = toStringValue(formData.get("name"));
@@ -101,10 +99,14 @@ export async function createTemplateAction(formData: FormData) {
   const language_code = toStringValue(formData.get("language_code")) || "es-PY";
 
   if (!name) {
-    redirect(messagingUrl({ error: "Template name is required.", tab: "templates" }));
+    redirect(
+      messagingUrl({ error: "Template name is required.", tab: "templates" })
+    );
   }
   if (!body) {
-    redirect(messagingUrl({ error: "Template body is required.", tab: "templates" }));
+    redirect(
+      messagingUrl({ error: "Template body is required.", tab: "templates" })
+    );
   }
 
   const variables = extractVariables(body);
@@ -133,7 +135,9 @@ export async function createTemplateAction(formData: FormData) {
 export async function deleteTemplateAction(formData: FormData) {
   const template_id = toStringValue(formData.get("template_id"));
   if (!template_id) {
-    redirect(messagingUrl({ error: "template_id is required", tab: "templates" }));
+    redirect(
+      messagingUrl({ error: "template_id is required", tab: "templates" })
+    );
   }
 
   try {

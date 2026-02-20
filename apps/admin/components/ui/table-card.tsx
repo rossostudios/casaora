@@ -33,9 +33,7 @@ export function TableCard({
           <CardDescription className="text-[11px] uppercase tracking-[0.13em]">
             {subtitle}
           </CardDescription>
-          <CardTitle className="mt-1 text-xl">
-            {title}
-          </CardTitle>
+          <CardTitle className="mt-1 text-xl">{title}</CardTitle>
         </div>
         <CardDescription className="rounded-full border border-border/75 bg-muted/44 px-2.5 py-1 font-medium text-[11px] tracking-wide">
           {rows.length} {isEn ? "records" : "registros"}

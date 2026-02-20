@@ -16,9 +16,6 @@ import {
   ViewIcon,
 } from "@hugeicons/core-free-icons";
 import type { ColumnDef } from "@tanstack/react-table";
-
-import type { PropertyPortfolioRow } from "@/lib/features/properties/types";
-import { formatCurrency } from "@/lib/format";
 import { buttonVariants } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -31,6 +28,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Icon } from "@/components/ui/icon";
 import { StatusBadge } from "@/components/ui/status-badge";
+import type { PropertyPortfolioRow } from "@/lib/features/properties/types";
+import { formatCurrency } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 type PropertyTableColumnsProps = {
@@ -120,7 +119,7 @@ export const getPropertyColumns = ({
       <ColHeader icon={Tag01Icon} label={isEn ? "Code" : "Código"} />
     ),
     cell: ({ row }) => (
-      <span className="font-mono text-xs text-muted-foreground">
+      <span className="font-mono text-muted-foreground text-xs">
         {row.original.code}
       </span>
     ),
@@ -130,9 +129,7 @@ export const getPropertyColumns = ({
     header: () => (
       <ColHeader icon={City01Icon} label={isEn ? "City" : "Ciudad"} />
     ),
-    cell: ({ row }) => (
-      <span className="text-sm">{row.original.city}</span>
-    ),
+    cell: ({ row }) => <span className="text-sm">{row.original.city}</span>,
   },
   {
     accessorKey: "unitCount",
@@ -140,16 +137,13 @@ export const getPropertyColumns = ({
       <ColHeader icon={Door01Icon} label={isEn ? "Units" : "Unidades"} />
     ),
     cell: ({ row }) => (
-      <span className="tabular-nums text-sm">{row.original.unitCount}</span>
+      <span className="text-sm tabular-nums">{row.original.unitCount}</span>
     ),
   },
   {
     accessorKey: "occupancyRate",
     header: () => (
-      <ColHeader
-        icon={Layers01Icon}
-        label={isEn ? "Occupancy" : "Ocupación"}
-      />
+      <ColHeader icon={Layers01Icon} label={isEn ? "Occupancy" : "Ocupación"} />
     ),
     cell: ({ row }) => {
       const rate = row.original.occupancyRate;
@@ -158,7 +152,7 @@ export const getPropertyColumns = ({
       else if (rate < 80) colorClass = "text-[var(--status-warning-fg)]";
 
       return (
-        <span className={cn("tabular-nums text-sm font-medium", colorClass)}>
+        <span className={cn("font-medium text-sm tabular-nums", colorClass)}>
           {rate}%
         </span>
       );
@@ -183,7 +177,7 @@ export const getPropertyColumns = ({
       />
     ),
     cell: ({ row }) => (
-      <span className="tabular-nums text-sm">
+      <span className="text-sm tabular-nums">
         {formatCurrency(row.original.revenueMtdPyg, "PYG", formatLocale)}
       </span>
     ),
@@ -202,7 +196,7 @@ export const getPropertyColumns = ({
       return (
         <span
           className={cn(
-            "tabular-nums text-sm",
+            "text-sm tabular-nums",
             urgent > 0 && "font-medium text-[var(--status-warning-fg)]"
           )}
         >
@@ -222,7 +216,7 @@ export const getPropertyColumns = ({
         return <span className="text-muted-foreground text-sm">&mdash;</span>;
       }
       return (
-        <span className="tabular-nums text-sm font-medium text-[var(--status-danger-fg)]">
+        <span className="font-medium text-[var(--status-danger-fg)] text-sm tabular-nums">
           {count}
         </span>
       );
@@ -237,10 +231,7 @@ export const getPropertyColumns = ({
       return (
         <DropdownMenu>
           <DropdownMenuTrigger
-            className={cn(
-              buttonVariants({ variant: "ghost" }),
-              "h-8 w-8 p-0"
-            )}
+            className={cn(buttonVariants({ variant: "ghost" }), "h-8 w-8 p-0")}
           >
             <span className="sr-only">Open menu</span>
             <Icon icon={MoreVerticalIcon} size={16} />

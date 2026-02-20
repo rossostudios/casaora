@@ -38,7 +38,7 @@ export function StatementPrintView({
   const fmt = (v: number) => formatCurrency(v, currency, locale);
 
   return (
-    <div className="statement-print mx-auto max-w-3xl p-8 font-sans text-sm text-gray-900">
+    <div className="statement-print mx-auto max-w-3xl p-8 font-sans text-gray-900 text-sm">
       <style>{`
         @media print {
           body { margin: 0; padding: 0; }
@@ -52,16 +52,16 @@ export function StatementPrintView({
         <div className="flex items-center gap-3">
           <CasaoraLogo className="h-8 w-8" />
           <div>
-            <h1 className="text-lg font-bold">Casaora</h1>
-            <p className="text-xs text-gray-500">{orgName}</p>
+            <h1 className="font-bold text-lg">Casaora</h1>
+            <p className="text-gray-500 text-xs">{orgName}</p>
           </div>
         </div>
         <div className="text-right">
-          <h2 className="text-base font-semibold">
+          <h2 className="font-semibold text-base">
             {isEn ? "Owner Statement" : "Estado de Cuenta"}
           </h2>
-          <p className="text-xs text-gray-500">{periodLabel}</p>
-          <p className="text-xs text-gray-400">
+          <p className="text-gray-500 text-xs">{periodLabel}</p>
+          <p className="text-gray-400 text-xs">
             {isEn ? "Generated" : "Generado"}: {generatedAt}
           </p>
         </div>
@@ -69,13 +69,13 @@ export function StatementPrintView({
 
       {/* Revenue / Collections */}
       <section className="mb-6">
-        <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
+        <h3 className="mb-2 font-semibold text-gray-500 text-xs uppercase tracking-wide">
           {isEn ? "Revenue / Collections" : "Ingresos / Cobros"}
         </h3>
         {collections.length > 0 ? (
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b text-left text-xs text-gray-500">
+              <tr className="border-b text-left text-gray-500 text-xs">
                 <th className="pb-1 font-medium">
                   {isEn ? "Description" : "Descripcion"}
                 </th>
@@ -86,7 +86,7 @@ export function StatementPrintView({
             </thead>
             <tbody>
               {collections.map((item) => (
-                <tr className="border-b border-gray-100" key={item.id}>
+                <tr className="border-gray-100 border-b" key={item.id}>
                   <td className="py-1.5">{item.label}</td>
                   <td className="py-1.5 text-right">{fmt(item.amount)}</td>
                 </tr>
@@ -112,13 +112,13 @@ export function StatementPrintView({
 
       {/* Expenses */}
       <section className="mb-6">
-        <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
+        <h3 className="mb-2 font-semibold text-gray-500 text-xs uppercase tracking-wide">
           {isEn ? "Expenses" : "Gastos"}
         </h3>
         {expenses.length > 0 ? (
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b text-left text-xs text-gray-500">
+              <tr className="border-b text-left text-gray-500 text-xs">
                 <th className="pb-1 font-medium">
                   {isEn ? "Description" : "Descripcion"}
                 </th>
@@ -129,7 +129,7 @@ export function StatementPrintView({
             </thead>
             <tbody>
               {expenses.map((item) => (
-                <tr className="border-b border-gray-100" key={item.id}>
+                <tr className="border-gray-100 border-b" key={item.id}>
                   <td className="py-1.5">{item.label}</td>
                   <td className="py-1.5 text-right text-red-600">
                     -{fmt(item.amount)}
@@ -150,9 +150,7 @@ export function StatementPrintView({
           </table>
         ) : (
           <p className="text-gray-400">
-            {isEn
-              ? "No expenses this period."
-              : "Sin gastos en este periodo."}
+            {isEn ? "No expenses this period." : "Sin gastos en este periodo."}
           </p>
         )}
       </section>
@@ -160,15 +158,15 @@ export function StatementPrintView({
       {/* Net Payout */}
       <section className="rounded-lg border-2 border-gray-900 p-4">
         <div className="flex items-center justify-between">
-          <span className="text-base font-bold">
+          <span className="font-bold text-base">
             {isEn ? "Net Payout" : "Pago Neto"}
           </span>
-          <span className="text-xl font-bold">{fmt(netPayout)}</span>
+          <span className="font-bold text-xl">{fmt(netPayout)}</span>
         </div>
       </section>
 
       {/* Footer */}
-      <div className="mt-8 border-t pt-4 text-center text-xs text-gray-400">
+      <div className="mt-8 border-t pt-4 text-center text-gray-400 text-xs">
         <p>Casaora &middot; casaora.co</p>
         <p>
           {isEn

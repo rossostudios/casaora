@@ -1,6 +1,6 @@
 import { ArrowLeft01Icon } from "@hugeicons/core-free-icons";
+import dynamic from "next/dynamic";
 import Link from "next/link";
-
 import { OrgAccessChanged } from "@/components/shell/org-access-changed";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
@@ -17,8 +17,6 @@ import { errorMessage, isOrgMembershipError } from "@/lib/errors";
 import { getActiveLocale } from "@/lib/i18n/server";
 import { getActiveOrgId } from "@/lib/org";
 import { cn } from "@/lib/utils";
-
-import dynamic from "next/dynamic";
 
 const FinanceDashboard = dynamic(() =>
   import("./finance-dashboard").then((m) => m.FinanceDashboard)
@@ -74,8 +72,7 @@ export default async function FinanceDashboardPage({
 
   const from =
     typeof params.from === "string" && params.from ? params.from : defaultFrom;
-  const to =
-    typeof params.to === "string" && params.to ? params.to : defaultTo;
+  const to = typeof params.to === "string" && params.to ? params.to : defaultTo;
   const propertyId =
     typeof params.property_id === "string" ? params.property_id : "";
 
@@ -129,9 +126,7 @@ export default async function FinanceDashboardPage({
       <Card>
         <CardHeader className="space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <Badge variant="outline">
-              {isEn ? "Finance" : "Finanzas"}
-            </Badge>
+            <Badge variant="outline">{isEn ? "Finance" : "Finanzas"}</Badge>
             <Link
               className={cn(buttonVariants({ variant: "ghost", size: "sm" }))}
               href="/module/reports"

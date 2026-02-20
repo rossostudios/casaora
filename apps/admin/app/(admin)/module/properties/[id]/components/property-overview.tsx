@@ -1,12 +1,13 @@
+import dynamic from "next/dynamic";
 import type { PropertyOverview as PropertyOverviewData } from "../types";
 import { PropertyOverviewFinancial } from "./property-overview-financial";
-import dynamic from "next/dynamic";
 
 const PropertyOverviewKpiCards = dynamic(() =>
   import("./property-overview-kpi-cards").then(
     (m) => m.PropertyOverviewKpiCards
   )
 );
+
 import { PropertyOverviewOperations } from "./property-overview-operations";
 
 type PropertyOverviewProps = {

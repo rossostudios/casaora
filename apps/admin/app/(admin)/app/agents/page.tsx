@@ -1,4 +1,4 @@
-import { AgentCatalog } from "@/components/agent/agent-catalog";
+import { ChatThread } from "@/components/agent/chat-thread";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getActiveLocale } from "@/lib/i18n/server";
@@ -7,12 +7,6 @@ import { getActiveOrgId } from "@/lib/org";
 type PageProps = {
   searchParams: Promise<{ new?: string; agent?: string }>;
 };
-
-function isTruthy(value: string | undefined): boolean {
-  if (!value) return false;
-  const normalized = value.trim().toLowerCase();
-  return ["1", "true", "yes", "on"].includes(normalized);
-}
 
 export default async function AgentsPage({ searchParams }: PageProps) {
   const locale = await getActiveLocale();
@@ -46,13 +40,15 @@ export default async function AgentsPage({ searchParams }: PageProps) {
     );
   }
 
+  const initialAgentSlug =
+    typeof params.agent === "string" ? params.agent : undefined;
+
   return (
-    <AgentCatalog
-      autoStart={isTruthy(params.new)}
-      initialAgentSlug={
-        typeof params.agent === "string" ? params.agent : undefined
-      }
+    <ChatThread
+      defaultAgentSlug={initialAgentSlug}
+      freshKey={typeof params.new === "string" ? params.new : undefined}
       locale={locale}
+      mode="full"
       orgId={orgId}
     />
   );

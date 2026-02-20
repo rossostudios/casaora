@@ -2,9 +2,8 @@
 
 import Image from "next/image";
 import { useState } from "react";
-
-import { asText } from "./marketplace-types";
 import { ImageLightbox } from "./image-lightbox";
+import { asText } from "./marketplace-types";
 
 type ListingGalleryLightboxProps = {
   title: string;
@@ -78,7 +77,7 @@ export function ListingGalleryLightbox({
               {/* "Show all photos" overlay on last thumbnail */}
               {idx === thumbnails.length - 1 && hasMore ? (
                 <div className="absolute inset-0 flex items-center justify-center bg-black/40 backdrop-blur-[2px]">
-                  <span className="font-serif text-lg font-medium text-white">
+                  <span className="font-medium font-serif text-lg text-white">
                     +{images.length - 5} {isEn ? "photos" : "fotos"}
                   </span>
                 </div>

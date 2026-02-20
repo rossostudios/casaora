@@ -163,17 +163,16 @@ export async function transitionReservationStatusAction(formData: FormData) {
 
 export async function bulkTransitionReservationStatusAction(
   reservationIds: string[],
-  status: string,
+  status: string
 ): Promise<{ success: number; failed: number }> {
   let success = 0;
   let failed = 0;
 
   for (const id of reservationIds) {
     try {
-      await postJson(
-        `/reservations/${encodeURIComponent(id)}/status`,
-        { status },
-      );
+      await postJson(`/reservations/${encodeURIComponent(id)}/status`, {
+        status,
+      });
       success++;
     } catch {
       failed++;

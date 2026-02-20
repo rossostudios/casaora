@@ -41,7 +41,10 @@ const SEVERITY_DOT: Record<string, string> = {
   critical: "bg-red-500",
 };
 
-export function AnomalyAlerts({ orgId, locale: localeProp }: AnomalyAlertsProps) {
+export function AnomalyAlerts({
+  orgId,
+  locale: localeProp,
+}: AnomalyAlertsProps) {
   "use no memo";
   const activeLocale = useActiveLocale();
   const mounted = useMounted();

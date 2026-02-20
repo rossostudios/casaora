@@ -1,4 +1,4 @@
-import { type DataTableRow } from "@/components/ui/data-table";
+import type { DataTableRow } from "@/components/ui/data-table";
 
 export const PY_RESIDENTIAL_IVA_RATE = 0.05;
 

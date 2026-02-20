@@ -187,10 +187,8 @@ export function CsvImportDialog({
       const data = (await res.json()) as ImportResult;
       setResult(data);
       setStatus("done");
-      if (data.failed === 0) {
-        if (onComplete) {
-          onComplete();
-        }
+      if (data.failed === 0 && onComplete) {
+        onComplete();
       }
     } catch {
       setError(networkErrorMsg);
@@ -213,6 +211,11 @@ export function CsvImportDialog({
       </Button>
 
       <Sheet
+        description={
+          isEn
+            ? "Upload a CSV file with columns: name (required), code, address_line1, city, country_code"
+            : "Sube un CSV con columnas: name (obligatorio), code, address_line1, city, country_code"
+        }
         onOpenChange={(v) => {
           setOpen(v);
           if (!v) reset();
@@ -221,18 +224,13 @@ export function CsvImportDialog({
         title={
           isEn ? "Import Properties from CSV" : "Importar Propiedades desde CSV"
         }
-        description={
-          isEn
-            ? "Upload a CSV file with columns: name (required), code, address_line1, city, country_code"
-            : "Sube un CSV con columnas: name (obligatorio), code, address_line1, city, country_code"
-        }
       >
         <div className="space-y-4">
           {/* File input */}
           <div>
             <input
               accept=".csv,text/csv"
-              className="block w-full text-sm file:mr-3 file:rounded-md file:border file:border-border file:bg-muted file:px-3 file:py-1.5 file:text-sm file:font-medium"
+              className="block w-full text-sm file:mr-3 file:rounded-md file:border file:border-border file:bg-muted file:px-3 file:py-1.5 file:font-medium file:text-sm"
               onChange={handleFile}
               ref={fileRef}
               type="file"
@@ -243,10 +241,7 @@ export function CsvImportDialog({
           <div className="text-muted-foreground text-xs">
             {isEn ? "Expected columns:" : "Columnas esperadas:"}{" "}
             {EXPECTED_COLUMNS.map((col) => (
-              <code
-                className="mx-0.5 rounded bg-muted px-1 py-0.5"
-                key={col}
-              >
+              <code className="mx-0.5 rounded bg-muted px-1 py-0.5" key={col}>
                 {col}
               </code>
             ))}
@@ -255,7 +250,7 @@ export function CsvImportDialog({
           {/* Preview */}
           {parsedRows.length > 0 && !result ? (
             <div className="space-y-3">
-              <p className="text-sm font-medium">
+              <p className="font-medium text-sm">
                 {isEn ? "Preview" : "Vista previa"}: {parsedRows.length}{" "}
                 {isEn ? "rows" : "filas"}
               </p>
@@ -273,7 +268,12 @@ export function CsvImportDialog({
                   </thead>
                   <tbody>
                     {parsedRows.slice(0, 10).map((row, i) => (
-                      <tr className="border-b last:border-b-0" key={EXPECTED_COLUMNS.map((col) => row[col] ?? "").join("|")}>
+                      <tr
+                        className="border-b last:border-b-0"
+                        key={EXPECTED_COLUMNS.map((col) => row[col] ?? "").join(
+                          "|"
+                        )}
+                      >
                         <td className="px-2 py-1 text-muted-foreground">
                           {i + 1}
                         </td>
@@ -294,10 +294,7 @@ export function CsvImportDialog({
                 ) : null}
               </div>
 
-              <Button
-                disabled={status === "importing"}
-                onClick={handleImport}
-              >
+              <Button disabled={status === "importing"} onClick={handleImport}>
                 {status === "importing"
                   ? isEn
                     ? "Importing..."
@@ -311,7 +308,7 @@ export function CsvImportDialog({
 
           {/* Error */}
           {error ? (
-            <div className="rounded-lg border border-red-200/60 bg-red-50/40 px-3 py-2 text-sm text-red-700 dark:border-red-800/40 dark:bg-red-950/20 dark:text-red-400">
+            <div className="rounded-lg border border-red-200/60 bg-red-50/40 px-3 py-2 text-red-700 text-sm dark:border-red-800/40 dark:bg-red-950/20 dark:text-red-400">
               {error}
             </div>
           ) : null}
@@ -323,7 +320,7 @@ export function CsvImportDialog({
                 <p className="font-medium">
                   {isEn ? "Import complete" : "Importación completa"}
                 </p>
-                <p className="mt-1 text-sm text-muted-foreground">
+                <p className="mt-1 text-muted-foreground text-sm">
                   {result.succeeded} / {result.total}{" "}
                   {isEn ? "succeeded" : "exitosas"}
                   {result.failed > 0

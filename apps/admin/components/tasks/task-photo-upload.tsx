@@ -7,8 +7,8 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
-import { getSupabaseBrowserClient } from "@/lib/supabase/browser";
 import { useActiveLocale } from "@/lib/i18n/client";
+import { getSupabaseBrowserClient } from "@/lib/supabase/browser";
 
 type TaskPhotoUploadProps = {
   taskId: string;

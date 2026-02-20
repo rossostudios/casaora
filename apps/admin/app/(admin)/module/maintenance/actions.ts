@@ -42,10 +42,7 @@ function withParams(
   return suffix ? `${base}?${suffix}` : base;
 }
 
-function maintenanceUrl(params?: {
-  success?: string;
-  error?: string;
-}): string {
+function maintenanceUrl(params?: { success?: string; error?: string }): string {
   return withParams("/module/maintenance", params ?? {});
 }
 

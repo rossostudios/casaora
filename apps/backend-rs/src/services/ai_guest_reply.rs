@@ -136,7 +136,7 @@ pub async fn generate_ai_reply(
     });
 
     let response = http_client
-        .post("https://api.openai.com/v1/chat/completions")
+        .post(config.openai_chat_completions_url())
         .header("Authorization", format!("Bearer {api_key}"))
         .json(&payload)
         .send()

@@ -1,4 +1,4 @@
-import { NextResponse, type NextRequest } from "next/server";
+import { type NextRequest, NextResponse } from "next/server";
 
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
@@ -7,9 +7,7 @@ const API_BASE_URL =
 
 export async function PATCH(
   request: NextRequest,
-  {
-    params,
-  }: { params: Promise<{ taskId: string; itemId: string }> }
+  { params }: { params: Promise<{ taskId: string; itemId: string }> }
 ) {
   const { taskId, itemId } = await params;
   const supabase = await createSupabaseServerClient();

@@ -1,14 +1,11 @@
 "use client";
 
 import {
-  type Table as ReactTable,
-  flexRender,
-} from "@tanstack/react-table";
-import {
   ArrowDown01Icon,
   ArrowUp01Icon,
   ArrowUpDownIcon,
 } from "@hugeicons/core-free-icons";
+import { flexRender, type Table as ReactTable } from "@tanstack/react-table";
 import type React from "react";
 import { type ReactNode, useEffect, useRef } from "react";
 
@@ -72,7 +69,9 @@ export function DataTableBody<TRow extends DataTableRow>({
   isEn: boolean;
 }) {
   return (
-    <div className={cn("rounded-md border", borderless && "rounded-none border-0")}>
+    <div
+      className={cn("rounded-md border", borderless && "rounded-none border-0")}
+    >
       <Table className="table-fixed">
         <TableHeader>
           {table.getHeaderGroups().map((headerGroup) => (
@@ -122,12 +121,13 @@ export function DataTableBody<TRow extends DataTableRow>({
         <TableBody>
           {table.getRowModel().rows.length ? (
             table.getRowModel().rows.map((row) => {
-              const isFocused = focusedRowIndex >= 0 && row.index === focusedRowIndex;
+              const isFocused =
+                focusedRowIndex >= 0 && row.index === focusedRowIndex;
               return (
                 <FocusableTableRow
                   className={cn(
                     onRowClick ? "cursor-pointer hover:bg-muted/30" : "",
-                    isFocused ? "ring-2 ring-primary/30 bg-primary/[0.03]" : ""
+                    isFocused ? "bg-primary/[0.03] ring-2 ring-primary/30" : ""
                   )}
                   isFocused={isFocused}
                   key={row.id}

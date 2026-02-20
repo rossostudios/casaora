@@ -1,17 +1,11 @@
 "use client";
 
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useState } from "react";
 
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 
@@ -80,7 +74,7 @@ export function GuestMessages() {
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <h1 className="text-2xl font-bold">Messages</h1>
+        <h1 className="font-bold text-2xl">Messages</h1>
         <Link href={`/guest/${encodeURIComponent(token)}/itinerary`}>
           <Button size="sm" variant="outline">
             Back
@@ -93,7 +87,7 @@ export function GuestMessages() {
           <CardTitle className="text-lg">Conversation</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          {error && <p className="text-sm text-red-600">{error}</p>}
+          {error && <p className="text-red-600 text-sm">{error}</p>}
 
           <div className="max-h-[45vh] space-y-3 overflow-y-auto rounded-lg border bg-muted/20 p-3 sm:max-h-[50vh]">
             {loading ? (
@@ -103,7 +97,7 @@ export function GuestMessages() {
                 <Skeleton className="h-12 w-3/4" />
               </>
             ) : messages.length === 0 ? (
-              <p className="text-muted-foreground text-sm py-4 text-center">
+              <p className="py-4 text-center text-muted-foreground text-sm">
                 No messages yet. Send one below.
               </p>
             ) : (
@@ -111,9 +105,7 @@ export function GuestMessages() {
                 const isInbound = msg.payload?.direction === "inbound";
                 const body =
                   msg.payload?.body ??
-                  (typeof msg.payload === "string"
-                    ? msg.payload
-                    : "");
+                  (typeof msg.payload === "string" ? msg.payload : "");
                 const sender = msg.payload?.sender_name;
 
                 return (
@@ -129,12 +121,12 @@ export function GuestMessages() {
                       }`}
                     >
                       {sender && (
-                        <p className="text-[11px] text-muted-foreground mb-0.5 font-medium">
+                        <p className="mb-0.5 font-medium text-[11px] text-muted-foreground">
                           {sender}
                         </p>
                       )}
                       <p className="whitespace-pre-wrap">{body}</p>
-                      <p className="text-[10px] text-muted-foreground mt-1">
+                      <p className="mt-1 text-[10px] text-muted-foreground">
                         {msg.created_at
                           ? new Date(msg.created_at).toLocaleString()
                           : ""}

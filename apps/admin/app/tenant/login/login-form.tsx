@@ -78,7 +78,11 @@ function TenantLoginFormInner({ locale }: { locale: string }) {
     }
   }, [verifyQuery.data, tokenFromUrl, router]);
 
-  const requestAccessMutation = useMutation<RequestAccessResult, Error, { email: string }>({
+  const requestAccessMutation = useMutation<
+    RequestAccessResult,
+    Error,
+    { email: string }
+  >({
     mutationFn: async (variables) => {
       const res = await fetch(`${API_BASE}/public/tenant/request-access`, {
         method: "POST",
@@ -125,7 +129,7 @@ function TenantLoginFormInner({ locale }: { locale: string }) {
   if (tokenFromUrl && verifyQuery.isLoading) {
     return (
       <div className="flex min-h-[50vh] items-center justify-center">
-        <p className="text-muted-foreground animate-pulse">
+        <p className="animate-pulse text-muted-foreground">
           {isEn ? "Verifying access..." : "Verificando acceso..."}
         </p>
       </div>
@@ -143,7 +147,7 @@ function TenantLoginFormInner({ locale }: { locale: string }) {
         <CardContent>
           {sent ? (
             <div className="space-y-3 text-center">
-              <p className="text-lg font-medium">
+              <p className="font-medium text-lg">
                 {isEn ? "Check your WhatsApp!" : "Revisa tu WhatsApp!"}
               </p>
               <p className="text-muted-foreground text-sm">
@@ -169,7 +173,9 @@ function TenantLoginFormInner({ locale }: { locale: string }) {
                   value={email}
                 />
               </label>
-              {displayError && <p className="text-sm text-red-600">{displayError}</p>}
+              {displayError && (
+                <p className="text-red-600 text-sm">{displayError}</p>
+              )}
               <Button className="w-full" disabled={loading} type="submit">
                 {requestAccessMutation.isPending
                   ? isEn

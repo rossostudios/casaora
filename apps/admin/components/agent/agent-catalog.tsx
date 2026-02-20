@@ -1,19 +1,9 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
+import { useRouter } from "next/navigation";
+import { useEffect, useRef } from "react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
 import type { AgentDefinition } from "@/lib/api";
 import type { Locale } from "@/lib/i18n";
 
@@ -36,34 +26,18 @@ function normalizeAgents(payload: unknown): AgentDefinition[] {
     .filter((item) => item.id && item.slug && item.name);
 }
 
-const AGENT_SKELETON_KEYS = [
-  "agent-skeleton-1",
-  "agent-skeleton-2",
-  "agent-skeleton-3",
-  "agent-skeleton-4",
-  "agent-skeleton-5",
-  "agent-skeleton-6",
-];
-
 export function AgentCatalog({
   orgId,
   locale,
-  autoStart,
-  initialAgentSlug,
 }: {
   orgId: string;
   locale: Locale;
-  autoStart: boolean;
-  initialAgentSlug?: string;
 }) {
   const isEn = locale === "en-US";
   const router = useRouter();
   const autoStartTriggered = useRef<boolean>(false);
-
-  const targetAgentSlug = useMemo(
-    () => initialAgentSlug?.trim() || null,
-    [initialAgentSlug]
-  );
+  // Default to Guest Concierge for the unified experience
+  const targetAgentSlug = "guest-concierge";
 
   const agentsQuery = useQuery({
     queryKey: ["agents", orgId],
@@ -86,7 +60,11 @@ export function AgentCatalog({
       const payload = (await response.json()) as unknown;
       if (!response.ok) {
         let message = fallbackMsg;
-        if (payload != null && typeof payload === "object" && "error" in payload) {
+        if (
+          payload != null &&
+          typeof payload === "object" &&
+          "error" in payload
+        ) {
           message = String((payload as { error?: unknown }).error);
         }
         throw new Error(message);
@@ -101,7 +79,9 @@ export function AgentCatalog({
 
   const createChatMutation = useMutation({
     mutationFn: async (agentSlug: string) => {
-      const fallbackMsg = isEn ? "Could not create chat." : "No se pudo crear el chat.";
+      const fallbackMsg = isEn
+        ? "Could not create chat."
+        : "No se pudo crear el chat.";
 
       const response = await fetch("/api/agent/chats", {
         method: "POST",
@@ -120,7 +100,7 @@ export function AgentCatalog({
         error?: string;
       };
 
-      if (!response.ok || !payload.id) {
+      if (!(response.ok && payload.id)) {
         throw new Error(payload.error || fallbackMsg);
       }
 
@@ -132,13 +112,14 @@ export function AgentCatalog({
     },
   });
 
-  const error = agentsQuery.error?.message ?? createChatMutation.error?.message ?? null;
+  const error =
+    agentsQuery.error?.message ?? createChatMutation.error?.message ?? null;
   const creatingSlug = createChatMutation.isPending
     ? (createChatMutation.variables ?? null)
     : null;
 
   useEffect(() => {
-    if (!autoStart || loading || autoStartTriggered.current) {
+    if (loading || autoStartTriggered.current) {
       return;
     }
 
@@ -147,9 +128,7 @@ export function AgentCatalog({
     }
 
     const target =
-      (targetAgentSlug &&
-        agents.find((agent) => agent.slug === targetAgentSlug)) ||
-      agents[0];
+      agents.find((agent) => agent.slug === targetAgentSlug) || agents[0];
 
     if (!target) {
       return;
@@ -162,83 +141,25 @@ export function AgentCatalog({
       },
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoStart, loading, agents, targetAgentSlug]);
+  }, [loading, agents, targetAgentSlug]);
 
   return (
-    <div className="space-y-4">
-      <Card>
-        <CardHeader className="flex flex-row items-start justify-between gap-3">
-          <div className="space-y-1">
-            <CardTitle>{isEn ? "Agents" : "Agentes"}</CardTitle>
-            <CardDescription>
-              {isEn
-                ? "Choose a specialized assistant for operations, leasing, finance, and growth."
-                : "Elige un asistente especializado para operaciones, leasing, finanzas y crecimiento."}
-            </CardDescription>
-          </div>
-          <Button onClick={() => router.push("/app/chats")} variant="outline">
-            {isEn ? "View chats" : "Ver chats"}
-          </Button>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {error ? (
-            <Alert variant="destructive">
-              <AlertTitle>
-                {isEn ? "Request failed" : "Solicitud fallida"}
-              </AlertTitle>
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
-          ) : null}
+    <div className="flex flex-col items-center justify-center space-y-4 p-12">
+      {error ? (
+        <Alert className="w-full max-w-md" variant="destructive">
+          <AlertTitle>{isEn ? "Error" : "Error"}</AlertTitle>
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      ) : null}
 
-          {loading ? (
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-              {AGENT_SKELETON_KEYS.map((key) => (
-                <Card key={key}>
-                  <CardHeader className="space-y-3 pb-3">
-                    <Skeleton className="h-5 w-32" />
-                    <Skeleton className="h-4 w-full" />
-                  </CardHeader>
-                  <CardContent>
-                    <Skeleton className="h-9 w-28" />
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          ) : (
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-              {agents.map((agent) => (
-                <Card key={agent.id}>
-                  <CardHeader className="space-y-2 pb-3">
-                    <div className="flex items-center justify-between gap-2">
-                      <CardTitle className="text-base">{agent.name}</CardTitle>
-                      <Badge variant="secondary">{isEn ? "AI" : "IA"}</Badge>
-                    </div>
-                    <CardDescription>{agent.description}</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <Button
-                      className="w-full"
-                      disabled={creatingSlug !== null}
-                      onClick={() => {
-                        createChatMutation.reset();
-                        createChatMutation.mutate(agent.slug);
-                      }}
-                    >
-                      {creatingSlug === agent.slug
-                        ? isEn
-                          ? "Opening..."
-                          : "Abriendo..."
-                        : isEn
-                          ? "Start chat"
-                          : "Iniciar chat"}
-                    </Button>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      {!error && (
+        <div className="flex animate-pulse flex-col items-center space-y-4">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-sidebar-primary border-t-transparent" />
+          <p className="font-medium text-muted-foreground text-sm">
+            {isEn ? "Creating Chat..." : "Creando Chat..."}
+          </p>
+        </div>
+      )}
     </div>
   );
 }

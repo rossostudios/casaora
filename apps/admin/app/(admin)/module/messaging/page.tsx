@@ -63,9 +63,7 @@ type PageProps = {
   }>;
 };
 
-export default async function MessagingModulePage({
-  searchParams,
-}: PageProps) {
+export default async function MessagingModulePage({ searchParams }: PageProps) {
   const locale = await getActiveLocale();
   const isEn = locale === "en-US";
   const orgId = await getActiveOrgId();
@@ -87,7 +85,7 @@ export default async function MessagingModulePage({
               : "Selecciona una organización para cargar la bandeja."}
           </CardDescription>
         </CardHeader>
-        <CardContent className="text-sm text-muted-foreground">
+        <CardContent className="text-muted-foreground text-sm">
           {isEn ? (
             <>
               Select an organization from the top bar, or create one in{" "}
@@ -144,7 +142,7 @@ export default async function MessagingModulePage({
               : "No se pudieron cargar los registros de mensajes desde el backend."}
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-2 text-sm text-muted-foreground">
+        <CardContent className="space-y-2 text-muted-foreground text-sm">
           <p>
             {isEn ? "Backend base URL" : "URL base del backend"}:{" "}
             <code className="rounded bg-muted px-1 py-0.5">
@@ -197,9 +195,9 @@ export default async function MessagingModulePage({
           </div>
 
           {/* Tab switcher */}
-          <div className="flex gap-1 border-b border-border/40 pb-0">
+          <div className="flex gap-1 border-border/40 border-b pb-0">
             <Link
-              className={`inline-flex items-center gap-1.5 border-b-2 px-3 py-2 text-sm font-medium transition-colors ${
+              className={`inline-flex items-center gap-1.5 border-b-2 px-3 py-2 font-medium text-sm transition-colors ${
                 activeTab === "inbox"
                   ? "border-primary text-foreground"
                   : "border-transparent text-muted-foreground hover:text-foreground"
@@ -209,7 +207,7 @@ export default async function MessagingModulePage({
               {isEn ? "Inbox" : "Bandeja"}
             </Link>
             <Link
-              className={`inline-flex items-center gap-1.5 border-b-2 px-3 py-2 text-sm font-medium transition-colors ${
+              className={`inline-flex items-center gap-1.5 border-b-2 px-3 py-2 font-medium text-sm transition-colors ${
                 activeTab === "templates"
                   ? "border-primary text-foreground"
                   : "border-transparent text-muted-foreground hover:text-foreground"
@@ -217,19 +215,22 @@ export default async function MessagingModulePage({
               href="/module/messaging?tab=templates"
             >
               {isEn ? "Templates" : "Plantillas"}
-              <Badge className="ml-1 px-1.5 py-0 text-[10px]" variant="secondary">
+              <Badge
+                className="ml-1 px-1.5 py-0 text-[10px]"
+                variant="secondary"
+              >
                 {templates.length}
               </Badge>
             </Link>
           </div>
 
           {sp.success ? (
-            <div className="rounded-lg border border-emerald-200/60 bg-emerald-50/40 px-3 py-2 text-sm text-emerald-700 dark:border-emerald-800/40 dark:bg-emerald-950/20 dark:text-emerald-400">
+            <div className="rounded-lg border border-emerald-200/60 bg-emerald-50/40 px-3 py-2 text-emerald-700 text-sm dark:border-emerald-800/40 dark:bg-emerald-950/20 dark:text-emerald-400">
               {sp.success.replaceAll("-", " ")}
             </div>
           ) : null}
           {sp.error ? (
-            <div className="rounded-lg border border-red-200/60 bg-red-50/40 px-3 py-2 text-sm text-red-700 dark:border-red-800/40 dark:bg-red-950/20 dark:text-red-400">
+            <div className="rounded-lg border border-red-200/60 bg-red-50/40 px-3 py-2 text-red-700 text-sm dark:border-red-800/40 dark:bg-red-950/20 dark:text-red-400">
               {sp.error}
             </div>
           ) : null}
@@ -240,8 +241,8 @@ export default async function MessagingModulePage({
           ) : (
             <MessagingInbox
               conversations={conversations}
-              initialStatus={sp.status}
               initialSegment={sp.segment}
+              initialStatus={sp.status}
               orgId={orgId}
               templates={templates}
             />

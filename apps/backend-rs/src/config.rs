@@ -52,6 +52,7 @@ pub struct AppConfig {
     pub notification_rules_enforced: bool,
     pub ai_agent_enabled: bool,
     pub openai_api_key: Option<String>,
+    pub openai_api_base_url: String,
     pub openai_primary_model: String,
     pub openai_fallback_models: Vec<String>,
     pub openai_model: Option<String>,
@@ -112,6 +113,7 @@ impl AppConfig {
             notification_rules_enforced: env_parse_bool_or("NOTIFICATION_RULES_ENFORCED", false),
             ai_agent_enabled: env_parse_bool_or("AI_AGENT_ENABLED", true),
             openai_api_key: env_opt("OPENAI_API_KEY"),
+            openai_api_base_url: env_or("OPENAI_API_BASE_URL", "https://api.openai.com/v1"),
             openai_primary_model: env_or("OPENAI_PRIMARY_MODEL", "gpt-5.2"),
             openai_fallback_models: parse_csv(&env_or(
                 "OPENAI_FALLBACK_MODELS",
@@ -212,6 +214,19 @@ impl AppConfig {
         }
 
         models
+    }
+
+    pub fn openai_chat_completions_url(&self) -> String {
+        let base = self.openai_api_base_url.trim().trim_end_matches('/');
+        if base.is_empty() {
+            return "https://api.openai.com/v1/chat/completions".to_string();
+        }
+
+        if base.ends_with("/chat/completions") {
+            return base.to_string();
+        }
+
+        format!("{base}/chat/completions")
     }
 
     pub fn workflow_queue_enabled(&self) -> bool {

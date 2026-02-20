@@ -120,7 +120,7 @@ export default async function PropertyRecordPage({
       <div className="space-y-6">
         <RecordRecent href={href} label={data.title} meta={moduleLabel} />
 
-        <div className="relative rounded-3xl pb-4 pt-2">
+        <div className="relative rounded-3xl pt-2 pb-4">
           <div className="relative grid gap-8 px-2 md:px-4 xl:grid-cols-[1fr_320px]">
             <div className="flex flex-col justify-between space-y-8">
               <div className="flex flex-wrap items-start justify-between gap-4">
@@ -129,11 +129,11 @@ export default async function PropertyRecordPage({
                     <Link
                       className={cn(
                         buttonVariants({ variant: "ghost", size: "sm" }),
-                        "h-7 rounded-full px-3 font-semibold text-[10px] uppercase tracking-widest text-muted-foreground transition-all hover:bg-muted/50 hover:text-foreground"
+                        "h-7 rounded-full px-3 font-semibold text-[10px] text-muted-foreground uppercase tracking-widest transition-all hover:bg-muted/50 hover:text-foreground"
                       )}
                       href="/module/properties"
                     >
-                      <Icon icon={ArrowLeft01Icon} size={12} className="mr-1" />
+                      <Icon className="mr-1" icon={ArrowLeft01Icon} size={12} />
                       {isEn ? "Back" : "Volver"}
                     </Link>
                     <Badge
@@ -163,11 +163,11 @@ export default async function PropertyRecordPage({
                     isEn={isEn}
                   />
                   <CopyButton
-                    className="h-9 rounded-full border-border/40 bg-muted/40 px-4 hover:bg-muted/80 text-muted-foreground"
+                    className="h-9 rounded-full border-border/40 bg-muted/40 px-4 text-muted-foreground hover:bg-muted/80"
                     value={data.recordId}
                   />
                   <PinButton
-                    className="h-9 rounded-full border-border/40 bg-muted/40 px-4 hover:bg-muted/80 text-muted-foreground"
+                    className="h-9 rounded-full border-border/40 bg-muted/40 px-4 text-muted-foreground hover:bg-muted/80"
                     href={href}
                     label={data.title}
                     meta={moduleLabel}

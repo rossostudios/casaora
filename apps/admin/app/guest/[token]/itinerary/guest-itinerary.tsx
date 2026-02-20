@@ -22,7 +22,10 @@ interface ItineraryData {
   property: Record<string, unknown> | null;
 }
 
-function asText(obj: Record<string, unknown> | null | undefined, key: string): string {
+function asText(
+  obj: Record<string, unknown> | null | undefined,
+  key: string
+): string {
   if (!obj) return "";
   const v = obj[key];
   return typeof v === "string" ? v.trim() : "";
@@ -31,7 +34,11 @@ function asText(obj: Record<string, unknown> | null | undefined, key: string): s
 export function GuestItinerary() {
   const { token, headers, apiBase } = useGuest();
 
-  const { data, isLoading: loading, error: queryError } = useQuery({
+  const {
+    data,
+    isLoading: loading,
+    error: queryError,
+  } = useQuery({
     queryKey: ["guest-itinerary", token],
     queryFn: async () => {
       const res = await fetch(`${apiBase}/guest/itinerary`, { headers });
@@ -69,10 +76,10 @@ export function GuestItinerary() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold">
+        <h1 className="font-bold text-2xl">
           {guestName ? `Welcome, ${guestName}` : "Your Itinerary"}
         </h1>
-        <p className="text-muted-foreground text-sm mt-1">
+        <p className="mt-1 text-muted-foreground text-sm">
           {propertyName}
           {unitName ? ` — ${unitName}` : ""}
         </p>
@@ -82,8 +89,7 @@ export function GuestItinerary() {
         <CardHeader>
           <CardTitle className="text-lg">Reservation Details</CardTitle>
           <CardDescription>
-            Status:{" "}
-            <span className="font-medium capitalize">{status}</span>
+            Status: <span className="font-medium capitalize">{status}</span>
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-3 text-sm sm:grid-cols-2">

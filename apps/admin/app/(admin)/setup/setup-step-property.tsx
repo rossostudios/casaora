@@ -49,9 +49,7 @@ export function SetupStepProperty({
             : "Registra tu primer activo del portafolio."
         }
         stepNumber={2}
-        title={
-          isEn ? "Add your first property" : "Agrega tu primera propiedad"
-        }
+        title={isEn ? "Add your first property" : "Agrega tu primera propiedad"}
       >
         <form className="grid gap-3" onSubmit={onSubmit}>
           <label className="grid gap-1">
@@ -116,9 +114,7 @@ export function SetupStepProperty({
           : "Se habilita al crear una organización."
       }
       stepNumber={2}
-      title={
-        isEn ? "Add your first property" : "Agrega tu primera propiedad"
-      }
+      title={isEn ? "Add your first property" : "Agrega tu primera propiedad"}
     />
   );
 }

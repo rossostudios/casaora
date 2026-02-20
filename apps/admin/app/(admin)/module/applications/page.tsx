@@ -1,3 +1,4 @@
+import dynamic from "next/dynamic";
 import { Suspense } from "react";
 import { OrgAccessChanged } from "@/components/shell/org-access-changed";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -12,8 +13,6 @@ import { fetchList, getApiBaseUrl } from "@/lib/api";
 import { errorMessage, isOrgMembershipError } from "@/lib/errors";
 import { getActiveLocale } from "@/lib/i18n/server";
 import { getActiveOrgId } from "@/lib/org";
-
-import dynamic from "next/dynamic";
 
 const ApplicationsManager = dynamic(() =>
   import("./applications-manager").then((m) => m.ApplicationsManager)

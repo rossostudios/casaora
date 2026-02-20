@@ -59,6 +59,17 @@ export async function POST(request: Request, { params }: RouteParams) {
     );
   }
 
+  const writeFlags: {
+    allow_mutations?: boolean;
+    confirm_write?: boolean;
+  } = {};
+  if (typeof payload.allow_mutations === "boolean") {
+    writeFlags.allow_mutations = payload.allow_mutations;
+  }
+  if (typeof payload.confirm_write === "boolean") {
+    writeFlags.confirm_write = payload.confirm_write;
+  }
+
   return forwardAgentRequest(
     `/agent/chats/${encodeURIComponent(chatId)}/messages?org_id=${encodeURIComponent(orgId)}`,
     {
@@ -68,8 +79,7 @@ export async function POST(request: Request, { params }: RouteParams) {
       },
       body: JSON.stringify({
         message,
-        allow_mutations: payload.allow_mutations === true,
-        confirm_write: payload.confirm_write === true,
+        ...writeFlags,
       }),
     }
   );

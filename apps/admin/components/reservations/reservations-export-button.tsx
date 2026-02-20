@@ -163,7 +163,9 @@ export function ReservationsExportButton({
       headers.map(escapeCSV).join(","),
       ...rows.map((r) => toRow(r).map(escapeCSV).join(",")),
     ];
-    const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8" });
+    const blob = new Blob([lines.join("\n")], {
+      type: "text/csv;charset=utf-8",
+    });
     const date = new Date().toISOString().slice(0, 10);
     downloadBlob(blob, `reservations-${date}.csv`);
   };
@@ -177,11 +179,17 @@ export function ReservationsExportButton({
       const checkOut = r.check_out_date != null ? r.check_out_date : "";
       const guest = r.guest_name != null ? r.guest_name : "";
       const unit = r.unit_name != null ? r.unit_name : "";
-      const source = r.source === "direct_booking" ? "Marketplace" : r.source != null ? r.source : "Manual";
+      const source =
+        r.source === "direct_booking"
+          ? "Marketplace"
+          : r.source != null
+            ? r.source
+            : "Manual";
       const currency = r.currency != null ? r.currency : "PYG";
-      const amount = r.total_amount != null
-        ? formatCurrency(r.total_amount, currency, locale)
-        : "-";
+      const amount =
+        r.total_amount != null
+          ? formatCurrency(r.total_amount, currency, locale)
+          : "-";
       return [status, checkIn, checkOut, guest, unit, source, amount];
     });
 
@@ -229,7 +237,12 @@ export function ReservationsExportButton({
   }
 
   return (
-    <Button disabled={generating} onClick={handlePDF} size="sm" variant="outline">
+    <Button
+      disabled={generating}
+      onClick={handlePDF}
+      size="sm"
+      variant="outline"
+    >
       {generating ? (
         <>
           <Spinner size="sm" />

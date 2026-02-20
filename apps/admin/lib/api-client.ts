@@ -46,8 +46,7 @@ export async function clientFetch<T = unknown>(
     let message = `Request failed (${response.status})`;
     try {
       const body = await response.json();
-      const detail =
-        body?.detail ?? body?.error ?? body?.message ?? undefined;
+      const detail = body?.detail ?? body?.error ?? body?.message ?? undefined;
       if (typeof detail === "string") message = detail;
     } catch {
       // non-JSON response
@@ -81,7 +80,8 @@ const CLIENT_TOKEN_SKEW_MS = 30_000;
 type BrowserSupabaseClient = ReturnType<typeof createBrowserClient>;
 
 let browserSupabaseClient: BrowserSupabaseClient | null = null;
-let cachedClientToken: { token: string | null; expiresAt: number } | null = null;
+let cachedClientToken: { token: string | null; expiresAt: number } | null =
+  null;
 
 function getBrowserSupabaseClient(): BrowserSupabaseClient {
   if (!browserSupabaseClient) {

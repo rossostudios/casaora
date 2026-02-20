@@ -43,6 +43,10 @@ function SidebarContent({
   const isEn = locale === "en-US";
 
   const openSearch = useCallback(() => {
+    // Relying on setCmdPaletteOpen directly via the parent or context could be cleaner,
+    // but the global keydown event from useGlobalHotkeys already handles this.
+    // If we want to open it via mouse click here, we simulate it via the global event
+    // or trigger a custom event.
     if (typeof window === "undefined") return;
     const isMac = APPLE_DEVICE_REGEX.test(window.navigator.platform);
     const event = new KeyboardEvent("keydown", {
@@ -70,9 +74,9 @@ function SidebarContent({
               const tabLink = (
                 <Link
                   className={cn(
-                    "inline-flex min-w-0 items-center gap-1.5 rounded-lg px-2 py-1.5 font-medium text-[12px] transition-colors",
+                    "inline-flex min-w-0 items-center gap-1.5 rounded-lg px-2 py-1.5 font-medium text-[12px] transition-all duration-200",
                     active
-                      ? "bg-sidebar-primary text-sidebar-primary-foreground shadow-sm"
+                      ? "bg-sidebar-primary/10 text-sidebar-primary shadow-sm ring-1 ring-sidebar-primary/20 ring-inset"
                       : "text-sidebar-foreground/50 hover:bg-sidebar-accent/60 hover:text-sidebar-foreground"
                   )}
                   href={tab.href}
@@ -149,10 +153,14 @@ function SidebarContent({
 
       <div className="shrink-0 space-y-2 p-3 pt-0">
         <Link
-          className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-full bg-sidebar-primary px-3 font-medium text-[13px] text-sidebar-primary-foreground shadow-[0_1px_3px_rgba(255,93,70,0.25)] transition-all hover:shadow-[0_2px_8px_rgba(255,93,70,0.3)] hover:brightness-110"
+          className="group inline-flex h-10 w-full items-center justify-center gap-2 rounded-full border border-sidebar-border/50 bg-sidebar-accent/30 px-3 font-medium text-[13px] text-sidebar-foreground shadow-sm transition-all duration-300 hover:border-sidebar-border/80 hover:bg-sidebar-accent hover:shadow"
           href="/app/agents?new=1"
         >
-          <Icon icon={AiVoiceGeneratorIcon} size={14} />
+          <Icon
+            className="text-sidebar-primary transition-transform duration-300 group-hover:scale-110"
+            icon={AiVoiceGeneratorIcon}
+            size={14}
+          />
           {isEn ? "New chat" : "Nuevo chat"}
         </Link>
         <SidebarAccount collapsed={false} locale={locale} orgId={orgId} />

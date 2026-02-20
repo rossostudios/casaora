@@ -1,5 +1,12 @@
 "use client";
 
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  type ChartConfig,
+  ChartContainer,
+  ChartTooltip,
+  ChartTooltipContent,
+} from "@/components/ui/chart";
 import {
   Bar,
   BarChart,
@@ -10,14 +17,6 @@ import {
   XAxis,
   YAxis,
 } from "@/lib/recharts";
-
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  type ChartConfig,
-  ChartContainer,
-  ChartTooltip,
-  ChartTooltipContent,
-} from "@/components/ui/chart";
 
 export function ApplicationsCharts({
   isEn,
@@ -50,11 +49,7 @@ export function ApplicationsCharts({
                 tickLine={false}
                 tickMargin={8}
               />
-              <YAxis
-                allowDecimals={false}
-                axisLine={false}
-                tickLine={false}
-              />
+              <YAxis allowDecimals={false} axisLine={false} tickLine={false} />
               <ChartTooltip
                 content={(props) => (
                   <ChartTooltipContent
@@ -84,14 +79,8 @@ export function ApplicationsCharts({
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <ChartContainer
-            className="h-48 w-full"
-            config={responseTrendConfig}
-          >
-            <LineChart
-              data={responseTrendData}
-              margin={{ left: 0, right: 8 }}
-            >
+          <ChartContainer className="h-48 w-full" config={responseTrendConfig}>
+            <LineChart data={responseTrendData} margin={{ left: 0, right: 8 }}>
               <CartesianGrid vertical={false} />
               <XAxis
                 axisLine={false}
@@ -99,11 +88,7 @@ export function ApplicationsCharts({
                 tickLine={false}
                 tickMargin={8}
               />
-              <YAxis
-                allowDecimals={false}
-                axisLine={false}
-                tickLine={false}
-              />
+              <YAxis allowDecimals={false} axisLine={false} tickLine={false} />
               <ChartTooltip
                 content={(props) => (
                   <ChartTooltipContent

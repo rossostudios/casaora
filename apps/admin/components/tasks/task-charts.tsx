@@ -2,6 +2,14 @@
 
 import { useMemo } from "react";
 import {
+  type ChartConfig,
+  ChartContainer,
+  ChartTooltip,
+  ChartTooltipContent,
+} from "@/components/ui/chart";
+import type { DataTableRow } from "@/components/ui/data-table";
+import { asString } from "@/lib/features/tasks/helpers";
+import {
   Bar,
   BarChart,
   CartesianGrid,
@@ -11,15 +19,6 @@ import {
   XAxis,
   YAxis,
 } from "@/lib/recharts";
-
-import {
-  type ChartConfig,
-  ChartContainer,
-  ChartTooltip,
-  ChartTooltipContent,
-} from "@/components/ui/chart";
-import { asString } from "@/lib/features/tasks/helpers";
-import type { DataTableRow } from "@/components/ui/data-table";
 
 type StatusCounts = {
   todo: number;

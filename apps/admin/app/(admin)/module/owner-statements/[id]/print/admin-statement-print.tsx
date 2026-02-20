@@ -1,7 +1,7 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
 import { StatementPrintView } from "@/components/statements/statement-print-view";
+import { Button } from "@/components/ui/button";
 
 function asString(value: unknown): string {
   return typeof value === "string" ? value : value ? String(value) : "";
@@ -45,10 +45,7 @@ export function AdminStatementPrint({
   return (
     <div>
       <div className="no-print mx-auto mb-4 flex max-w-3xl justify-end gap-2 px-8 pt-4">
-        <Button
-          onClick={() => window.print()}
-          size="sm"
-        >
+        <Button onClick={() => window.print()} size="sm">
           {isEn ? "Print" : "Imprimir"}
         </Button>
       </div>
@@ -68,7 +65,9 @@ export function AdminStatementPrint({
         locale={locale}
         netPayout={asNumber(statement.net_payout)}
         orgName={orgName}
-        periodLabel={asString(statement.period_label) || asString(statement.month)}
+        periodLabel={
+          asString(statement.period_label) || asString(statement.month)
+        }
         totalExpenses={asNumber(statement.total_expenses)}
         totalRevenue={asNumber(statement.total_revenue)}
       />

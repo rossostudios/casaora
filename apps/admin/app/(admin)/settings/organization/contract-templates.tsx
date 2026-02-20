@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useCallback, useState } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -37,9 +37,7 @@ function parseTemplate(raw: Record<string, unknown>): TemplateRow {
     name: asString(raw.name),
     language: asString(raw.language) || "es",
     body_template: asString(raw.body_template),
-    variables: Array.isArray(variables)
-      ? variables.map(String)
-      : [],
+    variables: Array.isArray(variables) ? variables.map(String) : [],
     is_default: Boolean(raw.is_default),
     created_at: asString(raw.created_at),
   };
@@ -65,11 +63,7 @@ const AVAILABLE_VARIABLES = [
   "today",
 ];
 
-export function ContractTemplatesSection({
-  orgId,
-}: {
-  orgId: string;
-}) {
+export function ContractTemplatesSection({ orgId }: { orgId: string }) {
   "use no memo";
   const locale = useActiveLocale();
   const isEn = locale === "en-US";
@@ -128,10 +122,16 @@ export function ContractTemplatesSection({
       ? `${API_BASE}/contract-templates/${encodeURIComponent(editingId)}`
       : `${API_BASE}/contract-templates`;
     const method = editingId ? "PATCH" : "POST";
-    const defaultErrorMsg = isEn ? "Failed to save template" : "Error al guardar la plantilla";
+    const defaultErrorMsg = isEn
+      ? "Failed to save template"
+      : "Error al guardar la plantilla";
     const successMsg = editingId
-      ? isEn ? "Template updated" : "Plantilla actualizada"
-      : isEn ? "Template created" : "Plantilla creada";
+      ? isEn
+        ? "Template updated"
+        : "Plantilla actualizada"
+      : isEn
+        ? "Template created"
+        : "Plantilla creada";
 
     const body: Record<string, unknown> = {
       name: name.trim(),
@@ -174,7 +174,9 @@ export function ContractTemplatesSection({
       toast.success(successMsg);
       setSheetOpen(false);
       resetForm();
-      queryClient.invalidateQueries({ queryKey: ["contract-templates", orgId] });
+      queryClient.invalidateQueries({
+        queryKey: ["contract-templates", orgId],
+      });
       setBusy(false);
     } catch {
       let networkErrMsg: string;
@@ -186,7 +188,16 @@ export function ContractTemplatesSection({
       toast.error(networkErrMsg);
       setBusy(false);
     }
-  }, [name, language, bodyTemplate, isDefault, orgId, editingId, isEn, queryClient]);
+  }, [
+    name,
+    language,
+    bodyTemplate,
+    isDefault,
+    orgId,
+    editingId,
+    isEn,
+    queryClient,
+  ]);
 
   const handleDelete = useCallback(
     async (id: string) => {
@@ -262,7 +273,7 @@ export function ContractTemplatesSection({
       </CardHeader>
       <CardContent className="space-y-3">
         {loading ? (
-          <p className="text-muted-foreground text-sm animate-pulse">
+          <p className="animate-pulse text-muted-foreground text-sm">
             {isEn ? "Loading..." : "Cargando..."}
           </p>
         ) : templates.length === 0 ? (
@@ -279,7 +290,7 @@ export function ContractTemplatesSection({
             >
               <div className="min-w-0">
                 <p className="truncate font-medium text-sm">{t.name}</p>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-muted-foreground text-xs">
                   {t.language === "es" ? "Español" : "English"} ·{" "}
                   {t.variables.length} {isEn ? "variables" : "variables"}
                   {t.is_default ? (
@@ -295,11 +306,7 @@ export function ContractTemplatesSection({
                 </p>
               </div>
               <div className="flex gap-1">
-                <Button
-                  onClick={() => handleEdit(t)}
-                  size="sm"
-                  variant="ghost"
-                >
+                <Button onClick={() => handleEdit(t)} size="sm" variant="ghost">
                   {isEn ? "Edit" : "Editar"}
                 </Button>
                 <Button
@@ -317,6 +324,11 @@ export function ContractTemplatesSection({
 
         {/* Create/Edit Sheet */}
         <Sheet
+          description={
+            isEn
+              ? "Use {{variable}} placeholders that will be replaced with lease data."
+              : "Usa {{variable}} como marcadores que se reemplazarán con datos del contrato."
+          }
           onOpenChange={(open) => {
             setSheetOpen(open);
             if (!open) resetForm();
@@ -330,11 +342,6 @@ export function ContractTemplatesSection({
               : isEn
                 ? "New Contract Template"
                 : "Nueva Plantilla de Contrato"
-          }
-          description={
-            isEn
-              ? "Use {{variable}} placeholders that will be replaced with lease data."
-              : "Usa {{variable}} como marcadores que se reemplazarán con datos del contrato."
           }
         >
           <div className="space-y-4">
@@ -385,7 +392,7 @@ export function ContractTemplatesSection({
 
             {/* Variables preview */}
             <div className="space-y-1">
-              <p className="text-xs font-medium text-muted-foreground">
+              <p className="font-medium text-muted-foreground text-xs">
                 {isEn ? "Available variables:" : "Variables disponibles:"}
               </p>
               <div className="flex flex-wrap gap-1">
@@ -393,9 +400,7 @@ export function ContractTemplatesSection({
                   <button
                     className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] hover:bg-muted/80"
                     key={v}
-                    onClick={() =>
-                      setBodyTemplate((prev) => `${prev}{{${v}}}`)
-                    }
+                    onClick={() => setBodyTemplate((prev) => `${prev}{{${v}}}`)}
                     type="button"
                   >
                     {`{{${v}}}`}
@@ -406,9 +411,10 @@ export function ContractTemplatesSection({
 
             {/* Detected variables */}
             {bodyTemplate ? (
-              <div className="text-xs text-muted-foreground">
+              <div className="text-muted-foreground text-xs">
                 {isEn ? "Detected:" : "Detectadas:"}{" "}
-                {extractVariables(bodyTemplate).join(", ") || (isEn ? "none" : "ninguna")}
+                {extractVariables(bodyTemplate).join(", ") ||
+                  (isEn ? "none" : "ninguna")}
               </div>
             ) : null}
 
@@ -420,7 +426,9 @@ export function ContractTemplatesSection({
                 type="checkbox"
               />
               <span>
-                {isEn ? "Set as default template" : "Establecer como plantilla predeterminada"}
+                {isEn
+                  ? "Set as default template"
+                  : "Establecer como plantilla predeterminada"}
               </span>
             </label>
 

@@ -35,10 +35,22 @@ function pct(value: unknown): string {
  * PDF generation logic — extracted to module scope so the React Compiler
  * can optimize the component without encountering value blocks in try/catch.
  */
-async function generateOwnerStatementPdf(props: OwnerStatementPdfProps): Promise<void> {
-  const { reportData, orgName, orgRuc, orgQrImageUrl, periodLabel, locale, isEn } = props;
+async function generateOwnerStatementPdf(
+  props: OwnerStatementPdfProps
+): Promise<void> {
+  const {
+    reportData,
+    orgName,
+    orgRuc,
+    orgQrImageUrl,
+    periodLabel,
+    locale,
+    isEn,
+  } = props;
 
-  const titleText = isEn ? "Owner Statement" : "Estado de Cuenta del Propietario";
+  const titleText = isEn
+    ? "Owner Statement"
+    : "Estado de Cuenta del Propietario";
   const summaryTitle = isEn ? "Summary" : "Resumen";
   const itemLabel = isEn ? "Item" : "Concepto";
   const amountLabel = isEn ? "Amount" : "Monto";
@@ -65,11 +77,23 @@ async function generateOwnerStatementPdf(props: OwnerStatementPdfProps): Promise
   }
 
   const summaryData = [
-    [isEn ? "Gross Revenue" : "Ingresos Brutos", fmt(reportData.gross_revenue, "PYG", locale)],
-    [isEn ? "Lease Collections" : "Cobros de Alquiler", fmt(leaseCollections, "PYG", locale)],
-    [isEn ? "Service Fees" : "Cuotas de Servicio", fmt(reportData.service_fees, "PYG", locale)],
+    [
+      isEn ? "Gross Revenue" : "Ingresos Brutos",
+      fmt(reportData.gross_revenue, "PYG", locale),
+    ],
+    [
+      isEn ? "Lease Collections" : "Cobros de Alquiler",
+      fmt(leaseCollections, "PYG", locale),
+    ],
+    [
+      isEn ? "Service Fees" : "Cuotas de Servicio",
+      fmt(reportData.service_fees, "PYG", locale),
+    ],
     [isEn ? "Expenses" : "Gastos", fmt(expenses, "PYG", locale)],
-    [isEn ? "Platform Fees" : "Comisiones de Plataforma", fmt(reportData.platform_fees, "PYG", locale)],
+    [
+      isEn ? "Platform Fees" : "Comisiones de Plataforma",
+      fmt(reportData.platform_fees, "PYG", locale),
+    ],
     [isEn ? "Taxes" : "Impuestos", fmt(taxesCollected, "PYG", locale)],
   ].filter(([, val]) => val !== "-");
 
@@ -77,16 +101,28 @@ async function generateOwnerStatementPdf(props: OwnerStatementPdfProps): Promise
 
   const perfData: string[][] = [];
   if (reportData.occupancy_rate !== undefined) {
-    perfData.push([isEn ? "Occupancy Rate" : "Tasa de Ocupación", pct(reportData.occupancy_rate)]);
+    perfData.push([
+      isEn ? "Occupancy Rate" : "Tasa de Ocupación",
+      pct(reportData.occupancy_rate),
+    ]);
   }
   if (reportData.collection_rate !== undefined) {
-    perfData.push([isEn ? "Collection Rate" : "Tasa de Cobro", pct(reportData.collection_rate)]);
+    perfData.push([
+      isEn ? "Collection Rate" : "Tasa de Cobro",
+      pct(reportData.collection_rate),
+    ]);
   }
   if (reportData.total_units !== undefined) {
-    perfData.push([isEn ? "Total Units" : "Total Unidades", String(reportData.total_units)]);
+    perfData.push([
+      isEn ? "Total Units" : "Total Unidades",
+      String(reportData.total_units),
+    ]);
   }
   if (reportData.active_leases !== undefined) {
-    perfData.push([isEn ? "Active Leases" : "Contratos Activos", String(reportData.active_leases)]);
+    perfData.push([
+      isEn ? "Active Leases" : "Contratos Activos",
+      String(reportData.active_leases),
+    ]);
   }
 
   let hasPerformance = false;
@@ -104,7 +140,11 @@ async function generateOwnerStatementPdf(props: OwnerStatementPdfProps): Promise
   const autoTable = autoTableModule.default;
 
   try {
-    const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+    const doc = new jsPDF({
+      orientation: "portrait",
+      unit: "mm",
+      format: "a4",
+    });
     const pageWidth = doc.internal.pageSize.getWidth();
     const margin = 15;
     let y = 20;
@@ -156,11 +196,7 @@ async function generateOwnerStatementPdf(props: OwnerStatementPdfProps): Promise
     // Net payout highlight
     doc.setFontSize(12);
     doc.setFont("helvetica", "bold");
-    doc.text(
-      netPayoutLabel + ": " + netPayout,
-      margin,
-      y
-    );
+    doc.text(netPayoutLabel + ": " + netPayout, margin, y);
     y += 10;
 
     // Occupancy & Performance
@@ -204,11 +240,7 @@ async function generateOwnerStatementPdf(props: OwnerStatementPdfProps): Promise
         doc.setFontSize(8);
         doc.setFont("helvetica", "normal");
         doc.setTextColor(100);
-        doc.text(
-          scanLabel,
-          margin + qrSize + 4,
-          y + qrSize / 2,
-        );
+        doc.text(scanLabel, margin + qrSize + 4, y + qrSize / 2);
         y += qrSize + 10;
       } catch {
         // QR image fetch failed — skip silently
@@ -225,18 +257,15 @@ async function generateOwnerStatementPdf(props: OwnerStatementPdfProps): Promise
       doc.setFont("helvetica", "normal");
       doc.setTextColor(150);
       const footerY = doc.internal.pageSize.getHeight() - 10;
-      const footerRight = pagePrefix + " " + String(i) + "/" + String(pageCount);
+      const footerRight =
+        pagePrefix + " " + String(i) + "/" + String(pageCount);
       doc.text(footerLeft, margin, footerY);
-      doc.text(
-        footerRight,
-        pageWidth - margin,
-        footerY,
-        { align: "right" }
-      );
+      doc.text(footerRight, pageWidth - margin, footerY, { align: "right" });
     }
 
     // Download
-    const fileName = filePrefix + "-" + periodLabel.replace(/\s+/g, "-") + ".pdf";
+    const fileName =
+      filePrefix + "-" + periodLabel.replace(/\s+/g, "-") + ".pdf";
     doc.save(fileName);
   } catch (err) {
     console.error("PDF generation failed:", err);
@@ -257,16 +286,24 @@ export function OwnerStatementPdfButton({
   const handleDownload = async () => {
     if (generating) return;
     setGenerating(true);
-    await generateOwnerStatementPdf({ reportData, orgName, orgRuc, orgQrImageUrl, periodLabel, locale, isEn });
+    await generateOwnerStatementPdf({
+      reportData,
+      orgName,
+      orgRuc,
+      orgQrImageUrl,
+      periodLabel,
+      locale,
+      isEn,
+    });
     setGenerating(false);
   };
 
   return (
     <Button
-      variant="outline"
-      size="sm"
-      onClick={handleDownload}
       disabled={generating}
+      onClick={handleDownload}
+      size="sm"
+      variant="outline"
     >
       {generating ? (
         <>

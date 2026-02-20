@@ -30,7 +30,7 @@ export function CollectionsToolbar({
         <div className="flex rounded-md border">
           <button
             className={cn(
-              "px-3 py-1 text-xs font-medium transition-colors",
+              "px-3 py-1 font-medium text-xs transition-colors",
               viewMode === "list"
                 ? "bg-primary text-primary-foreground"
                 : "hover:bg-muted"
@@ -42,7 +42,7 @@ export function CollectionsToolbar({
           </button>
           <button
             className={cn(
-              "px-3 py-1 text-xs font-medium transition-colors",
+              "px-3 py-1 font-medium text-xs transition-colors",
               viewMode === "aging"
                 ? "bg-primary text-primary-foreground"
                 : "hover:bg-muted"

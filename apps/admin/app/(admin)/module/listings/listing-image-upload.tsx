@@ -2,7 +2,7 @@
 
 import { Cancel01Icon, CloudUploadIcon } from "@hugeicons/core-free-icons";
 import Image from "next/image";
-import { useCallback, useRef, useState, type DragEvent } from "react";
+import { type DragEvent, useCallback, useRef, useState } from "react";
 
 import { ReorderableImageGrid } from "@/components/listings/reorderable-image-grid";
 import { Icon } from "@/components/ui/icon";
@@ -67,7 +67,7 @@ export function ImageUpload({
               ? [controlledValue]
               : []
         );
-        controlledOnChange?.(multiple ? next : next[0] ?? "");
+        controlledOnChange?.(multiple ? next : (next[0] ?? ""));
       } else {
         setInternalUrls(updater);
       }
@@ -82,9 +82,7 @@ export function ImageUpload({
       for (const file of list) {
         if (!file) continue;
         upload(file, (publicUrl) => {
-          setUrls((prev) =>
-            multiple ? [...prev, publicUrl] : [publicUrl]
-          );
+          setUrls((prev) => (multiple ? [...prev, publicUrl] : [publicUrl]));
         });
       }
     },
@@ -119,7 +117,7 @@ export function ImageUpload({
     [setUrls]
   );
 
-  const serialized = multiple ? JSON.stringify(urls) : urls[0] ?? "";
+  const serialized = multiple ? JSON.stringify(urls) : (urls[0] ?? "");
 
   return (
     <div className="space-y-2">

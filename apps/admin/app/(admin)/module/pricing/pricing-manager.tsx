@@ -227,7 +227,12 @@ function PricingManagerInner({
 
           <label className="space-y-1 text-sm" htmlFor="pricing-template-name">
             <span>{isEn ? "Template name" : "Nombre de plantilla"}</span>
-            <Input id="pricing-template-name" name="name" placeholder="Largo plazo estándar" required />
+            <Input
+              id="pricing-template-name"
+              name="name"
+              placeholder="Largo plazo estándar"
+              required
+            />
           </label>
 
           <label className="space-y-1 text-sm" htmlFor="pricing-currency">
@@ -252,9 +257,18 @@ function PricingManagerInner({
             </label>
             <label className="space-y-1 text-sm" htmlFor="pricing-advance-rent">
               <span>{isEn ? "Advance rent" : "Adelanto"}</span>
-              <Input id="pricing-advance-rent" min={0} name="advance_rent" step="0.01" type="number" />
+              <Input
+                id="pricing-advance-rent"
+                min={0}
+                name="advance_rent"
+                step="0.01"
+                type="number"
+              />
             </label>
-            <label className="space-y-1 text-sm" htmlFor="pricing-security-deposit">
+            <label
+              className="space-y-1 text-sm"
+              htmlFor="pricing-security-deposit"
+            >
               <span>{isEn ? "Security deposit" : "Garantía"}</span>
               <Input
                 id="pricing-security-deposit"
@@ -276,9 +290,18 @@ function PricingManagerInner({
             </label>
             <label className="space-y-1 text-sm" htmlFor="pricing-tax-iva">
               <span>IVA</span>
-              <Input id="pricing-tax-iva" min={0} name="tax_iva" step="0.01" type="number" />
+              <Input
+                id="pricing-tax-iva"
+                min={0}
+                name="tax_iva"
+                step="0.01"
+                type="number"
+              />
             </label>
-            <label className="space-y-1 text-sm" htmlFor="pricing-guarantee-option-fee">
+            <label
+              className="space-y-1 text-sm"
+              htmlFor="pricing-guarantee-option-fee"
+            >
               <span>
                 {isEn ? "Guarantee option fee" : "Costo opción de garantía"}
               </span>

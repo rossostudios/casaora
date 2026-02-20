@@ -32,7 +32,7 @@ function parseRow(raw: Record<string, unknown>): ReservationRow {
   let nights = 0;
   if (checkIn && checkOut) {
     const diff = new Date(checkOut).getTime() - new Date(checkIn).getTime();
-    nights = Math.max(Math.ceil(diff / 86400000), 0);
+    nights = Math.max(Math.ceil(diff / 86_400_000), 0);
   }
   return {
     id: asString(raw.id),
@@ -82,7 +82,7 @@ export function OwnerReservations({ locale }: { locale: string }) {
   if (loading) {
     return (
       <div className="flex min-h-[50vh] items-center justify-center">
-        <p className="text-muted-foreground animate-pulse">
+        <p className="animate-pulse text-muted-foreground">
           {isEn ? "Loading..." : "Cargando..."}
         </p>
       </div>
@@ -92,11 +92,11 @@ export function OwnerReservations({ locale }: { locale: string }) {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">
+        <h1 className="font-bold text-2xl">
           {isEn ? "Reservations" : "Reservas"}
         </h1>
         <Link
-          className="text-sm text-primary hover:underline"
+          className="text-primary text-sm hover:underline"
           href="/owner/dashboard"
         >
           {isEn ? "Back to dashboard" : "Volver al panel"}
@@ -124,24 +124,24 @@ export function OwnerReservations({ locale }: { locale: string }) {
               <CardContent>
                 <div className="grid gap-3 sm:grid-cols-3">
                   <div>
-                    <p className="text-xs text-muted-foreground">
+                    <p className="text-muted-foreground text-xs">
                       {isEn ? "Dates" : "Fechas"}
                     </p>
-                    <p className="text-sm font-medium">
+                    <p className="font-medium text-sm">
                       {row.check_in_date} &rarr; {row.check_out_date}
                     </p>
                   </div>
                   <div>
-                    <p className="text-xs text-muted-foreground">
+                    <p className="text-muted-foreground text-xs">
                       {isEn ? "Nights" : "Noches"}
                     </p>
-                    <p className="text-sm font-medium">{row.nights}</p>
+                    <p className="font-medium text-sm">{row.nights}</p>
                   </div>
                   <div>
-                    <p className="text-xs text-muted-foreground">
+                    <p className="text-muted-foreground text-xs">
                       {isEn ? "Guest" : "Huésped"}
                     </p>
-                    <p className="text-sm font-medium">
+                    <p className="font-medium text-sm">
                       {row.guest_name || "—"}
                     </p>
                   </div>

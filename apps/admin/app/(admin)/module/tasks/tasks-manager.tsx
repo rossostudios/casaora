@@ -1,17 +1,18 @@
 "use client";
 
 import type { ColumnDef } from "@tanstack/react-table";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { Suspense, useMemo, useState } from "react";
-
 import { createTaskAction } from "@/app/(admin)/module/tasks/actions";
+import { TaskBoard } from "@/components/tasks/task-board";
 import { Button } from "@/components/ui/button";
-import { type DataTableRow } from "@/components/ui/data-table";
-import { NotionDataTable } from "@/components/ui/notion-data-table";
+import type { DataTableRow } from "@/components/ui/data-table";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Form } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import { NotionDataTable } from "@/components/ui/notion-data-table";
 import { Select } from "@/components/ui/select";
 import { Sheet } from "@/components/ui/sheet";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -21,21 +22,19 @@ import {
   localizedPriorityLabel,
   localizedTaskStatusLabel,
   localizedTaskTypeLabel,
+  PRIORITY_OPTIONS,
   priorityTone,
   shortId,
-  PRIORITY_OPTIONS,
-  TYPE_OPTIONS,
   type TaskRow,
+  TYPE_OPTIONS,
   type UnitRow,
 } from "@/lib/features/tasks/helpers";
 import { useActiveLocale } from "@/lib/i18n/client";
 
-import { TaskBoard } from "@/components/tasks/task-board";
-import dynamic from "next/dynamic";
-
 const TaskCharts = dynamic(() =>
   import("@/components/tasks/task-charts").then((m) => m.TaskCharts)
 );
+
 import { TaskFilters } from "@/components/tasks/task-filters";
 import { TaskRowActions } from "@/components/tasks/task-row-actions";
 
@@ -374,12 +373,7 @@ function TasksManagerInner({
         unitOptions={unitOptions}
       />
 
-      <TaskCharts
-        counts={counts}
-        isEn={isEn}
-        locale={locale}
-        rows={rows}
-      />
+      <TaskCharts counts={counts} isEn={isEn} locale={locale} rows={rows} />
 
       <TaskBoard
         isEn={isEn}

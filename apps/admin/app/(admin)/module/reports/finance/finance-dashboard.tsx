@@ -2,18 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useCallback, useMemo, useState } from "react";
-import {
-  Area,
-  AreaChart,
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Cell,
-  Pie,
-  PieChart,
-  XAxis,
-  YAxis,
-} from "@/lib/recharts";
+import { Button } from "@/components/ui/button";
 
 import {
   Card,
@@ -28,12 +17,23 @@ import {
   ChartTooltip,
   ChartTooltipContent,
 } from "@/components/ui/chart";
-import { Button } from "@/components/ui/button";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Select } from "@/components/ui/select";
 import { StatCard } from "@/components/ui/stat-card";
 import { formatCurrency, humanizeKey } from "@/lib/format";
 import type { Locale } from "@/lib/i18n";
+import {
+  Area,
+  AreaChart,
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  Pie,
+  PieChart,
+  XAxis,
+  YAxis,
+} from "@/lib/recharts";
 
 type MonthData = {
   month: string;
@@ -123,7 +123,11 @@ export function FinanceDashboard({
     (months: number) => {
       const now = new Date();
       const newTo = now.toISOString().slice(0, 10);
-      const newFrom = new Date(now.getFullYear(), now.getMonth() - months + 1, 1)
+      const newFrom = new Date(
+        now.getFullYear(),
+        now.getMonth() - months + 1,
+        1
+      )
         .toISOString()
         .slice(0, 10);
       setFrom(newFrom);
@@ -213,9 +217,7 @@ export function FinanceDashboard({
     [months]
   );
 
-  const hasRevenue = months.some(
-    (m) => m.revenue > 0 || m.expenses > 0
-  );
+  const hasRevenue = months.some((m) => m.revenue > 0 || m.expenses > 0);
   const hasBreakdown = expenseBreakdown.some((item) => item.total > 0);
   const hasCollections = months.some((m) => m.collections_scheduled > 0);
 
@@ -262,22 +264,14 @@ export function FinanceDashboard({
           <span className="block text-muted-foreground text-xs">
             {isEn ? "From" : "Desde"}
           </span>
-          <DatePicker
-            locale={locale}
-            onValueChange={setFrom}
-            value={from}
-          />
+          <DatePicker locale={locale} onValueChange={setFrom} value={from} />
         </label>
 
         <label className="space-y-1 text-sm">
           <span className="block text-muted-foreground text-xs">
             {isEn ? "To" : "Hasta"}
           </span>
-          <DatePicker
-            locale={locale}
-            onValueChange={setTo}
-            value={to}
-          />
+          <DatePicker locale={locale} onValueChange={setTo} value={to} />
         </label>
 
         {propertyOptions.length > 0 ? (
@@ -285,10 +279,7 @@ export function FinanceDashboard({
             <span className="block text-muted-foreground text-xs">
               {isEn ? "Property" : "Propiedad"}
             </span>
-            <Select
-              onChange={(e) => setPropId(e.target.value)}
-              value={propId}
-            >
+            <Select onChange={(e) => setPropId(e.target.value)} value={propId}>
               <option value="">{isEn ? "All" : "Todas"}</option>
               {propertyOptions.map((p) => (
                 <option key={p.id} value={p.id}>
@@ -342,7 +333,9 @@ export function FinanceDashboard({
           <div className="space-y-2 font-mono text-sm">
             <div className="flex justify-between">
               <span>
-                {isEn ? "Revenue (collections paid)" : "Ingresos (cobros pagados)"}
+                {isEn
+                  ? "Revenue (collections paid)"
+                  : "Ingresos (cobros pagados)"}
               </span>
               <span className="font-medium">
                 {formatCurrency(totals.revenue, "PYG", locale)}
@@ -394,9 +387,7 @@ export function FinanceDashboard({
                   />
                   <YAxis
                     axisLine={false}
-                    tickFormatter={(v) =>
-                      formatCurrency(v, "PYG", locale)
-                    }
+                    tickFormatter={(v) => formatCurrency(v, "PYG", locale)}
                     tickLine={false}
                     tickMargin={8}
                     width={72}
@@ -405,9 +396,7 @@ export function FinanceDashboard({
                     content={(props) => (
                       <ChartTooltipContent
                         {...props}
-                        valueFormatter={(v) =>
-                          formatCurrency(v, "PYG", locale)
-                        }
+                        valueFormatter={(v) => formatCurrency(v, "PYG", locale)}
                       />
                     )}
                     cursor={{ fill: "rgba(0,0,0,0.04)" }}
@@ -453,10 +442,7 @@ export function FinanceDashboard({
           </CardHeader>
           <CardContent className="min-w-0 pt-4">
             {hasCollections ? (
-              <ChartContainer
-                className="h-64 w-full"
-                config={collectionConfig}
-              >
+              <ChartContainer className="h-64 w-full" config={collectionConfig}>
                 <AreaChart data={collectionData} margin={{ left: 8, right: 8 }}>
                   <CartesianGrid vertical={false} />
                   <XAxis
@@ -482,13 +468,7 @@ export function FinanceDashboard({
                     )}
                   />
                   <defs>
-                    <linearGradient
-                      id="fillRate"
-                      x1="0"
-                      x2="0"
-                      y1="0"
-                      y2="1"
-                    >
+                    <linearGradient id="fillRate" x1="0" x2="0" y1="0" y2="1">
                       <stop
                         offset="5%"
                         stopColor="var(--color-collection_rate)"
@@ -543,12 +523,8 @@ export function FinanceDashboard({
                     content={(props) => (
                       <ChartTooltipContent
                         {...props}
-                        headerFormatter={() =>
-                          isEn ? "Expenses" : "Gastos"
-                        }
-                        valueFormatter={(v) =>
-                          formatCurrency(v, "PYG", locale)
-                        }
+                        headerFormatter={() => (isEn ? "Expenses" : "Gastos")}
+                        valueFormatter={(v) => formatCurrency(v, "PYG", locale)}
                       />
                     )}
                   />
@@ -585,9 +561,7 @@ export function FinanceDashboard({
               {isEn ? "Outstanding Collections" : "Cobros Pendientes"}
             </CardTitle>
             <CardDescription>
-              {isEn
-                ? "Unpaid or overdue"
-                : "Sin pagar o vencidos"}
+              {isEn ? "Unpaid or overdue" : "Sin pagar o vencidos"}
             </CardDescription>
           </CardHeader>
           <CardContent className="min-w-0 pt-4">
@@ -609,7 +583,10 @@ export function FinanceDashboard({
                   </thead>
                   <tbody>
                     {outstandingCollections.map((c) => (
-                      <tr className="border-b border-border/50" key={`${asString(c.due_date)}-${asNumber(c.amount)}-${asString(c.status)}`}>
+                      <tr
+                        className="border-border/50 border-b"
+                        key={`${asString(c.due_date)}-${asNumber(c.amount)}-${asString(c.status)}`}
+                      >
                         <td className="py-2 tabular-nums">
                           {asString(c.due_date)}
                         </td>
@@ -622,7 +599,7 @@ export function FinanceDashboard({
                         </td>
                         <td className="py-2">
                           <span
-                            className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${
+                            className={`inline-flex rounded-full px-2 py-0.5 font-medium text-xs ${
                               asString(c.status) === "overdue"
                                 ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
                                 : "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400"

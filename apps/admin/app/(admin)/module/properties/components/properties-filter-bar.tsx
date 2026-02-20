@@ -6,7 +6,7 @@ import {
   Search01Icon,
   SidebarRight01Icon,
 } from "@hugeicons/core-free-icons";
-
+import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -15,7 +15,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { Input } from "@/components/ui/input";
 import type {
@@ -56,7 +55,7 @@ export function PropertiesFilterBar({
     <div className="flex flex-wrap items-center justify-between gap-4 rounded-full border border-border/40 bg-card/40 p-1.5 pl-4 shadow-sm backdrop-blur-md">
       <div className="relative min-w-[20rem] flex-1">
         <Icon
-          className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground"
+          className="pointer-events-none absolute top-1/2 left-3.5 -translate-y-1/2 text-muted-foreground"
           icon={Search01Icon}
           size={15}
         />

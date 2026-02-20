@@ -4,12 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 
 import { useGuest } from "../layout";
@@ -34,7 +29,11 @@ interface CheckinData {
 export function CheckinInfo() {
   const { token, headers, apiBase } = useGuest();
 
-  const { data, isLoading: loading, error: queryError } = useQuery({
+  const {
+    data,
+    isLoading: loading,
+    error: queryError,
+  } = useQuery({
     queryKey: ["guest-checkin-info", token],
     queryFn: async () => {
       const res = await fetch(`${apiBase}/guest/checkin-info`, { headers });
@@ -64,7 +63,7 @@ export function CheckinInfo() {
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <h1 className="text-2xl font-bold">Check-in Information</h1>
+        <h1 className="font-bold text-2xl">Check-in Information</h1>
         <Link href={`/guest/${encodeURIComponent(token)}/itinerary`}>
           <Button size="sm" variant="outline">
             Back
@@ -131,13 +130,13 @@ export function CheckinInfo() {
             {data.wifi_network && (
               <div>
                 <span className="text-muted-foreground">Network</span>
-                <p className="font-mono font-medium">{data.wifi_network}</p>
+                <p className="font-medium font-mono">{data.wifi_network}</p>
               </div>
             )}
             {data.wifi_password && (
               <div>
                 <span className="text-muted-foreground">Password</span>
-                <p className="font-mono font-medium">{data.wifi_password}</p>
+                <p className="font-medium font-mono">{data.wifi_password}</p>
               </div>
             )}
           </CardContent>
@@ -161,7 +160,7 @@ export function CheckinInfo() {
             <CardTitle className="text-lg">Emergency Contact</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-sm font-medium">{data.emergency_contact}</p>
+            <p className="font-medium text-sm">{data.emergency_contact}</p>
           </CardContent>
         </Card>
       )}
@@ -173,7 +172,7 @@ export function CheckinInfo() {
           </CardHeader>
           <CardContent>
             <a
-              className="text-primary inline-flex h-10 items-center text-sm underline"
+              className="inline-flex h-10 items-center text-primary text-sm underline"
               href={`https://www.google.com/maps?q=${data.property_lat},${data.property_lng}`}
               rel="noopener noreferrer"
               target="_blank"

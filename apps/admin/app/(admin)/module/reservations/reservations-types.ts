@@ -88,7 +88,9 @@ export function daysBetween(a: string | null, b: string | null): number | null {
   return Math.max(0, Math.round((d2.getTime() - d1.getTime()) / 86_400_000));
 }
 
-export function statusActions(status: string): { next: string; label: string }[] {
+export function statusActions(
+  status: string
+): { next: string; label: string }[] {
   const normalized = status.trim().toLowerCase();
   if (normalized === "pending") {
     return [

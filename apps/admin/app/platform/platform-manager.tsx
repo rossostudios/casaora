@@ -3,7 +3,6 @@
 import { useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -67,7 +66,11 @@ export function PlatformManager({ orgs, locale }: PlatformManagerProps) {
           <Input
             className="w-64"
             onChange={(e) => setSearch(e.target.value)}
-            placeholder={isEn ? "Search by name or email..." : "Buscar por nombre o email..."}
+            placeholder={
+              isEn
+                ? "Search by name or email..."
+                : "Buscar por nombre o email..."
+            }
             value={search}
           />
         </div>
@@ -94,8 +97,10 @@ export function PlatformManager({ orgs, locale }: PlatformManagerProps) {
                   <div className="flex items-center gap-2">
                     <p className="truncate font-medium text-sm">{name}</p>
                     <Badge
-                      variant={status === "active" ? "secondary" : "destructive"}
                       className="text-[10px]"
+                      variant={
+                        status === "active" ? "secondary" : "destructive"
+                      }
                     >
                       {status}
                     </Badge>
@@ -103,13 +108,13 @@ export function PlatformManager({ orgs, locale }: PlatformManagerProps) {
                   <p className="text-muted-foreground text-xs">
                     {memberCount} {isEn ? "members" : "miembros"} ·{" "}
                     {propertyCount} {isEn ? "properties" : "propiedades"}
-                    {createdAt && ` · ${isEn ? "Created" : "Creado"} ${createdAt}`}
+                    {createdAt &&
+                      ` · ${isEn ? "Created" : "Creado"} ${createdAt}`}
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
                   {subStatus && (
                     <Badge
-                      variant="outline"
                       className={`text-[10px] ${
                         subStatus === "active"
                           ? "border-green-300 text-green-700 dark:border-green-700 dark:text-green-400"
@@ -117,12 +122,16 @@ export function PlatformManager({ orgs, locale }: PlatformManagerProps) {
                             ? "border-blue-300 text-blue-700 dark:border-blue-700 dark:text-blue-400"
                             : ""
                       }`}
+                      variant="outline"
                     >
                       {subStatus}
                     </Badge>
                   )}
                   {!sub && (
-                    <Badge variant="outline" className="text-[10px] text-muted-foreground">
+                    <Badge
+                      className="text-[10px] text-muted-foreground"
+                      variant="outline"
+                    >
                       {isEn ? "No plan" : "Sin plan"}
                     </Badge>
                   )}

@@ -41,7 +41,9 @@ export function CreateTaskConfig({ value, onChange, isEn }: ConfigProps) {
       <Field label={isEn ? "Task title" : "Título de la tarea"}>
         <Input
           onChange={(e) => onChange({ ...value, title: e.target.value })}
-          placeholder={isEn ? "e.g. Turnover cleaning" : "ej. Limpieza de rotación"}
+          placeholder={
+            isEn ? "e.g. Turnover cleaning" : "ej. Limpieza de rotación"
+          }
           value={asStr(value.title)}
         />
       </Field>
@@ -51,8 +53,12 @@ export function CreateTaskConfig({ value, onChange, isEn }: ConfigProps) {
           value={asStr(value.type) || "cleaning"}
         >
           <option value="cleaning">{isEn ? "Cleaning" : "Limpieza"}</option>
-          <option value="maintenance">{isEn ? "Maintenance" : "Mantenimiento"}</option>
-          <option value="inspection">{isEn ? "Inspection" : "Inspección"}</option>
+          <option value="maintenance">
+            {isEn ? "Maintenance" : "Mantenimiento"}
+          </option>
+          <option value="inspection">
+            {isEn ? "Inspection" : "Inspección"}
+          </option>
         </Select>
       </Field>
       <Field label={isEn ? "Priority" : "Prioridad"}>
@@ -111,7 +117,9 @@ export function SendWhatsappConfig({ value, onChange, isEn }: ConfigProps) {
           value={asStr(value.body)}
         />
       </Field>
-      <Field label={isEn ? "Template ID (optional)" : "ID de plantilla (opcional)"}>
+      <Field
+        label={isEn ? "Template ID (optional)" : "ID de plantilla (opcional)"}
+      >
         <Input
           onChange={(e) => onChange({ ...value, template_id: e.target.value })}
           placeholder="UUID"
@@ -130,14 +138,18 @@ export function UpdateStatusConfig({ value, onChange, isEn }: ConfigProps) {
           onChange={(e) => onChange({ ...value, entity_type: e.target.value })}
           value={asStr(value.entity_type) || "reservation"}
         >
-          <option value="reservation">{isEn ? "Reservation" : "Reserva"}</option>
+          <option value="reservation">
+            {isEn ? "Reservation" : "Reserva"}
+          </option>
           <option value="lease">{isEn ? "Lease" : "Contrato"}</option>
           <option value="task">{isEn ? "Task" : "Tarea"}</option>
         </Select>
       </Field>
       <Field label={isEn ? "Target status" : "Estado destino"}>
         <Input
-          onChange={(e) => onChange({ ...value, target_status: e.target.value })}
+          onChange={(e) =>
+            onChange({ ...value, target_status: e.target.value })
+          }
           placeholder={isEn ? "e.g. completed" : "ej. completado"}
           value={asStr(value.target_status)}
         />
@@ -165,7 +177,12 @@ export function CreateExpenseConfig({ value, onChange, isEn }: ConfigProps) {
       <Field label={isEn ? "Amount" : "Monto"}>
         <Input
           min={0}
-          onChange={(e) => onChange({ ...value, amount: e.target.value ? Number(e.target.value) : undefined })}
+          onChange={(e) =>
+            onChange({
+              ...value,
+              amount: e.target.value ? Number(e.target.value) : undefined,
+            })
+          }
           step="0.01"
           type="number"
           value={asNum(value.amount)}
@@ -175,7 +192,11 @@ export function CreateExpenseConfig({ value, onChange, isEn }: ConfigProps) {
   );
 }
 
-export function AssignTaskRoundRobinConfig({ value, onChange, isEn }: ConfigProps) {
+export function AssignTaskRoundRobinConfig({
+  value,
+  onChange,
+  isEn,
+}: ConfigProps) {
   return (
     <div className="grid gap-3 sm:grid-cols-2">
       <Field label={isEn ? "Task type" : "Tipo de tarea"}>
@@ -184,8 +205,12 @@ export function AssignTaskRoundRobinConfig({ value, onChange, isEn }: ConfigProp
           value={asStr(value.task_type) || "cleaning"}
         >
           <option value="cleaning">{isEn ? "Cleaning" : "Limpieza"}</option>
-          <option value="maintenance">{isEn ? "Maintenance" : "Mantenimiento"}</option>
-          <option value="inspection">{isEn ? "Inspection" : "Inspección"}</option>
+          <option value="maintenance">
+            {isEn ? "Maintenance" : "Mantenimiento"}
+          </option>
+          <option value="inspection">
+            {isEn ? "Inspection" : "Inspección"}
+          </option>
         </Select>
       </Field>
       <Field label={isEn ? "Priority" : "Prioridad"}>
@@ -217,15 +242,29 @@ export function ActionConfigForm({
     case "create_task":
       return <CreateTaskConfig isEn={isEn} onChange={onChange} value={value} />;
     case "send_notification":
-      return <SendNotificationConfig isEn={isEn} onChange={onChange} value={value} />;
+      return (
+        <SendNotificationConfig isEn={isEn} onChange={onChange} value={value} />
+      );
     case "send_whatsapp":
-      return <SendWhatsappConfig isEn={isEn} onChange={onChange} value={value} />;
+      return (
+        <SendWhatsappConfig isEn={isEn} onChange={onChange} value={value} />
+      );
     case "update_status":
-      return <UpdateStatusConfig isEn={isEn} onChange={onChange} value={value} />;
+      return (
+        <UpdateStatusConfig isEn={isEn} onChange={onChange} value={value} />
+      );
     case "create_expense":
-      return <CreateExpenseConfig isEn={isEn} onChange={onChange} value={value} />;
+      return (
+        <CreateExpenseConfig isEn={isEn} onChange={onChange} value={value} />
+      );
     case "assign_task_round_robin":
-      return <AssignTaskRoundRobinConfig isEn={isEn} onChange={onChange} value={value} />;
+      return (
+        <AssignTaskRoundRobinConfig
+          isEn={isEn}
+          onChange={onChange}
+          value={value}
+        />
+      );
     default:
       return (
         <p className="text-muted-foreground text-xs">

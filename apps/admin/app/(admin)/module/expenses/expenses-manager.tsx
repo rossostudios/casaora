@@ -68,7 +68,12 @@ export function ExpensesManager({
     },
   });
   const membershipRole = membershipData?.role ?? null;
-  const roleStatus = roleQueryStatus === "pending" ? "loading" : roleQueryStatus === "success" ? "ok" : "error";
+  const roleStatus =
+    roleQueryStatus === "pending"
+      ? "loading"
+      : roleQueryStatus === "success"
+        ? "ok"
+        : "error";
 
   const [open, setOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
@@ -151,9 +156,8 @@ export function ExpensesManager({
         if (normalizedPayment !== "all" && rowPayment !== normalizedPayment)
           return false;
 
-        const rowApproval = asString(expense.approval_status)
-          .trim()
-          .toLowerCase() || "pending";
+        const rowApproval =
+          asString(expense.approval_status).trim().toLowerCase() || "pending";
         if (normalizedApproval !== "all" && rowApproval !== normalizedApproval)
           return false;
 
@@ -364,12 +368,8 @@ export function ExpensesManager({
               value={approvalFilter}
             >
               <option value="all">{isEn ? "All" : "Todos"}</option>
-              <option value="pending">
-                {isEn ? "Pending" : "Pendiente"}
-              </option>
-              <option value="approved">
-                {isEn ? "Approved" : "Aprobado"}
-              </option>
+              <option value="pending">{isEn ? "Pending" : "Pendiente"}</option>
+              <option value="approved">{isEn ? "Approved" : "Aprobado"}</option>
               <option value="rejected">
                 {isEn ? "Rejected" : "Rechazado"}
               </option>

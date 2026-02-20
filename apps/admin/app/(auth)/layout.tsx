@@ -31,17 +31,11 @@ export default async function AuthLayout({
             {isEn ? "All rights reserved." : "Todos los derechos reservados."}
           </span>
           <div className="flex items-center gap-3">
-            <Link
-              className="transition-colors hover:text-foreground"
-              href="#"
-            >
+            <Link className="transition-colors hover:text-foreground" href="#">
               {isEn ? "Privacy Policy" : "Política de privacidad"}
             </Link>
             <span aria-hidden="true">&middot;</span>
-            <Link
-              className="transition-colors hover:text-foreground"
-              href="#"
-            >
+            <Link className="transition-colors hover:text-foreground" href="#">
               {isEn ? "Terms & Conditions" : "Términos y condiciones"}
             </Link>
           </div>
@@ -67,10 +61,8 @@ export default async function AuthLayout({
 
           {/* Branding */}
           <div className="text-center">
-            <h2 className="text-xl font-semibold text-white">
-              {isEn
-                ? "Manage Your Properties"
-                : "Administra tus propiedades"}
+            <h2 className="font-semibold text-white text-xl">
+              {isEn ? "Manage Your Properties" : "Administra tus propiedades"}
             </h2>
             <p className="mt-2 text-sm text-white/50">
               {isEn

@@ -25,12 +25,12 @@ export default function Loading() {
           </div>
 
           <div className="rounded-md border border-border/40">
-            <div className="border-b border-border/40 p-4">
+            <div className="border-border/40 border-b p-4">
               <Skeleton className="h-9 w-full max-w-sm" />
             </div>
             <div className="space-y-4 p-4">
               {Array.from({ length: 5 }).map((_, i) => (
-                <div key={i} className="flex items-center gap-4">
+                <div className="flex items-center gap-4" key={i}>
                   <Skeleton className="h-12 w-full" />
                 </div>
               ))}

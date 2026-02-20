@@ -1,18 +1,22 @@
 "use client";
 
-import { useState } from "react";
-import { Cancel01Icon, CheckmarkSquare01Icon, SquareIcon } from "@hugeicons/core-free-icons";
+import {
+  Cancel01Icon,
+  CheckmarkSquare01Icon,
+  SquareIcon,
+} from "@hugeicons/core-free-icons";
 import Image from "next/image";
+import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
+import { formatCurrency } from "@/lib/format";
 import {
   asNumber,
   asOptionalNumber,
   asText,
   type MarketplaceListingRecord,
 } from "./marketplace-types";
-import { formatCurrency } from "@/lib/format";
 
 type ComparisonProps = {
   selected: MarketplaceListingRecord[];
@@ -36,7 +40,7 @@ function ComparisonModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
       <div className="relative max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-2xl bg-white p-6 shadow-xl">
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="font-serif text-lg font-semibold text-[var(--marketplace-text)]">
+          <h2 className="font-semibold font-serif text-[var(--marketplace-text)] text-lg">
             {isEn ? "Compare Listings" : "Comparar Anuncios"}
           </h2>
           <button
@@ -48,10 +52,14 @@ function ComparisonModal({
           </button>
         </div>
 
-        <div className="grid gap-4" style={{ gridTemplateColumns: `repeat(${selected.length}, 1fr)` }}>
+        <div
+          className="grid gap-4"
+          style={{ gridTemplateColumns: `repeat(${selected.length}, 1fr)` }}
+        >
           {selected.map((listing) => {
             const id = asText(listing.id);
-            const title = asText(listing.title) || (isEn ? "Untitled" : "Sin titulo");
+            const title =
+              asText(listing.title) || (isEn ? "Untitled" : "Sin titulo");
             const cover = asText(listing.cover_image_url);
             const bedrooms = asOptionalNumber(listing.bedrooms);
             const bathrooms = asOptionalNumber(listing.bathrooms);
@@ -64,7 +72,8 @@ function ComparisonModal({
               ? (listing.amenities as string[])
               : [];
             const petPolicy = asText(listing.pet_policy);
-            const furnished = listing.furnished === true || listing.furnished === "true";
+            const furnished =
+              listing.furnished === true || listing.furnished === "true";
 
             return (
               <div className="space-y-3" key={id}>
@@ -79,12 +88,12 @@ function ComparisonModal({
                       src={cover}
                     />
                   ) : (
-                    <div className="flex h-full items-center justify-center text-xs text-gray-400">
+                    <div className="flex h-full items-center justify-center text-gray-400 text-xs">
                       {isEn ? "No image" : "Sin imagen"}
                     </div>
                   )}
                   <button
-                    className="absolute right-2 top-2 rounded-full bg-white/80 p-1"
+                    className="absolute top-2 right-2 rounded-full bg-white/80 p-1"
                     onClick={() => onRemove(id)}
                     type="button"
                   >
@@ -92,21 +101,25 @@ function ComparisonModal({
                   </button>
                 </div>
 
-                <h3 className="text-sm font-semibold">{title}</h3>
-                <p className="text-xs text-gray-500">
+                <h3 className="font-semibold text-sm">{title}</h3>
+                <p className="text-gray-500 text-xs">
                   {neighborhood ? `${neighborhood}, ${city}` : city}
                 </p>
 
                 {/* Price */}
                 <div className="space-y-1 rounded-lg bg-gray-50 p-2">
                   <div className="flex justify-between text-xs">
-                    <span className="text-gray-500">{isEn ? "Monthly" : "Mensual"}</span>
+                    <span className="text-gray-500">
+                      {isEn ? "Monthly" : "Mensual"}
+                    </span>
                     <span className="font-semibold">
                       {formatCurrency(monthly, currency(listing), locale)}
                     </span>
                   </div>
                   <div className="flex justify-between text-xs">
-                    <span className="text-gray-500">{isEn ? "Move-in" : "Ingreso"}</span>
+                    <span className="text-gray-500">
+                      {isEn ? "Move-in" : "Ingreso"}
+                    </span>
                     <span className="font-medium">
                       {formatCurrency(moveIn, currency(listing), locale)}
                     </span>
@@ -116,11 +129,15 @@ function ComparisonModal({
                 {/* Specs */}
                 <div className="space-y-1 text-xs">
                   <div className="flex justify-between">
-                    <span className="text-gray-500">{isEn ? "Bedrooms" : "Habitaciones"}</span>
+                    <span className="text-gray-500">
+                      {isEn ? "Bedrooms" : "Habitaciones"}
+                    </span>
                     <span>{bedrooms ?? "-"}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-gray-500">{isEn ? "Bathrooms" : "Banos"}</span>
+                    <span className="text-gray-500">
+                      {isEn ? "Bathrooms" : "Banos"}
+                    </span>
                     <span>{bathrooms ?? "-"}</span>
                   </div>
                   <div className="flex justify-between">
@@ -128,11 +145,15 @@ function ComparisonModal({
                     <span>{sqm ?? "-"}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-gray-500">{isEn ? "Furnished" : "Amoblado"}</span>
+                    <span className="text-gray-500">
+                      {isEn ? "Furnished" : "Amoblado"}
+                    </span>
                     <span>{furnished ? (isEn ? "Yes" : "Si") : "No"}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-gray-500">{isEn ? "Pets" : "Mascotas"}</span>
+                    <span className="text-gray-500">
+                      {isEn ? "Pets" : "Mascotas"}
+                    </span>
                     <span>{petPolicy || "-"}</span>
                   </div>
                 </div>
@@ -140,7 +161,7 @@ function ComparisonModal({
                 {/* Amenities */}
                 {amenities.length > 0 ? (
                   <div>
-                    <p className="mb-1 text-xs font-medium text-gray-500">
+                    <p className="mb-1 font-medium text-gray-500 text-xs">
                       {isEn ? "Amenities" : "Amenidades"}
                     </p>
                     <div className="flex flex-wrap gap-1">
@@ -207,7 +228,7 @@ export function CompareCheckbox({
 }) {
   return (
     <button
-      className="inline-flex items-center gap-1 rounded-lg border border-[#e8e4df] bg-white/80 px-2 py-1 text-[10px] font-medium backdrop-blur transition-colors hover:bg-white"
+      className="inline-flex items-center gap-1 rounded-lg border border-[#e8e4df] bg-white/80 px-2 py-1 font-medium text-[10px] backdrop-blur transition-colors hover:bg-white"
       onClick={(e) => {
         e.preventDefault();
         e.stopPropagation();
@@ -215,10 +236,7 @@ export function CompareCheckbox({
       }}
       type="button"
     >
-      <Icon
-        icon={isSelected ? CheckmarkSquare01Icon : SquareIcon}
-        size={13}
-      />
+      <Icon icon={isSelected ? CheckmarkSquare01Icon : SquareIcon} size={13} />
       {isEn ? "Compare" : "Comparar"}
     </button>
   );
@@ -237,10 +255,10 @@ export function ComparisonBar({
 
   return (
     <>
-      <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-[#e8e4df] bg-white/95 backdrop-blur">
+      <div className="fixed right-0 bottom-0 left-0 z-40 border-[#e8e4df] border-t bg-white/95 backdrop-blur">
         <div className="mx-auto flex max-w-[1560px] items-center justify-between px-4 py-3 sm:px-6 lg:px-8">
           <div className="flex items-center gap-3">
-            <span className="text-sm font-medium text-[var(--marketplace-text)]">
+            <span className="font-medium text-[var(--marketplace-text)] text-sm">
               {selected.length} {isEn ? "selected" : "seleccionados"}
             </span>
             <div className="flex -space-x-2">
@@ -264,17 +282,10 @@ export function ComparisonBar({
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <Button
-              onClick={onClear}
-              size="sm"
-              variant="ghost"
-            >
+            <Button onClick={onClear} size="sm" variant="ghost">
               {isEn ? "Clear" : "Limpiar"}
             </Button>
-            <Button
-              onClick={() => setShowModal(true)}
-              size="sm"
-            >
+            <Button onClick={() => setShowModal(true)} size="sm">
               {isEn ? "Compare" : "Comparar"}
             </Button>
           </div>
@@ -285,11 +296,11 @@ export function ComparisonBar({
         <ComparisonModal
           isEn={isEn}
           locale={locale}
-          onClose={() => setShowModal(false)}
           onClear={() => {
             onClear();
             setShowModal(false);
           }}
+          onClose={() => setShowModal(false)}
           onRemove={onRemove}
           selected={selected}
         />

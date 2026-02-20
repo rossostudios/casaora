@@ -18,9 +18,7 @@ type PageProps = {
   searchParams: Promise<{ success?: string; error?: string }>;
 };
 
-export default async function DocumentsModulePage({
-  searchParams,
-}: PageProps) {
+export default async function DocumentsModulePage({ searchParams }: PageProps) {
   const locale = await getActiveLocale();
   const isEn = locale === "en-US";
   const orgId = await getActiveOrgId();
@@ -50,12 +48,15 @@ export default async function DocumentsModulePage({
   try {
     [data, properties, leases, guests] = await Promise.all([
       fetchList("/documents", orgId, 500) as Promise<Record<string, unknown>[]>,
-      fetchList("/properties", orgId, 200) as Promise<Record<string, unknown>[]>,
+      fetchList("/properties", orgId, 200) as Promise<
+        Record<string, unknown>[]
+      >,
       fetchList("/leases", orgId, 200) as Promise<Record<string, unknown>[]>,
       fetchList("/guests", orgId, 200) as Promise<Record<string, unknown>[]>,
     ]);
   } catch (err) {
-    if (isOrgMembershipError(errorMessage(err))) return <OrgAccessChanged orgId={orgId} />;
+    if (isOrgMembershipError(errorMessage(err)))
+      return <OrgAccessChanged orgId={orgId} />;
     return (
       <Card>
         <CardHeader>
@@ -64,7 +65,9 @@ export default async function DocumentsModulePage({
         <CardContent>
           <Alert variant="destructive">
             <AlertDescription>
-              {isEn ? "Failed to load documents." : "Error al cargar documentos."}
+              {isEn
+                ? "Failed to load documents."
+                : "Error al cargar documentos."}
             </AlertDescription>
           </Alert>
         </CardContent>

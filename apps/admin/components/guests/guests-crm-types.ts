@@ -27,7 +27,10 @@ export type GuestCrmRow = {
 export type Segment = "all" | "upcoming" | "returning" | "no_contact" | "notes";
 export type SheetMode = "create" | "view" | "edit";
 
-export function asDateLabel(locale: string, value: string | null): string | null {
+export function asDateLabel(
+  locale: string,
+  value: string | null
+): string | null {
   if (!value) return null;
   const date = new Date(value);
   if (Number.isNaN(date.valueOf())) return null;

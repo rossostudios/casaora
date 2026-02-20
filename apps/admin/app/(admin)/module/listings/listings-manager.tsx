@@ -8,11 +8,11 @@ import { toast } from "sonner";
 import { ListingForm } from "@/components/listings/listing-form";
 import { ListingNotionTable } from "@/components/listings/listing-notion-table";
 import { ListingPreviewModal } from "@/components/listings/listing-preview-modal";
-import type { SavedView } from "@/lib/features/listings/saved-views";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { Sheet } from "@/components/ui/sheet";
 import { authedFetch } from "@/lib/features/listings/listings-api";
+import type { SavedView } from "@/lib/features/listings/saved-views";
 import { useListingsQuery } from "@/lib/features/listings/use-listings-query";
 import type { Locale } from "@/lib/i18n";
 import { useActiveLocale } from "@/lib/i18n/client";
@@ -173,9 +173,7 @@ export function ListingsManager({
   const [bulkProcessing, setBulkProcessing] = useState(false);
 
   /* --- preview --- */
-  const [previewListing, setPreviewListing] = useState<ListingRow | null>(
-    null
-  );
+  const [previewListing, setPreviewListing] = useState<ListingRow | null>(null);
 
   /* --- scroll-to-field (Make Ready) --- */
   const [scrollToField, setScrollToField] = useState<string | undefined>();
@@ -284,13 +282,25 @@ export function ListingsManager({
         );
         queryClient.invalidateQueries({ queryKey: ["listings"] });
         let pubMsg: string;
-        if (isEn) { pubMsg = "Published"; } else { pubMsg = "Publicado"; }
+        if (isEn) {
+          pubMsg = "Published";
+        } else {
+          pubMsg = "Publicado";
+        }
         toast.success(pubMsg);
       } catch (err) {
         let failTitle: string;
-        if (isEn) { failTitle = "Failed"; } else { failTitle = "Error"; }
+        if (isEn) {
+          failTitle = "Failed";
+        } else {
+          failTitle = "Error";
+        }
         let errDesc: string;
-        if (err instanceof Error) { errDesc = err.message; } else { errDesc = String(err); }
+        if (err instanceof Error) {
+          errDesc = err.message;
+        } else {
+          errDesc = String(err);
+        }
         toast.error(failTitle, { description: errDesc });
       }
     },
@@ -300,19 +310,31 @@ export function ListingsManager({
   const handleUnpublish = useCallback(
     async (listingId: string) => {
       try {
-        await authedFetch(
-          `/listings/${encodeURIComponent(listingId)}`,
-          { method: "PATCH", body: JSON.stringify({ is_published: false }) }
-        );
+        await authedFetch(`/listings/${encodeURIComponent(listingId)}`, {
+          method: "PATCH",
+          body: JSON.stringify({ is_published: false }),
+        });
         queryClient.invalidateQueries({ queryKey: ["listings"] });
         let unpubMsg: string;
-        if (isEn) { unpubMsg = "Unpublished"; } else { unpubMsg = "Despublicado"; }
+        if (isEn) {
+          unpubMsg = "Unpublished";
+        } else {
+          unpubMsg = "Despublicado";
+        }
         toast.success(unpubMsg);
       } catch (err) {
         let failTitle2: string;
-        if (isEn) { failTitle2 = "Failed"; } else { failTitle2 = "Error"; }
+        if (isEn) {
+          failTitle2 = "Failed";
+        } else {
+          failTitle2 = "Error";
+        }
         let errDesc2: string;
-        if (err instanceof Error) { errDesc2 = err.message; } else { errDesc2 = String(err); }
+        if (err instanceof Error) {
+          errDesc2 = err.message;
+        } else {
+          errDesc2 = String(err);
+        }
         toast.error(failTitle2, { description: errDesc2 });
       }
     },
@@ -325,14 +347,12 @@ export function ListingsManager({
       field: string,
       value: string
     ): Promise<{ ok: boolean; error?: string }> => {
-      const apiValue = NUMERIC_FIELDS.has(field)
-        ? Number(value) || 0
-        : value;
+      const apiValue = NUMERIC_FIELDS.has(field) ? Number(value) || 0 : value;
       try {
-        await authedFetch(
-          `/listings/${encodeURIComponent(listingId)}`,
-          { method: "PATCH", body: JSON.stringify({ [field]: apiValue }) }
-        );
+        await authedFetch(`/listings/${encodeURIComponent(listingId)}`, {
+          method: "PATCH",
+          body: JSON.stringify({ [field]: apiValue }),
+        });
         queryClient.invalidateQueries({ queryKey: ["listings"] });
         return { ok: true };
       } catch (err) {
@@ -414,10 +434,12 @@ export function ListingsManager({
 
       {/* ---- table ---- */}
       <ListingNotionTable
+        activeViewId={activeViewId}
         formatLocale={locale as "en-US" | "es-PY"}
         globalFilter={query.globalFilter}
         isEn={isEn}
         isLoading={query.isLoading}
+        onApplyView={handleApplyView}
         onCommitEdit={handleCommitEdit}
         onEditInSheet={openEdit}
         onGlobalFilterChange={query.setGlobalFilter}
@@ -439,8 +461,6 @@ export function ListingsManager({
         sorting={query.sorting}
         statusFilter={query.statusFilter}
         totalRows={query.totalRows}
-        activeViewId={activeViewId}
-        onApplyView={handleApplyView}
       />
 
       {/* ---- form sheet ---- */}
@@ -475,13 +495,12 @@ export function ListingsManager({
           isEn={isEn}
           key={editing?.id ?? "create"}
           locale={locale}
-          scrollToField={scrollToField}
           onPreview={
             editing
               ? () => {
-                setOpen(false);
-                setPreviewListing(editing);
-              }
+                  setOpen(false);
+                  setPreviewListing(editing);
+                }
               : undefined
           }
           onSuccess={() => {
@@ -491,6 +510,7 @@ export function ListingsManager({
           orgId={orgId}
           pricingTemplateOptions={pricingTemplateOptions}
           propertyOptions={propertyOptions}
+          scrollToField={scrollToField}
           unitOptions={unitOptions}
         />
       </Sheet>

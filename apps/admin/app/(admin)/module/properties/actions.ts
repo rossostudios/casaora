@@ -8,19 +8,28 @@ function toStringValue(value: FormDataEntryValue | null): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
-function toOptionalStringValue(formData: FormData, key: string): string | undefined {
+function toOptionalStringValue(
+  formData: FormData,
+  key: string
+): string | undefined {
   const value = toStringValue(formData.get(key));
   return value || undefined;
 }
 
-function toOptionalNumberValue(formData: FormData, key: string): number | undefined {
+function toOptionalNumberValue(
+  formData: FormData,
+  key: string
+): number | undefined {
   const value = toOptionalStringValue(formData, key);
   if (!value) return undefined;
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : undefined;
 }
 
-function toOptionalListValue(formData: FormData, key: string): string[] | undefined {
+function toOptionalListValue(
+  formData: FormData,
+  key: string
+): string[] | undefined {
   const value = toOptionalStringValue(formData, key);
   if (!value) return undefined;
   const parsed = value
@@ -46,7 +55,10 @@ export async function createPropertyFromPropertiesModuleAction(
   const name = toStringValue(formData.get("name"));
   const code = toOptionalStringValue(formData, "code");
   const status = toOptionalStringValue(formData, "status")?.toLowerCase();
-  const property_type = toOptionalStringValue(formData, "property_type")?.toLowerCase();
+  const property_type = toOptionalStringValue(
+    formData,
+    "property_type"
+  )?.toLowerCase();
   const address_line1 = toOptionalStringValue(formData, "address_line1");
   const address_line2 = toOptionalStringValue(formData, "address_line2");
   const neighborhood = toOptionalStringValue(formData, "neighborhood");
@@ -57,10 +69,19 @@ export async function createPropertyFromPropertiesModuleAction(
   const country_code = countryCode ? countryCode.toUpperCase() : undefined;
   const latitude = toOptionalNumberValue(formData, "latitude");
   const longitude = toOptionalNumberValue(formData, "longitude");
-  const building_amenities = toOptionalListValue(formData, "building_amenities");
-  const access_instructions = toOptionalStringValue(formData, "access_instructions");
+  const building_amenities = toOptionalListValue(
+    formData,
+    "building_amenities"
+  );
+  const access_instructions = toOptionalStringValue(
+    formData,
+    "access_instructions"
+  );
   const shared_wifi_name = toOptionalStringValue(formData, "shared_wifi_name");
-  const shared_wifi_password = toOptionalStringValue(formData, "shared_wifi_password");
+  const shared_wifi_password = toOptionalStringValue(
+    formData,
+    "shared_wifi_password"
+  );
   const asset_owner_name = toOptionalStringValue(formData, "asset_owner_name");
   const asset_owner_organization_id = toOptionalStringValue(
     formData,

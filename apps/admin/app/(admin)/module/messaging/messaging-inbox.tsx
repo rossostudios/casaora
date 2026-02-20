@@ -1,17 +1,15 @@
 "use client";
 
 import {
-  AlertCircleIcon,
-  Clock01Icon,
   InboxIcon,
   Mail01Icon,
   MailSend01Icon,
   Message01Icon,
   PlusSignIcon,
-  SentIcon,
 } from "@hugeicons/core-free-icons";
+import { useHotkey } from "@tanstack/react-hotkeys";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-
+import { AiComposeAssist } from "@/components/messaging/ai-compose-assist";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -21,16 +19,15 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Sheet } from "@/components/ui/sheet";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Textarea } from "@/components/ui/textarea";
-import { useActiveLocale } from "@/lib/i18n/client";
-import { cn } from "@/lib/utils";
-
 import type {
   Conversation,
   MessageLogItem,
   MessageTemplate,
 } from "@/lib/features/messaging/types";
-
-import { AiComposeAssist } from "@/components/messaging/ai-compose-assist";
+import { isInputFocused } from "@/lib/hotkeys/is-input-focused";
+import { useFormSubmitHotkey } from "@/lib/hotkeys/use-form-hotkeys";
+import { useActiveLocale } from "@/lib/i18n/client";
+import { cn } from "@/lib/utils";
 
 import { sendMessageAction } from "./actions";
 
@@ -157,15 +154,16 @@ function matchesFilter(convo: Conversation, filter: FilterKey): boolean {
     if (!last) return false;
     const lastIdx = convo.messages.findIndex((m) => m.id === last.id);
     if (last.direction !== "inbound") return false;
-    return !convo.messages.slice(lastIdx + 1).some((m) => m.direction === "outbound");
+    return !convo.messages
+      .slice(lastIdx + 1)
+      .some((m) => m.direction === "outbound");
   }
   // "awaiting" — last message direction is inbound (guest waiting for reply)
   if (filter === "awaiting") return last?.direction === "inbound";
   // "resolved" — last message is outbound and sent/delivered
   if (filter === "resolved") {
     return (
-      last?.direction === "outbound" &&
-      (s === "sent" || s === "delivered")
+      last?.direction === "outbound" && (s === "sent" || s === "delivered")
     );
   }
   // "starred" — future feature, no conversations match yet
@@ -196,7 +194,7 @@ function FilterPill({
   return (
     <button
       className={cn(
-        "inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[13px] font-medium transition-colors",
+        "inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 font-medium text-[13px] transition-colors",
         active
           ? "border-primary/30 bg-primary/10 text-foreground"
           : "bg-background/60 text-muted-foreground hover:text-foreground"
@@ -217,7 +215,7 @@ function ChannelBadge({ channel }: { channel: string }) {
   return (
     <Badge
       className={cn(
-        "gap-1 border px-1.5 py-px text-[10px] font-semibold",
+        "gap-1 border px-1.5 py-px font-semibold text-[10px]",
         meta.className
       )}
       variant="outline"
@@ -247,25 +245,23 @@ function ConversationRow({
     <button
       className={cn(
         "group flex w-full items-start gap-3 rounded-xl px-3 py-3 text-left transition-colors",
-        selected
-          ? "bg-primary/8 ring-1 ring-primary/15"
-          : "hover:bg-muted/40"
+        selected ? "bg-primary/8 ring-1 ring-primary/15" : "hover:bg-muted/40"
       )}
       onClick={onClick}
       type="button"
     >
       {/* Avatar */}
-      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border bg-muted/20 text-[13px] font-semibold text-primary">
+      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border bg-muted/20 font-semibold text-[13px] text-primary">
         {initials(convo.guestName)}
       </div>
 
       {/* Content */}
       <div className="min-w-0 flex-1">
         <div className="flex items-center justify-between gap-2">
-          <span className="truncate text-[13px] font-semibold text-foreground">
+          <span className="truncate font-semibold text-[13px] text-foreground">
             {convo.guestName}
           </span>
-          <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">
+          <span className="shrink-0 text-[11px] text-muted-foreground tabular-nums">
             {relativeTime(lastMsg?.created_at ?? null, isEn)}
           </span>
         </div>
@@ -292,13 +288,7 @@ function ConversationRow({
 // Detail panel
 // ---------------------------------------------------------------------------
 
-function MessageBubble({
-  msg,
-  isEn,
-}: {
-  msg: MessageLogItem;
-  isEn: boolean;
-}) {
+function MessageBubble({ msg, isEn }: { msg: MessageLogItem; isEn: boolean }) {
   const isOutbound = msg.direction === "outbound";
 
   return (
@@ -317,7 +307,7 @@ function MessageBubble({
         )}
       >
         {msg.subject ? (
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+          <p className="font-semibold text-[11px] text-muted-foreground uppercase tracking-wide">
             {msg.subject}
           </p>
         ) : null}
@@ -325,7 +315,7 @@ function MessageBubble({
           {msg.body ?? (isEn ? "(no content)" : "(sin contenido)")}
         </p>
         <div className="flex items-center justify-end gap-2">
-          <span className="text-[10px] tabular-nums text-muted-foreground/70">
+          <span className="text-[10px] text-muted-foreground/70 tabular-nums">
             {formatTimestamp(msg.created_at)}
           </span>
           <StatusBadge
@@ -352,14 +342,24 @@ function DetailPanel({
   onBack?: () => void;
 }) {
   const timelineEnd = useRef<HTMLDivElement>(null);
+  const formRef = useRef<HTMLFormElement>(null);
+  const textRef = useRef<HTMLTextAreaElement>(null);
+
+  useFormSubmitHotkey(formRef);
+  useHotkey("/", (e) => {
+    if (isInputFocused()) return;
+    e.preventDefault();
+    textRef.current?.focus();
+  });
+
   const [selectedTemplateId, setSelectedTemplateId] = useState("");
   const [bodyValue, setBodyValue] = useState("");
 
   const lastChannel = convo.lastMessage?.channel ?? "email";
   const recipient =
     lastChannel === "email"
-      ? convo.guestEmail ?? ""
-      : convo.guestPhone ?? "";
+      ? (convo.guestEmail ?? "")
+      : (convo.guestPhone ?? "");
 
   // Scroll to bottom on mount
   useEffect(() => {
@@ -383,7 +383,7 @@ function DetailPanel({
   return (
     <div className="flex h-full flex-col">
       {/* Header */}
-      <div className="flex items-center gap-3 border-b border-border/50 px-4 py-3">
+      <div className="flex items-center gap-3 border-border/50 border-b px-4 py-3">
         {onBack ? (
           <Button
             className="mr-1"
@@ -395,11 +395,11 @@ function DetailPanel({
             &larr;
           </Button>
         ) : null}
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border bg-muted/20 text-sm font-semibold text-primary">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border bg-muted/20 font-semibold text-primary text-sm">
           {initials(convo.guestName)}
         </div>
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold text-foreground">
+          <p className="truncate font-semibold text-foreground text-sm">
             {convo.guestName}
           </p>
           <p className="truncate text-[12px] text-muted-foreground">
@@ -420,8 +420,8 @@ function DetailPanel({
       </ScrollArea>
 
       {/* Compose */}
-      <div className="border-t border-border/50 px-4 py-3">
-        <Form action={sendMessageAction} className="space-y-2">
+      <div className="border-border/50 border-t px-4 py-3">
+        <Form action={sendMessageAction} className="space-y-2" ref={formRef}>
           <input name="organization_id" type="hidden" value={orgId} />
           <input name="channel" type="hidden" value={lastChannel} />
           <input name="recipient" type="hidden" value={recipient} />
@@ -475,10 +475,9 @@ function DetailPanel({
               name="body"
               onChange={(e) => setBodyValue(e.target.value)}
               placeholder={
-                isEn
-                  ? "Write a message..."
-                  : "Escribe un mensaje..."
+                isEn ? "Write a message..." : "Escribe un mensaje..."
               }
+              ref={textRef}
               rows={2}
               value={bodyValue}
             />
@@ -555,9 +554,7 @@ function ComposeSheet({
       title={
         <div className="space-y-1">
           <div className="flex items-center gap-2">
-            <Badge variant="outline">
-              {isEn ? "Compose" : "Redactar"}
-            </Badge>
+            <Badge variant="outline">{isEn ? "Compose" : "Redactar"}</Badge>
             <Badge className="text-[11px]" variant="secondary">
               {isEn ? "Communications" : "Comunicaciones"}
             </Badge>
@@ -573,7 +570,7 @@ function ComposeSheet({
 
         {/* Channel */}
         <div className="grid gap-1">
-          <label className="text-xs font-medium">
+          <label className="font-medium text-xs">
             {isEn ? "Channel" : "Canal"}
           </label>
           <div className="flex gap-2">
@@ -582,7 +579,7 @@ function ComposeSheet({
               return (
                 <button
                   className={cn(
-                    "inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors",
+                    "inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 font-medium text-xs transition-colors",
                     channel === ch
                       ? cn("ring-1 ring-primary/20", meta.className)
                       : "bg-background/60 text-muted-foreground hover:text-foreground"
@@ -602,16 +599,14 @@ function ComposeSheet({
 
         {/* Recipient */}
         <div className="grid gap-1">
-          <label className="text-xs font-medium">
+          <label className="font-medium text-xs">
             {isEn ? "Recipient" : "Destinatario"}
           </label>
           <input
             className="flex h-9 w-full rounded-xl border border-input bg-background px-3 text-sm transition-colors placeholder:text-muted-foreground/85 focus-visible:border-ring/55 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/25"
             name="recipient"
             placeholder={
-              channel === "email"
-                ? "guest@example.com"
-                : "+595981000000"
+              channel === "email" ? "guest@example.com" : "+595981000000"
             }
             required
           />
@@ -620,7 +615,7 @@ function ComposeSheet({
         {/* Subject (email only) */}
         {channel === "email" ? (
           <div className="grid gap-1">
-            <label className="text-xs font-medium">
+            <label className="font-medium text-xs">
               {isEn ? "Subject" : "Asunto"}
             </label>
             <input
@@ -636,17 +631,15 @@ function ComposeSheet({
         {/* Template */}
         {templates.length > 0 ? (
           <div className="grid gap-1">
-            <label className="text-xs font-medium">
+            <label className="font-medium text-xs">
               {isEn ? "Template" : "Plantilla"}
             </label>
             <select
-              className="h-9 w-full rounded-xl border border-input bg-background px-2.5 text-sm text-muted-foreground transition-colors focus:border-ring/55 focus:outline-none focus:ring-2 focus:ring-ring/25"
+              className="h-9 w-full rounded-xl border border-input bg-background px-2.5 text-muted-foreground text-sm transition-colors focus:border-ring/55 focus:outline-none focus:ring-2 focus:ring-ring/25"
               onChange={handleTemplateChange}
               value={selectedTemplateId}
             >
-              <option value="">
-                {isEn ? "None" : "Ninguna"}
-              </option>
+              <option value="">{isEn ? "None" : "Ninguna"}</option>
               {templates.map((tpl) => (
                 <option key={tpl.id} value={tpl.id}>
                   {tpl.name}
@@ -665,16 +658,14 @@ function ComposeSheet({
 
         {/* Body */}
         <div className="grid gap-1">
-          <label className="text-xs font-medium">
+          <label className="font-medium text-xs">
             {isEn ? "Message" : "Mensaje"}
           </label>
           <Textarea
             name="body"
             onChange={(e) => setBodyValue(e.target.value)}
             placeholder={
-              isEn
-                ? "Write your message..."
-                : "Escribe tu mensaje..."
+              isEn ? "Write your message..." : "Escribe tu mensaje..."
             }
             required={!selectedTemplateId}
             rows={4}
@@ -759,14 +750,12 @@ export function MessagingInbox({
 
   // Auto-select first conversation (derive during render).
   const effectiveSelectedId =
-    !selectedId && filtered.length > 0
-      ? filtered[0]!.guestId
-      : selectedId;
+    !selectedId && filtered.length > 0 ? filtered[0]!.guestId : selectedId;
 
   const selectedConvo = useMemo(
     () =>
       effectiveSelectedId
-        ? conversations.find((c) => c.guestId === effectiveSelectedId) ?? null
+        ? (conversations.find((c) => c.guestId === effectiveSelectedId) ?? null)
         : null,
     [conversations, effectiveSelectedId]
   );
@@ -776,6 +765,28 @@ export function MessagingInbox({
     // On mobile, open the detail Sheet
     setMobileDetailOpen(true);
   }, []);
+
+  useHotkey("J", (e) => {
+    if (isInputFocused() || filtered.length === 0) return;
+    e.preventDefault();
+    const currentIdx = filtered.findIndex(
+      (c) => c.guestId === effectiveSelectedId
+    );
+    if (currentIdx < filtered.length - 1) {
+      handleSelectConvo(filtered[currentIdx + 1]!.guestId);
+    }
+  });
+
+  useHotkey("K", (e) => {
+    if (isInputFocused() || filtered.length === 0) return;
+    e.preventDefault();
+    const currentIdx = filtered.findIndex(
+      (c) => c.guestId === effectiveSelectedId
+    );
+    if (currentIdx > 0) {
+      handleSelectConvo(filtered[currentIdx - 1]!.guestId);
+    }
+  });
 
   // Empty state
   if (conversations.length === 0) {
@@ -892,17 +903,17 @@ export function MessagingInbox({
           {/* Conversation list */}
           <div
             className={cn(
-              "w-full border-r border-border/40 md:w-[38%] md:min-w-[280px] md:max-w-[400px]",
+              "w-full border-border/40 border-r md:w-[38%] md:min-w-[280px] md:max-w-[400px]",
               selectedConvo ? "hidden md:block" : ""
             )}
           >
-            <div className="flex items-center gap-2 border-b border-border/40 px-4 py-2.5">
+            <div className="flex items-center gap-2 border-border/40 border-b px-4 py-2.5">
               <Icon
                 className="text-muted-foreground"
                 icon={InboxIcon}
                 size={15}
               />
-              <span className="text-[12px] font-medium text-muted-foreground">
+              <span className="font-medium text-[12px] text-muted-foreground">
                 {filtered.length}{" "}
                 {isEn
                   ? filtered.length === 1

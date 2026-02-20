@@ -1,10 +1,9 @@
 "use client";
 
+import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-
-import { useQuery } from "@tanstack/react-query";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -53,7 +52,7 @@ export function TenantDocuments({ locale }: { locale: string }) {
   if (loading) {
     return (
       <div className="flex min-h-[50vh] items-center justify-center">
-        <p className="text-muted-foreground animate-pulse">
+        <p className="animate-pulse text-muted-foreground">
           {isEn ? "Loading..." : "Cargando..."}
         </p>
       </div>
@@ -63,7 +62,7 @@ export function TenantDocuments({ locale }: { locale: string }) {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">
+        <h1 className="font-bold text-2xl">
           {isEn ? "Documents" : "Documentos"}
         </h1>
         <Link href="/tenant/dashboard">
@@ -87,7 +86,10 @@ export function TenantDocuments({ locale }: { locale: string }) {
         <div className="space-y-3">
           {docs.map((doc) => {
             const id = asString(doc.id);
-            const title = asString(doc.title) || asString(doc.name) || (isEn ? "Document" : "Documento");
+            const title =
+              asString(doc.title) ||
+              asString(doc.name) ||
+              (isEn ? "Document" : "Documento");
             const docType = asString(doc.document_type);
             const url = asString(doc.url) || asString(doc.file_url);
             const createdAt = asString(doc.created_at);
@@ -113,7 +115,7 @@ export function TenantDocuments({ locale }: { locale: string }) {
                     </div>
                     {url && (
                       <a
-                        className="text-primary text-sm font-medium underline"
+                        className="font-medium text-primary text-sm underline"
                         href={url}
                         rel="noopener noreferrer"
                         target="_blank"

@@ -75,8 +75,20 @@ function sanitizeFilePart(value: string): string {
  * PDF generation logic — extracted to module scope so the React Compiler
  * can optimize the component without encountering value blocks in try/catch.
  */
-async function generateStakeholderPdf(props: StakeholderReportPdfProps): Promise<void> {
-  const { isEn, locale, orgName, periodLabel, propertyLabel, kpis, exceptions, propertyRows, trendRows } = props;
+async function generateStakeholderPdf(
+  props: StakeholderReportPdfProps
+): Promise<void> {
+  const {
+    isEn,
+    locale,
+    orgName,
+    periodLabel,
+    propertyLabel,
+    kpis,
+    exceptions,
+    propertyRows,
+    trendRows,
+  } = props;
 
   const titleText = isEn ? "Stakeholder Report" : "Reporte para stakeholders";
   const propertyPrefix = isEn ? "Property" : "Propiedad";
@@ -86,9 +98,15 @@ async function generateStakeholderPdf(props: StakeholderReportPdfProps): Promise
   const kpiBody: [string, string][] = [
     [isEn ? "Income" : "Ingresos", fmtCurrency(kpis.income, locale)],
     [isEn ? "Expenses" : "Gastos", fmtCurrency(kpis.expenses, locale)],
-    [isEn ? "Net payout" : "Liquidación neta", fmtCurrency(kpis.netPayout, locale)],
+    [
+      isEn ? "Net payout" : "Liquidación neta",
+      fmtCurrency(kpis.netPayout, locale),
+    ],
     [isEn ? "Occupancy" : "Ocupación", fmtPercent(kpis.occupancyRatePct)],
-    [isEn ? "Collection rate" : "Tasa de cobro", fmtPercent(kpis.collectionRatePct)],
+    [
+      isEn ? "Collection rate" : "Tasa de cobro",
+      fmtPercent(kpis.collectionRatePct),
+    ],
     [isEn ? "SLA breaches" : "Incumplimientos SLA", String(kpis.slaBreaches)],
     [isEn ? "Overdue tasks" : "Tareas vencidas", String(kpis.overdueTasks)],
   ];
@@ -104,11 +122,16 @@ async function generateStakeholderPdf(props: StakeholderReportPdfProps): Promise
     ? "No trend data available for this selection."
     : "No hay datos de tendencia para este filtro.";
   const exceptionsTitle = isEn ? "Exceptions" : "Excepciones";
-  const exceptionsHead = [isEn ? "Attention required" : "Atención requerida", isEn ? "Detail" : "Detalle"];
+  const exceptionsHead = [
+    isEn ? "Attention required" : "Atención requerida",
+    isEn ? "Detail" : "Detalle",
+  ];
   const noExceptionsText = isEn
     ? "No critical exceptions detected."
     : "No se detectaron excepciones críticas.";
-  const propertySummaryTitle = isEn ? "Property Summary" : "Resumen por propiedad";
+  const propertySummaryTitle = isEn
+    ? "Property Summary"
+    : "Resumen por propiedad";
   const propertyHead = [
     isEn ? "Property" : "Propiedad",
     isEn ? "Income" : "Ingresos",
@@ -130,7 +153,11 @@ async function generateStakeholderPdf(props: StakeholderReportPdfProps): Promise
   const autoTable = autoTableModule.default;
 
   try {
-    const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+    const doc = new jsPDF({
+      orientation: "portrait",
+      unit: "mm",
+      format: "a4",
+    });
     const margin = 14;
     const pageWidth = doc.internal.pageSize.getWidth();
     let y = 16;
@@ -147,11 +174,7 @@ async function generateStakeholderPdf(props: StakeholderReportPdfProps): Promise
     y += 5;
     doc.text(periodLabel, margin, y);
     y += 5;
-    doc.text(
-      propertyPrefix + ": " + propertyLabel,
-      margin,
-      y
-    );
+    doc.text(propertyPrefix + ": " + propertyLabel, margin, y);
     y += 4;
 
     doc.setDrawColor(210);
@@ -268,7 +291,9 @@ async function generateStakeholderPdf(props: StakeholderReportPdfProps): Promise
           fmtCurrency(row.expenses, locale),
           fmtCurrency(row.net_payout, locale),
           fmtPercent(row.occupancy_rate * 100),
-          String(row.outstanding_count) + " \u00B7 " + fmtCurrency(row.outstanding_amount, locale),
+          String(row.outstanding_count) +
+            " \u00B7 " +
+            fmtCurrency(row.outstanding_amount, locale),
         ]),
         theme: "striped",
         headStyles: { fillColor: [17, 24, 39], fontSize: 8 },
@@ -297,14 +322,10 @@ async function generateStakeholderPdf(props: StakeholderReportPdfProps): Promise
       doc.setFontSize(8);
       doc.setTextColor(130);
       const footerY = doc.internal.pageSize.getHeight() - 8;
-      const footerRight = pagePrefix + " " + String(i) + "/" + String(totalPages);
+      const footerRight =
+        pagePrefix + " " + String(i) + "/" + String(totalPages);
       doc.text(footerLeft, margin, footerY);
-      doc.text(
-        footerRight,
-        pageWidth - margin,
-        footerY,
-        { align: "right" }
-      );
+      doc.text(footerRight, pageWidth - margin, footerY, { align: "right" });
     }
 
     let filePart = sanitizeFilePart(periodLabel);
@@ -334,12 +355,27 @@ export function StakeholderReportPdfButton({
   const handleDownload = async () => {
     if (generating) return;
     setGenerating(true);
-    await generateStakeholderPdf({ isEn, locale, orgName, periodLabel, propertyLabel, kpis, exceptions, propertyRows, trendRows });
+    await generateStakeholderPdf({
+      isEn,
+      locale,
+      orgName,
+      periodLabel,
+      propertyLabel,
+      kpis,
+      exceptions,
+      propertyRows,
+      trendRows,
+    });
     setGenerating(false);
   };
 
   return (
-    <Button disabled={generating} onClick={handleDownload} size="sm" variant="outline">
+    <Button
+      disabled={generating}
+      onClick={handleDownload}
+      size="sm"
+      variant="outline"
+    >
       {generating ? (
         <>
           <Spinner size="sm" />

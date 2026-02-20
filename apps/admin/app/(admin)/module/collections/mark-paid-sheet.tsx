@@ -27,7 +27,9 @@ function useReceiptUpload(orgId: string) {
     if (!file) return;
     if (!orgId) return;
     setUploading(true);
-    const errorLabel = isEn ? "Receipt upload failed" : "Fallo la subida del comprobante";
+    const errorLabel = isEn
+      ? "Receipt upload failed"
+      : "Fallo la subida del comprobante";
     try {
       const supabase = getSupabaseBrowserClient();
       const safeName = file.name.replaceAll(/[^\w.-]+/g, "-");
@@ -42,7 +44,9 @@ function useReceiptUpload(orgId: string) {
       }
       const { data } = supabase.storage.from("receipts").getPublicUrl(key);
       if (!data.publicUrl) {
-        toast.error(errorLabel, { description: "Could not resolve public URL." });
+        toast.error(errorLabel, {
+          description: "Could not resolve public URL.",
+        });
         setUploading(false);
         return;
       }
@@ -123,11 +127,7 @@ export function MarkPaidSheet({
           setReceiptUrl("");
         }}
       >
-        <input
-          name="collection_id"
-          type="hidden"
-          value={markPaidId ?? ""}
-        />
+        <input name="collection_id" type="hidden" value={markPaidId ?? ""} />
         <input name="next" type="hidden" value={nextPath} />
         <input name="receipt_url" type="hidden" value={receiptUrl} />
 
@@ -145,22 +145,25 @@ export function MarkPaidSheet({
 
         <label className="space-y-1 text-sm">
           <span>{isEn ? "Payment reference" : "Referencia de pago"}</span>
-          <Input name="payment_reference" placeholder={isEn ? "Transfer #, receipt code..." : "# transferencia, codigo..."} />
+          <Input
+            name="payment_reference"
+            placeholder={
+              isEn
+                ? "Transfer #, receipt code..."
+                : "# transferencia, codigo..."
+            }
+          />
         </label>
 
         <label className="space-y-1 text-sm">
           <span>{isEn ? "Paid at" : "Fecha de pago"}</span>
-          <DatePicker
-            defaultValue={today}
-            locale={locale}
-            name="paid_at"
-          />
+          <DatePicker defaultValue={today} locale={locale} name="paid_at" />
         </label>
 
         <div className="space-y-1 text-sm">
           <span>{isEn ? "Receipt" : "Comprobante"}</span>
           <div
-            className="flex cursor-pointer items-center justify-center rounded-lg border-2 border-dashed border-muted-foreground/25 px-4 py-4 text-sm transition-colors hover:border-muted-foreground/50"
+            className="flex cursor-pointer items-center justify-center rounded-lg border-2 border-muted-foreground/25 border-dashed px-4 py-4 text-sm transition-colors hover:border-muted-foreground/50"
             onClick={() => receiptInputRef.current?.click()}
             onKeyDown={(e) => {
               if (e.key === "Enter" || e.key === " ") {

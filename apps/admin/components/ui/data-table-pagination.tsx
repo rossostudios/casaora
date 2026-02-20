@@ -23,21 +23,15 @@ export function DataTablePagination<TRow extends DataTableRow>({
         {isEn ? (
           <>
             Showing{" "}
-            <span className="font-medium text-foreground">
-              {filteredRows}
-            </span>{" "}
-            of{" "}
-            <span className="font-medium text-foreground">{totalRows}</span>{" "}
+            <span className="font-medium text-foreground">{filteredRows}</span>{" "}
+            of <span className="font-medium text-foreground">{totalRows}</span>{" "}
             rows
           </>
         ) : (
           <>
             Mostrando{" "}
-            <span className="font-medium text-foreground">
-              {filteredRows}
-            </span>{" "}
-            de{" "}
-            <span className="font-medium text-foreground">{totalRows}</span>{" "}
+            <span className="font-medium text-foreground">{filteredRows}</span>{" "}
+            de <span className="font-medium text-foreground">{totalRows}</span>{" "}
             filas
           </>
         )}
@@ -48,9 +42,7 @@ export function DataTablePagination<TRow extends DataTableRow>({
           {isEn ? "Rows" : "Filas"}
           <select
             className="h-8 rounded-md border bg-background px-2 text-foreground text-sm"
-            onChange={(event) =>
-              table.setPageSize(Number(event.target.value))
-            }
+            onChange={(event) => table.setPageSize(Number(event.target.value))}
             value={table.getState().pagination.pageSize}
           >
             {[10, 20, 50, 100].map((size) => (

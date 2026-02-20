@@ -16,25 +16,30 @@ import {
 import {
   type ColumnDef,
   type ColumnFiltersState,
-  type SortingState,
   flexRender,
   getCoreRowModel,
   getFilteredRowModel,
   getPaginationRowModel,
   getSortedRowModel,
+  type SortingState,
   useReactTable,
 } from "@tanstack/react-table";
 import { useRouter } from "next/navigation";
-import { useCallback, useMemo, useState, useOptimistic, useTransition } from "react";
+import {
+  useCallback,
+  useMemo,
+  useOptimistic,
+  useState,
+  useTransition,
+} from "react";
 import { toast } from "sonner";
 
 import { updateUnitInlineAction } from "@/app/(admin)/module/units/actions";
 import { EditableCell } from "@/components/properties/editable-cell";
-import { DataTablePagination } from "@/components/ui/data-table-pagination";
-import { DataTableToolbar } from "@/components/ui/data-table-toolbar";
-import { Select } from "@/components/ui/select";
 import { buttonVariants } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { DataTablePagination } from "@/components/ui/data-table-pagination";
+import { DataTableToolbar } from "@/components/ui/data-table-toolbar";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -44,12 +49,12 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Icon } from "@/components/ui/icon";
+import { Select } from "@/components/ui/select";
 import { StatusBadge } from "@/components/ui/status-badge";
 import {
   Table,
   TableBody,
   TableCell,
-  TableFooter,
   TableHead,
   TableHeader,
   TableRow,
@@ -117,13 +122,17 @@ export function UnitNotionTable({
   const [globalFilter, setGlobalFilter] = useState("");
 
   const uniqueProperties = useMemo(() => {
-    return Array.from(new Set(rows.map((r) => r.property_name).filter(Boolean))) as string[];
+    return Array.from(
+      new Set(rows.map((r) => r.property_name).filter(Boolean))
+    ) as string[];
   }, [rows]);
 
   const uniqueBedrooms = useMemo(() => {
-    return Array.from(new Set(rows.map((r) => r.bedrooms).filter((r) => r !== null && r !== undefined))).sort(
-      (a, b) => Number(a) - Number(b)
-    ) as number[];
+    return Array.from(
+      new Set(
+        rows.map((r) => r.bedrooms).filter((r) => r !== null && r !== undefined)
+      )
+    ).sort((a, b) => Number(a) - Number(b)) as number[];
   }, [rows]);
 
   const [optimisticRows, addOptimistic] = useOptimistic(
@@ -135,11 +144,7 @@ export function UnitNotionTable({
   );
 
   const commitEdit = useCallback(
-    async (
-      unitId: string,
-      field: string,
-      next: string | number | boolean
-    ) => {
+    async (unitId: string, field: string, next: string | number | boolean) => {
       startTransition(() => {
         addOptimistic({
           id: unitId,
@@ -154,12 +159,12 @@ export function UnitNotionTable({
         value: next,
       });
 
-      if (!result.ok) {
+      if (result.ok) {
+        toast.success(isEn ? "Saved" : "Guardado");
+      } else {
         toast.error(isEn ? "Failed to save" : "Error al guardar", {
           description: result.error,
         });
-      } else {
-        toast.success(isEn ? "Saved" : "Guardado");
       }
     },
     [addOptimistic, isEn, startTransition]
@@ -215,7 +220,7 @@ export function UnitNotionTable({
           />
         ),
         cell: ({ row }) => (
-          <span className="text-sm truncate">
+          <span className="truncate text-sm">
             {row.original.property_name ?? "-"}
           </span>
         ),
@@ -249,7 +254,7 @@ export function UnitNotionTable({
           return (
             <EditableCell
               displayNode={
-                <span className="font-mono text-xs text-muted-foreground">
+                <span className="font-mono text-muted-foreground text-xs">
                   {data.code ?? ""}
                 </span>
               }
@@ -274,7 +279,7 @@ export function UnitNotionTable({
           return (
             <EditableCell
               displayNode={
-                <span className="tabular-nums text-sm">
+                <span className="text-sm tabular-nums">
                   {data.max_guests ?? "-"}
                 </span>
               }
@@ -299,7 +304,7 @@ export function UnitNotionTable({
           return (
             <EditableCell
               displayNode={
-                <span className="tabular-nums text-sm">
+                <span className="text-sm tabular-nums">
                   {data.bedrooms ?? "-"}
                 </span>
               }
@@ -314,17 +319,14 @@ export function UnitNotionTable({
         size: 100,
         minSize: 60,
         header: () => (
-          <ColHeader
-            icon={Door01Icon}
-            label={isEn ? "Bathrooms" : "Baños"}
-          />
+          <ColHeader icon={Door01Icon} label={isEn ? "Bathrooms" : "Baños"} />
         ),
         cell: ({ row }) => {
           const data = row.original;
           return (
             <EditableCell
               displayNode={
-                <span className="tabular-nums text-sm">
+                <span className="text-sm tabular-nums">
                   {data.bathrooms ?? "-"}
                 </span>
               }
@@ -399,9 +401,7 @@ export function UnitNotionTable({
                   {isEn ? "Actions" : "Acciones"}
                 </DropdownMenuLabel>
                 <DropdownMenuItem
-                  onClick={() =>
-                    router.push(`/module/units/${unit.id}`)
-                  }
+                  onClick={() => router.push(`/module/units/${unit.id}`)}
                 >
                   <Icon className="mr-2" icon={ViewIcon} size={14} />
                   {isEn ? "View details" : "Ver detalles"}
@@ -463,14 +463,21 @@ export function UnitNotionTable({
         />
         <div className="flex flex-wrap items-center gap-2">
           <Select
+            className="w-[180px]"
             onChange={(e) => {
               const val = e.target.value;
-              table.getColumn("property_name")?.setFilterValue(val === "all" ? undefined : val);
+              table
+                .getColumn("property_name")
+                ?.setFilterValue(val === "all" ? undefined : val);
             }}
-            value={(table.getColumn("property_name")?.getFilterValue() as string) ?? "all"}
-            className="w-[180px]"
+            value={
+              (table.getColumn("property_name")?.getFilterValue() as string) ??
+              "all"
+            }
           >
-            <option value="all">{isEn ? "All properties" : "Todas las propiedades"}</option>
+            <option value="all">
+              {isEn ? "All properties" : "Todas las propiedades"}
+            </option>
             {uniqueProperties.map((p) => (
               <option key={p} value={p}>
                 {p}
@@ -478,41 +485,48 @@ export function UnitNotionTable({
             ))}
           </Select>
           <Select
+            className="w-[140px]"
             onChange={(e) => {
               const val = e.target.value;
-              table.getColumn("bedrooms")?.setFilterValue(val === "all" ? undefined : Number(val));
+              table
+                .getColumn("bedrooms")
+                ?.setFilterValue(val === "all" ? undefined : Number(val));
             }}
-            value={(table.getColumn("bedrooms")?.getFilterValue() as string) ?? "all"}
-            className="w-[140px]"
+            value={
+              (table.getColumn("bedrooms")?.getFilterValue() as string) ?? "all"
+            }
           >
             <option value="all">{isEn ? "All beds" : "Todas las camas"}</option>
             {uniqueBedrooms.map((b) => (
               <option key={String(b)} value={String(b)}>
-                {b} {isEn ? (b === 1 ? "bed" : "beds") : (b === 1 ? "hab." : "habs.")}
+                {b}{" "}
+                {isEn ? (b === 1 ? "bed" : "beds") : b === 1 ? "hab." : "habs."}
               </option>
             ))}
           </Select>
         </div>
       </div>
       <div className="overflow-x-auto rounded-xl border bg-background shadow-[var(--shadow-floating)]">
-        <Table className="table-fixed w-full" style={{ minWidth: table.getTotalSize() }}>
+        <Table
+          className="w-full table-fixed"
+          style={{ minWidth: table.getTotalSize() }}
+        >
           <TableHeader>
             {table.getHeaderGroups().map((hg) => (
               <TableRow key={hg.id}>
                 {hg.headers.map((header) => (
                   <TableHead
-                    className="relative whitespace-nowrap select-none text-[11px] uppercase tracking-wider"
+                    className="relative select-none whitespace-nowrap text-[11px] uppercase tracking-wider"
                     grid
                     key={header.id}
                     style={{ width: header.getSize() }}
                   >
-                    {header.isPlaceholder
-                      ? null
-                      : <div
+                    {header.isPlaceholder ? null : (
+                      <div
                         className={cn(
                           "flex items-center gap-1",
                           header.column.getCanSort() &&
-                          "cursor-pointer select-none hover:text-foreground"
+                            "cursor-pointer select-none hover:text-foreground"
                         )}
                         onClick={header.column.getToggleSortingHandler()}
                       >
@@ -521,16 +535,17 @@ export function UnitNotionTable({
                           header.getContext()
                         )}
                         {{
-                          asc: <span className="text-[10px] ml-1">↑</span>,
-                          desc: <span className="text-[10px] ml-1">↓</span>,
+                          asc: <span className="ml-1 text-[10px]">↑</span>,
+                          desc: <span className="ml-1 text-[10px]">↓</span>,
                         }[header.column.getIsSorted() as string] ?? null}
-                      </div>}
+                      </div>
+                    )}
 
                     {header.column.getCanResize() && (
                       <div
                         aria-label="Resize column"
                         className={cn(
-                          "absolute right-0 top-0 h-full w-1 cursor-col-resize select-none touch-none",
+                          "absolute top-0 right-0 h-full w-1 cursor-col-resize touch-none select-none",
                           "hover:bg-primary/30",
                           header.column.getIsResizing() && "bg-primary/50"
                         )}
@@ -561,14 +576,20 @@ export function UnitNotionTable({
                       key={cell.id}
                       style={{ width: cell.column.getSize() }}
                     >
-                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                      {flexRender(
+                        cell.column.columnDef.cell,
+                        cell.getContext()
+                      )}
                     </TableCell>
                   ))}
                 </TableRow>
               ))
             ) : (
               <TableRow>
-                <TableCell className="h-24 text-center" colSpan={columns.length}>
+                <TableCell
+                  className="h-24 text-center"
+                  colSpan={columns.length}
+                >
                   {isEn ? "No results." : "Sin resultados."}
                 </TableCell>
               </TableRow>

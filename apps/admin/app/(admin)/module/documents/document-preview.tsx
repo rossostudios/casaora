@@ -63,7 +63,7 @@ export function DocumentPreview({
                 : "Vista previa no disponible para este tipo de archivo."}
             </p>
             <a
-              className="text-sm text-blue-600 hover:underline"
+              className="text-blue-600 text-sm hover:underline"
               href={fileUrl}
               rel="noopener noreferrer"
               target="_blank"

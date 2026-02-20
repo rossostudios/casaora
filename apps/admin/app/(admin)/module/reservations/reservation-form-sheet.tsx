@@ -1,13 +1,18 @@
 "use client";
 
+import React from "react";
 import { createReservationAction } from "@/app/(admin)/module/reservations/actions";
-import { humanizeStatus, type UnitOption } from "@/app/(admin)/module/reservations/reservations-types";
+import {
+  humanizeStatus,
+  type UnitOption,
+} from "@/app/(admin)/module/reservations/reservations-types";
 import { Button } from "@/components/ui/button";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Form } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Sheet } from "@/components/ui/sheet";
+import { useFormSubmitHotkey } from "@/lib/hotkeys/use-form-hotkeys";
 import type { Locale } from "@/lib/i18n";
 
 export function ReservationFormSheet({
@@ -25,6 +30,9 @@ export function ReservationFormSheet({
   orgId: string;
   unitOptions: UnitOption[];
 }) {
+  const formRef = React.useRef<HTMLFormElement>(null);
+  useFormSubmitHotkey(formRef);
+
   return (
     <Sheet
       description={
@@ -36,7 +44,11 @@ export function ReservationFormSheet({
       open={open}
       title={isEn ? "New reservation" : "Nueva reserva"}
     >
-      <Form action={createReservationAction} className="space-y-4">
+      <Form
+        action={createReservationAction}
+        className="space-y-4"
+        ref={formRef}
+      >
         <input name="organization_id" type="hidden" value={orgId} />
 
         <label className="block space-y-1" htmlFor="new-res-unit">
@@ -71,13 +83,21 @@ export function ReservationFormSheet({
             <span className="block font-medium text-muted-foreground text-xs">
               Check-in
             </span>
-            <DatePicker id="new-res-check-in" locale={locale} name="check_in_date" />
+            <DatePicker
+              id="new-res-check-in"
+              locale={locale}
+              name="check_in_date"
+            />
           </label>
           <label className="block space-y-1" htmlFor="new-res-check-out">
             <span className="block font-medium text-muted-foreground text-xs">
               Check-out
             </span>
-            <DatePicker id="new-res-check-out" locale={locale} name="check_out_date" />
+            <DatePicker
+              id="new-res-check-out"
+              locale={locale}
+              name="check_out_date"
+            />
           </label>
         </div>
 
@@ -190,7 +210,11 @@ export function ReservationFormSheet({
           <span className="block font-medium text-muted-foreground text-xs">
             {isEn ? "Notes" : "Notas"}
           </span>
-          <Input id="new-res-notes" name="notes" placeholder={isEn ? "Optional" : "Opcional"} />
+          <Input
+            id="new-res-notes"
+            name="notes"
+            placeholder={isEn ? "Optional" : "Opcional"}
+          />
         </label>
 
         <div className="flex flex-wrap justify-end gap-2">

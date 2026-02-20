@@ -1,22 +1,34 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { CheckmarkCircle02Icon, Cancel01Icon } from "@hugeicons/core-free-icons";
-import { useEffect, useRef, useState } from "react";
-import { Controller, useForm, useWatch, type Resolver } from "react-hook-form";
+import { Cancel01Icon } from "@hugeicons/core-free-icons";
 import { useQueryClient } from "@tanstack/react-query";
+import { useEffect, useRef, useState } from "react";
+import { Controller, type Resolver, useForm, useWatch } from "react-hook-form";
 import { toast } from "sonner";
-
-import { ReadinessRing } from "@/components/listings/readiness-ring";
 import { ImageUpload } from "@/app/(admin)/module/listings/listing-image-upload";
+import type { ListingRow } from "@/app/(admin)/module/listings/listings-manager";
+import { ReadinessRing } from "@/components/listings/readiness-ring";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Combobox, type ComboboxOption } from "@/components/ui/combobox";
 import { DatePicker } from "@/components/ui/date-picker";
+import { Icon } from "@/components/ui/icon";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  type ListingFormValues,
+  listingFormSchema,
+} from "@/lib/features/listings/listing-schema";
+import {
+  authedFetch,
+  fetchSlugAvailable,
+  type ReadinessIssue,
+} from "@/lib/features/listings/listings-api";
+import { slugify } from "@/lib/features/listings/slugify";
+import { useListingReadiness } from "@/lib/features/listings/use-listing-readiness";
 import {
   AMENITY_PRESETS,
   NEIGHBORHOODS,
@@ -26,19 +38,7 @@ import {
   CITY_CENTERS,
   CITY_DISPLAY_NAMES,
 } from "@/lib/features/marketplace/geo";
-import {
-  listingFormSchema,
-  type ListingFormValues,
-} from "@/lib/features/listings/listing-schema";
-import {
-  authedFetch,
-  fetchSlugAvailable,
-  type ReadinessIssue,
-} from "@/lib/features/listings/listings-api";
-import { useListingReadiness } from "@/lib/features/listings/use-listing-readiness";
-import { Icon } from "@/components/ui/icon";
-import { slugify } from "@/lib/features/listings/slugify";
-import type { ListingRow } from "@/app/(admin)/module/listings/listings-manager";
+import { useFormSubmitHotkey } from "@/lib/hotkeys/use-form-hotkeys";
 
 const READINESS_FIELD_MAP: Record<string, string> = {
   cover_image: "cover_image_url",
@@ -89,57 +89,58 @@ export function ListingForm({
 
   const form = useForm<ListingFormValues>({
     // Zod v4 coerce types differ between input/output; runtime behavior is correct
-    resolver: zodResolver(listingFormSchema) as unknown as Resolver<ListingFormValues>,
+    resolver: zodResolver(
+      listingFormSchema
+    ) as unknown as Resolver<ListingFormValues>,
     defaultValues: isEditing
       ? {
-        title: editing.title,
-        public_slug: editing.public_slug,
-        city: initialCity,
-        neighborhood: editing.neighborhood || "",
-        property_type: editing.property_type || "",
-        description: editing.description || "",
-        summary: editing.summary || "",
-        bedrooms: editing.bedrooms || undefined,
-        bathrooms: editing.bathrooms || undefined,
-        square_meters: editing.square_meters || undefined,
-        furnished: editing.furnished,
-        pet_policy: editing.pet_policy || "",
-        parking_spaces: editing.parking_spaces || undefined,
-        available_from: editing.available_from || "",
-        minimum_lease_months: editing.minimum_lease_months || undefined,
-        maintenance_fee: editing.maintenance_fee || undefined,
-        cover_image_url: editing.cover_image_url || "",
-        gallery_image_urls:
-          editing.gallery_image_urls?.map(String) || [],
-        amenities: Array.isArray(editing.amenities)
-          ? editing.amenities.map(String)
-          : [],
-        currency: editing.currency || "PYG",
-        pricing_template_id: editing.pricing_template_id || "",
-        property_id: editing.property_id || "",
-        unit_id: editing.unit_id || "",
-        country_code: "PY",
-      }
+          title: editing.title,
+          public_slug: editing.public_slug,
+          city: initialCity,
+          neighborhood: editing.neighborhood || "",
+          property_type: editing.property_type || "",
+          description: editing.description || "",
+          summary: editing.summary || "",
+          bedrooms: editing.bedrooms || undefined,
+          bathrooms: editing.bathrooms || undefined,
+          square_meters: editing.square_meters || undefined,
+          furnished: editing.furnished,
+          pet_policy: editing.pet_policy || "",
+          parking_spaces: editing.parking_spaces || undefined,
+          available_from: editing.available_from || "",
+          minimum_lease_months: editing.minimum_lease_months || undefined,
+          maintenance_fee: editing.maintenance_fee || undefined,
+          cover_image_url: editing.cover_image_url || "",
+          gallery_image_urls: editing.gallery_image_urls?.map(String) || [],
+          amenities: Array.isArray(editing.amenities)
+            ? editing.amenities.map(String)
+            : [],
+          currency: editing.currency || "PYG",
+          pricing_template_id: editing.pricing_template_id || "",
+          property_id: editing.property_id || "",
+          unit_id: editing.unit_id || "",
+          country_code: "PY",
+        }
       : {
-        title: "",
-        public_slug: "",
-        city: "asuncion",
-        neighborhood: "",
-        property_type: "",
-        description: "",
-        summary: "",
-        furnished: false,
-        pet_policy: "",
-        available_from: "",
-        cover_image_url: "",
-        gallery_image_urls: [],
-        amenities: [],
-        currency: "PYG",
-        pricing_template_id: "",
-        property_id: "",
-        unit_id: "",
-        country_code: "PY",
-      },
+          title: "",
+          public_slug: "",
+          city: "asuncion",
+          neighborhood: "",
+          property_type: "",
+          description: "",
+          summary: "",
+          furnished: false,
+          pet_policy: "",
+          available_from: "",
+          cover_image_url: "",
+          gallery_image_urls: [],
+          amenities: [],
+          currency: "PYG",
+          pricing_template_id: "",
+          property_id: "",
+          unit_id: "",
+          country_code: "PY",
+        },
   });
 
   /* ---- Scroll to blocking field ---- */
@@ -184,11 +185,11 @@ export function ListingForm({
   const [prevSlugValue, setPrevSlugValue] = useState(slugValue);
   if (slugValue !== prevSlugValue) {
     setPrevSlugValue(slugValue);
-    if (!slugValue?.trim()) {
+    if (slugValue?.trim()) {
+      setSlugChecking(true);
+    } else {
       setSlugAvailable(null);
       setSlugChecking(false);
-    } else {
-      setSlugChecking(true);
     }
   }
 
@@ -198,11 +199,7 @@ export function ListingForm({
     const editingId = editing?.id;
     slugTimerRef.current = setTimeout(async () => {
       try {
-        const res = await fetchSlugAvailable(
-          slugValue,
-          orgId,
-          editingId
-        );
+        const res = await fetchSlugAvailable(slugValue, orgId, editingId);
         setSlugAvailable(res.available);
         setSlugChecking(false);
       } catch {
@@ -243,18 +240,12 @@ export function ListingForm({
     };
 
     // Optional fields — set null on update to clear
-    const optStr = (
-      key: string,
-      val: string | undefined
-    ) => {
+    const optStr = (key: string, val: string | undefined) => {
       if (val) payload[key] = val;
       else if (isEditing) payload[key] = null;
     };
 
-    const optNum = (
-      key: string,
-      val: number | undefined
-    ) => {
+    const optNum = (key: string, val: number | undefined) => {
       if (val !== undefined && val !== 0) payload[key] = val;
       else if (isEditing) payload[key] = null;
     };
@@ -305,10 +296,10 @@ export function ListingForm({
     try {
       let resultId: string;
       if (isEditing) {
-        await authedFetch(
-          `/listings/${encodeURIComponent(editing.id)}`,
-          { method: "PATCH", body: JSON.stringify(payload) }
-        );
+        await authedFetch(`/listings/${encodeURIComponent(editing.id)}`, {
+          method: "PATCH",
+          body: JSON.stringify(payload),
+        });
         resultId = editing.id;
       } else {
         const created = await authedFetch<{ id: string }>("/listings", {
@@ -353,19 +344,27 @@ export function ListingForm({
   }
 
   const readinessData = readinessQuery.data;
-  const unsatisfied = readinessData?.issues.filter((i: ReadinessIssue) => !i.satisfied) ?? [];
+  const unsatisfied =
+    readinessData?.issues.filter((i: ReadinessIssue) => !i.satisfied) ?? [];
+
+  const formRef = useRef<HTMLFormElement>(null);
+  useFormSubmitHotkey(formRef);
 
   return (
-    <form className="space-y-4" onSubmit={form.handleSubmit(onSubmit)}>
+    <form
+      className="space-y-4"
+      onSubmit={form.handleSubmit(onSubmit)}
+      ref={formRef}
+    >
       {savedListingId && readinessData ? (
-        <div className="rounded-xl border border-border/60 bg-muted/30 p-4 space-y-3">
+        <div className="space-y-3 rounded-xl border border-border/60 bg-muted/30 p-4">
           <div className="flex items-center gap-3">
             <ReadinessRing score={readinessData.score} />
-            <div className="flex-1 min-w-0">
+            <div className="min-w-0 flex-1">
               <p className="font-medium text-sm">
                 {isEn ? "Readiness" : "Preparación"}: {readinessData.score}%
                 {unsatisfied.length > 0
-                  ? ` — ${unsatisfied.length} ${isEn ? (unsatisfied.length === 1 ? "issue remaining" : "issues remaining") : (unsatisfied.length === 1 ? "pendiente" : "pendientes")}`
+                  ? ` — ${unsatisfied.length} ${isEn ? (unsatisfied.length === 1 ? "issue remaining" : "issues remaining") : unsatisfied.length === 1 ? "pendiente" : "pendientes"}`
                   : ""}
               </p>
             </div>
@@ -384,7 +383,7 @@ export function ListingForm({
                   />
                   <span className="text-muted-foreground">{issue.label}</span>
                   <button
-                    className="ml-auto text-xs text-primary hover:underline"
+                    className="ml-auto text-primary text-xs hover:underline"
                     onClick={() => scrollToFormField(issue.field)}
                     type="button"
                   >
@@ -405,34 +404,51 @@ export function ListingForm({
         </div>
       ) : null}
 
-      <Tabs defaultValue="basics" className="w-full">
-        <TabsList className="grid w-full grid-cols-5 h-9 p-1 bg-muted/50 rounded-lg mb-4">
-          <TabsTrigger value="basics" className="text-xs data-[state=active]:shadow-sm">
+      <Tabs className="w-full" defaultValue="basics">
+        <TabsList className="mb-4 grid h-9 w-full grid-cols-5 rounded-lg bg-muted/50 p-1">
+          <TabsTrigger
+            className="text-xs data-[state=active]:shadow-sm"
+            value="basics"
+          >
             {isEn ? "Basics" : "Básicos"}
           </TabsTrigger>
-          <TabsTrigger value="details" className="text-xs data-[state=active]:shadow-sm">
+          <TabsTrigger
+            className="text-xs data-[state=active]:shadow-sm"
+            value="details"
+          >
             {isEn ? "Details" : "Detalles"}
           </TabsTrigger>
-          <TabsTrigger value="location" className="text-xs data-[state=active]:shadow-sm">
+          <TabsTrigger
+            className="text-xs data-[state=active]:shadow-sm"
+            value="location"
+          >
             {isEn ? "Location" : "Ubicación"}
           </TabsTrigger>
-          <TabsTrigger value="pricing" className="text-xs data-[state=active]:shadow-sm">
+          <TabsTrigger
+            className="text-xs data-[state=active]:shadow-sm"
+            value="pricing"
+          >
             {isEn ? "Pricing" : "Precios"}
           </TabsTrigger>
-          <TabsTrigger value="media" className="text-xs data-[state=active]:shadow-sm">
+          <TabsTrigger
+            className="text-xs data-[state=active]:shadow-sm"
+            value="media"
+          >
             {isEn ? "Media" : "Media"}
           </TabsTrigger>
         </TabsList>
 
         <div className="mt-2 min-h-[400px]">
-          <TabsContent value="basics" className="m-0 space-y-4">
+          <TabsContent className="m-0 space-y-4" value="basics">
             <div className="grid gap-4 md:grid-cols-2">
               {/* Title */}
               <label className="space-y-1.5 text-sm md:col-span-2">
-                <span className="font-medium text-foreground">{isEn ? "Title" : "Título"}</span>
+                <span className="font-medium text-foreground">
+                  {isEn ? "Title" : "Título"}
+                </span>
                 <Input {...form.register("title")} />
                 {form.formState.errors.title && (
-                  <p className="text-destructive text-[11px] font-medium uppercase tracking-wider">
+                  <p className="font-medium text-[11px] text-destructive uppercase tracking-wider">
                     {form.formState.errors.title.message}
                   </p>
                 )}
@@ -448,7 +464,7 @@ export function ListingForm({
                     })}
                     placeholder="departamento-asuncion-centro"
                   />
-                  <span className="flex-shrink-0 w-6 flex justify-center">
+                  <span className="flex w-6 flex-shrink-0 justify-center">
                     {slugChecking ? (
                       <span className="text-muted-foreground text-xs">...</span>
                     ) : slugAvailable === true ? (
@@ -464,7 +480,7 @@ export function ListingForm({
                   </p>
                 )}
                 {form.formState.errors.public_slug && (
-                  <p className="text-destructive text-[11px] font-medium uppercase tracking-wider">
+                  <p className="font-medium text-[11px] text-destructive uppercase tracking-wider">
                     {form.formState.errors.public_slug.message}
                   </p>
                 )}
@@ -472,7 +488,9 @@ export function ListingForm({
 
               {/* Property type */}
               <label className="space-y-1.5 text-sm md:col-span-2">
-                <span className="font-medium text-foreground">{isEn ? "Property type" : "Tipo de propiedad"}</span>
+                <span className="font-medium text-foreground">
+                  {isEn ? "Property type" : "Tipo de propiedad"}
+                </span>
                 <Select {...form.register("property_type")}>
                   <option value="">
                     {isEn ? "Select type" : "Seleccionar tipo"}
@@ -487,33 +505,48 @@ export function ListingForm({
 
               {/* Summary */}
               <label className="space-y-1.5 text-sm md:col-span-2">
-                <span className="font-medium text-foreground">{isEn ? "Summary" : "Resumen"}</span>
-                <Input {...form.register("summary")} placeholder={isEn ? "Brief standout summary..." : "Resumen destacado..."} />
+                <span className="font-medium text-foreground">
+                  {isEn ? "Summary" : "Resumen"}
+                </span>
+                <Input
+                  {...form.register("summary")}
+                  placeholder={
+                    isEn ? "Brief standout summary..." : "Resumen destacado..."
+                  }
+                />
               </label>
 
               {/* Description */}
-              <label className="space-y-1.5 text-sm md:col-span-2" data-field="description">
-                <span className="font-medium text-foreground">{isEn ? "Description" : "Descripción"}</span>
-                <Textarea className="min-h-[120px]" {...form.register("description")} />
+              <label
+                className="space-y-1.5 text-sm md:col-span-2"
+                data-field="description"
+              >
+                <span className="font-medium text-foreground">
+                  {isEn ? "Description" : "Descripción"}
+                </span>
+                <Textarea
+                  className="min-h-[120px]"
+                  {...form.register("description")}
+                />
               </label>
             </div>
           </TabsContent>
 
-          <TabsContent value="details" className="m-0 space-y-4">
+          <TabsContent className="m-0 space-y-4" value="details">
             <div className="grid gap-4 md:grid-cols-2">
               {/* Bedrooms */}
               <label className="space-y-1.5 text-sm" data-field="bedrooms">
-                <span className="font-medium text-foreground">{isEn ? "Bedrooms" : "Habitaciones"}</span>
-                <Input
-                  {...form.register("bedrooms")}
-                  min={0}
-                  type="number"
-                />
+                <span className="font-medium text-foreground">
+                  {isEn ? "Bedrooms" : "Habitaciones"}
+                </span>
+                <Input {...form.register("bedrooms")} min={0} type="number" />
               </label>
 
               {/* Bathrooms */}
               <label className="space-y-1.5 text-sm">
-                <span className="font-medium text-foreground">{isEn ? "Bathrooms" : "Baños"}</span>
+                <span className="font-medium text-foreground">
+                  {isEn ? "Bathrooms" : "Baños"}
+                </span>
                 <Input
                   {...form.register("bathrooms")}
                   min={0}
@@ -524,7 +557,9 @@ export function ListingForm({
 
               {/* Area */}
               <label className="space-y-1.5 text-sm" data-field="square_meters">
-                <span className="font-medium text-foreground">{isEn ? "Area (m²)" : "Área (m²)"}</span>
+                <span className="font-medium text-foreground">
+                  {isEn ? "Area (m²)" : "Área (m²)"}
+                </span>
                 <Input
                   {...form.register("square_meters")}
                   min={0}
@@ -546,7 +581,7 @@ export function ListingForm({
               </label>
             </div>
 
-            <div className="rounded-xl border border-border/50 bg-muted/20 p-4 space-y-4 mt-4">
+            <div className="mt-4 space-y-4 rounded-xl border border-border/50 bg-muted/20 p-4">
               {/* Furnished */}
               <Controller
                 control={form.control}
@@ -557,7 +592,9 @@ export function ListingForm({
                       checked={field.value}
                       onCheckedChange={field.onChange}
                     />
-                    <span className="font-medium text-foreground">{isEn ? "Furnished property" : "Propiedad amoblada"}</span>
+                    <span className="font-medium text-foreground">
+                      {isEn ? "Furnished property" : "Propiedad amoblada"}
+                    </span>
                   </div>
                 )}
               />
@@ -574,18 +611,22 @@ export function ListingForm({
                         field.onChange(checked ? "Pets allowed" : "")
                       }
                     />
-                    <span className="font-medium text-foreground">{isEn ? "Pets allowed" : "Se aceptan mascotas"}</span>
+                    <span className="font-medium text-foreground">
+                      {isEn ? "Pets allowed" : "Se aceptan mascotas"}
+                    </span>
                   </div>
                 )}
               />
             </div>
           </TabsContent>
 
-          <TabsContent value="location" className="m-0 space-y-4">
+          <TabsContent className="m-0 space-y-4" value="location">
             <div className="grid gap-4 md:grid-cols-2">
               {/* City */}
               <div className="space-y-1.5 text-sm">
-                <span className="font-medium text-foreground">{isEn ? "City" : "Ciudad"}</span>
+                <span className="font-medium text-foreground">
+                  {isEn ? "City" : "Ciudad"}
+                </span>
                 <Controller
                   control={form.control}
                   name="city"
@@ -605,7 +646,9 @@ export function ListingForm({
 
               {/* Neighborhood */}
               <div className="space-y-1.5 text-sm">
-                <span className="font-medium text-foreground">{isEn ? "Neighborhood" : "Barrio"}</span>
+                <span className="font-medium text-foreground">
+                  {isEn ? "Neighborhood" : "Barrio"}
+                </span>
                 <Controller
                   control={form.control}
                   name="neighborhood"
@@ -630,16 +673,20 @@ export function ListingForm({
               </div>
             </div>
 
-            <div className="border-t border-border/50 pt-4 mt-6">
-              <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground mb-4">
+            <div className="mt-6 border-border/50 border-t pt-4">
+              <p className="mb-4 font-medium text-muted-foreground text-xs uppercase tracking-wider">
                 {isEn ? "Internal Links" : "Enlaces Internos"}
               </p>
               <div className="grid gap-4 md:grid-cols-2">
                 {/* Property */}
                 <label className="space-y-1.5 text-sm">
-                  <span className="font-medium text-foreground">{isEn ? "Property" : "Propiedad"}</span>
+                  <span className="font-medium text-foreground">
+                    {isEn ? "Property" : "Propiedad"}
+                  </span>
                   <Select {...form.register("property_id")}>
-                    <option value="">{isEn ? "Unassigned" : "Sin asignar"}</option>
+                    <option value="">
+                      {isEn ? "Unassigned" : "Sin asignar"}
+                    </option>
                     {propertyOptions.map((p) => (
                       <option key={p.id} value={p.id}>
                         {p.label}
@@ -650,9 +697,13 @@ export function ListingForm({
 
                 {/* Unit */}
                 <label className="space-y-1.5 text-sm">
-                  <span className="font-medium text-foreground">{isEn ? "Unit" : "Unidad"}</span>
+                  <span className="font-medium text-foreground">
+                    {isEn ? "Unit" : "Unidad"}
+                  </span>
                   <Select {...form.register("unit_id")}>
-                    <option value="">{isEn ? "Unassigned" : "Sin asignar"}</option>
+                    <option value="">
+                      {isEn ? "Unassigned" : "Sin asignar"}
+                    </option>
                     {unitOptions.map((u) => (
                       <option key={u.id} value={u.id}>
                         {u.label}
@@ -664,11 +715,13 @@ export function ListingForm({
             </div>
           </TabsContent>
 
-          <TabsContent value="pricing" className="m-0 space-y-4">
+          <TabsContent className="m-0 space-y-4" value="pricing">
             <div className="grid gap-4 md:grid-cols-2">
               {/* Currency */}
               <label className="space-y-1.5 text-sm">
-                <span className="font-medium text-foreground">{isEn ? "Currency" : "Moneda"}</span>
+                <span className="font-medium text-foreground">
+                  {isEn ? "Currency" : "Moneda"}
+                </span>
                 <Select {...form.register("currency")}>
                   <option value="PYG">PYG</option>
                   <option value="USD">USD</option>
@@ -695,7 +748,9 @@ export function ListingForm({
                 </span>
                 <Select {...form.register("pricing_template_id")}>
                   <option value="">
-                    {isEn ? "Select template (Managed separately)" : "Seleccionar plantilla (Gestionados por separado)"}
+                    {isEn
+                      ? "Select template (Managed separately)"
+                      : "Seleccionar plantilla (Gestionados por separado)"}
                   </option>
                   {pricingTemplateOptions.map((t) => (
                     <option key={t.id} value={t.id}>
@@ -703,17 +758,20 @@ export function ListingForm({
                     </option>
                   ))}
                 </Select>
-                <p className="text-[11px] text-muted-foreground mt-1">
-                  {isEn ? "Controls nightly and monthly rates, and fees." : "Controla las tarifas y cuotas por noche y mensuales."}
+                <p className="mt-1 text-[11px] text-muted-foreground">
+                  {isEn
+                    ? "Controls nightly and monthly rates, and fees."
+                    : "Controla las tarifas y cuotas por noche y mensuales."}
                 </p>
               </label>
 
               {/* Minimum lease */}
-              <label className="space-y-1.5 text-sm mt-4" data-field="minimum_lease_months">
+              <label
+                className="mt-4 space-y-1.5 text-sm"
+                data-field="minimum_lease_months"
+              >
                 <span className="font-medium text-foreground">
-                  {isEn
-                    ? "Minimum lease (months)"
-                    : "Contrato mínimo (meses)"}
+                  {isEn ? "Minimum lease (months)" : "Contrato mínimo (meses)"}
                 </span>
                 <Input
                   {...form.register("minimum_lease_months")}
@@ -723,8 +781,13 @@ export function ListingForm({
               </label>
 
               {/* Available from */}
-              <div className="space-y-1.5 text-sm mt-4" data-field="available_from">
-                <span className="font-medium text-foreground">{isEn ? "Available from" : "Disponible desde"}</span>
+              <div
+                className="mt-4 space-y-1.5 text-sm"
+                data-field="available_from"
+              >
+                <span className="font-medium text-foreground">
+                  {isEn ? "Available from" : "Disponible desde"}
+                </span>
                 <Controller
                   control={form.control}
                   name="available_from"
@@ -740,11 +803,13 @@ export function ListingForm({
             </div>
           </TabsContent>
 
-          <TabsContent value="media" className="m-0 space-y-6">
+          <TabsContent className="m-0 space-y-6" value="media">
             <div className="space-y-6">
               {/* Cover image */}
               <div className="space-y-2 text-sm" data-field="cover_image_url">
-                <span className="font-medium text-foreground">{isEn ? "Cover image" : "Imagen de portada"}</span>
+                <span className="font-medium text-foreground">
+                  {isEn ? "Cover image" : "Imagen de portada"}
+                </span>
                 <Controller
                   control={form.control}
                   name="cover_image_url"
@@ -754,7 +819,9 @@ export function ListingForm({
                       labelEn="Single cover image"
                       labelEs="Una imagen de portada"
                       onChange={(val) =>
-                        field.onChange(Array.isArray(val) ? val[0] ?? "" : val)
+                        field.onChange(
+                          Array.isArray(val) ? (val[0] ?? "") : val
+                        )
                       }
                       orgId={orgId}
                       value={field.value || ""}
@@ -765,7 +832,9 @@ export function ListingForm({
 
               {/* Gallery images */}
               <div className="space-y-2 text-sm">
-                <span className="font-medium text-foreground">{isEn ? "Gallery images" : "Imágenes de galería"}</span>
+                <span className="font-medium text-foreground">
+                  {isEn ? "Gallery images" : "Imágenes de galería"}
+                </span>
                 <Controller
                   control={form.control}
                   name="gallery_image_urls"
@@ -786,7 +855,7 @@ export function ListingForm({
                 />
               </div>
 
-              <div className="border-t border-border/50 pt-6">
+              <div className="border-border/50 border-t pt-6">
                 {/* Amenities */}
                 <Controller
                   control={form.control}
@@ -801,11 +870,13 @@ export function ListingForm({
                     };
                     return (
                       <div className="space-y-3 text-sm" data-field="amenities">
-                        <span className="font-medium text-foreground">{isEn ? "Amenities" : "Amenidades"}</span>
-                        <div className="grid grid-cols-2 gap-y-3 gap-x-4 sm:grid-cols-3">
+                        <span className="font-medium text-foreground">
+                          {isEn ? "Amenities" : "Amenidades"}
+                        </span>
+                        <div className="grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3">
                           {AMENITY_PRESETS.map((amenity) => (
                             <label
-                              className="flex items-center gap-2.5 cursor-pointer hover:text-foreground text-muted-foreground transition-colors"
+                              className="flex cursor-pointer items-center gap-2.5 text-muted-foreground transition-colors hover:text-foreground"
                               key={amenity.value}
                             >
                               <Checkbox

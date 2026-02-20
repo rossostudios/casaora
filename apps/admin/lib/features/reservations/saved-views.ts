@@ -89,7 +89,7 @@ export function getCustomViews(): ReservationSavedView[] {
 }
 
 export function saveCustomView(
-  view: Omit<ReservationSavedView, "id">,
+  view: Omit<ReservationSavedView, "id">
 ): ReservationSavedView {
   const views = readCustomViews();
   const newView: ReservationSavedView = {

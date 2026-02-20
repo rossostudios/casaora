@@ -84,16 +84,20 @@ export function PropertyOverviewOperations({
         <CardContent className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           {workflowSteps.map((step) => (
             <Link
-              className="group rounded-3xl border border-border/40 bg-background/50 p-4 transition-all duration-300 hover:bg-card hover:-translate-y-1 hover:shadow-[var(--shadow-floating)]"
+              className="group rounded-3xl border border-border/40 bg-background/50 p-4 transition-all duration-300 hover:-translate-y-1 hover:bg-card hover:shadow-[var(--shadow-floating)]"
               href={step.href}
               key={step.id}
             >
-              <div className="mb-3 inline-flex h-9 w-9 items-center justify-center rounded-xl border border-border/40 bg-muted/30 transition-colors group-hover:bg-primary/5 group-hover:border-primary/20 group-hover:text-primary">
+              <div className="mb-3 inline-flex h-9 w-9 items-center justify-center rounded-xl border border-border/40 bg-muted/30 transition-colors group-hover:border-primary/20 group-hover:bg-primary/5 group-hover:text-primary">
                 <Icon icon={step.icon} size={18} />
               </div>
-              <p className="font-semibold text-[11px] uppercase tracking-widest text-muted-foreground">{step.label}</p>
-              <p className="mt-1 font-bold text-2xl tabular-nums">{step.value}</p>
-              <p className="mt-1 text-muted-foreground text-[11px]">
+              <p className="font-semibold text-[11px] text-muted-foreground uppercase tracking-widest">
+                {step.label}
+              </p>
+              <p className="mt-1 font-bold text-2xl tabular-nums">
+                {step.value}
+              </p>
+              <p className="mt-1 text-[11px] text-muted-foreground">
                 {step.description}
               </p>
             </Link>
@@ -142,7 +146,7 @@ export function PropertyOverviewOperations({
 
                   return (
                     <article
-                      className="flex h-full flex-col rounded-3xl border border-border/40 bg-background/50 p-4 transition-all duration-300 hover:shadow-[var(--shadow-soft)] hover:bg-card hover:border-border/80"
+                      className="flex h-full flex-col rounded-3xl border border-border/40 bg-background/50 p-4 transition-all duration-300 hover:border-border/80 hover:bg-card hover:shadow-[var(--shadow-soft)]"
                       key={unit.id}
                     >
                       <div className="mb-2 flex items-start justify-between gap-2">

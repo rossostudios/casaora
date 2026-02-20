@@ -1,6 +1,6 @@
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { Suspense } from "react";
-
 import { OrgAccessChanged } from "@/components/shell/org-access-changed";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -17,7 +17,6 @@ import { errorMessage, isOrgMembershipError } from "@/lib/errors";
 import { getActiveLocale } from "@/lib/i18n/server";
 import { getActiveOrgId } from "@/lib/org";
 import { cn } from "@/lib/utils";
-import dynamic from "next/dynamic";
 
 const StatementsManager = dynamic(() =>
   import("./statements-manager").then((m) => m.StatementsManager)
@@ -116,9 +115,7 @@ export default async function OwnerStatementsModulePage({
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="space-y-2">
               <div className="flex flex-wrap items-center gap-2">
-                <Badge variant="outline">
-                  {isEn ? "Finance" : "Finanzas"}
-                </Badge>
+                <Badge variant="outline">{isEn ? "Finance" : "Finanzas"}</Badge>
                 <Badge className="text-[11px]" variant="secondary">
                   {isEn ? "Payout Statements" : "Liquidaciones"}
                 </Badge>

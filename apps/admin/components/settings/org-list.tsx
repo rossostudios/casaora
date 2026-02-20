@@ -1,9 +1,9 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
 import Image from "next/image";
+import { useRouter } from "next/navigation";
+import { useTransition } from "react";
 import { toast } from "sonner";
 
 import { deleteOrganizationFromSettingsAction } from "@/app/(admin)/settings/actions";

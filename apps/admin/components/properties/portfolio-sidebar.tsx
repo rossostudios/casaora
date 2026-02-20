@@ -9,14 +9,13 @@ import {
   Task01Icon,
   Time02Icon,
 } from "@hugeicons/core-free-icons";
-
+import { Card, CardContent } from "@/components/ui/card";
+import { Icon } from "@/components/ui/icon";
 import type {
   PropertyActivityItem,
   PropertyNotificationItem,
 } from "@/lib/features/properties/types";
 import { formatCompactCurrency } from "@/lib/format";
-import { Card, CardContent } from "@/components/ui/card";
-import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
 
 type PortfolioStatsProps = {
@@ -78,7 +77,7 @@ export function PortfolioSidebar({
         </h3>
 
         <Card className="group relative overflow-hidden border-0 bg-casaora-gradient text-white shadow-casaora">
-          <div className="absolute right-0 top-0 p-4 opacity-5 transition-transform group-hover:-translate-y-2 group-hover:translate-x-2">
+          <div className="absolute top-0 right-0 p-4 opacity-5 transition-transform group-hover:translate-x-2 group-hover:-translate-y-2">
             <Icon icon={ChartIcon} size={140} />
           </div>
           <CardContent className="relative z-10 space-y-4 p-5">
@@ -86,7 +85,7 @@ export function PortfolioSidebar({
               <div className="font-semibold text-[11px] text-white/70 uppercase tracking-wider">
                 {isEn ? "Total Assets" : "Activos Totales"}
               </div>
-              <div className="mt-1 text-3xl font-bold tracking-tight text-white">
+              <div className="mt-1 font-bold text-3xl text-white tracking-tight">
                 {formatCompactCurrency(totalValuePyg, "PYG", formatLocale)}
               </div>
             </div>
@@ -94,7 +93,7 @@ export function PortfolioSidebar({
               <div className="font-medium text-[10px] text-white/60 uppercase tracking-wider">
                 {isEn ? "Revenue MTD" : "Ingresos del Mes"}
               </div>
-              <div className="mt-0.5 text-lg font-bold text-white/90">
+              <div className="mt-0.5 font-bold text-lg text-white/90">
                 {formatCompactCurrency(totalRevenueMtdPyg, "PYG", formatLocale)}
               </div>
             </div>
@@ -107,7 +106,7 @@ export function PortfolioSidebar({
               <div className="font-bold text-[10px] text-muted-foreground/80 uppercase tracking-wider">
                 {isEn ? "Occupancy" : "Ocupación"}
               </div>
-              <div className="text-[var(--status-success-fg)] text-lg font-bold">
+              <div className="font-bold text-[var(--status-success-fg)] text-lg">
                 {Math.round(occupancyRate)}%
               </div>
             </CardContent>
@@ -117,7 +116,7 @@ export function PortfolioSidebar({
               <div className="font-bold text-[10px] text-muted-foreground/80 uppercase tracking-wider">
                 {isEn ? "Avg. Rent" : "Alquiler Prom."}
               </div>
-              <div className="text-lg font-bold text-foreground">
+              <div className="font-bold text-foreground text-lg">
                 {formatCompactCurrency(avgRentPyg, "PYG", formatLocale)}
               </div>
             </CardContent>
@@ -138,7 +137,7 @@ export function PortfolioSidebar({
                 <div className="font-bold text-[10px] text-[var(--status-danger-fg)] uppercase tracking-wider">
                   {isEn ? "Overdue Collections" : "Cobros Vencidos"}
                 </div>
-                <div className="text-lg font-bold text-[var(--status-danger-fg)]">
+                <div className="font-bold text-[var(--status-danger-fg)] text-lg">
                   {totalOverdueCollections}
                 </div>
               </div>
@@ -153,11 +152,11 @@ export function PortfolioSidebar({
                 {isEn ? "Vacancy Cost" : "Costo de Vacancia"}
               </div>
               <div className="flex items-baseline gap-2">
-                <span className="text-lg font-bold text-[var(--status-warning-fg)]">
+                <span className="font-bold text-[var(--status-warning-fg)] text-lg">
                   {totalVacantUnits} {isEn ? "units" : "unidades"}
                 </span>
               </div>
-              <div className="text-xs text-muted-foreground">
+              <div className="text-muted-foreground text-xs">
                 ~{formatCompactCurrency(vacancyCostPyg, "PYG", formatLocale)}{" "}
                 {isEn ? "potential lost /mo" : "pérdida potencial /mes"}
               </div>
@@ -181,10 +180,10 @@ export function PortfolioSidebar({
                   <Icon icon={AlertCircleIcon} size={16} />
                 </div>
                 <div className="space-y-0.5">
-                  <h4 className="text-sm font-semibold text-red-900 dark:text-red-200">
+                  <h4 className="font-semibold text-red-900 text-sm dark:text-red-200">
                     {notification.title}
                   </h4>
-                  <p className="leading-relaxed text-red-700/80 text-xs dark:text-red-400/80">
+                  <p className="text-red-700/80 text-xs leading-relaxed dark:text-red-400/80">
                     {notification.detail}
                   </p>
                 </div>
@@ -199,13 +198,19 @@ export function PortfolioSidebar({
           <h3 className="font-bold text-[11px] text-muted-foreground/70 uppercase tracking-widest">
             {isEn ? "Recent Activity" : "Actividad Reciente"}
           </h3>
-          <Icon className="text-muted-foreground/50" icon={Time02Icon} size={14} />
+          <Icon
+            className="text-muted-foreground/50"
+            icon={Time02Icon}
+            size={14}
+          />
         </div>
 
         <div className="space-y-5 px-1">
           {recentActivity.length === 0 ? (
             <div className="py-2 text-muted-foreground text-xs italic">
-              {isEn ? "No recent activity recorded." : "No se registró actividad reciente."}
+              {isEn
+                ? "No recent activity recorded."
+                : "No se registró actividad reciente."}
             </div>
           ) : (
             recentActivity.map((item) => (
@@ -222,10 +227,12 @@ export function PortfolioSidebar({
                   <Icon icon={activityIcon(item)} size={16} />
                 </div>
                 <div className="space-y-1">
-                  <div className="leading-tight text-foreground text-sm font-semibold">
+                  <div className="font-semibold text-foreground text-sm leading-tight">
                     {item.title}
                   </div>
-                  <div className="leading-snug text-muted-foreground text-xs">{item.detail}</div>
+                  <div className="text-muted-foreground text-xs leading-snug">
+                    {item.detail}
+                  </div>
                   <div className="pt-0.5 font-medium text-[10px] text-muted-foreground/60 uppercase tracking-tight">
                     {relativeTimeLabel(item.timestamp, isEn)}
                   </div>
@@ -237,7 +244,10 @@ export function PortfolioSidebar({
 
         {recentActivity.length > 0 ? (
           <div className="px-1 pt-2">
-            <button className="font-bold text-[11px] text-primary transition-all hover:underline" type="button">
+            <button
+              className="font-bold text-[11px] text-primary transition-all hover:underline"
+              type="button"
+            >
               {isEn ? "View all activity" : "Ver toda la actividad"}
             </button>
           </div>

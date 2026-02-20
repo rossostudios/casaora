@@ -29,9 +29,7 @@ import {
   isRentalMode,
   type OrganizationProfileType,
   ProgressStepper,
-  profileTypeLabel,
   type RentalMode,
-  rentalModeLabel,
   type Row,
   type StepDef,
   TechnicalDetails,
@@ -134,28 +132,71 @@ export function SetupWizard({
     integrations.length === 0;
 
   const strLinks = [
-    { href: "/module/channels", label: isEn ? "Connect a channel" : "Conectar un canal" },
-    { href: "/module/reservations", label: isEn ? "Start reservations" : "Iniciar reservas" },
+    {
+      href: "/module/channels",
+      label: isEn ? "Connect a channel" : "Conectar un canal",
+    },
+    {
+      href: "/module/reservations",
+      label: isEn ? "Start reservations" : "Iniciar reservas",
+    },
   ];
   const ltrLinks = [
-    { href: "/module/leases", label: isEn ? "Manage leases" : "Gestionar contratos" },
-    { href: "/module/collections", label: isEn ? "View collections" : "Ver cobros" },
-    { href: "/module/listings", label: isEn ? "Publish listing" : "Publicar anuncio" },
+    {
+      href: "/module/leases",
+      label: isEn ? "Manage leases" : "Gestionar contratos",
+    },
+    {
+      href: "/module/collections",
+      label: isEn ? "View collections" : "Ver cobros",
+    },
+    {
+      href: "/module/listings",
+      label: isEn ? "Publish listing" : "Publicar anuncio",
+    },
   ];
   const nextActionLinks =
-    rentalMode === "str" ? strLinks : rentalMode === "ltr" ? ltrLinks : [...strLinks, ...ltrLinks];
+    rentalMode === "str"
+      ? strLinks
+      : rentalMode === "ltr"
+        ? ltrLinks
+        : [...strLinks, ...ltrLinks];
 
   const steps: StepDef[] = [
-    { number: 1, label: isEn ? "Organization" : "Organización", done: orgDone, active: activeStep === 1 },
-    { number: 2, label: isEn ? "Property" : "Propiedad", done: propertyDone, active: activeStep === 2 },
-    { number: 3, label: isEn ? "Unit" : "Unidad", done: unitDone, active: activeStep === 3 },
+    {
+      number: 1,
+      label: isEn ? "Organization" : "Organización",
+      done: orgDone,
+      active: activeStep === 1,
+    },
+    {
+      number: 2,
+      label: isEn ? "Property" : "Propiedad",
+      done: propertyDone,
+      active: activeStep === 2,
+    },
+    {
+      number: 3,
+      label: isEn ? "Unit" : "Unidad",
+      done: unitDone,
+      active: activeStep === 3,
+    },
     ...(onboardingDone
-      ? [{
-          number: 4,
-          label: rentalMode === "ltr" ? (isEn ? "Lease" : "Contrato") : (isEn ? "Connect" : "Conectar"),
-          done: step4Complete,
-          active: !step4Complete,
-        }]
+      ? [
+          {
+            number: 4,
+            label:
+              rentalMode === "ltr"
+                ? isEn
+                  ? "Lease"
+                  : "Contrato"
+                : isEn
+                  ? "Connect"
+                  : "Conectar",
+            done: step4Complete,
+            active: !step4Complete,
+          },
+        ]
       : []),
   ];
 
@@ -177,7 +218,9 @@ export function SetupWizard({
 
     if (!result.ok) {
       toast.error(
-        isEn ? "Could not create organization" : "No se pudo crear la organización",
+        isEn
+          ? "Could not create organization"
+          : "No se pudo crear la organización",
         { description: result.error }
       );
       setSubmitting(null);
@@ -190,7 +233,9 @@ export function SetupWizard({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ org_id: result.data.id }),
       });
-    } catch { /* Cookie was already set server-side in the action */ }
+    } catch {
+      /* Cookie was already set server-side in the action */
+    }
 
     setOrgId(result.data.id);
     setOrgName(result.data.name);
@@ -205,8 +250,12 @@ export function SetupWizard({
 
     if (initialPlanId && result.data.id) {
       const planSuccessTitle = isEn ? "Plan activated" : "Plan activado";
-      const planSuccessDesc = isEn ? "Your trial period has started." : "Tu período de prueba ha comenzado.";
-      const planErrorTitle = isEn ? "Could not activate plan" : "No se pudo activar el plan";
+      const planSuccessDesc = isEn
+        ? "Your trial period has started."
+        : "Tu período de prueba ha comenzado.";
+      const planErrorTitle = isEn
+        ? "Could not activate plan"
+        : "No se pudo activar el plan";
       const planErrorDesc = isEn
         ? "You can activate it later from Settings → Billing."
         : "Puedes activarlo después desde Ajustes → Facturación.";
@@ -215,7 +264,10 @@ export function SetupWizard({
         const subscribeRes = await fetch(`${apiBaseUrl}/billing/subscribe`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ organization_id: result.data.id, plan_id: initialPlanId }),
+          body: JSON.stringify({
+            organization_id: result.data.id,
+            plan_id: initialPlanId,
+          }),
         });
         if (subscribeRes.ok) {
           toast.success(planSuccessTitle, { description: planSuccessDesc });
@@ -246,13 +298,21 @@ export function SetupWizard({
     });
 
     if (!result.ok) {
-      toast.error(isEn ? "Could not create property" : "No se pudo crear la propiedad", { description: result.error });
+      toast.error(
+        isEn ? "Could not create property" : "No se pudo crear la propiedad",
+        { description: result.error }
+      );
       setSubmitting(null);
       return;
     }
 
-    setProperties((prev) => [...prev, { id: result.data.id, name: result.data.name }]);
-    toast.success(isEn ? "Property created" : "Propiedad creada", { description: result.data.name });
+    setProperties((prev) => [
+      ...prev,
+      { id: result.data.id, name: result.data.name },
+    ]);
+    toast.success(isEn ? "Property created" : "Propiedad creada", {
+      description: result.data.name,
+    });
     setSubmitting(null);
   };
 
@@ -273,17 +333,25 @@ export function SetupWizard({
     });
 
     if (!result.ok) {
-      toast.error(isEn ? "Could not create unit" : "No se pudo crear la unidad", { description: result.error });
+      toast.error(
+        isEn ? "Could not create unit" : "No se pudo crear la unidad",
+        { description: result.error }
+      );
       setSubmitting(null);
       return;
     }
 
-    setUnits((prev) => [...prev, { id: result.data.id, name: fd(form, "name"), code: fd(form, "code") }]);
+    setUnits((prev) => [
+      ...prev,
+      { id: result.data.id, name: fd(form, "name"), code: fd(form, "code") },
+    ]);
     toast.success(isEn ? "Unit created" : "Unidad creada");
     setSubmitting(null);
   };
 
-  const handleCreateIntegrationStep4 = async (e: FormEvent<HTMLFormElement>) => {
+  const handleCreateIntegrationStep4 = async (
+    e: FormEvent<HTMLFormElement>
+  ) => {
     e.preventDefault();
     if (submitting || !orgId) return;
     setSubmitting("integration");
@@ -299,13 +367,18 @@ export function SetupWizard({
     });
 
     if (!result.ok) {
-      toast.error(isEn ? "Could not create channel" : "No se pudo crear el canal", { description: result.error });
+      toast.error(
+        isEn ? "Could not create channel" : "No se pudo crear el canal",
+        { description: result.error }
+      );
       setSubmitting(null);
       return;
     }
 
     setStep4Done(true);
-    toast.success(isEn ? "Channel created" : "Canal creado", { description: result.data.name });
+    toast.success(isEn ? "Channel created" : "Canal creado", {
+      description: result.data.name,
+    });
     setSubmitting(null);
   };
 
@@ -330,7 +403,10 @@ export function SetupWizard({
     });
 
     if (!result.ok) {
-      toast.error(isEn ? "Could not create lease" : "No se pudo crear el contrato", { description: result.error });
+      toast.error(
+        isEn ? "Could not create lease" : "No se pudo crear el contrato",
+        { description: result.error }
+      );
       setSubmitting(null);
       return;
     }
@@ -351,7 +427,10 @@ export function SetupWizard({
 
     const result = await wizardSeedDemoData({ organization_id: orgId });
     if (!result.ok) {
-      toast.error(isEn ? "Could not load demo data" : "No se pudieron cargar datos demo", { description: result.error });
+      toast.error(
+        isEn ? "Could not load demo data" : "No se pudieron cargar datos demo",
+        { description: result.error }
+      );
       setSubmitting(null);
       return;
     }
@@ -371,10 +450,16 @@ export function SetupWizard({
         </Badge>
         <h1 className="font-semibold text-2xl text-foreground tracking-tight">
           {onboardingDone
-            ? isEn ? "You're all set" : "Todo listo"
+            ? isEn
+              ? "You're all set"
+              : "Todo listo"
             : orgDone
-              ? isEn ? "Complete your setup" : "Completa tu configuración"
-              : isEn ? "Set up your workspace" : "Configura tu espacio de trabajo"}
+              ? isEn
+                ? "Complete your setup"
+                : "Completa tu configuración"
+              : isEn
+                ? "Set up your workspace"
+                : "Configura tu espacio de trabajo"}
         </h1>
         <p className="mt-1 text-muted-foreground text-sm">
           {onboardingDone
@@ -390,82 +475,102 @@ export function SetupWizard({
       <ProgressStepper steps={steps} />
 
       {showDemoSeed ? (
-        <DemoSeedCallout isEn={isEn} onSeed={handleSeedDemo} submitting={submitting === "seed"} />
+        <DemoSeedCallout
+          isEn={isEn}
+          onSeed={handleSeedDemo}
+          submitting={submitting === "seed"}
+        />
       ) : null}
 
       {onboardingDone ? (
-        <CompletionCard isEn={isEn} nextActionLinks={nextActionLinks} rentalMode={rentalMode} />
+        <CompletionCard
+          isEn={isEn}
+          nextActionLinks={nextActionLinks}
+          rentalMode={rentalMode}
+        />
       ) : null}
 
       <SetupStepOrganization
         isEn={isEn}
+        onSubmit={handleCreateOrg}
         orgDone={orgDone}
         orgName={orgName}
         profileType={profileType}
         rentalMode={rentalMode}
         submitting={submitting}
-        onSubmit={handleCreateOrg}
       />
 
       <SetupStepProperty
-        isEn={isEn}
-        propertyDone={propertyDone}
-        propertyCount={properties.length}
         activeStep={activeStep}
-        submitting={submitting}
-        onSubmit={handleCreateProperty}
+        isEn={isEn}
         onImportClick={() => setImportPropertyOpen(true)}
+        onSubmit={handleCreateProperty}
+        propertyCount={properties.length}
+        propertyDone={propertyDone}
+        submitting={submitting}
       />
 
       <SetupStepUnit
-        isEn={isEn}
-        unitDone={unitDone}
-        unitCount={units.length}
         activeStep={activeStep}
-        submitting={submitting}
-        propertyOptions={propertyOptions}
-        onSubmit={handleCreateUnit}
+        isEn={isEn}
         onImportClick={() => setImportUnitOpen(true)}
+        onSubmit={handleCreateUnit}
+        propertyOptions={propertyOptions}
+        submitting={submitting}
+        unitCount={units.length}
+        unitDone={unitDone}
       />
 
       {onboardingDone && !step4Complete ? (
         <SetupStepConnect
           isEn={isEn}
-          rentalMode={rentalMode}
-          step4View={step4View}
-          unitOptions={unitOptions}
-          submitting={submitting}
-          onStep4ViewChange={setStep4View}
           onCreateIntegration={handleCreateIntegrationStep4}
           onCreateLease={handleCreateLeaseStep4}
-          onSkip={() => setStep4Skipped(true)}
           onImportLeaseClick={() => setImportLeaseOpen(true)}
+          onSkip={() => setStep4Skipped(true)}
+          onStep4ViewChange={setStep4View}
+          rentalMode={rentalMode}
+          step4View={step4View}
+          submitting={submitting}
+          unitOptions={unitOptions}
         />
       ) : null}
 
-      <TechnicalDetails apiBaseUrl={apiBaseUrl} isEn={isEn} orgId={orgId} profileType={profileType} />
+      <TechnicalDetails
+        apiBaseUrl={apiBaseUrl}
+        isEn={isEn}
+        orgId={orgId}
+        profileType={profileType}
+      />
 
       {orgDone ? null : (
-        <ExistingOrganizations isEn={isEn} locale={locale} organizations={initialOrganizations} />
+        <ExistingOrganizations
+          isEn={isEn}
+          locale={locale}
+          organizations={initialOrganizations}
+        />
       )}
 
       {orgDone ? (
         <SetupAdvancedSection
-          isEn={isEn}
-          orgId={orgId as string}
-          initialTab={initialTab}
           initialOrganizations={initialOrganizations}
+          initialTab={initialTab}
+          integrations={integrations}
+          isEn={isEn}
+          openAdvancedByDefault={Boolean(initialTab)}
+          orgId={orgId as string}
           properties={properties}
           units={units}
-          integrations={integrations}
-          openAdvancedByDefault={Boolean(initialTab)}
         />
       ) : null}
 
       {orgDone ? null : (
         <div className="flex justify-center">
           <Link
-            className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "text-muted-foreground")}
+            className={cn(
+              buttonVariants({ variant: "ghost", size: "sm" }),
+              "text-muted-foreground"
+            )}
             href="/app"
           >
             {isEn ? "Back to dashboard" : "Volver al panel"}
@@ -475,17 +580,17 @@ export function SetupWizard({
 
       {orgId ? (
         <SetupImportSheets
+          importLeaseOpen={effectiveImportLeaseOpen}
+          importPropertyOpen={effectiveImportPropertyOpen}
+          importUnitOpen={effectiveImportUnitOpen}
           isEn={isEn}
+          onImportComplete={() => router.refresh()}
+          onImportLeaseOpenChange={setImportLeaseOpen}
+          onImportPropertyOpenChange={setImportPropertyOpen}
+          onImportUnitOpenChange={setImportUnitOpen}
           orgId={orgId}
           propertyOptions={propertyOptions}
           unitOptions={unitOptions}
-          importPropertyOpen={effectiveImportPropertyOpen}
-          importUnitOpen={effectiveImportUnitOpen}
-          importLeaseOpen={effectiveImportLeaseOpen}
-          onImportPropertyOpenChange={setImportPropertyOpen}
-          onImportUnitOpenChange={setImportUnitOpen}
-          onImportLeaseOpenChange={setImportLeaseOpen}
-          onImportComplete={() => router.refresh()}
         />
       ) : null}
     </div>

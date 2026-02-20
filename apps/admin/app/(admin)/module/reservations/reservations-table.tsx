@@ -1,7 +1,7 @@
 "use client";
 
+import type { ColumnDef } from "@tanstack/react-table";
 import { useMemo } from "react";
-
 import { transitionReservationStatusAction } from "@/app/(admin)/module/reservations/actions";
 import {
   asNumber,
@@ -12,17 +12,13 @@ import {
 } from "@/app/(admin)/module/reservations/reservations-types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { type DataTableRow } from "@/components/ui/data-table";
+import type { DataTableRow } from "@/components/ui/data-table";
 import { Form } from "@/components/ui/form";
 import { NotionDataTable } from "@/components/ui/notion-data-table";
 import { StatusBadge } from "@/components/ui/status-badge";
-import {
-  TableCell,
-  TableRow,
-} from "@/components/ui/table";
+import { TableCell, TableRow } from "@/components/ui/table";
 import { formatCurrency } from "@/lib/format";
 import { useActiveLocale } from "@/lib/i18n/client";
-import type { ColumnDef } from "@tanstack/react-table";
 
 function ReservationRowActions({ row }: { row: DataTableRow }) {
   const locale = useActiveLocale();
@@ -77,9 +73,7 @@ export function ReservationsTable({
         accessorKey: "status",
         header: isEn ? "Status" : "Estado",
         size: 120,
-        cell: ({ getValue }) => (
-          <StatusBadge value={asString(getValue())} />
-        ),
+        cell: ({ getValue }) => <StatusBadge value={asString(getValue())} />,
       },
       {
         accessorKey: "check_in_date",
@@ -101,7 +95,7 @@ export function ReservationsTable({
             asString(row.original.check_out_date)
           );
           return nights != null ? (
-            <span className="tabular-nums text-sm">{nights}</span>
+            <span className="text-sm tabular-nums">{nights}</span>
           ) : (
             <span className="text-muted-foreground">-</span>
           );
@@ -123,8 +117,8 @@ export function ReservationsTable({
           const comp =
             adults > 0 || children > 0
               ? [adults > 0 && `${adults}A`, children > 0 && `${children}C`]
-                    .filter(Boolean)
-                    .join(" ")
+                  .filter(Boolean)
+                  .join(" ")
               : null;
 
           return (
@@ -159,13 +153,9 @@ export function ReservationsTable({
           const channel = asString(row.original.channel_name).trim();
           const integration = asString(row.original.integration_name).trim();
           const display = channel || integration;
-          if (!display)
-            return <span className="text-muted-foreground">-</span>;
+          if (!display) return <span className="text-muted-foreground">-</span>;
           return (
-            <Badge
-              className="px-1.5 py-0 text-[10px]"
-              variant="outline"
-            >
+            <Badge className="px-1.5 py-0 text-[10px]" variant="outline">
               {display}
             </Badge>
           );
@@ -179,14 +169,14 @@ export function ReservationsTable({
           const source = asString(row.original.source).trim().toLowerCase();
           if (!source || source === "manual") {
             return (
-              <Badge className="bg-muted text-muted-foreground border-0 px-1.5 py-0 text-[10px]">
+              <Badge className="border-0 bg-muted px-1.5 py-0 text-[10px] text-muted-foreground">
                 Manual
               </Badge>
             );
           }
           if (source === "direct_booking") {
             return (
-              <Badge className="bg-primary/10 text-primary border-0 px-1.5 py-0 text-[10px]">
+              <Badge className="border-0 bg-primary/10 px-1.5 py-0 text-[10px] text-primary">
                 Marketplace
               </Badge>
             );
@@ -213,22 +203,20 @@ export function ReservationsTable({
 
           if (ratio >= 1) {
             return (
-              <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 border-0 px-1.5 py-0 text-[10px]">
+              <Badge className="border-0 bg-emerald-100 px-1.5 py-0 text-[10px] text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
                 {isEn ? "Paid" : "Pagado"}
               </Badge>
             );
           }
           if (ratio <= 0) {
             return (
-              <Badge className="bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 border-0 px-1.5 py-0 text-[10px]">
+              <Badge className="border-0 bg-red-100 px-1.5 py-0 text-[10px] text-red-700 dark:bg-red-900/30 dark:text-red-400">
                 {isEn ? "Unpaid" : "Sin pago"}
               </Badge>
             );
           }
           return (
-            <Badge
-              className="bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 border-0 px-1.5 py-0 text-[10px] tabular-nums"
-            >
+            <Badge className="border-0 bg-amber-100 px-1.5 py-0 text-[10px] text-amber-700 tabular-nums dark:bg-amber-900/30 dark:text-amber-400">
               {Math.round(ratio * 100)}%
             </Badge>
           );
@@ -242,7 +230,7 @@ export function ReservationsTable({
           const amount = asNumber(row.original.total_amount);
           const currency = asString(row.original.currency).trim() || "PYG";
           return amount != null ? (
-            <span className="tabular-nums text-sm">
+            <span className="text-sm tabular-nums">
               {formatCurrency(amount, currency, locale)}
             </span>
           ) : (
@@ -271,7 +259,7 @@ export function ReservationsTable({
     <>
       {selectedRows.length > 0 ? (
         <div className="sticky bottom-0 z-20 flex items-center justify-between gap-3 rounded-xl border border-border bg-card p-3 shadow-lg">
-          <span className="text-sm font-medium">
+          <span className="font-medium text-sm">
             {selectedRows.length} {isEn ? "selected" : "seleccionados"}
           </span>
           <div className="flex items-center gap-2">
@@ -291,11 +279,7 @@ export function ReservationsTable({
             >
               {isEn ? "Cancel All" : "Cancelar todos"}
             </Button>
-            <Button
-              onClick={onClearSelection}
-              size="sm"
-              variant="ghost"
-            >
+            <Button onClick={onClearSelection} size="sm" variant="ghost">
               {isEn ? "Clear" : "Limpiar"}
             </Button>
           </div>
@@ -306,23 +290,23 @@ export function ReservationsTable({
         columns={reservationColumns}
         data={filteredRows}
         enableSelection
-        getRowId={(row) => asString(row.id)}
-        onSelectionChange={onSelectionChange}
         footer={
           footerRow ? (
             <TableRow>
               <TableCell className="py-2 font-semibold text-xs" colSpan={9}>
                 {isEn ? "Total" : "Total"}
               </TableCell>
-              <TableCell className="py-2 text-right font-semibold tabular-nums text-xs">
+              <TableCell className="py-2 text-right font-semibold text-xs tabular-nums">
                 {formatCurrency(footerRow.sum, footerRow.currency, locale)}
               </TableCell>
             </TableRow>
           ) : undefined
         }
+        getRowId={(row) => asString(row.id)}
         hideSearch
         isEn={isEn}
         onRowClick={onRowClick}
+        onSelectionChange={onSelectionChange}
         renderRowActions={(row) => <ReservationRowActions row={row} />}
         rowActionsHeader={isEn ? "Actions" : "Acciones"}
       />

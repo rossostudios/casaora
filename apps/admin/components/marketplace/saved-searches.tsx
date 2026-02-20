@@ -1,9 +1,9 @@
 "use client";
 
-import { Suspense, useState } from "react";
+import { Cancel01Icon, FloppyDiskIcon } from "@hugeicons/core-free-icons";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Cancel01Icon, FloppyDiskIcon } from "@hugeicons/core-free-icons";
+import { Suspense, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
@@ -81,7 +81,9 @@ function SavedSearchesInner({ isEn }: { isEn: boolean }) {
         }),
       });
       if (res.ok) {
-        await queryClient.invalidateQueries({ queryKey: ["saved-searches", visitorId] });
+        await queryClient.invalidateQueries({
+          queryKey: ["saved-searches", visitorId],
+        });
       }
       setSaving(false);
     } catch {
@@ -122,7 +124,7 @@ function SavedSearchesInner({ isEn }: { isEn: boolean }) {
     <div className="flex flex-wrap items-center gap-2">
       {searches.map((search) => (
         <button
-          className="group inline-flex items-center gap-1.5 rounded-full border border-[#e8e4df] bg-white px-3 py-1.5 text-xs font-medium text-[var(--marketplace-text)] transition-colors hover:border-primary/30 hover:bg-primary/5"
+          className="group inline-flex items-center gap-1.5 rounded-full border border-[#e8e4df] bg-white px-3 py-1.5 font-medium text-[var(--marketplace-text)] text-xs transition-colors hover:border-primary/30 hover:bg-primary/5"
           key={search.id}
           onClick={() => applySearch(search.filters)}
           type="button"
@@ -144,7 +146,11 @@ function SavedSearchesInner({ isEn }: { isEn: boolean }) {
             role="button"
             tabIndex={0}
           >
-            <Icon className="text-muted-foreground" icon={Cancel01Icon} size={12} />
+            <Icon
+              className="text-muted-foreground"
+              icon={Cancel01Icon}
+              size={12}
+            />
           </span>
         </button>
       ))}

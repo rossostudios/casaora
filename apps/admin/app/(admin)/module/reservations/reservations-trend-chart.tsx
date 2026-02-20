@@ -1,7 +1,5 @@
 "use client";
 
-import { CartesianGrid, Line, LineChart, XAxis, YAxis } from "@/lib/recharts";
-
 import {
   type ChartConfig,
   ChartContainer,
@@ -13,6 +11,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
+import { CartesianGrid, Line, LineChart, XAxis, YAxis } from "@/lib/recharts";
 
 export function ReservationsTrendChart({
   isEn,
@@ -45,14 +44,8 @@ export function ReservationsTrendChart({
         </CollapsibleTrigger>
         <CollapsibleContent>
           <div className="mt-2">
-            <ChartContainer
-              className="h-52 w-full"
-              config={trendConfig}
-            >
-              <LineChart
-                data={trendData}
-                margin={{ left: 2, right: 8 }}
-              >
+            <ChartContainer className="h-52 w-full" config={trendConfig}>
+              <LineChart data={trendData} margin={{ left: 2, right: 8 }}>
                 <CartesianGrid vertical={false} />
                 <XAxis
                   axisLine={false}
@@ -70,9 +63,7 @@ export function ReservationsTrendChart({
                     <ChartTooltipContent
                       {...props}
                       headerFormatter={() =>
-                        isEn
-                          ? "Reservations trend"
-                          : "Tendencia de reservas"
+                        isEn ? "Reservations trend" : "Tendencia de reservas"
                       }
                     />
                   )}

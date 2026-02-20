@@ -6,7 +6,7 @@ import {
   updateTaskStatusAction,
 } from "@/app/(admin)/module/tasks/actions";
 import { Button } from "@/components/ui/button";
-import { type DataTableRow } from "@/components/ui/data-table";
+import type { DataTableRow } from "@/components/ui/data-table";
 import { Form } from "@/components/ui/form";
 import {
   asString,

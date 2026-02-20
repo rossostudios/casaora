@@ -28,7 +28,7 @@ function PreviewFrame({ href }: { href: string | null }) {
 
   if (!href) {
     return (
-      <div className="flex h-full items-center justify-center p-6 text-center text-xs text-muted-foreground/60" />
+      <div className="flex h-full items-center justify-center p-6 text-center text-muted-foreground/60 text-xs" />
     );
   }
 
@@ -43,8 +43,8 @@ function PreviewFrame({ href }: { href: string | null }) {
         </div>
       )}
       <iframe
-        key={previewUrl}
         className="pointer-events-none absolute top-0 left-0 h-[400%] w-[400%] origin-top-left scale-[0.25] border-0"
+        key={previewUrl}
         onLoad={() => setLoadedHref(href)}
         src={previewUrl}
         title="Page preview"
@@ -141,7 +141,7 @@ export function CommandPalette({
 
   // Escape handler when controlled
   useEffect(() => {
-    if (!isControlled || !open) return;
+    if (!(isControlled && open)) return;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         event.preventDefault();
@@ -193,7 +193,8 @@ export function CommandPalette({
   }, [isEn, pins, query, recents]);
 
   // Clamp cursor to valid range (derive during render).
-  const clampedCursor = actions.length > 0 ? Math.min(cursor, actions.length - 1) : 0;
+  const clampedCursor =
+    actions.length > 0 ? Math.min(cursor, actions.length - 1) : 0;
   if (clampedCursor !== cursor) {
     setCursor(clampedCursor);
   }
@@ -264,7 +265,7 @@ export function CommandPalette({
             onClick={() => setOpen(false)}
           />
 
-          <div className="absolute top-[9vh] left-1/2 w-[min(760px,calc(100vw-32px))] md:w-[min(1100px,calc(100vw-32px))] -translate-x-1/2">
+          <div className="absolute top-[9vh] left-1/2 w-[min(760px,calc(100vw-32px))] -translate-x-1/2 md:w-[min(1100px,calc(100vw-32px))]">
             <div className="overflow-hidden rounded-3xl border border-border/80 bg-popover/98 shadow-[var(--shadow-floating)]">
               <div className="flex items-center gap-2 border-border/75 border-b px-4 py-3">
                 <Icon
@@ -276,7 +277,11 @@ export function CommandPalette({
                   className="border-0 bg-transparent px-0 focus-visible:ring-0"
                   onChange={(event) => setQuery(event.target.value)}
                   onKeyDown={onKeyDownList}
-                  placeholder={isEn ? "Search modules, recents, or pins..." : "Buscar módulos, registros recientes o accesos fijados..."}
+                  placeholder={
+                    isEn
+                      ? "Search modules, recents, or pins..."
+                      : "Buscar módulos, registros recientes o accesos fijados..."
+                  }
                   ref={inputRef}
                   value={query}
                 />
@@ -322,9 +327,13 @@ export function CommandPalette({
                           </span>
                           <span className="text-[11px] text-muted-foreground">
                             {action.kind === "pin"
-                              ? isEn ? "Pinned" : "Fijado"
+                              ? isEn
+                                ? "Pinned"
+                                : "Fijado"
                               : action.kind === "recent"
-                                ? isEn ? "Recent" : "Reciente"
+                                ? isEn
+                                  ? "Recent"
+                                  : "Reciente"
                                 : ""}
                           </span>
                         </button>
@@ -337,7 +346,7 @@ export function CommandPalette({
                   )}
                 </div>
 
-                <div className="hidden w-[340px] shrink-0 overflow-hidden border-l border-border/60 md:block">
+                <div className="hidden w-[340px] shrink-0 overflow-hidden border-border/60 border-l md:block">
                   <PreviewFrame href={effectiveDebouncedHref} />
                 </div>
               </div>
@@ -345,7 +354,8 @@ export function CommandPalette({
               <div className="border-border/75 border-t px-4 py-2.5 text-muted-foreground text-xs">
                 {isEn ? (
                   <>
-                    Tip: <span className="font-medium text-foreground">Cmd+K</span>{" "}
+                    Tip:{" "}
+                    <span className="font-medium text-foreground">Cmd+K</span>{" "}
                     to open. Use{" "}
                     <span className="font-medium text-foreground">↑</span>/
                     <span className="font-medium text-foreground">↓</span> then{" "}
@@ -353,10 +363,12 @@ export function CommandPalette({
                   </>
                 ) : (
                   <>
-                    Tip: <span className="font-medium text-foreground">Cmd+K</span>{" "}
+                    Tip:{" "}
+                    <span className="font-medium text-foreground">Cmd+K</span>{" "}
                     para abrir. Usa{" "}
                     <span className="font-medium text-foreground">↑</span>/
-                    <span className="font-medium text-foreground">↓</span> y luego{" "}
+                    <span className="font-medium text-foreground">↓</span> y
+                    luego{" "}
                     <span className="font-medium text-foreground">Enter</span>.
                   </>
                 )}

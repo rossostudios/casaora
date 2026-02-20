@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useRef } from "react";
 import type { RealtimeChannel } from "@supabase/supabase-js";
+import { useEffect, useRef } from "react";
 import { getSupabaseBrowserClient } from "@/lib/supabase/browser";
 
 export type RealtimeInsertPayload<T = Record<string, unknown>> = {
@@ -17,7 +17,10 @@ type UseRealtimeSubscriptionOptions = {
   schema?: string;
   enabled?: boolean;
   onInsert?: (payload: RealtimeInsertPayload) => void;
-  onUpdate?: (payload: { new: Record<string, unknown>; old: Record<string, unknown> }) => void;
+  onUpdate?: (payload: {
+    new: Record<string, unknown>;
+    old: Record<string, unknown>;
+  }) => void;
   onDelete?: (payload: { old: Record<string, unknown> }) => void;
 };
 
@@ -60,7 +63,11 @@ export function useRealtimeSubscription({
       .on(
         "postgres_changes" as never,
         postgresChangesFilter as never,
-        (payload: { eventType: string; new: Record<string, unknown>; old: Record<string, unknown> }) => {
+        (payload: {
+          eventType: string;
+          new: Record<string, unknown>;
+          old: Record<string, unknown>;
+        }) => {
           if (payload.eventType === "INSERT" && onInsert) {
             onInsert(payload as RealtimeInsertPayload);
           } else if (payload.eventType === "UPDATE" && onUpdate) {
@@ -68,7 +75,7 @@ export function useRealtimeSubscription({
           } else if (payload.eventType === "DELETE" && onDelete) {
             onDelete({ old: payload.old });
           }
-        },
+        }
       )
       .subscribe();
 

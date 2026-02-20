@@ -29,12 +29,12 @@ import {
 } from "@/components/reports/lease-contract-pdf";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { type DataTableRow } from "@/components/ui/data-table";
-import { NotionDataTable } from "@/components/ui/notion-data-table";
+import type { DataTableRow } from "@/components/ui/data-table";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Form } from "@/components/ui/form";
 import { Icon } from "@/components/ui/icon";
 import { Input } from "@/components/ui/input";
+import { NotionDataTable } from "@/components/ui/notion-data-table";
 import { Select } from "@/components/ui/select";
 import { Sheet } from "@/components/ui/sheet";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -192,11 +192,14 @@ function LeasesManagerInner({
     setOpen(true);
   }, [resetTenantFields]);
 
-  const openEdit = useCallback((row: LeaseRow) => {
-    setEditing(row);
-    resetTenantFields(row);
-    setOpen(true);
-  }, [resetTenantFields]);
+  const openEdit = useCallback(
+    (row: LeaseRow) => {
+      setEditing(row);
+      resetTenantFields(row);
+      setOpen(true);
+    },
+    [resetTenantFields]
+  );
 
   const searchGuests = useCallback(
     (query: string) => {
@@ -479,17 +482,17 @@ function LeasesManagerInner({
           return (
             <div className="flex flex-wrap justify-end gap-2">
               <Button
+                onClick={() => openEdit(row as unknown as LeaseRow)}
                 size="sm"
                 variant="ghost"
-                onClick={() => openEdit(row as unknown as LeaseRow)}
               >
                 <Icon icon={Edit02Icon} size={14} />
                 {isEn ? "Edit" : "Editar"}
               </Button>
               <Button
+                onClick={handleDownloadContract}
                 size="sm"
                 variant="ghost"
-                onClick={handleDownloadContract}
               >
                 {isEn ? "Contract" : "Contrato"}
               </Button>
@@ -500,28 +503,26 @@ function LeasesManagerInner({
                 {isEn ? "Collections" : "Cobros"}
               </Link>
               <Button
+                onClick={() => setGeneratingFor(row as unknown as LeaseRow)}
                 size="sm"
                 variant="ghost"
-                onClick={() =>
-                  setGeneratingFor(row as unknown as LeaseRow)
-                }
               >
                 {isEn ? "Generate" : "Generar"}
               </Button>
 
-              {canRenew(status) && !(row as unknown as LeaseRow).renewal_status ? (
+              {canRenew(status) &&
+              !(row as unknown as LeaseRow).renewal_status ? (
                 <Button
+                  onClick={() => setRenewingFrom(row as unknown as LeaseRow)}
                   size="sm"
                   variant="ghost"
-                  onClick={() =>
-                    setRenewingFrom(row as unknown as LeaseRow)
-                  }
                 >
                   {isEn ? "Renew" : "Renovar"}
                 </Button>
               ) : null}
 
-              {canRenew(status) && !(row as unknown as LeaseRow).renewal_status ? (
+              {canRenew(status) &&
+              !(row as unknown as LeaseRow).renewal_status ? (
                 <Form action={sendRenewalOfferAction}>
                   <input name="lease_id" type="hidden" value={id} />
                   <input name="next" type="hidden" value={nextPath} />
@@ -531,7 +532,8 @@ function LeasesManagerInner({
                 </Form>
               ) : null}
 
-              {(row as unknown as LeaseRow).renewal_status === "offered" || (row as unknown as LeaseRow).renewal_status === "pending" ? (
+              {(row as unknown as LeaseRow).renewal_status === "offered" ||
+              (row as unknown as LeaseRow).renewal_status === "pending" ? (
                 <Form action={acceptRenewalAction}>
                   <input name="lease_id" type="hidden" value={id} />
                   <input name="next" type="hidden" value={nextPath} />
@@ -641,7 +643,10 @@ function LeasesManagerInner({
           <input name="next" type="hidden" value={nextPath} />
 
           <div className="grid gap-3 md:grid-cols-2">
-            <div className="relative space-y-1 text-sm md:col-span-2" ref={dropdownRef}>
+            <div
+              className="relative space-y-1 text-sm md:col-span-2"
+              ref={dropdownRef}
+            >
               <span>{isEn ? "Tenant full name" : "Nombre completo"}</span>
               <Input
                 autoComplete="off"
@@ -657,7 +662,7 @@ function LeasesManagerInner({
                 value={tenantName}
               />
               {showGuestDropdown && guestResults.length > 0 && (
-                <div className="absolute left-0 right-0 top-full z-50 mt-1 max-h-48 overflow-y-auto rounded-md border bg-popover shadow-md">
+                <div className="absolute top-full right-0 left-0 z-50 mt-1 max-h-48 overflow-y-auto rounded-md border bg-popover shadow-md">
                   {guestResults.map((guest) => (
                     <button
                       className="flex w-full flex-col gap-0.5 px-3 py-2 text-left text-sm hover:bg-accent"
@@ -769,16 +774,13 @@ function LeasesManagerInner({
 
             <label className="space-y-1 text-sm">
               <span>{isEn ? "Currency" : "Moneda"}</span>
-              <Select
-                defaultValue={editing?.currency ?? "PYG"}
-                name="currency"
-              >
+              <Select defaultValue={editing?.currency ?? "PYG"} name="currency">
                 <option value="PYG">PYG</option>
                 <option value="USD">USD</option>
               </Select>
             </label>
 
-            {!editing ? (
+            {editing ? null : (
               <label className="space-y-1 text-sm">
                 <span>{isEn ? "Lease status" : "Estado del contrato"}</span>
                 <Select defaultValue="active" name="lease_status">
@@ -786,7 +788,7 @@ function LeasesManagerInner({
                   <option value="active">{isEn ? "Active" : "Activo"}</option>
                 </Select>
               </label>
-            ) : null}
+            )}
           </div>
 
           <div className="grid gap-3 md:grid-cols-3">
@@ -807,7 +809,7 @@ function LeasesManagerInner({
               <div className="flex items-center gap-2">
                 <span>IVA</span>
                 <button
-                  className="rounded border border-input px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                  className="rounded border border-input px-1.5 py-0.5 font-medium text-[10px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
                   onClick={autoCalcIva}
                   title={
                     isEn
@@ -874,7 +876,7 @@ function LeasesManagerInner({
             </label>
           </div>
 
-          {!editing ? (
+          {editing ? null : (
             <div className="grid gap-3 md:grid-cols-2">
               <label className="space-y-1 text-sm">
                 <span>
@@ -897,7 +899,7 @@ function LeasesManagerInner({
                 />
               </label>
             </div>
-          ) : null}
+          )}
 
           <label className="space-y-1 text-sm">
             <span>{isEn ? "Notes" : "Notas"}</span>
@@ -943,13 +945,15 @@ function LeasesManagerInner({
           >
             <input name="organization_id" type="hidden" value={orgId} />
             <input name="lease_id" type="hidden" value={generatingFor.id} />
-            <input name="currency" type="hidden" value={generatingFor.currency} />
+            <input
+              name="currency"
+              type="hidden"
+              value={generatingFor.currency}
+            />
             <input name="next" type="hidden" value={nextPath} />
 
             <label className="space-y-1 text-sm">
-              <span>
-                {isEn ? "Number of months" : "Cantidad de meses"}
-              </span>
+              <span>{isEn ? "Number of months" : "Cantidad de meses"}</span>
               <Input
                 defaultValue={12}
                 max={36}
@@ -989,9 +993,7 @@ function LeasesManagerInner({
             </label>
 
             <div className="flex justify-end">
-              <Button type="submit">
-                {isEn ? "Generate" : "Generar"}
-              </Button>
+              <Button type="submit">{isEn ? "Generate" : "Generar"}</Button>
             </div>
           </Form>
         ) : null}
@@ -1016,11 +1018,7 @@ function LeasesManagerInner({
             className="space-y-4"
             key={`renew-${renewingFrom.id}`}
           >
-            <input
-              name="old_lease_id"
-              type="hidden"
-              value={renewingFrom.id}
-            />
+            <input name="old_lease_id" type="hidden" value={renewingFrom.id} />
             <input name="organization_id" type="hidden" value={orgId} />
             <input name="next" type="hidden" value={nextPath} />
 
@@ -1102,10 +1100,7 @@ function LeasesManagerInner({
 
               <label className="space-y-1 text-sm">
                 <span>{isEn ? "Currency" : "Moneda"}</span>
-                <Select
-                  defaultValue={renewingFrom.currency}
-                  name="currency"
-                >
+                <Select defaultValue={renewingFrom.currency} name="currency">
                   <option value="PYG">PYG</option>
                   <option value="USD">USD</option>
                 </Select>
@@ -1129,7 +1124,7 @@ function LeasesManagerInner({
                 <div className="flex items-center gap-2">
                   <span>IVA</span>
                   <button
-                    className="rounded border border-input px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                    className="rounded border border-input px-1.5 py-0.5 font-medium text-[10px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
                     onClick={(e) => {
                       const form = (e.target as HTMLElement).closest("form");
                       if (!form) return;

@@ -12,12 +12,12 @@ import { CollectionsToolbar } from "./collections-toolbar";
 import {
   asNumber,
   asString,
+  type CollectionRow,
   computeAgingRows,
   computeSummaries,
   exportCollectionsCsv,
   overdueDays,
   statusLabel,
-  type CollectionRow,
 } from "./collections-utils";
 import { CreateCollectionSheet } from "./create-collection-sheet";
 import { MarkPaidSheet } from "./mark-paid-sheet";
@@ -161,11 +161,7 @@ function CollectionsManagerInner({
 
   return (
     <div className="space-y-4">
-      <CollectionsSummary
-        isEn={isEn}
-        locale={locale}
-        summaries={summaries}
-      />
+      <CollectionsSummary isEn={isEn} locale={locale} summaries={summaries} />
 
       <CollectionsToolbar
         isEn={isEn}

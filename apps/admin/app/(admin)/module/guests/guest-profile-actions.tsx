@@ -47,9 +47,21 @@ type GuestProfile = {
 const DOCUMENT_TYPE_OPTIONS = [
   { value: "", en: "Select...", es: "Seleccionar..." },
   { value: "passport", en: "Passport", es: "Pasaporte" },
-  { value: "national_id", en: "National ID (Cédula)", es: "Cédula de Identidad" },
-  { value: "drivers_license", en: "Driver's License", es: "Licencia de Conducir" },
-  { value: "residence_permit", en: "Residence Permit", es: "Permiso de Residencia" },
+  {
+    value: "national_id",
+    en: "National ID (Cédula)",
+    es: "Cédula de Identidad",
+  },
+  {
+    value: "drivers_license",
+    en: "Driver's License",
+    es: "Licencia de Conducir",
+  },
+  {
+    value: "residence_permit",
+    en: "Residence Permit",
+    es: "Permiso de Residencia",
+  },
   { value: "other", en: "Other", es: "Otro" },
 ] as const;
 
@@ -137,7 +149,9 @@ export function GuestProfileActions({
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="grid gap-1">
-                <label className="font-medium text-xs" htmlFor="gpa-email">Email</label>
+                <label className="font-medium text-xs" htmlFor="gpa-email">
+                  Email
+                </label>
                 <Input
                   defaultValue={guest.email ?? ""}
                   id="gpa-email"
@@ -220,7 +234,10 @@ export function GuestProfileActions({
                 />
               </div>
               <div className="grid gap-1">
-                <label className="font-medium text-xs" htmlFor="gpa-nationality">
+                <label
+                  className="font-medium text-xs"
+                  htmlFor="gpa-nationality"
+                >
                   {t("Nationality", "Nacionalidad")}
                 </label>
                 <Input

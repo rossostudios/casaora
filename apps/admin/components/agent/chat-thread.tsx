@@ -1,939 +1,902 @@
 "use client";
 
+import { useChat } from "@ai-sdk/react";
+import { Loading03Icon } from "@hugeicons/core-free-icons";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  type DataUIPart,
+  DefaultChatTransport,
+  isTextUIPart,
+  type UIDataTypes,
+  type UIMessage,
+} from "ai";
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+
+import { ChatEmptyState } from "@/components/agent/chat-empty-state";
+import { ChatHeader } from "@/components/agent/chat-header";
+import { ChatInputBar } from "@/components/agent/chat-input-bar";
+import {
+  ChatMessageBubble,
+  type DisplayMessage,
+} from "@/components/agent/chat-message-bubble";
+import {
+  fetchThread,
+  MESSAGE_SKELETON_KEYS,
+  normalizeChat,
+  type ThreadData,
+  ZOEY_PROMPTS,
+} from "@/components/agent/chat-thread-types";
+import {
+  ChatToolEventStrip,
+  type StreamToolEvent,
+} from "@/components/agent/chat-tool-event";
+import { useChatAttachments } from "@/components/agent/use-chat-attachments";
+import { useVoiceChat } from "@/components/agent/use-voice-chat";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
+import { Icon } from "@/components/ui/icon";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Textarea } from "@/components/ui/textarea";
-import type { AgentChatMessage, AgentChatSummary } from "@/lib/api";
+import type {
+  AgentChatMessage,
+  AgentChatSummary,
+  AgentModelOption,
+} from "@/lib/api";
 import type { Locale } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
-const PROMPTS: Record<string, { "en-US": string[]; "es-PY": string[] }> = {
-  "morning-brief": {
-    "en-US": [
-      "Give me today's top 5 priorities.",
-      "Which turnovers are at risk this morning?",
-      "What is the biggest operational bottleneck now?",
-    ],
-    "es-PY": [
-      "Dame las 5 prioridades de hoy.",
-      "¿Qué turnovers están en riesgo esta mañana?",
-      "¿Cuál es el mayor cuello de botella operativo ahora?",
-    ],
-  },
-  "ops-dispatch": {
-    "en-US": [
-      "Show all tasks at risk of SLA breach today.",
-      "Which team assignments should I rebalance right now?",
-      "Give me a dispatch plan for overdue turnovers.",
-    ],
-    "es-PY": [
-      "Muestra todas las tareas en riesgo de incumplir SLA hoy.",
-      "¿Qué asignaciones del equipo debo rebalancear ahora?",
-      "Dame un plan de despacho para turnovers vencidos.",
-    ],
-  },
-  "leasing-funnel": {
-    "en-US": [
-      "Which applications are stalled and need follow-up?",
-      "What is slowing down lease conversion this week?",
-      "Prioritize the top applicants that should move forward today.",
-    ],
-    "es-PY": [
-      "¿Qué solicitudes están estancadas y requieren seguimiento?",
-      "¿Qué está frenando la conversión de contratos esta semana?",
-      "Prioriza los mejores solicitantes para avanzar hoy.",
-    ],
-  },
-  "collections-finance": {
-    "en-US": [
-      "Summarize this month's revenue by property.",
-      "Compare revenue vs expenses for the last 3 months.",
-      "Flag any unusual expenses this month.",
-    ],
-    "es-PY": [
-      "Resume los ingresos de este mes por propiedad.",
-      "Compara ingresos vs gastos de los últimos 3 meses.",
-      "Señala gastos inusuales de este mes.",
-    ],
-  },
-  "guest-comms": {
-    "en-US": [
-      "Draft a check-in message for this week's arrivals.",
-      "Show me all guests arriving in the next 7 days.",
-      "Write a welcome message for the guest in unit 3.",
-    ],
-    "es-PY": [
-      "Redacta un mensaje de check-in para las llegadas de esta semana.",
-      "Muéstrame todos los huéspedes que llegan en los próximos 7 días.",
-      "Escribe un mensaje de bienvenida para el huésped de la unidad 3.",
-    ],
-  },
-  "marketplace-growth": {
-    "en-US": [
-      "Which listings have low conversion this week?",
-      "Identify missing transparency info hurting conversion.",
-      "What listing improvements would raise demand fastest?",
-    ],
-    "es-PY": [
-      "¿Qué anuncios tienen baja conversión esta semana?",
-      "Identifica información de transparencia faltante que afecta conversión.",
-      "¿Qué mejoras de anuncios subirían la demanda más rápido?",
-    ],
-  },
-  "price-optimizer": {
-    "en-US": [
-      "Which units have the lowest occupancy this month?",
-      "Identify underpriced units based on market trends.",
-      "Suggest seasonal pricing adjustments for next quarter.",
-    ],
-    "es-PY": [
-      "¿Qué unidades tienen la ocupación más baja este mes?",
-      "Identifica unidades con precios bajos según tendencias.",
-      "Sugiere ajustes de precios estacionales para el próximo trimestre.",
-    ],
-  },
-  "market-match": {
-    "en-US": [
-      "Match the latest applicants to available listings.",
-      "Which pet-friendly listings are currently available?",
-      "Score the top 5 pending applications by fit.",
-    ],
-    "es-PY": [
-      "Empareja los últimos solicitantes con anuncios disponibles.",
-      "¿Qué anuncios pet-friendly están disponibles?",
-      "Puntúa las 5 mejores solicitudes pendientes por compatibilidad.",
-    ],
-  },
-  "maintenance-triage": {
-    "en-US": [
-      "Show open maintenance requests sorted by urgency.",
-      "Which properties have the most pending repairs?",
-      "Estimate repair costs for all open tickets this month.",
-    ],
-    "es-PY": [
-      "Muestra solicitudes de mantenimiento abiertas por urgencia.",
-      "¿Qué propiedades tienen más reparaciones pendientes?",
-      "Estima costos de reparación para tickets abiertos este mes.",
-    ],
-  },
-  "compliance-guard": {
-    "en-US": [
-      "Flag any leases expiring in the next 30 days.",
-      "Which tenants have overdue payments this month?",
-      "Check document expirations across all properties.",
-    ],
-    "es-PY": [
-      "Señala contratos que vencen en los próximos 30 días.",
-      "¿Qué inquilinos tienen pagos vencidos este mes?",
-      "Revisa vencimientos de documentos en todas las propiedades.",
-    ],
-  },
-  default: {
-    "en-US": [
-      "Summarize the key risks for today.",
-      "What should I fix first in operations?",
-      "Give me a concise action plan.",
-    ],
-    "es-PY": [
-      "Resume los riesgos clave de hoy.",
-      "¿Qué debo corregir primero en operaciones?",
-      "Dame un plan de acción conciso.",
-    ],
-  },
+type StreamMeta = {
+  model_used?: string | null;
+  fallback_used?: boolean;
+  tool_trace?: AgentChatMessage["tool_trace"];
 };
 
-const MESSAGE_SKELETON_KEYS = [
-  "message-skeleton-1",
-  "message-skeleton-2",
-  "message-skeleton-3",
-  "message-skeleton-4",
-  "message-skeleton-5",
-];
+const BACKEND_AGENT_SLUG = "guest-concierge";
 
-type ThreadData = {
-  chat: AgentChatSummary | null;
-  messages: AgentChatMessage[];
-};
-
-function normalizeChat(payload: unknown): AgentChatSummary | null {
-  if (!payload || typeof payload !== "object") return null;
-  const row = payload as Record<string, unknown>;
-  if (!(row.id && row.title)) return null;
-
-  return {
-    id: String(row.id),
-    org_id: String(row.org_id ?? ""),
-    agent_id: String(row.agent_id ?? ""),
-    agent_slug: String(row.agent_slug ?? ""),
-    agent_name: String(row.agent_name ?? ""),
-    agent_icon_key:
-      typeof row.agent_icon_key === "string" ? row.agent_icon_key : undefined,
-    title: String(row.title),
-    is_archived: Boolean(row.is_archived),
-    last_message_at: String(row.last_message_at ?? ""),
-    created_at: String(row.created_at ?? ""),
-    updated_at: String(row.updated_at ?? ""),
-    latest_message_preview:
-      typeof row.latest_message_preview === "string"
-        ? row.latest_message_preview
-        : null,
-  };
-}
-
-function normalizeMessages(payload: unknown): AgentChatMessage[] {
+function normalizeModels(payload: unknown): AgentModelOption[] {
   if (!payload || typeof payload !== "object") return [];
   const data = (payload as { data?: unknown[] }).data;
   if (!Array.isArray(data)) return [];
-
-  return data
-    .filter((row): row is AgentChatMessage =>
-      Boolean(row && typeof row === "object")
-    )
-    .map((row) => {
-      const role: "user" | "assistant" =
-        row.role === "assistant" ? "assistant" : "user";
-
-      return {
-        id: String(row.id ?? ""),
-        chat_id: String(row.chat_id ?? ""),
-        org_id: String(row.org_id ?? ""),
-        role,
-        content: String(row.content ?? ""),
-        tool_trace: Array.isArray(row.tool_trace)
-          ? (row.tool_trace as AgentChatMessage["tool_trace"])
-          : undefined,
-        model_used:
-          typeof row.model_used === "string" ? row.model_used : undefined,
-        fallback_used: Boolean(row.fallback_used ?? false),
-        created_at: String(row.created_at ?? ""),
-      };
-    })
-    .filter((row) => row.id && row.content);
+  const seen = new Set<string>();
+  const models: AgentModelOption[] = [];
+  for (const row of data) {
+    if (!row || typeof row !== "object") continue;
+    const item = row as Record<string, unknown>;
+    const model =
+      typeof item.model === "string"
+        ? item.model.trim()
+        : typeof item.id === "string"
+          ? item.id.trim()
+          : "";
+    if (!model || seen.has(model)) continue;
+    seen.add(model);
+    models.push({ model, is_primary: item.is_primary === true });
+  }
+  return models;
 }
 
-async function fetchThread(chatId: string, orgId: string): Promise<ThreadData> {
-  const [chatRes, messagesRes] = await Promise.all([
-    fetch(
-      `/api/agent/chats/${encodeURIComponent(chatId)}?org_id=${encodeURIComponent(orgId)}`,
-      {
-        method: "GET",
-        cache: "no-store",
-        headers: { Accept: "application/json" },
-      }
-    ),
-    fetch(
-      `/api/agent/chats/${encodeURIComponent(chatId)}/messages?org_id=${encodeURIComponent(orgId)}&limit=160`,
-      {
-        method: "GET",
-        cache: "no-store",
-        headers: { Accept: "application/json" },
-      }
-    ),
-  ]);
-
-  const chatPayload = (await chatRes.json()) as unknown;
-  const messagesPayload = (await messagesRes.json()) as unknown;
-
-  if (!chatRes.ok) {
-    let message = "Could not load chat.";
-    if (
-      chatPayload != null &&
-      typeof chatPayload === "object" &&
-      "error" in chatPayload
-    ) {
-      message = String((chatPayload as { error?: unknown }).error);
-    }
-    throw new Error(message);
+function extractUiMessageText(message: UIMessage | undefined): string {
+  if (!message) return "";
+  const chunks: string[] = [];
+  for (const part of message.parts) {
+    if (!isTextUIPart(part)) continue;
+    const text = part.text.trim();
+    if (text) chunks.push(text);
   }
-
-  if (!messagesRes.ok) {
-    let message = "Could not load messages.";
-    if (
-      messagesPayload != null &&
-      typeof messagesPayload === "object" &&
-      "error" in messagesPayload
-    ) {
-      message = String((messagesPayload as { error?: unknown }).error);
-    }
-    throw new Error(message);
-  }
-
-  return {
-    chat: normalizeChat(chatPayload),
-    messages: normalizeMessages(messagesPayload),
-  };
+  return chunks.join("").trim();
 }
+
+function findLastUserText(messages: UIMessage[]): string {
+  for (let i = messages.length - 1; i >= 0; i -= 1) {
+    const row = messages[i];
+    if (row.role !== "user") continue;
+    const text = extractUiMessageText(row);
+    if (text) return text;
+  }
+  return "";
+}
+
+// ---------------------------------------------------------------------------
+// ChatThread — orchestrator
+// ---------------------------------------------------------------------------
 
 export function ChatThread({
   orgId,
   locale,
   chatId,
+  mode = "full",
+  freshKey,
 }: {
   orgId: string;
   locale: Locale;
-  chatId: string;
+  chatId?: string;
+  defaultAgentSlug?: string;
+  mode?: "full" | "embedded";
+  freshKey?: string;
 }) {
   const isEn = locale === "en-US";
+  const isEmbedded = mode === "embedded";
+  const isChatDetailRoute = Boolean(chatId);
   const router = useRouter();
   const queryClient = useQueryClient();
 
-  const [sending, setSending] = useState(false);
+  // --- state ---------------------------------------------------------------
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
-  const [allowMutations, setAllowMutations] = useState(false);
-  const [confirmWrite, setConfirmWrite] = useState(false);
   const [deleteArmed, setDeleteArmed] = useState(false);
-  const [streamingText, setStreamingText] = useState("");
-  const [streamingTools, setStreamingTools] = useState<
-    { name: string; preview?: string; ok?: boolean }[]
-  >([]);
-  // Local messages appended optimistically during send (before refetch)
-  const [localMessages, setLocalMessages] = useState<AgentChatMessage[]>([]);
+  const [editingSourceId, setEditingSourceId] = useState<string | null>(null);
+  const [activeChatId, setActiveChatId] = useState<string | undefined>(chatId);
+  const [selectedModel, setSelectedModel] = useState<string>("");
+  const [modelBusy, setModelBusy] = useState(false);
   const [localChat, setLocalChat] = useState<AgentChatSummary | null>(null);
+  const [streamToolEvents, setStreamToolEvents] = useState<StreamToolEvent[]>(
+    []
+  );
+  const [streamStatus, setStreamStatus] = useState<string | null>(null);
+  const [streamMetaByMessageId, setStreamMetaByMessageId] = useState<
+    Record<string, StreamMeta>
+  >({});
 
+  const activeChatIdRef = useRef<string | undefined>(chatId);
+  const pendingSendRef = useRef<{
+    chatId: string;
+    message: string;
+    fallbackAttempted: boolean;
+  } | null>(null);
+  const messageViewportRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    activeChatIdRef.current = activeChatId;
+  }, [activeChatId]);
+
+  // --- queries -------------------------------------------------------------
   const threadQuery = useQuery<ThreadData, Error>({
-    queryKey: ["agent-thread", chatId, orgId],
-    queryFn: () => fetchThread(chatId, orgId),
+    queryKey: ["agent-thread", activeChatId, orgId],
+    queryFn: () => {
+      if (!activeChatId)
+        throw new Error(isEn ? "Missing chat id." : "Falta id de chat.");
+      return fetchThread(activeChatId, orgId);
+    },
+    enabled: !!activeChatId,
   });
 
-  const chat = localChat ?? threadQuery.data?.chat ?? null;
-  const messages = [...(threadQuery.data?.messages ?? []), ...localMessages];
-  const loading = threadQuery.isLoading;
-
-  const quickPrompts = useMemo(() => {
-    const key =
-      chat?.agent_slug && PROMPTS[chat.agent_slug]
-        ? chat.agent_slug
-        : "default";
-    return PROMPTS[key][locale];
-  }, [chat?.agent_slug, locale]);
-
-  const sendMessageStream = async (message: string) => {
-    // Optimistically add user message
-    setLocalMessages((prev) => [
-      ...prev,
-      {
-        id: `temp-user-${Date.now()}`,
-        chat_id: chatId,
-        org_id: orgId,
-        role: "user" as const,
-        content: message,
-        fallback_used: false,
-        created_at: new Date().toISOString(),
-      },
-    ]);
-    setStreamingText("");
-    setStreamingTools([]);
-
-    const response = await fetch(
-      `/api/agent/chats/${encodeURIComponent(chatId)}/messages/stream?org_id=${encodeURIComponent(orgId)}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          message,
-          allow_mutations: allowMutations,
-          confirm_write: confirmWrite,
-        }),
-      }
-    );
-
-    if (!(response.ok && response.body)) {
-      throw new Error(
-        isEn ? "Streaming failed." : "La transmisi\u00f3n fall\u00f3."
-      );
-    }
-
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = "";
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split("\n");
-      const remainder = lines.pop();
-      buffer = remainder != null ? remainder : "";
-
-      for (const line of lines) {
-        if (!line.startsWith("data: ")) continue;
-        const data = line.slice(6).trim();
-        if (!data) continue;
-
-        let parsedEvent: Record<string, unknown> | null = null;
-        try {
-          parsedEvent = JSON.parse(data) as Record<string, unknown>;
-        } catch {
-          // Skip unparseable lines
+  // Model options — fail silently (no error banners)
+  const modelOptionsQuery = useQuery<AgentModelOption[], Error>({
+    queryKey: ["agent-model-options", orgId],
+    queryFn: async () => {
+      const res = await fetch(
+        `/api/agent/models?org_id=${encodeURIComponent(orgId)}`,
+        {
+          method: "GET",
+          cache: "no-store",
+          headers: { Accept: "application/json" },
         }
-        if (parsedEvent == null) continue;
+      );
+      const payload = (await res.json()) as unknown;
+      if (!res.ok) return [];
+      return normalizeModels(payload);
+    },
+    staleTime: 60_000,
+    enabled: !!orgId,
+    retry: false,
+  });
 
-        const eventType = String(parsedEvent.type);
-        const eventName =
-          typeof parsedEvent.name === "string" ? parsedEvent.name : undefined;
+  // --- voice chat ----------------------------------------------------------
+  const handleVoiceSend = useCallback((text: string) => {
+    if (!text.trim()) return;
+    setDraft("");
+    handleSendRef.current(text);
+  }, []);
 
-        if (eventType === "tool_call" && eventName) {
-          const nameVal = eventName;
-          setStreamingTools((prev) => [...prev, { name: nameVal }]);
-        } else if (eventType === "tool_result" && eventName) {
-          const nameVal = eventName;
-          const previewVal =
-            typeof parsedEvent.preview === "string"
-              ? parsedEvent.preview
-              : undefined;
-          const okVal =
-            typeof parsedEvent.ok === "boolean" ? parsedEvent.ok : undefined;
-          setStreamingTools((prev) =>
-            prev.map((t) => {
-              if (t.name === nameVal && t.preview === undefined) {
-                return { ...t, preview: previewVal, ok: okVal };
-              }
-              return t;
-            })
-          );
-        } else if (
-          eventType === "token" &&
-          typeof parsedEvent.text === "string"
-        ) {
-          setStreamingText(parsedEvent.text);
-        } else if (
-          eventType === "done" &&
-          typeof parsedEvent.content === "string"
-        ) {
-          // Finalize: add assistant message
-          const doneContent = parsedEvent.content as string;
-          const doneToolTrace =
-            parsedEvent.tool_trace as AgentChatMessage["tool_trace"];
-          setLocalMessages((prev) => [
+  const voice = useVoiceChat(handleVoiceSend);
+
+  // --- attachments ---------------------------------------------------------
+  const attachmentHook = useChatAttachments(orgId, isEn);
+
+  // --- transport + chat hook -----------------------------------------------
+  const transport = useMemo(
+    () =>
+      new DefaultChatTransport<UIMessage>({
+        api: "/api/agent/chats/pending/messages/stream",
+        prepareSendMessagesRequest: ({
+          messages,
+          body,
+          headers,
+          credentials,
+        }) => {
+          const cid = activeChatIdRef.current;
+          if (!cid)
+            throw new Error(isEn ? "Missing chat id." : "Falta id de chat.");
+          const text = findLastUserText(messages);
+          if (!text)
+            throw new Error(
+              isEn ? "Missing message content." : "Falta contenido del mensaje."
+            );
+          return {
+            api: `/api/agent/chats/${encodeURIComponent(cid)}/messages/stream?org_id=${encodeURIComponent(orgId)}`,
+            headers,
+            credentials,
+            body: { ...(body ?? {}), org_id: orgId, message: text },
+          };
+        },
+      }),
+    [isEn, orgId]
+  );
+
+  const {
+    messages: liveMessages,
+    sendMessage,
+    stop,
+    setMessages: setLiveMessages,
+    status,
+    error: chatError,
+    clearError,
+  } = useChat<UIMessage>({
+    id: activeChatId ? `agent-${activeChatId}` : "agent-draft-zoey",
+    transport,
+    onData: (part: DataUIPart<UIDataTypes>) => {
+      const typed = part as { type: string; data?: unknown };
+      if (typed.type === "data-casaora-status") {
+        if (typed.data && typeof typed.data === "object") {
+          const msg = (typed.data as { message?: unknown }).message;
+          if (typeof msg === "string" && msg.trim())
+            setStreamStatus(msg.trim());
+        }
+        return;
+      }
+      if (typed.type === "data-casaora-tool") {
+        if (typed.data && typeof typed.data === "object") {
+          const d = typed.data as {
+            phase?: unknown;
+            tool_name?: unknown;
+            tool_call_id?: unknown;
+            ok?: unknown;
+            preview?: unknown;
+          };
+          setStreamToolEvents((prev) => [
             ...prev,
             {
-              id: `temp-assistant-${Date.now()}`,
-              chat_id: chatId,
-              org_id: orgId,
-              role: "assistant" as const,
-              content: doneContent,
-              tool_trace: doneToolTrace,
-              fallback_used: false,
-              created_at: new Date().toISOString(),
+              phase: d.phase === "result" ? "result" : "call",
+              tool_name:
+                typeof d.tool_name === "string" && d.tool_name.trim()
+                  ? d.tool_name.trim()
+                  : "tool",
+              tool_call_id:
+                typeof d.tool_call_id === "string" && d.tool_call_id.trim()
+                  ? d.tool_call_id.trim()
+                  : `tool-${Date.now()}`,
+              ok: typeof d.ok === "boolean" ? d.ok : undefined,
+              preview: typeof d.preview === "string" ? d.preview : undefined,
             },
           ]);
-          setStreamingText("");
-          setStreamingTools([]);
-        } else if (eventType === "error") {
-          let errorMessage = "Agent error";
-          if (typeof parsedEvent.message === "string") {
-            errorMessage = parsedEvent.message;
-          }
-          throw new Error(errorMessage);
         }
+        return;
       }
+      if (
+        typed.type === "data-casaora-meta" &&
+        typed.data &&
+        typeof typed.data === "object"
+      ) {
+        const d = typed.data as {
+          messageId?: unknown;
+          model_used?: unknown;
+          fallback_used?: unknown;
+          tool_trace?: unknown;
+        };
+        const mid = typeof d.messageId === "string" ? d.messageId : "";
+        if (!mid) return;
+        setStreamMetaByMessageId((prev) => ({
+          ...prev,
+          [mid]: {
+            model_used: typeof d.model_used === "string" ? d.model_used : null,
+            fallback_used:
+              typeof d.fallback_used === "boolean" ? d.fallback_used : false,
+            tool_trace: Array.isArray(d.tool_trace)
+              ? (d.tool_trace as AgentChatMessage["tool_trace"])
+              : [],
+          },
+        }));
+      }
+    },
+    onFinish: () => {
+      pendingSendRef.current = null;
+      const current = activeChatIdRef.current;
+      if (!current) return;
+      const sync = async () => {
+        await queryClient.invalidateQueries({
+          queryKey: ["agent-thread", current, orgId],
+        });
+        await queryClient.invalidateQueries({
+          queryKey: ["agent-chats", orgId],
+        });
+        await queryClient.invalidateQueries({
+          queryKey: ["sidebar-chat-data", orgId],
+        });
+        setLiveMessages([]);
+        setStreamToolEvents([]);
+        setStreamStatus(null);
+        setStreamMetaByMessageId({});
+        setLocalChat(null);
+      };
+      sync().catch(() => undefined);
+    },
+    onError: (incomingError) => {
+      const pending = pendingSendRef.current;
+      if (!pending || pending.fallbackAttempted) {
+        setError(incomingError.message);
+        return;
+      }
+      pending.fallbackAttempted = true;
+      const runFallback = async () => {
+        try {
+          await sendMessageFallback(pending.chatId, pending.message);
+          pendingSendRef.current = null;
+          clearError();
+          setError(null);
+        } catch (e) {
+          setError(e instanceof Error ? e.message : String(e));
+        }
+      };
+      runFallback().catch(() => undefined);
+    },
+  });
+
+  // --- derived data --------------------------------------------------------
+  const modelOptions = modelOptionsQuery.data ?? [];
+  const primaryModel =
+    modelOptions.find((i) => i.is_primary)?.model ??
+    modelOptions[0]?.model ??
+    "";
+  const chat = localChat ?? threadQuery.data?.chat ?? null;
+  const serverMessages = threadQuery.data?.messages ?? [];
+  const loading = !!activeChatId && threadQuery.isLoading;
+  const isSending = status === "submitted" || status === "streaming";
+
+  // --- model preference ----------------------------------------------------
+  const updatePreferredModel = useCallback(
+    async (nextModel: string) => {
+      setSelectedModel(nextModel);
+      const cid = activeChatIdRef.current;
+      if (!cid) return;
+      setModelBusy(true);
+      setError(null);
+      try {
+        const res = await fetch(
+          `/api/agent/chats/${encodeURIComponent(cid)}/preferences`,
+          {
+            method: "PATCH",
+            headers: {
+              "Content-Type": "application/json",
+              Accept: "application/json",
+            },
+            body: JSON.stringify({ org_id: orgId, preferred_model: nextModel }),
+          }
+        );
+        const payload = (await res.json()) as {
+          error?: string;
+          chat?: unknown;
+        };
+        if (!res.ok)
+          throw new Error(
+            payload.error ||
+              (isEn
+                ? "Could not update model preference."
+                : "No se pudo actualizar el modelo.")
+          );
+        const normalized = normalizeChat(payload.chat);
+        if (normalized) setLocalChat(normalized);
+        await queryClient.invalidateQueries({
+          queryKey: ["agent-thread", cid, orgId],
+        });
+        await queryClient.invalidateQueries({
+          queryKey: ["agent-chats", orgId],
+        });
+        await queryClient.invalidateQueries({
+          queryKey: ["sidebar-chat-data", orgId],
+        });
+      } catch (e) {
+        setError(e instanceof Error ? e.message : String(e));
+      } finally {
+        setModelBusy(false);
+      }
+    },
+    [isEn, orgId, queryClient]
+  );
+
+  // --- sync effects --------------------------------------------------------
+  useEffect(() => {
+    setActiveChatId(chatId);
+    activeChatIdRef.current = chatId;
+    setDeleteArmed(false);
+    setError(null);
+    setDraft("");
+    setEditingSourceId(null);
+    setLiveMessages([]);
+    setStreamToolEvents([]);
+    setStreamStatus(null);
+    setStreamMetaByMessageId({});
+    setLocalChat(null);
+  }, [chatId, setLiveMessages]);
+
+  useEffect(() => {
+    if (!freshKey || isChatDetailRoute) return;
+    setActiveChatId(undefined);
+    activeChatIdRef.current = undefined;
+    setDeleteArmed(false);
+    setError(null);
+    setDraft("");
+    setEditingSourceId(null);
+    setLiveMessages([]);
+    setStreamToolEvents([]);
+    setStreamStatus(null);
+    setStreamMetaByMessageId({});
+    setLocalChat(null);
+  }, [freshKey, isChatDetailRoute, setLiveMessages]);
+
+  useEffect(() => {
+    const preferred = chat?.preferred_model?.trim();
+    if (preferred) {
+      setSelectedModel(preferred);
+      return;
     }
+    if (activeChatId && primaryModel && selectedModel !== primaryModel) {
+      setSelectedModel(primaryModel);
+      return;
+    }
+    if (!selectedModel && primaryModel) setSelectedModel(primaryModel);
+  }, [activeChatId, chat?.preferred_model, primaryModel, selectedModel]);
+
+  useEffect(() => {
+    if (!(selectedModel && modelOptions.length && primaryModel)) return;
+    if (modelOptions.some((o) => o.model === selectedModel)) return;
+    setSelectedModel(primaryModel);
+    const cid = activeChatIdRef.current;
+    if (cid) updatePreferredModel(primaryModel).catch(() => undefined);
+  }, [modelOptions, primaryModel, selectedModel, updatePreferredModel]);
+
+  // --- display messages ----------------------------------------------------
+  const serverDisplayMessages = useMemo<DisplayMessage[]>(
+    () =>
+      serverMessages.map((m) => ({
+        id: m.id,
+        role: m.role,
+        content: m.content,
+        model_used: m.model_used ?? null,
+        tool_trace: m.tool_trace,
+        source: "server",
+      })),
+    [serverMessages]
+  );
+
+  const liveDisplayMessages = useMemo<DisplayMessage[]>(() => {
+    const next: DisplayMessage[] = [];
+    for (const m of liveMessages) {
+      if (m.role !== "user" && m.role !== "assistant") continue;
+      const content = extractUiMessageText(m);
+      if (!content && m.role === "assistant") continue;
+      next.push({
+        id: m.id,
+        role: m.role,
+        content,
+        model_used: streamMetaByMessageId[m.id]?.model_used ?? null,
+        tool_trace: streamMetaByMessageId[m.id]?.tool_trace,
+        source: "live",
+      });
+    }
+    return next;
+  }, [liveMessages, streamMetaByMessageId]);
+
+  const displayMessages = useMemo<DisplayMessage[]>(() => {
+    const ids = new Set(serverDisplayMessages.map((i) => i.id));
+    return [
+      ...serverDisplayMessages,
+      ...liveDisplayMessages.filter((i) => !ids.has(i.id)),
+    ];
+  }, [liveDisplayMessages, serverDisplayMessages]);
+
+  // --- auto-speak for voice mode -------------------------------------------
+  const lastSpokenRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!voice.voiceModeActive) return;
+    const lastAssistant = [...displayMessages]
+      .reverse()
+      .find((m) => m.role === "assistant");
+    if (!lastAssistant || lastAssistant.id === lastSpokenRef.current) return;
+    if (isSending) return; // wait until message is complete
+    lastSpokenRef.current = lastAssistant.id;
+    voice.speak(lastAssistant.content);
+  }, [displayMessages, isSending, voice]);
+
+  // --- auto-scroll ---------------------------------------------------------
+  useEffect(() => {
+    const vp = messageViewportRef.current;
+    if (!vp) return;
+    if (
+      displayMessages.length > 0 ||
+      isSending ||
+      streamToolEvents.length > 0 ||
+      streamStatus
+    ) {
+      vp.scrollTop = vp.scrollHeight;
+    }
+  }, [
+    displayMessages.length,
+    isSending,
+    streamStatus,
+    streamToolEvents.length,
+  ]);
+
+  // --- quick prompts -------------------------------------------------------
+  const quickPrompts = ZOEY_PROMPTS[locale];
+
+  // --- actions -------------------------------------------------------------
+  const ensureChatId = async (): Promise<string> => {
+    if (activeChatIdRef.current) return activeChatIdRef.current;
+    const res = await fetch("/api/agent/chats", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        org_id: orgId,
+        agent_slug: BACKEND_AGENT_SLUG,
+        preferred_model: selectedModel || null,
+      }),
+    });
+    const payload = (await res.json()) as { id?: string; error?: string };
+    if (!(res.ok && payload.id))
+      throw new Error(
+        payload.error ||
+          (isEn ? "Failed to create chat." : "No se pudo crear el chat.")
+      );
+    const nextId = String(payload.id);
+    activeChatIdRef.current = nextId;
+    setActiveChatId(nextId);
+    const normalized = normalizeChat(payload);
+    if (normalized) setLocalChat(normalized);
+    return nextId;
   };
 
-  const sendMessageFallback = async (message: string) => {
-    const response = await fetch(
-      `/api/agent/chats/${encodeURIComponent(chatId)}/messages`,
+  const sendMessageFallback = async (targetChatId: string, message: string) => {
+    const res = await fetch(
+      `/api/agent/chats/${encodeURIComponent(targetChatId)}/messages`,
       {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Accept: "application/json",
         },
-        body: JSON.stringify({
-          org_id: orgId,
-          message,
-          allow_mutations: allowMutations,
-          confirm_write: confirmWrite,
-        }),
+        body: JSON.stringify({ org_id: orgId, message }),
       }
     );
-
-    const payload = (await response.json()) as {
-      error?: string;
-      user_message?: AgentChatMessage;
-      assistant_message?: AgentChatMessage;
-      chat?: AgentChatSummary;
-    };
-
-    if (!response.ok) {
+    const payload = (await res.json()) as { error?: string };
+    if (!res.ok)
       throw new Error(
         payload.error ||
           (isEn ? "Message failed to send." : "No se pudo enviar el mensaje.")
       );
+    await queryClient.invalidateQueries({
+      queryKey: ["agent-thread", targetChatId, orgId],
+    });
+    await queryClient.invalidateQueries({ queryKey: ["agent-chats", orgId] });
+    await queryClient.invalidateQueries({
+      queryKey: ["sidebar-chat-data", orgId],
+    });
+    setLiveMessages([]);
+    setStreamToolEvents([]);
+    setStreamStatus(null);
+    setStreamMetaByMessageId({});
+    setLocalChat(null);
+  };
+
+  const handleSend = async (value?: string) => {
+    const message = (value ?? draft).trim();
+    if (!message || isSending) return;
+
+    // Include attachment URLs if any
+    let fullMessage = message;
+    const urls = attachmentHook.getReadyUrls();
+    if (urls.length > 0) {
+      fullMessage = `${message}\n\n[Attachments]\n${urls.join("\n")}`;
     }
 
-    if (payload.chat) {
-      setLocalChat(payload.chat);
-    }
-
-    const appended: AgentChatMessage[] = [];
-    if (payload.user_message) appended.push(payload.user_message);
-    if (payload.assistant_message) appended.push(payload.assistant_message);
-
-    if (appended.length) {
-      setLocalMessages((previous) => [...previous, ...appended]);
-    } else {
-      // Clear local messages before refetch to avoid duplicates
-      setLocalMessages([]);
-      setLocalChat(null);
-      await queryClient.invalidateQueries({
-        queryKey: ["agent-thread", chatId, orgId],
-      });
+    setError(null);
+    clearError();
+    try {
+      const finalChatId = await ensureChatId();
+      pendingSendRef.current = {
+        chatId: finalChatId,
+        message: fullMessage,
+        fallbackAttempted: false,
+      };
+      setDraft("");
+      setEditingSourceId(null);
+      setStreamToolEvents([]);
+      setStreamStatus(null);
+      attachmentHook.clearAttachments();
+      await sendMessage({ text: fullMessage });
+    } catch (err) {
+      const fb = pendingSendRef.current;
+      if (fb && !fb.fallbackAttempted) {
+        fb.fallbackAttempted = true;
+        try {
+          await sendMessageFallback(fb.chatId, fb.message);
+          pendingSendRef.current = null;
+          return;
+        } catch (fe) {
+          setError(fe instanceof Error ? fe.message : String(fe));
+          return;
+        }
+      }
+      setError(err instanceof Error ? err.message : String(err));
     }
   };
 
-  const sendMessage = async (value?: string) => {
-    const message = (value ?? draft).trim();
-    if (!message || sending) return;
+  // Stable ref for voice callback
+  const handleSendRef = useRef(handleSend);
+  handleSendRef.current = handleSend;
 
-    setSending(true);
-    setError(null);
-
-    try {
-      try {
-        await sendMessageStream(message);
-      } catch {
-        // Fall back to non-streaming POST
-        await sendMessageFallback(message);
+  const handleRetryAssistant = async (messageId: string) => {
+    if (isSending) return;
+    const idx = displayMessages.findIndex((m) => m.id === messageId);
+    if (idx <= 0) return;
+    for (let i = idx - 1; i >= 0; i -= 1) {
+      if (displayMessages[i].role === "user") {
+        await handleSend(displayMessages[i].content);
+        return;
       }
-      setDraft("");
-      setSending(false);
-      setStreamingText("");
-      setStreamingTools([]);
-    } catch (err) {
-      let errMsg = String(err);
-      if (err instanceof Error) {
-        errMsg = err.message;
-      }
-      setError(errMsg);
-      setSending(false);
-      setStreamingText("");
-      setStreamingTools([]);
     }
+  };
+
+  const handleCopyMessage = async (content: string) => {
+    try {
+      await navigator.clipboard.writeText(content);
+    } catch {
+      /* ignore */
+    }
+  };
+
+  const resetToFreshThread = () => {
+    setActiveChatId(undefined);
+    activeChatIdRef.current = undefined;
+    setDeleteArmed(false);
+    setError(null);
+    setDraft("");
+    setEditingSourceId(null);
+    setLocalChat(null);
+    setLiveMessages([]);
+    setStreamToolEvents([]);
+    setStreamStatus(null);
+    setStreamMetaByMessageId({});
+    attachmentHook.clearAttachments();
+    if (primaryModel) setSelectedModel(primaryModel);
   };
 
   const mutateChat = async (action: "archive" | "restore" | "delete") => {
+    if (!activeChatIdRef.current) return;
+    const cid = activeChatIdRef.current;
     setBusy(true);
     setError(null);
-    const fallbackErrorMsg = isEn
+    const fallbackMsg = isEn
       ? "Chat update failed."
-      : "La actualizaci\u00f3n del chat fall\u00f3.";
-
+      : "La actualización del chat falló.";
     try {
-      let response: Response;
+      let res: Response;
       if (action === "delete") {
-        response = await fetch(
-          `/api/agent/chats/${encodeURIComponent(chatId)}?org_id=${encodeURIComponent(orgId)}`,
-          {
-            method: "DELETE",
-            headers: {
-              Accept: "application/json",
-            },
-          }
+        res = await fetch(
+          `/api/agent/chats/${encodeURIComponent(cid)}?org_id=${encodeURIComponent(orgId)}`,
+          { method: "DELETE", headers: { Accept: "application/json" } }
         );
       } else {
-        response = await fetch(
-          `/api/agent/chats/${encodeURIComponent(chatId)}`,
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Accept: "application/json",
-            },
-            body: JSON.stringify({
-              org_id: orgId,
-              action,
-            }),
-          }
-        );
+        res = await fetch(`/api/agent/chats/${encodeURIComponent(cid)}`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "application/json",
+          },
+          body: JSON.stringify({ org_id: orgId, action }),
+        });
       }
-
-      const payload = (await response.json()) as { error?: string };
-      if (!response.ok) {
-        let errorMsg = fallbackErrorMsg;
-        if (payload.error) {
-          errorMsg = payload.error;
-        }
-        setError(errorMsg);
+      const payload = (await res.json()) as { error?: string };
+      if (!res.ok) {
+        setError(payload.error || fallbackMsg);
         setBusy(false);
         return;
       }
-
       if (action === "delete") {
-        router.push("/app/chats");
-        router.refresh();
         setBusy(false);
+        if (isChatDetailRoute) {
+          router.push("/app/chats");
+          router.refresh();
+          return;
+        }
+        resetToFreshThread();
         return;
       }
-
-      setLocalMessages([]);
-      setLocalChat(null);
       await queryClient.invalidateQueries({
-        queryKey: ["agent-thread", chatId, orgId],
+        queryKey: ["agent-thread", cid, orgId],
       });
-      router.refresh();
+      await queryClient.invalidateQueries({ queryKey: ["agent-chats", orgId] });
+      await queryClient.invalidateQueries({
+        queryKey: ["sidebar-chat-data", orgId],
+      });
       setBusy(false);
-    } catch (err) {
-      let errMsg = String(err);
-      if (err instanceof Error) {
-        errMsg = err.message;
-      }
-      setError(errMsg);
+      router.refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
       setBusy(false);
     }
   };
 
-  const displayError = error ?? threadQuery.error?.message ?? null;
+  const displayError =
+    error ?? threadQuery.error?.message ?? chatError?.message ?? null;
 
+  // --- render --------------------------------------------------------------
   return (
-    <Card>
-      <CardHeader className="space-y-3">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="space-y-1">
-            {loading ? (
-              <Skeleton className="h-7 w-44" />
-            ) : (
-              <CardTitle>{chat?.title || (isEn ? "Chat" : "Chat")}</CardTitle>
-            )}
-            {loading ? (
-              <Skeleton className="h-4 w-64" />
-            ) : (
-              <CardDescription className="flex items-center gap-2">
-                <Badge variant="secondary">{chat?.agent_name || "AI"}</Badge>
-                <span>
-                  {chat?.is_archived
-                    ? isEn
-                      ? "Archived"
-                      : "Archivado"
-                    : isEn
-                      ? "Active"
-                      : "Activo"}
-                </span>
-              </CardDescription>
-            )}
-          </div>
+    <div
+      className={cn(
+        "relative flex h-full flex-col",
+        isEmbedded
+          ? "min-h-[38rem] overflow-hidden rounded-3xl border border-border/70 bg-card/80 shadow-[0_24px_60px_-40px_hsl(var(--foreground)/0.65)]"
+          : "min-h-[calc(100vh-4rem)] bg-background"
+      )}
+    >
+      {/* Header */}
+      <ChatHeader
+        busy={busy}
+        chatTitle={chat?.title}
+        deleteArmed={deleteArmed}
+        isArchived={chat?.is_archived}
+        isChatDetailRoute={isChatDetailRoute}
+        isEmbedded={isEmbedded}
+        isEn={isEn}
+        isSending={isSending}
+        loading={loading}
+        modelBusy={modelBusy}
+        modelOptions={modelOptions}
+        onArchiveToggle={() => {
+          const action = chat?.is_archived ? "restore" : "archive";
+          mutateChat(action).catch(() => undefined);
+          setDeleteArmed(false);
+        }}
+        onDeleteArm={() => setDeleteArmed(true)}
+        onDeleteCancel={() => setDeleteArmed(false)}
+        onDeleteConfirm={() => {
+          mutateChat("delete").catch(() => undefined);
+          setDeleteArmed(false);
+        }}
+        onHistoryClick={() => router.push("/app/chats")}
+        onModelChange={(model) =>
+          updatePreferredModel(model).catch(() => undefined)
+        }
+        onNewThread={() => resetToFreshThread()}
+        primaryModel={primaryModel}
+        selectedModel={selectedModel}
+      />
 
-          <div className="flex items-center gap-2">
-            <Button
-              onClick={() => router.push("/app/chats")}
-              size="sm"
-              variant="outline"
-            >
-              {isEn ? "Back" : "Volver"}
-            </Button>
-            <Button
-              disabled={loading || busy}
-              onClick={() => {
-                const action = chat?.is_archived ? "restore" : "archive";
-                mutateChat(action).catch(() => undefined);
-                setDeleteArmed(false);
-              }}
-              size="sm"
-              variant="outline"
-            >
-              {chat?.is_archived
-                ? isEn
-                  ? "Restore"
-                  : "Restaurar"
-                : isEn
-                  ? "Archive"
-                  : "Archivar"}
-            </Button>
-            {deleteArmed ? (
-              <Button
-                disabled={loading || busy}
-                onClick={() => setDeleteArmed(false)}
-                size="sm"
-                variant="outline"
-              >
-                {isEn ? "Cancel" : "Cancelar"}
-              </Button>
-            ) : null}
-            <Button
-              disabled={loading || busy}
-              onClick={() => {
-                if (!deleteArmed) {
-                  setDeleteArmed(true);
-                  return;
-                }
-                mutateChat("delete").catch(() => undefined);
-                setDeleteArmed(false);
-              }}
-              size="sm"
-              variant="destructive"
-            >
-              {deleteArmed
-                ? isEn
-                  ? "Confirm delete"
-                  : "Confirmar"
-                : isEn
-                  ? "Delete"
-                  : "Eliminar"}
-            </Button>
-          </div>
-        </div>
-      </CardHeader>
+      {/* Message area */}
+      <div
+        className={cn(
+          "flex-1 overflow-y-auto p-4 pb-48 sm:p-6",
+          isEmbedded ? "pb-52" : ""
+        )}
+        ref={messageViewportRef}
+      >
+        <div
+          className={cn(
+            "mx-auto flex flex-col space-y-5",
+            isEmbedded ? "max-w-4xl" : "max-w-3xl"
+          )}
+        >
+          {/* Error — only real errors, no agent/model banners */}
+          {displayError ? (
+            <Alert variant="destructive">
+              <AlertTitle>Error</AlertTitle>
+              <AlertDescription>{displayError}</AlertDescription>
+            </Alert>
+          ) : null}
 
-      <CardContent className="space-y-4">
-        {displayError ? (
-          <Alert variant="destructive">
-            <AlertTitle>
-              {isEn ? "Request failed" : "Solicitud fallida"}
-            </AlertTitle>
-            <AlertDescription>{displayError}</AlertDescription>
-          </Alert>
-        ) : null}
-
-        <Alert variant={allowMutations ? "warning" : "info"}>
-          <AlertTitle>
-            {allowMutations
-              ? isEn
-                ? "Write mode requested"
-                : "Modo escritura solicitado"
-              : isEn
-                ? "Read-only mode"
-                : "Modo solo lectura"}
-          </AlertTitle>
-          <AlertDescription>
-            {allowMutations
-              ? isEn
-                ? "Writes run only when confirmation is checked below."
-                : "La escritura se ejecuta solo cuando se marca la confirmaci\u00f3n abajo."
-              : isEn
-                ? "The agent analyzes data without mutating records."
-                : "El agente analiza datos sin modificar registros."}
-          </AlertDescription>
-        </Alert>
-
-        <div className="max-h-[52vh] space-y-3 overflow-y-auto rounded-xl border bg-background/70 p-3">
+          {/* Body */}
           {loading ? (
-            MESSAGE_SKELETON_KEYS.map((key, index) => (
+            MESSAGE_SKELETON_KEYS.map((key, i) => (
               <div
                 className={cn(
                   "flex",
-                  index % 2 === 0 ? "justify-end" : "justify-start"
+                  i % 2 === 0 ? "justify-end" : "justify-start"
                 )}
                 key={key}
               >
                 <Skeleton className="h-16 w-[70%] rounded-2xl" />
               </div>
             ))
-          ) : messages.length === 0 ? (
-            <div className="rounded-lg border border-dashed bg-muted/25 p-4 text-muted-foreground text-sm">
-              {isEn
-                ? "No messages yet. Start the conversation below."
-                : "Todav\u00eda no hay mensajes. Inicia la conversaci\u00f3n abajo."}
-            </div>
+          ) : displayMessages.length === 0 ? (
+            <ChatEmptyState
+              disabled={isSending}
+              isEn={isEn}
+              onSendPrompt={(prompt) => {
+                handleSend(prompt).catch(() => undefined);
+              }}
+              quickPrompts={quickPrompts}
+            />
           ) : (
-            messages.map((message) => (
-              <div
-                className={cn(
-                  "flex",
-                  message.role === "user" ? "justify-end" : "justify-start"
-                )}
-                key={message.id}
-              >
-                <div
-                  className={cn(
-                    "max-w-[92%] rounded-2xl border px-3 py-2",
-                    message.role === "user"
-                      ? "border-primary/30 bg-primary/10"
-                      : "border-border/60 bg-card"
-                  )}
-                >
-                  <div className="mb-1 flex items-center gap-2 text-[11px] text-muted-foreground uppercase tracking-wide">
-                    {message.role === "user"
-                      ? isEn
-                        ? "You"
-                        : "T\u00fa"
-                      : isEn
-                        ? "Agent"
-                        : "Agente"}
-                    {message.model_used ? (
-                      <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] normal-case tracking-normal">
-                        {message.model_used}
-                      </span>
-                    ) : null}
-                  </div>
-                  <p className="whitespace-pre-wrap text-[13px] leading-relaxed">
-                    {message.content}
-                  </p>
-
-                  {message.role === "assistant" &&
-                  message.tool_trace?.length ? (
-                    <Collapsible>
-                      <CollapsibleTrigger className="mt-2 inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-[11px] text-muted-foreground hover:text-foreground">
-                        {isEn ? "Tool trace" : "Traza de herramientas"}
-                      </CollapsibleTrigger>
-                      <CollapsibleContent>
-                        <div className="mt-2 space-y-1 rounded-lg border bg-muted/20 p-2">
-                          {message.tool_trace.map((tool) => (
-                            <div
-                              className="flex items-center justify-between gap-2 rounded-md bg-background/80 px-2 py-1"
-                              key={`${message.id}-${tool.tool ?? "tool"}-${tool.preview ?? ""}-${String(tool.ok)}`}
-                            >
-                              <span className="font-mono text-[11px]">
-                                {tool.tool || "tool"}
-                              </span>
-                              <span className="text-[11px] text-muted-foreground">
-                                {tool.preview || (tool.ok ? "ok" : "error")}
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-                      </CollapsibleContent>
-                    </Collapsible>
-                  ) : null}
-                </div>
-              </div>
+            displayMessages.map((msg) => (
+              <ChatMessageBubble
+                isEn={isEn}
+                isSending={isSending}
+                key={msg.id}
+                message={msg}
+                onCopy={(content) => {
+                  handleCopyMessage(content).catch(() => undefined);
+                }}
+                onEdit={(_, content) => {
+                  setDraft(content);
+                  setEditingSourceId(msg.id);
+                }}
+                onRetry={(id) => {
+                  handleRetryAssistant(id).catch(() => undefined);
+                }}
+                onSpeak={
+                  voice.isSupported
+                    ? (content) => voice.speak(content)
+                    : undefined
+                }
+              />
             ))
           )}
 
-          {sending ? (
-            <div className="flex justify-start">
-              <div className="max-w-[92%] space-y-2 rounded-2xl border border-border/60 bg-card px-3 py-2">
-                {streamingTools.length > 0 ? (
-                  <div className="space-y-1">
-                    {streamingTools.map((tool) => (
-                      <div
-                        className="flex items-center gap-2 rounded-md bg-muted/30 px-2 py-1 text-[11px]"
-                        key={`stream-${tool.name}-${tool.preview ?? ""}-${String(tool.ok)}`}
-                      >
-                        <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-primary" />
-                        <span className="font-mono">{tool.name}</span>
-                        {tool.preview ? (
-                          <span className="text-muted-foreground">
-                            {tool.ok ? tool.preview : `error: ${tool.preview}`}
-                          </span>
-                        ) : (
-                          <span className="text-muted-foreground">
-                            {isEn ? "running..." : "ejecutando..."}
-                          </span>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                ) : null}
-                {streamingText ? (
-                  <p className="whitespace-pre-wrap text-[13px] leading-relaxed">
-                    {streamingText}
+          {/* Streaming indicator */}
+          {isSending ? (
+            <div className="flex gap-3">
+              <div className="mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-[var(--sidebar-primary)] to-[var(--sidebar-primary)]/70 text-white">
+                <Icon
+                  className="h-3.5 w-3.5 animate-spin"
+                  icon={Loading03Icon}
+                />
+              </div>
+              <div className="min-w-0 flex-1 space-y-2 py-1">
+                {streamStatus ? (
+                  <p className="text-[12px] text-muted-foreground">
+                    {streamStatus}
                   </p>
-                ) : streamingTools.length === 0 ? (
+                ) : null}
+
+                {streamToolEvents.length > 0 ? (
+                  <ChatToolEventStrip events={streamToolEvents} isEn={isEn} />
+                ) : null}
+
+                {streamToolEvents.length === 0 && !streamStatus ? (
                   <p className="flex items-center gap-2 text-muted-foreground text-sm">
-                    <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-primary" />
-                    {isEn
-                      ? "Agent is thinking..."
-                      : "El agente est\u00e1 pensando..."}
+                    <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-[var(--sidebar-primary)]" />
+                    {isEn ? "Thinking..." : "Pensando..."}
                   </p>
                 ) : null}
               </div>
             </div>
           ) : null}
         </div>
+      </div>
 
-        <div className="flex flex-wrap items-center gap-3 rounded-xl border bg-muted/20 p-3 text-sm">
-          <label className="inline-flex items-center gap-2">
-            <input
-              checked={allowMutations}
-              onChange={(event) => {
-                const checked = event.target.checked;
-                setAllowMutations(checked);
-                if (!checked) {
-                  setConfirmWrite(false);
-                }
-              }}
-              type="checkbox"
-            />
-            <span>
-              {isEn ? "Enable write mode" : "Habilitar modo escritura"}
-            </span>
-          </label>
-          <label className="inline-flex items-center gap-2">
-            <input
-              checked={confirmWrite}
-              disabled={!allowMutations}
-              onChange={(event) => setConfirmWrite(event.target.checked)}
-              type="checkbox"
-            />
-            <span>
-              {isEn
-                ? "Confirm write actions"
-                : "Confirmar acciones de escritura"}
-            </span>
-          </label>
-        </div>
-
-        <div className="flex flex-wrap gap-2">
-          {quickPrompts.map((prompt) => (
-            <Button
-              className="h-8 rounded-full px-3 text-[12px]"
-              key={prompt}
-              onClick={() => {
-                sendMessage(prompt).catch(() => undefined);
-              }}
-              size="sm"
-              variant="outline"
-            >
-              {prompt}
-            </Button>
-          ))}
-        </div>
-
-        <div className="space-y-2">
-          <Textarea
-            maxLength={4000}
-            onChange={(event) => setDraft(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
-                event.preventDefault();
-                sendMessage().catch(() => undefined);
-              }
-            }}
-            placeholder={
-              isEn
-                ? "Ask the AI agent anything about your operations..."
-                : "Pregunta al agente IA sobre tus operaciones..."
-            }
-            rows={4}
-            value={draft}
-          />
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] text-muted-foreground">
-              {isEn
-                ? "Send with Cmd/Ctrl + Enter"
-                : "Enviar con Cmd/Ctrl + Enter"}
-            </span>
-            <Button
-              disabled={sending || !draft.trim()}
-              onClick={() => {
-                sendMessage().catch(() => undefined);
-              }}
-            >
-              {isEn ? "Send" : "Enviar"}
-            </Button>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
+      {/* Input bar */}
+      <ChatInputBar
+        attachments={attachmentHook.attachments}
+        attachmentsReady={attachmentHook.allReady}
+        draft={draft}
+        editingSourceId={editingSourceId}
+        isEmbedded={isEmbedded}
+        isEn={isEn}
+        isListening={voice.isListening}
+        isSending={isSending}
+        onAddFiles={(files) => attachmentHook.addFiles(files)}
+        onCancelEdit={() => setEditingSourceId(null)}
+        onDraftChange={setDraft}
+        onRemoveAttachment={attachmentHook.removeAttachment}
+        onSend={(value) => {
+          handleSend(value).catch(() => undefined);
+        }}
+        onStop={() => stop()}
+        onToggleVoice={voice.toggleVoiceMode}
+        voiceModeActive={voice.voiceModeActive}
+        voiceSupported={voice.isSupported}
+        voiceTranscript={voice.transcript}
+      />
+    </div>
   );
 }

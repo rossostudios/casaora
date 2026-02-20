@@ -29,9 +29,7 @@ export function fetchListingsPaginated(
   if (params.q) sp.set("q", params.q);
   if (params.status) sp.set("status", params.status);
 
-  return authedFetch<PaginatedListingsResponse>(
-    `/listings?${sp.toString()}`
-  );
+  return authedFetch<PaginatedListingsResponse>(`/listings?${sp.toString()}`);
 }
 
 export type SlugAvailableResponse = {
@@ -69,9 +67,7 @@ export type ReadinessResponse = {
 export function fetchListingReadiness(
   listingId: string
 ): Promise<ReadinessResponse> {
-  return authedFetch<ReadinessResponse>(
-    `/listings/${listingId}/readiness`
-  );
+  return authedFetch<ReadinessResponse>(`/listings/${listingId}/readiness`);
 }
 
 export { authedFetch };

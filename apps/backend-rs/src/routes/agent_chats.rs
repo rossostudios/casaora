@@ -44,15 +44,16 @@ struct CreateAgentChatInput {
     org_id: String,
     agent_slug: String,
     title: Option<String>,
+    preferred_model: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
 struct SendAgentMessageInput {
     message: String,
     #[serde(default)]
-    allow_mutations: bool,
+    allow_mutations: Option<bool>,
     #[serde(default)]
-    confirm_write: bool,
+    confirm_write: Option<bool>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -60,9 +61,15 @@ struct AgentChatPath {
     chat_id: String,
 }
 
+#[derive(Debug, Clone, Deserialize)]
+struct UpdateChatPreferencesInput {
+    preferred_model: Option<String>,
+}
+
 pub fn router() -> axum::Router<AppState> {
     axum::Router::new()
         .route("/agent/agents", axum::routing::get(get_agent_definitions))
+        .route("/agent/models", axum::routing::get(get_agent_models))
         .route(
             "/agent/chats",
             axum::routing::get(get_agent_chats).post(create_agent_chat),
@@ -70,6 +77,10 @@ pub fn router() -> axum::Router<AppState> {
         .route(
             "/agent/chats/{chat_id}",
             axum::routing::get(get_agent_chat).delete(delete_agent_chat),
+        )
+        .route(
+            "/agent/chats/{chat_id}/preferences",
+            axum::routing::patch(update_chat_preferences),
         )
         .route(
             "/agent/chats/{chat_id}/messages",
@@ -123,6 +134,21 @@ async fn get_agent_chats(
     })))
 }
 
+async fn get_agent_models(
+    State(state): State<AppState>,
+    Query(query): Query<AgentOrgQuery>,
+    headers: HeaderMap,
+) -> AppResult<Json<Value>> {
+    let user_id = require_user_id(&state, &headers).await?;
+    assert_org_member(&state, &user_id, &query.org_id).await?;
+
+    let data = agent_chats::list_models(&state);
+    Ok(Json(serde_json::json!({
+        "organization_id": query.org_id,
+        "data": data,
+    })))
+}
+
 async fn create_agent_chat(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -137,6 +163,7 @@ async fn create_agent_chat(
         &user_id,
         &payload.agent_slug,
         payload.title.as_deref(),
+        payload.preferred_model.as_deref(),
     )
     .await?;
 
@@ -152,6 +179,7 @@ async fn create_agent_chat(
         Some(serde_json::json!({
             "agent_slug": payload.agent_slug,
             "title": value_str(&chat, "title"),
+            "preferred_model": value_str(&chat, "preferred_model"),
         })),
     )
     .await;
@@ -197,6 +225,32 @@ async fn get_agent_chat_messages(
     })))
 }
 
+async fn update_chat_preferences(
+    State(state): State<AppState>,
+    Path(path): Path<AgentChatPath>,
+    Query(query): Query<AgentOrgQuery>,
+    headers: HeaderMap,
+    Json(payload): Json<UpdateChatPreferencesInput>,
+) -> AppResult<Json<Value>> {
+    let user_id = require_user_id(&state, &headers).await?;
+    assert_org_member(&state, &user_id, &query.org_id).await?;
+
+    let chat = agent_chats::update_chat_preferences(
+        &state,
+        &path.chat_id,
+        &query.org_id,
+        &user_id,
+        payload.preferred_model.as_deref(),
+    )
+    .await?;
+
+    Ok(Json(serde_json::json!({
+        "organization_id": query.org_id,
+        "chat_id": path.chat_id,
+        "chat": chat,
+    })))
+}
+
 async fn post_agent_chat_message(
     State(state): State<AppState>,
     Path(path): Path<AgentChatPath>,
@@ -215,6 +269,9 @@ async fn post_agent_chat_message(
         .unwrap_or("viewer")
         .to_string();
 
+    let allow_mutations = payload.allow_mutations.unwrap_or(true);
+    let confirm_write = payload.confirm_write.unwrap_or(true);
+
     let result = agent_chats::send_chat_message(
         &state,
         &path.chat_id,
@@ -222,12 +279,12 @@ async fn post_agent_chat_message(
         &user_id,
         &role,
         &payload.message,
-        payload.allow_mutations,
-        payload.confirm_write,
+        allow_mutations,
+        confirm_write,
     )
     .await?;
 
-    if payload.allow_mutations {
+    if allow_mutations {
         write_audit_log(
             state.db_pool.as_ref(),
             Some(&query.org_id),
@@ -238,7 +295,7 @@ async fn post_agent_chat_message(
             None,
             Some(serde_json::json!({
                 "role": role,
-                "confirm_write": payload.confirm_write,
+                "confirm_write": confirm_write,
                 "tool_trace_count": tool_trace_count(&result),
                 "mutations_enabled": result
                     .get("mutations_enabled")
@@ -289,8 +346,8 @@ async fn post_agent_chat_message_stream(
     let user_id_clone = user_id.clone();
     let role_clone = role.clone();
     let message = payload.message.clone();
-    let allow_mutations = payload.allow_mutations;
-    let confirm_write = payload.confirm_write;
+    let allow_mutations = payload.allow_mutations.unwrap_or(true);
+    let confirm_write = payload.confirm_write.unwrap_or(true);
 
     tokio::spawn(async move {
         let result = agent_chats::send_chat_message_streaming(

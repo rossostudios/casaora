@@ -9,7 +9,12 @@ import { Spinner } from "@/components/ui/spinner";
 import { cn } from "@/lib/utils";
 
 import { OptionalStepCard } from "./setup-components";
-import type { RentalMode, SelectOption, Step4View, SubmittingState } from "./setup-types";
+import type {
+  RentalMode,
+  SelectOption,
+  Step4View,
+  SubmittingState,
+} from "./setup-types";
 
 export function SetupStepConnect({
   isEn,
@@ -63,7 +68,7 @@ export function SetupStepConnect({
             ? isEn
               ? "Create your first lease"
               : "Crea tu primer contrato"
-          : isEn
+            : isEn
               ? "Connect a channel"
               : "Conecta un canal"
       }
@@ -71,26 +76,26 @@ export function SetupStepConnect({
       {rentalMode === "both" ? (
         <Step4ViewToggle
           isEn={isEn}
-          step4View={step4View}
           onStep4ViewChange={onStep4ViewChange}
+          step4View={step4View}
         />
       ) : null}
       {showChannelForm ? (
         <ChannelForm
           isEn={isEn}
-          unitOptions={unitOptions}
-          submitting={submitting}
-          onSubmit={onCreateIntegration}
           onSkip={onSkip}
+          onSubmit={onCreateIntegration}
+          submitting={submitting}
+          unitOptions={unitOptions}
         />
       ) : (
         <LeaseForm
           isEn={isEn}
-          unitOptions={unitOptions}
-          submitting={submitting}
-          onSubmit={onCreateLease}
-          onSkip={onSkip}
           onImportLeaseClick={onImportLeaseClick}
+          onSkip={onSkip}
+          onSubmit={onCreateLease}
+          submitting={submitting}
+          unitOptions={unitOptions}
         />
       )}
     </OptionalStepCard>
@@ -164,9 +169,7 @@ function ChannelForm({
           >
             <option value="airbnb">Airbnb</option>
             <option value="bookingcom">Booking.com</option>
-            <option value="direct">
-              {isEn ? "Direct" : "Directo"}
-            </option>
+            <option value="direct">{isEn ? "Direct" : "Directo"}</option>
             <option value="vrbo">Vrbo</option>
             <option value="other">{isEn ? "Other" : "Otro"}</option>
           </select>
@@ -201,9 +204,7 @@ function ChannelForm({
           <Input
             name="public_name"
             placeholder={
-              isEn
-                ? "Airbnb - Apartment A1"
-                : "Airbnb - Departamento A1"
+              isEn ? "Airbnb - Apartment A1" : "Airbnb - Departamento A1"
             }
             required
           />
@@ -227,10 +228,7 @@ function ChannelForm({
           >
             {submitting === "integration" ? (
               <>
-                <Spinner
-                  className="text-primary-foreground"
-                  size="sm"
-                />
+                <Spinner className="text-primary-foreground" size="sm" />
                 {isEn ? "Creating..." : "Creando..."}
               </>
             ) : isEn ? (
@@ -239,12 +237,7 @@ function ChannelForm({
               "Crear canal"
             )}
           </Button>
-          <Button
-            onClick={onSkip}
-            size="sm"
-            type="button"
-            variant="ghost"
-          >
+          <Button onClick={onSkip} size="sm" type="button" variant="ghost">
             {isEn ? "Skip" : "Omitir"}
           </Button>
         </div>
@@ -290,15 +283,9 @@ function LeaseForm({
         </label>
         <label className="grid gap-1">
           <span className="font-medium text-muted-foreground text-xs">
-            {isEn
-              ? "Tenant full name"
-              : "Nombre completo del inquilino"}
+            {isEn ? "Tenant full name" : "Nombre completo del inquilino"}
           </span>
-          <Input
-            name="tenant_full_name"
-            placeholder="Juan Pérez"
-            required
-          />
+          <Input name="tenant_full_name" placeholder="Juan Pérez" required />
         </label>
         <div className="grid gap-3 sm:grid-cols-2">
           <label className="grid gap-1">
@@ -315,10 +302,7 @@ function LeaseForm({
             <span className="font-medium text-muted-foreground text-xs">
               {isEn ? "Phone (optional)" : "Teléfono (opcional)"}
             </span>
-            <Input
-              name="tenant_phone_e164"
-              placeholder="+595 981 123456"
-            />
+            <Input name="tenant_phone_e164" placeholder="+595 981 123456" />
           </label>
         </div>
         <div className="grid gap-3 sm:grid-cols-2">
@@ -376,10 +360,7 @@ function LeaseForm({
           >
             {submitting === "lease" ? (
               <>
-                <Spinner
-                  className="text-primary-foreground"
-                  size="sm"
-                />
+                <Spinner className="text-primary-foreground" size="sm" />
                 {isEn ? "Creating..." : "Creando..."}
               </>
             ) : isEn ? (
@@ -388,12 +369,7 @@ function LeaseForm({
               "Crear contrato"
             )}
           </Button>
-          <Button
-            onClick={onSkip}
-            size="sm"
-            type="button"
-            variant="ghost"
-          >
+          <Button onClick={onSkip} size="sm" type="button" variant="ghost">
             {isEn ? "Skip" : "Omitir"}
           </Button>
         </div>
@@ -408,24 +384,18 @@ function LeaseForm({
             onClick={onImportLeaseClick}
             type="button"
           >
-            {isEn
-              ? "Import leases from CSV"
-              : "Importar contratos desde CSV"}
+            {isEn ? "Import leases from CSV" : "Importar contratos desde CSV"}
           </button>
         </div>
         <div className="flex flex-wrap gap-2">
           <Link
-            className={cn(
-              buttonVariants({ variant: "outline", size: "sm" })
-            )}
+            className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
             href="/module/listings"
           >
             {isEn ? "Publish listing" : "Publicar anuncio"}
           </Link>
           <Link
-            className={cn(
-              buttonVariants({ variant: "outline", size: "sm" })
-            )}
+            className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
             href="/module/pricing"
           >
             {isEn ? "Set up pricing" : "Configurar precios"}

@@ -1,16 +1,6 @@
 "use client";
 
 import { useMemo } from "react";
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Cell,
-  Pie,
-  PieChart,
-  XAxis,
-  YAxis,
-} from "@/lib/recharts";
 import { Badge } from "@/components/ui/badge";
 import {
   Card,
@@ -28,6 +18,16 @@ import {
 import { useMounted } from "@/lib/hooks/use-mounted";
 import type { Locale } from "@/lib/i18n";
 import { useActiveLocale } from "@/lib/i18n/client";
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  Pie,
+  PieChart,
+  XAxis,
+  YAxis,
+} from "@/lib/recharts";
 
 type AgentPerformanceData = {
   total_conversations: number;
@@ -152,7 +152,9 @@ export function AgentPerformance({
             </p>
             <ChartContainer className="h-40 w-full" config={modelConfig}>
               <PieChart>
-                <ChartTooltip content={(props) => <ChartTooltipContent {...props} />} />
+                <ChartTooltip
+                  content={(props) => <ChartTooltipContent {...props} />}
+                />
                 <Pie
                   data={modelData}
                   dataKey="count"
@@ -192,7 +194,9 @@ export function AgentPerformance({
                   type="category"
                   width={90}
                 />
-                <ChartTooltip content={(props) => <ChartTooltipContent {...props} />} />
+                <ChartTooltip
+                  content={(props) => <ChartTooltipContent {...props} />}
+                />
                 <Bar dataKey="message_count" radius={[0, 6, 6, 0]}>
                   {agentData.map((entry) => (
                     <Cell fill={entry.fill} key={entry.agent_name} />

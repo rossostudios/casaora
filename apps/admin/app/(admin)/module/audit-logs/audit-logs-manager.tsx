@@ -114,7 +114,9 @@ export function AuditLogsManager({
           onChange={(e) => setActionFilter(e.target.value)}
           value={actionFilter}
         >
-          <option value="">{isEn ? "All actions" : "Todas las acciones"}</option>
+          <option value="">
+            {isEn ? "All actions" : "Todas las acciones"}
+          </option>
           {uniqueActions.map((a) => (
             <option key={a} value={a}>
               {a}
@@ -169,7 +171,9 @@ export function AuditLogsManager({
                   className="px-3 py-8 text-center text-muted-foreground"
                   colSpan={5}
                 >
-                  {isEn ? "No audit logs found." : "No se encontraron registros."}
+                  {isEn
+                    ? "No audit logs found."
+                    : "No se encontraron registros."}
                 </td>
               </tr>
             ) : (
@@ -189,12 +193,10 @@ export function AuditLogsManager({
                     />
                   </td>
                   <td className="px-3 py-2 font-medium">{log.entity_name}</td>
-                  <td className="px-3 py-2 font-mono text-xs text-muted-foreground">
-                    {log.entity_id
-                      ? `${log.entity_id.slice(0, 8)}...`
-                      : "-"}
+                  <td className="px-3 py-2 font-mono text-muted-foreground text-xs">
+                    {log.entity_id ? `${log.entity_id.slice(0, 8)}...` : "-"}
                   </td>
-                  <td className="px-3 py-2 font-mono text-xs text-muted-foreground">
+                  <td className="px-3 py-2 font-mono text-muted-foreground text-xs">
                     {log.actor_user_id
                       ? `${log.actor_user_id.slice(0, 8)}...`
                       : "-"}

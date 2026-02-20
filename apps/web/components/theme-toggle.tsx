@@ -4,7 +4,9 @@ import { Moon, Sun } from "lucide-react";
 import { useTheme } from "next-themes";
 import { useSyncExternalStore } from "react";
 
-const subscribe = () => () => {};
+const subscribe = () => () => {
+  /* no-op */
+};
 const getSnapshot = () => true;
 const getServerSnapshot = () => false;
 

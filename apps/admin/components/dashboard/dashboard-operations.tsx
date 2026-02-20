@@ -37,9 +37,7 @@ export function DashboardOperations({
           value={String(propertiesCount)}
         />
         <StatCard
-          helper={
-            isEn ? "Check-ins next 7 days" : "Check-ins próximos 7 días"
-          }
+          helper={isEn ? "Check-ins next 7 days" : "Check-ins próximos 7 días"}
           icon={CalendarCheckIn01Icon}
           label={isEn ? "Upcoming check-ins" : "Check-ins próximos"}
           value={String(operationsKpis.upcomingCheckIns)}

@@ -1,10 +1,9 @@
 "use client";
 
-import { Bar, BarChart, YAxis } from "@/lib/recharts";
-
 import { Card, CardContent } from "@/components/ui/card";
 import { type ChartConfig, ChartContainer } from "@/components/ui/chart";
 import { formatCompactCurrency, formatCurrency } from "@/lib/format";
+import { Bar, BarChart, YAxis } from "@/lib/recharts";
 import { cn } from "@/lib/utils";
 import type { PropertyOverview as PropertyOverviewData } from "../types";
 
@@ -25,8 +24,10 @@ function occupancyColor(rate: number | null) {
 
 function occupancyBorderColor(rate: number | null) {
   if (rate === null) return "border-border/60";
-  if (rate >= 80) return "border-[var(--status-success-fg)]/30 ring-1 ring-[var(--status-success-fg)]/20";
-  if (rate >= 50) return "border-[var(--status-warning-fg)]/30 ring-1 ring-[var(--status-warning-fg)]/20";
+  if (rate >= 80)
+    return "border-[var(--status-success-fg)]/30 ring-1 ring-[var(--status-success-fg)]/20";
+  if (rate >= 50)
+    return "border-[var(--status-warning-fg)]/30 ring-1 ring-[var(--status-warning-fg)]/20";
   return "border-[var(--status-danger-fg)]/30 ring-1 ring-[var(--status-danger-fg)]/20";
 }
 
@@ -57,9 +58,9 @@ function MiniBar({ a, b, colorA, colorB }: MiniBarProps) {
   const config: ChartConfig = isEmpty
     ? EMPTY_CONFIG
     : {
-      a: { label: "A", color: colorA },
-      b: { label: "B", color: colorB },
-    };
+        a: { label: "A", color: colorA },
+        b: { label: "B", color: colorB },
+      };
 
   const data = isEmpty ? [{ a: 1, b: 0 }] : [{ a, b }];
 
@@ -75,16 +76,16 @@ function MiniBar({ a, b, colorA, colorB }: MiniBarProps) {
         <Bar
           dataKey="a"
           fill="var(--color-a)"
+          isAnimationActive={false}
           radius={[4, 0, 0, 4]}
           stackId="stack"
-          isAnimationActive={false}
         />
         <Bar
           dataKey="b"
           fill="var(--color-b)"
+          isAnimationActive={false}
           radius={[0, 4, 4, 0]}
           stackId="stack"
-          isAnimationActive={false}
         />
       </BarChart>
     </ChartContainer>
@@ -143,12 +144,12 @@ export function PropertyOverviewKpiCards({
       {/* Occupancy */}
       <Card
         className={cn(
-          "bg-card/95 backdrop-blur-[2px] transition-all duration-300 hover:shadow-[var(--shadow-floating)] hover:-translate-y-[2px]",
+          "bg-card/95 backdrop-blur-[2px] transition-all duration-300 hover:-translate-y-[2px] hover:shadow-[var(--shadow-floating)]",
           occupancyBorderColor(oRate)
         )}
       >
         <CardContent className="p-5">
-          <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
+          <p className="font-mono text-[10px] text-muted-foreground uppercase tracking-widest">
             {isEn ? "OCCUPANCY" : "OCUPACIÓN"}
           </p>
           <p
@@ -168,7 +169,7 @@ export function PropertyOverviewKpiCards({
             />
           </div>
           {overview.vacantUnitCount > 0 ? (
-            <p className="mt-2 text-xs text-muted-foreground">
+            <p className="mt-2 text-muted-foreground text-xs">
               {overview.vacantUnitCount} {isEn ? "vacant" : "vacantes"} &middot;
               ~{formatCompactCurrency(overview.vacancyCostPyg, "PYG", locale)}
               {isEn ? "/mo lost" : "/mes perdido"}
@@ -178,9 +179,9 @@ export function PropertyOverviewKpiCards({
       </Card>
 
       {/* Projected Rent */}
-      <Card className="border-border/60 bg-card/95 backdrop-blur-[2px] transition-all duration-300 hover:shadow-[var(--shadow-floating)] hover:-translate-y-[2px] hover:border-border/80">
+      <Card className="border-border/60 bg-card/95 backdrop-blur-[2px] transition-all duration-300 hover:-translate-y-[2px] hover:border-border/80 hover:shadow-[var(--shadow-floating)]">
         <CardContent className="p-5">
-          <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
+          <p className="font-mono text-[10px] text-muted-foreground uppercase tracking-widest">
             {isEn ? "PROJECTED RENT" : "RENTA PROYECTADA"}
           </p>
           <p className="mt-1 font-bold text-3xl tabular-nums">
@@ -197,7 +198,7 @@ export function PropertyOverviewKpiCards({
           {overview.collectionRate !== null ? (
             <p
               className={cn(
-                "mt-2 text-xs font-medium",
+                "mt-2 font-medium text-xs",
                 collectionRateColor(overview.collectionRate)
               )}
             >
@@ -208,9 +209,9 @@ export function PropertyOverviewKpiCards({
       </Card>
 
       {/* Active Leases */}
-      <Card className="border-border/60 bg-card/95 backdrop-blur-[2px] transition-all duration-300 hover:shadow-[var(--shadow-floating)] hover:-translate-y-[2px] hover:border-border/80">
+      <Card className="border-border/60 bg-card/95 backdrop-blur-[2px] transition-all duration-300 hover:-translate-y-[2px] hover:border-border/80 hover:shadow-[var(--shadow-floating)]">
         <CardContent className="p-5">
-          <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
+          <p className="font-mono text-[10px] text-muted-foreground uppercase tracking-widest">
             {isEn ? "ACTIVE LEASES" : "CONTRATOS ACTIVOS"}
           </p>
           <p className="mt-1 font-bold text-3xl tabular-nums">
@@ -225,7 +226,7 @@ export function PropertyOverviewKpiCards({
             />
           </div>
           {overview.activeReservationCount > 0 ? (
-            <p className="mt-2 text-xs text-muted-foreground">
+            <p className="mt-2 text-muted-foreground text-xs">
               +{overview.activeReservationCount}{" "}
               {isEn ? "reservations" : "reservas"}
             </p>
@@ -236,12 +237,12 @@ export function PropertyOverviewKpiCards({
       {/* Open Tasks */}
       <Card
         className={cn(
-          "bg-card/95 backdrop-blur-[2px] transition-all duration-300 hover:shadow-[var(--shadow-floating)] hover:-translate-y-[2px]",
+          "bg-card/95 backdrop-blur-[2px] transition-all duration-300 hover:-translate-y-[2px] hover:shadow-[var(--shadow-floating)]",
           taskBorder
         )}
       >
         <CardContent className="p-5">
-          <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
+          <p className="font-mono text-[10px] text-muted-foreground uppercase tracking-widest">
             {isEn ? "OPEN TASKS" : "TAREAS ABIERTAS"}
           </p>
           <p className={cn("mt-1 font-bold text-3xl tabular-nums", taskColor)}>
@@ -256,7 +257,7 @@ export function PropertyOverviewKpiCards({
             />
           </div>
           {overview.urgentTaskCount > 0 ? (
-            <p className="mt-2 text-xs font-medium text-[var(--status-danger-fg)]">
+            <p className="mt-2 font-medium text-[var(--status-danger-fg)] text-xs">
               {overview.urgentTaskCount} {isEn ? "urgent" : "urgentes"}
             </p>
           ) : null}
@@ -266,12 +267,12 @@ export function PropertyOverviewKpiCards({
       {/* Open Collections */}
       <Card
         className={cn(
-          "bg-card/95 backdrop-blur-[2px] transition-all duration-300 hover:shadow-[var(--shadow-floating)] hover:-translate-y-[2px]",
+          "bg-card/95 backdrop-blur-[2px] transition-all duration-300 hover:-translate-y-[2px] hover:shadow-[var(--shadow-floating)]",
           collectionBorder
         )}
       >
         <CardContent className="p-5">
-          <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
+          <p className="font-mono text-[10px] text-muted-foreground uppercase tracking-widest">
             {isEn ? "OPEN COLLECTIONS" : "COBROS ABIERTOS"}
           </p>
           <p
@@ -291,9 +292,8 @@ export function PropertyOverviewKpiCards({
             />
           </div>
           {overview.overdueCollectionCount > 0 ? (
-            <p className="mt-2 text-xs font-medium text-[var(--status-danger-fg)]">
-              {overview.overdueCollectionCount}{" "}
-              {isEn ? "overdue" : "vencidos"}
+            <p className="mt-2 font-medium text-[var(--status-danger-fg)] text-xs">
+              {overview.overdueCollectionCount} {isEn ? "overdue" : "vencidos"}
             </p>
           ) : null}
         </CardContent>

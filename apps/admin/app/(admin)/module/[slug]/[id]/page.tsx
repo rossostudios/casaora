@@ -1,6 +1,6 @@
 import { ArrowLeft01Icon } from "@hugeicons/core-free-icons";
 import Link from "next/link";
-import { notFound, redirect, unstable_rethrow } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 
 import { PropertyDashboard } from "@/components/module-record/property-dashboard";
 import { RecordDetailsCard } from "@/components/module-record/record-details-card";
@@ -21,13 +21,13 @@ import {
 } from "@/components/ui/card";
 import { CopyButton } from "@/components/ui/copy-button";
 import { Icon } from "@/components/ui/icon";
-import { errorMessage, isOrgMembershipError } from "@/lib/errors";
-import { loadRecordDetailData } from "@/lib/features/module-record/fetch-detail";
+import { errorMessage } from "@/lib/errors";
 import {
   loadPropertyRelationSnapshot,
   toStatementLineItems,
   toStatementReconciliation,
 } from "@/lib/features/module-record/data";
+import { loadRecordDetailData } from "@/lib/features/module-record/fetch-detail";
 import { buildPropertyOverview } from "@/lib/features/module-record/property-overview";
 import { buildRelatedLinks } from "@/lib/features/module-record/related-links";
 import type {
@@ -42,7 +42,6 @@ import {
 import {
   asString,
   getFirstValue,
-  recordTitle,
   sortKeys,
 } from "@/lib/features/module-record/utils";
 import { getActiveLocale } from "@/lib/i18n/server";
@@ -121,7 +120,9 @@ export default async function ModuleRecordPage({ params }: RecordPageProps) {
         <CardContent className="space-y-2 text-muted-foreground text-sm">
           <p>
             {isEn ? "Backend base URL" : "URL base del backend"}:{" "}
-            <code className="rounded bg-muted px-1 py-0.5">{result.baseUrl}</code>
+            <code className="rounded bg-muted px-1 py-0.5">
+              {result.baseUrl}
+            </code>
           </p>
           {result.requestStatus ? (
             <p className="break-words">
@@ -131,9 +132,7 @@ export default async function ModuleRecordPage({ params }: RecordPageProps) {
               </code>
             </p>
           ) : null}
-          <p className="break-words">
-            {result.message}
-          </p>
+          <p className="break-words">{result.message}</p>
           <p>
             {isEn
               ? "Make sure the backend is running (`cd apps/backend-rs && cargo run`)"
@@ -162,7 +161,7 @@ export default async function ModuleRecordPage({ params }: RecordPageProps) {
   const href = `/module/${moduleDef.slug}/${recordId}`;
   const ownerUserId =
     moduleDef.slug === "organizations" &&
-      typeof record.owner_user_id === "string"
+    typeof record.owner_user_id === "string"
       ? record.owner_user_id
       : null;
 
@@ -272,11 +271,11 @@ export default async function ModuleRecordPage({ params }: RecordPageProps) {
   const propertyLocationLabel =
     moduleDef.slug === "properties"
       ? [
-        getFirstValue(record, ["district", "neighborhood", "city"]),
-        getFirstValue(record, ["address", "street_address", "location"]),
-      ]
-        .filter((value): value is string => Boolean(value))
-        .join(" · ")
+          getFirstValue(record, ["district", "neighborhood", "city"]),
+          getFirstValue(record, ["address", "street_address", "location"]),
+        ]
+          .filter((value): value is string => Boolean(value))
+          .join(" · ")
       : "";
   const propertyCodeLabel =
     moduleDef.slug === "properties"

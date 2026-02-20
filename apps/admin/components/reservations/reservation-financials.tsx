@@ -2,12 +2,7 @@
 
 import { Money01Icon } from "@hugeicons/core-free-icons";
 
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Icon } from "@/components/ui/icon";
 import { StatCard } from "@/components/ui/stat-card";
 import type { ReservationDetail } from "@/lib/features/reservations/types";
@@ -49,8 +44,12 @@ export function FinancialKpiRow({
       <StatCard
         helper={
           balance > 0
-            ? (isEn ? "Balance due" : "Saldo pendiente")
-            : (isEn ? "Fully paid" : "Pagado completo")
+            ? isEn
+              ? "Balance due"
+              : "Saldo pendiente"
+            : isEn
+              ? "Fully paid"
+              : "Pagado completo"
         }
         icon={Money01Icon}
         label={isEn ? "Balance" : "Saldo"}
@@ -92,7 +91,7 @@ function Row({
   danger?: boolean;
 }) {
   return (
-    <tr className="border-b border-border/30 last:border-b-0">
+    <tr className="border-border/30 border-b last:border-b-0">
       <td
         className={cn(
           "py-2 pr-4 text-sm",
@@ -104,10 +103,10 @@ function Row({
       </td>
       <td
         className={cn(
-          "py-2 text-right tabular-nums text-sm",
+          "py-2 text-right text-sm tabular-nums",
           negative && "text-muted-foreground",
           bold && "font-semibold",
-          danger && "text-destructive font-medium"
+          danger && "font-medium text-destructive"
         )}
       >
         {negative ? `\u2212${amount}` : amount}
@@ -135,7 +134,11 @@ export function FinancialBreakdownCard({
     <Card>
       <CardHeader className="pb-2">
         <CardTitle className="flex items-center gap-2 text-base">
-          <Icon className="text-muted-foreground" icon={Money01Icon} size={16} />
+          <Icon
+            className="text-muted-foreground"
+            icon={Money01Icon}
+            size={16}
+          />
           {isEn ? "Financial Breakdown" : "Desglose financiero"}
         </CardTitle>
       </CardHeader>
@@ -150,10 +153,7 @@ export function FinancialBreakdownCard({
               amount={fmt(r.cleaning_fee)}
               label={isEn ? "Cleaning fee" : "Limpieza"}
             />
-            <Row
-              amount={fmt(r.tax_amount)}
-              label={isEn ? "Tax" : "Impuesto"}
-            />
+            <Row amount={fmt(r.tax_amount)} label={isEn ? "Tax" : "Impuesto"} />
             <Row
               amount={fmt(r.extra_fees)}
               label={isEn ? "Extra fees" : "Tarifas extra"}
@@ -174,12 +174,12 @@ export function FinancialBreakdownCard({
 
             <tr>
               <td
-                className="border-t border-border pt-2 pr-4 font-semibold text-sm"
+                className="border-border border-t pt-2 pr-4 font-semibold text-sm"
                 colSpan={1}
               >
                 Subtotal
               </td>
-              <td className="border-t border-border pt-2 text-right font-semibold tabular-nums text-sm">
+              <td className="border-border border-t pt-2 text-right font-semibold text-sm tabular-nums">
                 {fmt(subtotal)}
               </td>
             </tr>
@@ -200,12 +200,12 @@ export function FinancialBreakdownCard({
 
             <tr>
               <td
-                className="border-t-2 border-border pt-2 pr-4 font-bold text-sm"
+                className="border-border border-t-2 pt-2 pr-4 font-bold text-sm"
                 colSpan={1}
               >
                 {isEn ? "Owner payout" : "Pago al propietario"}
               </td>
-              <td className="border-t-2 border-border pt-2 text-right font-bold tabular-nums text-sm">
+              <td className="border-border border-t-2 pt-2 text-right font-bold text-sm tabular-nums">
                 {fmt(r.owner_payout_estimate)}
               </td>
             </tr>

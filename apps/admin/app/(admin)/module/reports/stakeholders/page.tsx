@@ -1,6 +1,6 @@
 import { ArrowLeft01Icon } from "@hugeicons/core-free-icons";
+import dynamic from "next/dynamic";
 import Link from "next/link";
-
 import { OrgAccessChanged } from "@/components/shell/org-access-changed";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
@@ -12,13 +12,16 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Icon } from "@/components/ui/icon";
-import { fetchJson, fetchList, type KpiDashboard, type OperationsSummary } from "@/lib/api";
+import {
+  fetchJson,
+  fetchList,
+  type KpiDashboard,
+  type OperationsSummary,
+} from "@/lib/api";
 import { errorMessage, isOrgMembershipError } from "@/lib/errors";
 import { getActiveLocale } from "@/lib/i18n/server";
 import { getActiveOrgId } from "@/lib/org";
 import { cn } from "@/lib/utils";
-
-import dynamic from "next/dynamic";
 
 const StakeholderReport = dynamic(() =>
   import("./stakeholder-report").then((m) => m.StakeholderReport)
@@ -69,7 +72,9 @@ function asString(value: unknown): string {
   return typeof value === "string" ? value : value ? String(value) : "";
 }
 
-export default async function StakeholderReportPage({ searchParams }: PageProps) {
+export default async function StakeholderReportPage({
+  searchParams,
+}: PageProps) {
   const locale = await getActiveLocale();
   const isEn = locale === "en-US";
   const orgId = await getActiveOrgId();
@@ -151,7 +156,12 @@ export default async function StakeholderReportPage({ searchParams }: PageProps)
       fetchJson<KpiDashboard>("/reports/kpi-dashboard", queryBase),
     ]);
 
-  const settledResults = [ownerResult, financeResult, operationsResult, kpiResult];
+  const settledResults = [
+    ownerResult,
+    financeResult,
+    operationsResult,
+    kpiResult,
+  ];
   const membershipError = settledResults.some(
     (result) =>
       result.status === "rejected" &&
@@ -262,9 +272,7 @@ export default async function StakeholderReportPage({ searchParams }: PageProps)
       <Card>
         <CardHeader className="space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <Badge variant="outline">
-              {isEn ? "Reports" : "Reportes"}
-            </Badge>
+            <Badge variant="outline">{isEn ? "Reports" : "Reportes"}</Badge>
             <Link
               className={cn(buttonVariants({ variant: "ghost", size: "sm" }))}
               href="/module/reports"

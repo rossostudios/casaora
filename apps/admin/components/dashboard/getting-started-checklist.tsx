@@ -7,7 +7,7 @@ import {
   CircleIcon,
 } from "@hugeicons/core-free-icons";
 import Link from "next/link";
-import { useCallback, useSyncExternalStore, useState } from "react";
+import { useCallback, useState, useSyncExternalStore } from "react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -38,7 +38,8 @@ export function GettingStartedChecklist({
 
   const doneCount = items.filter((i) => i.isDone).length;
   const totalCount = items.length;
-  const progressPercent = totalCount > 0 ? Math.round((doneCount / totalCount) * 100) : 0;
+  const progressPercent =
+    totalCount > 0 ? Math.round((doneCount / totalCount) * 100) : 0;
   const allDone = doneCount === totalCount;
 
   const emptySubscribe = useCallback(() => () => {}, []);
@@ -57,7 +58,11 @@ export function GettingStartedChecklist({
     return false;
   }, [doneCount]);
   const getServerDismissed = useCallback(() => true, []);
-  const dismissed = useSyncExternalStore(emptySubscribe, getDismissedSnapshot, getServerDismissed);
+  const dismissed = useSyncExternalStore(
+    emptySubscribe,
+    getDismissedSnapshot,
+    getServerDismissed
+  );
   const [, forceUpdate] = useState(0);
 
   const onDismiss = () => {
@@ -103,7 +108,7 @@ export function GettingStartedChecklist({
             indicatorClassName={allDone ? "bg-primary" : undefined}
             value={progressPercent}
           />
-          <span className="shrink-0 text-xs font-medium text-muted-foreground tabular-nums">
+          <span className="shrink-0 font-medium text-muted-foreground text-xs tabular-nums">
             {doneCount}/{totalCount}
           </span>
         </div>
@@ -114,9 +119,7 @@ export function GettingStartedChecklist({
             <div
               className={cn(
                 "flex items-center gap-3 rounded-xl px-3 py-2.5 transition-colors",
-                item.isDone
-                  ? "opacity-60"
-                  : "bg-muted/30 hover:bg-muted/50"
+                item.isDone ? "opacity-60" : "bg-muted/30 hover:bg-muted/50"
               )}
               key={item.id}
             >
@@ -138,15 +141,15 @@ export function GettingStartedChecklist({
               >
                 {isEn ? item.labelEn : item.labelEs}
               </span>
-              {!item.isDone ? (
+              {item.isDone ? null : (
                 <Link
-                  className="inline-flex items-center gap-1 text-xs font-medium text-foreground hover:underline"
+                  className="inline-flex items-center gap-1 font-medium text-foreground text-xs hover:underline"
                   href={item.href}
                 >
                   {isEn ? "Go" : "Ir"}
                   <Icon icon={ArrowRight01Icon} size={12} />
                 </Link>
-              ) : null}
+              )}
             </div>
           ))}
         </div>

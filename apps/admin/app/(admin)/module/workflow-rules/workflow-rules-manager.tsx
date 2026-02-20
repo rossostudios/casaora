@@ -34,14 +34,30 @@ type ActionHint = {
 };
 
 const FALLBACK_TRIGGERS: TriggerOption[] = [
-  { value: "reservation_confirmed", en: "Reservation confirmed", es: "Reserva confirmada" },
+  {
+    value: "reservation_confirmed",
+    en: "Reservation confirmed",
+    es: "Reserva confirmada",
+  },
   { value: "checked_in", en: "Checked in", es: "Check-in" },
   { value: "checked_out", en: "Checked out", es: "Check-out" },
   { value: "lease_created", en: "Lease created", es: "Contrato creado" },
   { value: "lease_activated", en: "Lease activated", es: "Contrato activado" },
-  { value: "collection_overdue", en: "Collection overdue", es: "Cobro vencido" },
-  { value: "application_received", en: "Application received", es: "Aplicacion recibida" },
-  { value: "maintenance_submitted", en: "Maintenance submitted", es: "Mantenimiento enviado" },
+  {
+    value: "collection_overdue",
+    en: "Collection overdue",
+    es: "Cobro vencido",
+  },
+  {
+    value: "application_received",
+    en: "Application received",
+    es: "Aplicacion recibida",
+  },
+  {
+    value: "maintenance_submitted",
+    en: "Maintenance submitted",
+    es: "Mantenimiento enviado",
+  },
   { value: "task_completed", en: "Task completed", es: "Tarea completada" },
   { value: "payment_received", en: "Payment received", es: "Pago recibido" },
   { value: "lease_expiring", en: "Lease expiring", es: "Contrato por vencer" },
@@ -49,8 +65,16 @@ const FALLBACK_TRIGGERS: TriggerOption[] = [
 
 const FALLBACK_ACTIONS: ActionOption[] = [
   { value: "create_task", en: "Create task", es: "Crear tarea" },
-  { value: "assign_task_round_robin", en: "Assign task (round-robin)", es: "Asignar tarea (rotativa)" },
-  { value: "send_notification", en: "Send notification", es: "Enviar notificacion" },
+  {
+    value: "assign_task_round_robin",
+    en: "Assign task (round-robin)",
+    es: "Asignar tarea (rotativa)",
+  },
+  {
+    value: "send_notification",
+    en: "Send notification",
+    es: "Enviar notificacion",
+  },
   { value: "send_whatsapp", en: "Send WhatsApp", es: "Enviar WhatsApp" },
   { value: "update_status", en: "Update status", es: "Actualizar estado" },
   { value: "create_expense", en: "Create expense", es: "Crear gasto" },
@@ -102,7 +126,11 @@ const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
     trigger_event: "checked_out",
     action_type: "create_expense",
     delay_minutes: 0,
-    action_config: { category: "cleaning", description: "Turnover cleaning", amount: 150000 },
+    action_config: {
+      category: "cleaning",
+      description: "Turnover cleaning",
+      amount: 150_000,
+    },
   },
 ];
 
@@ -116,7 +144,9 @@ function asNumber(v: unknown): number {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-function parseActionHints(metadata?: WorkflowRuleMetadataResponse): Record<string, ActionHint> {
+function parseActionHints(
+  metadata?: WorkflowRuleMetadataResponse
+): Record<string, ActionHint> {
   const raw = metadata?.config_schema_hints;
   if (!raw || typeof raw !== "object") return {};
 
@@ -131,7 +161,9 @@ function parseActionHints(metadata?: WorkflowRuleMetadataResponse): Record<strin
 
     const legacyAliases: Record<string, string> = {};
     if (aliasesRaw && typeof aliasesRaw === "object") {
-      for (const [aliasKey, aliasTarget] of Object.entries(aliasesRaw as Record<string, unknown>)) {
+      for (const [aliasKey, aliasTarget] of Object.entries(
+        aliasesRaw as Record<string, unknown>
+      )) {
         if (typeof aliasTarget === "string") {
           legacyAliases[aliasKey] = aliasTarget;
         }
@@ -217,7 +249,10 @@ export function WorkflowRulesManager({
     return found ? (isEn ? found.en : found.es) : value;
   };
 
-  const selectedHint = actionHints[formAction] ?? { fields: [], legacyAliases: {} };
+  const selectedHint = actionHints[formAction] ?? {
+    fields: [],
+    legacyAliases: {},
+  };
 
   function resetForm() {
     setFormName("");
@@ -282,7 +317,9 @@ export function WorkflowRulesManager({
       try {
         config = JSON.parse(rawJson);
       } catch {
-        const msg = isEn ? "Invalid JSON in action config." : "JSON invalido en la configuracion.";
+        const msg = isEn
+          ? "Invalid JSON in action config."
+          : "JSON invalido en la configuracion.";
         setErrorMessage(msg);
         toast.error(msg);
         setSubmitting(false);
@@ -354,13 +391,13 @@ export function WorkflowRulesManager({
   }
 
   async function toggleActive(ruleId: string, currentlyActive: boolean) {
-    const successMessage = !currentlyActive
+    const successMessage = currentlyActive
       ? isEn
-        ? "Rule activated"
-        : "Regla activada"
-      : isEn
         ? "Rule disabled"
-        : "Regla desactivada";
+        : "Regla desactivada"
+      : isEn
+        ? "Rule activated"
+        : "Regla activada";
 
     try {
       await authedFetch(`/workflow-rules/${ruleId}`, {
@@ -390,7 +427,9 @@ export function WorkflowRulesManager({
     setApplyingTemplate(template.name_en);
     setErrorMessage(null);
     const templateName = isEn ? template.name_en : template.name_es;
-    const templateAppliedMessage = isEn ? "Template applied" : "Plantilla aplicada";
+    const templateAppliedMessage = isEn
+      ? "Template applied"
+      : "Plantilla aplicada";
 
     try {
       await authedFetch("/workflow-rules", {
@@ -456,7 +495,13 @@ export function WorkflowRulesManager({
           size="sm"
           type="button"
         >
-          {showForm ? (isEn ? "Cancel" : "Cancelar") : isEn ? "New Rule" : "Nueva Regla"}
+          {showForm
+            ? isEn
+              ? "Cancel"
+              : "Cancelar"
+            : isEn
+              ? "New Rule"
+              : "Nueva Regla"}
         </Button>
         <Button
           onClick={() => setShowTemplates(!showTemplates)}
@@ -475,7 +520,7 @@ export function WorkflowRulesManager({
       </div>
 
       {errorMessage ? (
-        <p className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+        <p className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-destructive text-sm">
           {errorMessage}
         </p>
       ) : null}
@@ -483,15 +528,28 @@ export function WorkflowRulesManager({
       {showTemplates && (
         <div className="grid gap-3 sm:grid-cols-2">
           {WORKFLOW_TEMPLATES.map((template) => (
-            <div className="bg-muted/30 space-y-2 rounded-lg border p-3" key={template.name_en}>
-              <p className="text-sm font-medium">{isEn ? template.name_en : template.name_es}</p>
-              <p className="text-muted-foreground text-xs">{isEn ? template.desc_en : template.desc_es}</p>
+            <div
+              className="space-y-2 rounded-lg border bg-muted/30 p-3"
+              key={template.name_en}
+            >
+              <p className="font-medium text-sm">
+                {isEn ? template.name_en : template.name_es}
+              </p>
+              <p className="text-muted-foreground text-xs">
+                {isEn ? template.desc_en : template.desc_es}
+              </p>
               <div className="flex items-center gap-2 text-xs">
-                <span className="bg-muted rounded px-1.5 py-0.5">{triggerLabel(template.trigger_event)}</span>
+                <span className="rounded bg-muted px-1.5 py-0.5">
+                  {triggerLabel(template.trigger_event)}
+                </span>
                 <span>&rarr;</span>
-                <span className="bg-muted rounded px-1.5 py-0.5">{actionLabel(template.action_type)}</span>
+                <span className="rounded bg-muted px-1.5 py-0.5">
+                  {actionLabel(template.action_type)}
+                </span>
                 {template.delay_minutes > 0 && (
-                  <span className="text-muted-foreground">({template.delay_minutes} min)</span>
+                  <span className="text-muted-foreground">
+                    ({template.delay_minutes} min)
+                  </span>
                 )}
               </div>
               <Button
@@ -514,16 +572,26 @@ export function WorkflowRulesManager({
       )}
 
       {showForm && (
-        <form className="bg-muted/50 space-y-3 rounded-lg border p-4" onSubmit={handleSubmit}>
+        <form
+          className="space-y-3 rounded-lg border bg-muted/50 p-4"
+          onSubmit={handleSubmit}
+        >
           <label className="space-y-1 text-sm">
             <span>{isEn ? "Rule Name" : "Nombre de la regla"} *</span>
-            <Input onChange={(e) => setFormName(e.target.value)} required value={formName} />
+            <Input
+              onChange={(e) => setFormName(e.target.value)}
+              required
+              value={formName}
+            />
           </label>
 
           <div className="grid gap-3 sm:grid-cols-3">
             <label className="space-y-1 text-sm">
               <span>{isEn ? "When" : "Cuando"}</span>
-              <Select onChange={(e) => setFormTrigger(e.target.value)} value={formTrigger}>
+              <Select
+                onChange={(e) => setFormTrigger(e.target.value)}
+                value={formTrigger}
+              >
                 {triggerOptions.map((trigger) => (
                   <option key={trigger.value} value={trigger.value}>
                     {isEn ? trigger.en : trigger.es}
@@ -563,20 +631,20 @@ export function WorkflowRulesManager({
 
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <span className="text-sm font-medium">
+              <span className="font-medium text-sm">
                 {isEn ? "Action configuration" : "Configuracion de la accion"}
               </span>
               <button
                 className="text-muted-foreground text-xs underline"
                 onClick={() => {
-                  if (!rawJsonMode) {
-                    setRawJson(JSON.stringify(formConfig, null, 2));
-                  } else {
+                  if (rawJsonMode) {
                     try {
                       setFormConfig(JSON.parse(rawJson));
                     } catch {
                       /* keep previous structured config */
                     }
+                  } else {
+                    setRawJson(JSON.stringify(formConfig, null, 2));
                   }
                   setRawJsonMode(!rawJsonMode);
                 }}
@@ -594,13 +662,14 @@ export function WorkflowRulesManager({
 
             {selectedHint.fields.length > 0 ? (
               <p className="text-muted-foreground text-xs">
-                {isEn ? "Allowed keys:" : "Claves permitidas:"} {selectedHint.fields.join(", ")}
+                {isEn ? "Allowed keys:" : "Claves permitidas:"}{" "}
+                {selectedHint.fields.join(", ")}
               </p>
             ) : null}
 
             {rawJsonMode ? (
               <textarea
-                className="border-input bg-background ring-offset-background placeholder:text-muted-foreground focus-visible:ring-ring flex min-h-[60px] w-full rounded-md border px-3 py-2 font-mono text-xs focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none"
+                className="flex min-h-[60px] w-full rounded-md border border-input bg-background px-3 py-2 font-mono text-xs ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                 onChange={(e) => setRawJson(e.target.value)}
                 rows={4}
                 value={rawJson}
@@ -633,7 +702,9 @@ export function WorkflowRulesManager({
 
       {data.length === 0 ? (
         <p className="text-muted-foreground text-sm">
-          {isEn ? "No automation rules defined yet." : "No hay reglas de automatizacion definidas."}
+          {isEn
+            ? "No automation rules defined yet."
+            : "No hay reglas de automatizacion definidas."}
         </p>
       ) : (
         <div className="divide-y rounded-lg border">
@@ -649,7 +720,10 @@ export function WorkflowRulesManager({
                   <div className="min-w-0 flex-1">
                     <p className="font-medium">{asString(rule.name)}</p>
                     <p className="text-muted-foreground text-xs">
-                      {isEn ? "When" : "Cuando"} <strong>{triggerLabel(asString(rule.trigger_event))}</strong>
+                      {isEn ? "When" : "Cuando"}{" "}
+                      <strong>
+                        {triggerLabel(asString(rule.trigger_event))}
+                      </strong>
                       {" \u2192 "}
                       <strong>{actionLabel(asString(rule.action_type))}</strong>
                       {Number(rule.delay_minutes) > 0 &&
@@ -659,23 +733,55 @@ export function WorkflowRulesManager({
 
                   <div className="flex items-center gap-2">
                     <StatusBadge
-                      label={isActive ? (isEn ? "Active" : "Activo") : isEn ? "Inactive" : "Inactivo"}
+                      label={
+                        isActive
+                          ? isEn
+                            ? "Active"
+                            : "Activo"
+                          : isEn
+                            ? "Inactive"
+                            : "Inactivo"
+                      }
                       value={isActive ? "active" : "inactive"}
                     />
-                    <Button onClick={() => openForEdit(rule)} size="sm" type="button" variant="outline">
+                    <Button
+                      onClick={() => openForEdit(rule)}
+                      size="sm"
+                      type="button"
+                      variant="outline"
+                    >
                       {isEn ? "Edit" : "Editar"}
                     </Button>
-                    <Button onClick={() => toggleActive(id, isActive)} size="sm" variant="outline">
-                      {isActive ? (isEn ? "Disable" : "Desactivar") : isEn ? "Enable" : "Activar"}
+                    <Button
+                      onClick={() => toggleActive(id, isActive)}
+                      size="sm"
+                      variant="outline"
+                    >
+                      {isActive
+                        ? isEn
+                          ? "Disable"
+                          : "Desactivar"
+                        : isEn
+                          ? "Enable"
+                          : "Activar"}
                     </Button>
-                    <Button onClick={() => handleDelete(id)} size="sm" variant="ghost">
+                    <Button
+                      onClick={() => handleDelete(id)}
+                      size="sm"
+                      variant="ghost"
+                    >
                       {isEn ? "Delete" : "Eliminar"}
                     </Button>
                   </div>
                 </div>
 
                 <div className="flex items-center gap-2">
-                  <Button onClick={() => toggleRuns(id)} size="sm" type="button" variant="ghost">
+                  <Button
+                    onClick={() => toggleRuns(id)}
+                    size="sm"
+                    type="button"
+                    variant="ghost"
+                  >
                     {isRunsOpen
                       ? isEn
                         ? "Hide runs"
@@ -687,11 +793,17 @@ export function WorkflowRulesManager({
                 </div>
 
                 {isRunsOpen ? (
-                  <div className="bg-muted/20 rounded-md border p-2 text-xs">
+                  <div className="rounded-md border bg-muted/20 p-2 text-xs">
                     {loadingRunsId === id ? (
-                      <p className="text-muted-foreground">{isEn ? "Loading runs..." : "Cargando ejecuciones..."}</p>
+                      <p className="text-muted-foreground">
+                        {isEn ? "Loading runs..." : "Cargando ejecuciones..."}
+                      </p>
                     ) : runs.length === 0 ? (
-                      <p className="text-muted-foreground">{isEn ? "No run history yet." : "Sin historial todavia."}</p>
+                      <p className="text-muted-foreground">
+                        {isEn
+                          ? "No run history yet."
+                          : "Sin historial todavia."}
+                      </p>
                     ) : (
                       <div className="space-y-2">
                         {runs.map((run) => {
@@ -702,12 +814,21 @@ export function WorkflowRulesManager({
                           const reason = asString(run.reason);
 
                           return (
-                            <div className="rounded border bg-background px-2 py-1" key={runId}>
+                            <div
+                              className="rounded border bg-background px-2 py-1"
+                              key={runId}
+                            >
                               <p>
                                 <strong>{status}</strong> · #{attempt}
-                                {createdAt ? ` · ${new Date(createdAt).toLocaleString()}` : ""}
+                                {createdAt
+                                  ? ` · ${new Date(createdAt).toLocaleString()}`
+                                  : ""}
                               </p>
-                              {reason ? <p className="text-muted-foreground">{reason}</p> : null}
+                              {reason ? (
+                                <p className="text-muted-foreground">
+                                  {reason}
+                                </p>
+                              ) : null}
                             </div>
                           );
                         })}

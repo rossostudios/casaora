@@ -1,9 +1,9 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
 import { HeartAddIcon } from "@hugeicons/core-free-icons";
+import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
+import { useEffect, useState } from "react";
 
 import { MarketplaceListingCard } from "@/components/marketplace/listing-card";
 import { PublicFooter } from "@/components/marketplace/public-footer";

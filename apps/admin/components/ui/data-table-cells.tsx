@@ -45,14 +45,26 @@ export function DataIdCell({
       await navigator.clipboard.writeText(value);
       setCopied(true);
       let copiedMsg: string;
-      if (isEn) { copiedMsg = "Copied to clipboard"; } else { copiedMsg = "Copiado al portapapeles"; }
+      if (isEn) {
+        copiedMsg = "Copied to clipboard";
+      } else {
+        copiedMsg = "Copiado al portapapeles";
+      }
       toast.success(copiedMsg, { description: shortId(value) });
       window.setTimeout(() => setCopied(false), 1200);
     } catch {
       let copyErrTitle: string;
-      if (isEn) { copyErrTitle = "Could not copy"; } else { copyErrTitle = "No se pudo copiar"; }
+      if (isEn) {
+        copyErrTitle = "Could not copy";
+      } else {
+        copyErrTitle = "No se pudo copiar";
+      }
       let copyErrDesc: string;
-      if (isEn) { copyErrDesc = "Your browser blocked clipboard access."; } else { copyErrDesc = "Tu navegador bloqueó el acceso al portapapeles."; }
+      if (isEn) {
+        copyErrDesc = "Your browser blocked clipboard access.";
+      } else {
+        copyErrDesc = "Tu navegador bloqueó el acceso al portapapeles.";
+      }
       toast.error(copyErrTitle, { description: copyErrDesc });
     }
   };

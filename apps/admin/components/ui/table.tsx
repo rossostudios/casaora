@@ -53,7 +53,7 @@ const TableFooter = forwardRef<
 >(({ className, ...props }, ref) => (
   <tfoot
     className={cn(
-      "border-t bg-muted/30 text-xs text-muted-foreground",
+      "border-t bg-muted/30 text-muted-foreground text-xs",
       className
     )}
     ref={ref}
@@ -83,8 +83,8 @@ const TableHead = forwardRef<
 >(({ className, grid, ...props }, ref) => (
   <th
     className={cn(
-      "h-10 px-3 text-left align-middle font-medium text-xs text-muted-foreground",
-      grid && "border-r border-border/40 last:border-r-0",
+      "h-10 px-3 text-left align-middle font-medium text-muted-foreground text-xs",
+      grid && "border-border/40 border-r last:border-r-0",
       className
     )}
     ref={ref}
@@ -100,7 +100,7 @@ const TableCell = forwardRef<
   <td
     className={cn(
       "px-3 py-2 align-middle [&:has([role=checkbox])]:pr-0",
-      grid && "border-r border-border/40 last:border-r-0",
+      grid && "border-border/40 border-r last:border-r-0",
       className
     )}
     ref={ref}

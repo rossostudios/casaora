@@ -8,86 +8,90 @@ const DropdownMenu = MenuPrimitive.Root;
 const DropdownMenuTrigger = MenuPrimitive.Trigger;
 
 type DropdownMenuContentProps = Omit<
-    ComponentPropsWithoutRef<typeof MenuPrimitive.Popup>,
-    "className"
+  ComponentPropsWithoutRef<typeof MenuPrimitive.Popup>,
+  "className"
 > & {
-    className?: string;
-    sideOffset?: number;
-    align?: "start" | "center" | "end";
-    side?: "top" | "bottom" | "left" | "right";
-    children: ReactNode;
+  className?: string;
+  sideOffset?: number;
+  align?: "start" | "center" | "end";
+  side?: "top" | "bottom" | "left" | "right";
+  children: ReactNode;
 };
 
 function DropdownMenuContent({
-    className,
-    sideOffset = 4,
-    align = "center",
-    side = "bottom",
-    children,
-    ...props
+  className,
+  sideOffset = 4,
+  align = "center",
+  side = "bottom",
+  children,
+  ...props
 }: DropdownMenuContentProps) {
-    return (
-        <MenuPrimitive.Portal>
-            <MenuPrimitive.Positioner align={align} side={side} sideOffset={sideOffset}>
-                <MenuPrimitive.Popup
-                    className={cn(
-                        "z-50 min-w-[8rem] overflow-hidden rounded-md border bg-popover p-1 text-popover-foreground shadow-md outline-none",
-                        "fade-in-0 zoom-in-95 animate-in",
-                        className
-                    )}
-                    {...props}
-                >
-                    {children}
-                </MenuPrimitive.Popup>
-            </MenuPrimitive.Positioner>
-        </MenuPrimitive.Portal>
-    );
+  return (
+    <MenuPrimitive.Portal>
+      <MenuPrimitive.Positioner
+        align={align}
+        side={side}
+        sideOffset={sideOffset}
+      >
+        <MenuPrimitive.Popup
+          className={cn(
+            "z-50 min-w-[8rem] overflow-hidden rounded-md border bg-popover p-1 text-popover-foreground shadow-md outline-none",
+            "fade-in-0 zoom-in-95 animate-in",
+            className
+          )}
+          {...props}
+        >
+          {children}
+        </MenuPrimitive.Popup>
+      </MenuPrimitive.Positioner>
+    </MenuPrimitive.Portal>
+  );
 }
 
 function DropdownMenuItem({
-    className,
-    ...props
+  className,
+  ...props
 }: ComponentPropsWithoutRef<typeof MenuPrimitive.Item>) {
-    return (
-        <MenuPrimitive.Item
-            className={cn(
-                "relative flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none transition-colors focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
-                className
-            )}
-            {...props}
-        />
-    );
+  return (
+    <MenuPrimitive.Item
+      className={cn(
+        "relative flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none transition-colors focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
+        className
+      )}
+      {...props}
+    />
+  );
 }
 
 function DropdownMenuLabel({
-    className,
-    ...props
+  className,
+  ...props
 }: ComponentPropsWithoutRef<"div">) {
-    return (
-        <div
-            className={cn("px-2 py-1.5 font-semibold text-sm", className)}
-            {...props}
-        />
-    );
+  return (
+    <div
+      className={cn("px-2 py-1.5 font-semibold text-sm", className)}
+      {...props}
+    />
+  );
 }
 
 function DropdownMenuSeparator({
-    className,
-    ...props
+  className,
+  ...props
 }: ComponentPropsWithoutRef<typeof MenuPrimitive.Separator>) {
-    return (
-        <MenuPrimitive.Separator
-            className={cn("-mx-1 my-1 h-px bg-muted", className)}
-            {...props}
-        />
-    );
+  return (
+    <MenuPrimitive.Separator
+      className={cn("-mx-1 my-1 h-px bg-muted", className)}
+      {...props}
+    />
+  );
 }
 
 export {
-    DropdownMenu,
-    DropdownMenuTrigger,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuLabel,
-    DropdownMenuSeparator,
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
 };

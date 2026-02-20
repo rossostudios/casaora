@@ -42,7 +42,9 @@ export function ScrollReveal({
     <div
       className={cn(
         "motion-safe:transition-all motion-safe:duration-700 motion-safe:ease-out",
-        visible ? "translate-y-0 opacity-100" : "motion-safe:translate-y-6 motion-safe:opacity-0",
+        visible
+          ? "translate-y-0 opacity-100"
+          : "motion-safe:translate-y-6 motion-safe:opacity-0",
         className
       )}
       ref={ref}

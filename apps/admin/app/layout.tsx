@@ -11,6 +11,7 @@ const playfair = Playfair_Display({
   display: "swap",
 });
 
+import { AppHotkeysProvider } from "@/components/providers/hotkeys-provider";
 import { QueryProvider } from "@/components/providers/query-provider";
 import { ApiErrorToaster } from "@/components/shell/api-error-toaster";
 import { Toaster } from "@/components/ui/sonner";
@@ -104,7 +105,9 @@ export default async function RootLayout({
           {THEME_INIT_SCRIPT}
         </Script>
         <LocaleProvider initialLocale={locale}>
-          <QueryProvider>{children}</QueryProvider>
+          <QueryProvider>
+            <AppHotkeysProvider>{children}</AppHotkeysProvider>
+          </QueryProvider>
         </LocaleProvider>
         <Toaster />
         <ApiErrorToaster />

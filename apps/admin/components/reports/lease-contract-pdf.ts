@@ -53,7 +53,11 @@ export async function generateLeaseContractPdf(
   const { default: jsPDF } = await import("jspdf");
   const autoTable = (await import("jspdf-autotable")).default;
 
-  const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "legal" });
+  const doc = new jsPDF({
+    orientation: "portrait",
+    unit: "mm",
+    format: "legal",
+  });
   const pageWidth = doc.internal.pageSize.getWidth();
   const margin = 20;
   let y = 25;
@@ -176,13 +180,21 @@ export async function generateLeaseContractPdf(
   const financialData = [
     [isEn ? "Monthly rent" : "Renta mensual", fmtAmount(data.monthlyRent, cur)],
     ...(data.serviceFee > 0
-      ? [[isEn ? "Service fee" : "Cuota de servicio", fmtAmount(data.serviceFee, cur)]]
+      ? [
+          [
+            isEn ? "Service fee" : "Cuota de servicio",
+            fmtAmount(data.serviceFee, cur),
+          ],
+        ]
       : []),
-    ...(data.taxIva > 0
-      ? [["IVA", fmtAmount(data.taxIva, cur)]]
-      : []),
+    ...(data.taxIva > 0 ? [["IVA", fmtAmount(data.taxIva, cur)]] : []),
     ...(data.monthlyTotal > 0
-      ? [[isEn ? "Monthly total" : "Total mensual", fmtAmount(data.monthlyTotal, cur)]]
+      ? [
+          [
+            isEn ? "Monthly total" : "Total mensual",
+            fmtAmount(data.monthlyTotal, cur),
+          ],
+        ]
       : []),
   ];
 
@@ -201,25 +213,40 @@ export async function generateLeaseContractPdf(
   y = doc.lastAutoTable.finalY + 8;
 
   // Move-in costs
-  if (data.securityDeposit > 0 || data.guaranteeFee > 0 || data.totalMoveIn > 0) {
+  if (
+    data.securityDeposit > 0 ||
+    data.guaranteeFee > 0 ||
+    data.totalMoveIn > 0
+  ) {
     doc.setFontSize(12);
     doc.setFont("helvetica", "bold");
-    doc.text(
-      isEn ? "5. MOVE-IN COSTS" : "5. COSTOS DE INGRESO",
-      margin,
-      y
-    );
+    doc.text(isEn ? "5. MOVE-IN COSTS" : "5. COSTOS DE INGRESO", margin, y);
     y += 7;
 
     const moveInData = [
       ...(data.securityDeposit > 0
-        ? [[isEn ? "Security deposit" : "Depósito de garantía", fmtAmount(data.securityDeposit, cur)]]
+        ? [
+            [
+              isEn ? "Security deposit" : "Depósito de garantía",
+              fmtAmount(data.securityDeposit, cur),
+            ],
+          ]
         : []),
       ...(data.guaranteeFee > 0
-        ? [[isEn ? "Guarantee fee" : "Cuota de garantía", fmtAmount(data.guaranteeFee, cur)]]
+        ? [
+            [
+              isEn ? "Guarantee fee" : "Cuota de garantía",
+              fmtAmount(data.guaranteeFee, cur),
+            ],
+          ]
         : []),
       ...(data.totalMoveIn > 0
-        ? [[isEn ? "Total move-in" : "Total de ingreso", fmtAmount(data.totalMoveIn, cur)]]
+        ? [
+            [
+              isEn ? "Total move-in" : "Total de ingreso",
+              fmtAmount(data.totalMoveIn, cur),
+            ],
+          ]
         : []),
     ];
 
@@ -284,16 +311,8 @@ export async function generateLeaseContractPdf(
   y += 20;
   doc.setFontSize(9);
   doc.setTextColor(120);
-  doc.text(
-    `${isEn ? "Date" : "Fecha"}: _____ / _____ / _____`,
-    margin,
-    y
-  );
-  doc.text(
-    `${isEn ? "Date" : "Fecha"}: _____ / _____ / _____`,
-    sigX2,
-    y
-  );
+  doc.text(`${isEn ? "Date" : "Fecha"}: _____ / _____ / _____`, margin, y);
+  doc.text(`${isEn ? "Date" : "Fecha"}: _____ / _____ / _____`, sigX2, y);
 
   // Footer
   const pageCount = doc.getNumberOfPages();

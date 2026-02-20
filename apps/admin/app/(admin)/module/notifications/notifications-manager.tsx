@@ -1,11 +1,10 @@
 "use client";
 
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useCallback, useMemo, useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-
-import type { NotificationListItem, NotificationListResponse } from "@/lib/api";
 import { Select } from "@/components/ui/select";
+import type { NotificationListItem, NotificationListResponse } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 const POLL_INTERVAL_MS = 45_000;
@@ -45,7 +44,8 @@ function normalizeNotification(item: unknown): NotificationListItem | null {
     title: typeof row.title === "string" ? row.title : "",
     body: typeof row.body === "string" ? row.body : "",
     link_path: typeof row.link_path === "string" ? row.link_path : null,
-    source_table: typeof row.source_table === "string" ? row.source_table : null,
+    source_table:
+      typeof row.source_table === "string" ? row.source_table : null,
     source_id: typeof row.source_id === "string" ? row.source_id : null,
     payload:
       row.payload && typeof row.payload === "object"
@@ -57,7 +57,10 @@ function normalizeNotification(item: unknown): NotificationListItem | null {
   };
 }
 
-function toRelativeTime(value: string | null | undefined, locale: string): string {
+function toRelativeTime(
+  value: string | null | undefined,
+  locale: string
+): string {
   if (!value) return "";
   const timestamp = new Date(value).getTime();
   if (!Number.isFinite(timestamp)) return "";
@@ -120,7 +123,9 @@ async function fetchNotificationsPage(
         .filter((item): item is NotificationListItem => Boolean(item))
     : [];
   const nextCursor =
-    typeof listPayload.next_cursor === "string" ? listPayload.next_cursor : null;
+    typeof listPayload.next_cursor === "string"
+      ? listPayload.next_cursor
+      : null;
 
   return { rows, nextCursor };
 }
@@ -151,7 +156,9 @@ export function NotificationsManager({
 }: NotificationsManagerProps) {
   const isEn = locale === "en-US";
   const queryClient = useQueryClient();
-  const [status, setStatus] = useState<StatusFilter>(() => normalizeStatus(initialStatus));
+  const [status, setStatus] = useState<StatusFilter>(() =>
+    normalizeStatus(initialStatus)
+  );
   const [category, setCategory] = useState<string>(
     initialCategory?.trim() || "all"
   );
@@ -176,7 +183,10 @@ export function NotificationsManager({
   const queryCursor = notificationsQuery.data?.nextCursor ?? null;
 
   // When the base query changes, clear paginated extra rows
-  const rows = useMemo(() => [...queryRows, ...extraRows], [queryRows, extraRows]);
+  const rows = useMemo(
+    () => [...queryRows, ...extraRows],
+    [queryRows, extraRows]
+  );
   const nextCursor = extraRows.length > 0 ? extraCursor : queryCursor;
   const unreadCount = unreadQuery.data ?? 0;
   const loading = notificationsQuery.isLoading;
@@ -206,7 +216,13 @@ export function NotificationsManager({
     async (cursor: string) => {
       setLoadingMore(true);
       try {
-        const page = await fetchNotificationsPage(orgId, status, category, isEn, cursor);
+        const page = await fetchNotificationsPage(
+          orgId,
+          status,
+          category,
+          isEn,
+          cursor
+        );
         setExtraRows((prev) => [...prev, ...page.rows]);
         setExtraCursor(page.nextCursor);
       } catch {
@@ -237,7 +253,9 @@ export function NotificationsManager({
         );
         setExtraRows((prev) =>
           prev.map((row) =>
-            row.id === item.id ? { ...row, read_at: new Date().toISOString() } : row
+            row.id === item.id
+              ? { ...row, read_at: new Date().toISOString() }
+              : row
           )
         );
         queryClient.setQueryData<number>(
@@ -281,10 +299,7 @@ export function NotificationsManager({
         row.read_at ? row : { ...row, read_at: optimisticReadAt }
       )
     );
-    queryClient.setQueryData<number>(
-      ["notifications-unread-count", orgId],
-      0
-    );
+    queryClient.setQueryData<number>(["notifications-unread-count", orgId], 0);
 
     try {
       await fetch("/api/notifications/read-all", {
@@ -297,7 +312,9 @@ export function NotificationsManager({
         body: JSON.stringify({ org_id: orgId }),
       });
     } catch {
-      void queryClient.invalidateQueries({ queryKey: ["notifications", orgId, status, category] });
+      void queryClient.invalidateQueries({
+        queryKey: ["notifications", orgId, status, category],
+      });
     }
   }, [orgId, status, category, queryClient]);
 
@@ -357,7 +374,9 @@ export function NotificationsManager({
         </div>
       ) : rows.length === 0 ? (
         <div className="rounded-xl border border-border/50 px-4 py-8 text-center text-muted-foreground text-sm">
-          {isEn ? "No notifications found." : "No se encontraron notificaciones."}
+          {isEn
+            ? "No notifications found."
+            : "No se encontraron notificaciones."}
         </div>
       ) : (
         <div className="overflow-hidden rounded-xl border border-border/60">
@@ -378,7 +397,9 @@ export function NotificationsManager({
                     <p
                       className={cn(
                         "truncate text-sm",
-                        isRead ? "text-muted-foreground" : "font-medium text-foreground"
+                        isRead
+                          ? "text-muted-foreground"
+                          : "font-medium text-foreground"
                       )}
                     >
                       {item.title || item.event_type}
@@ -387,11 +408,14 @@ export function NotificationsManager({
                       {item.body || item.category}
                     </p>
                     <p className="mt-1 text-[11px] text-muted-foreground/80">
-                      {toRelativeTime(item.occurred_at ?? item.created_at, locale)}
+                      {toRelativeTime(
+                        item.occurred_at ?? item.created_at,
+                        locale
+                      )}
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
-                    {!isRead ? (
+                    {isRead ? null : (
                       <button
                         className="rounded-md border border-border px-2 py-1 text-xs transition-colors hover:bg-muted"
                         onClick={() => markRead(item)}
@@ -399,7 +423,7 @@ export function NotificationsManager({
                       >
                         {isEn ? "Mark read" : "Marcar leído"}
                       </button>
-                    ) : null}
+                    )}
                     <Link
                       className="rounded-md border border-border px-2 py-1 text-xs transition-colors hover:bg-muted"
                       href={linkTarget}

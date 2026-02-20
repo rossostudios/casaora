@@ -1,7 +1,7 @@
 "use client";
 
-import { type FilterFn } from "@tanstack/react-table";
-import { InboxIcon } from "@hugeicons/core-free-icons";
+import type { InboxIcon } from "@hugeicons/core-free-icons";
+import type { FilterFn } from "@tanstack/react-table";
 import type { ReactNode } from "react";
 import { humanizeKey } from "@/lib/format";
 import type { Locale } from "@/lib/i18n";
@@ -69,7 +69,9 @@ export function isUuidString(value: string): boolean {
   return UUID_RE.test(value);
 }
 
-export function metaFromHrefBase(base: string | undefined | null): string | null {
+export function metaFromHrefBase(
+  base: string | undefined | null
+): string | null {
   if (!base) return null;
   const slug = base.split("/").filter(Boolean).pop();
   if (!slug) return null;
@@ -105,7 +107,11 @@ function stringifyForFilter(value: unknown): string {
   }
 }
 
-export const globalFilterFn: FilterFn<DataTableRow> = (row, columnId, filterValue) => {
+export const globalFilterFn: FilterFn<DataTableRow> = (
+  row,
+  columnId,
+  filterValue
+) => {
   const needle = String(filterValue ?? "")
     .trim()
     .toLowerCase();

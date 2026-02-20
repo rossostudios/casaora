@@ -87,10 +87,9 @@ export async function toggleNotificationRuleAction(formData: FormData) {
   const is_active = toStringValue(formData.get("is_active")) === "true";
 
   try {
-    await patchJson(
-      `/notification-rules/${encodeURIComponent(rule_id)}`,
-      { is_active }
-    );
+    await patchJson(`/notification-rules/${encodeURIComponent(rule_id)}`, {
+      is_active,
+    });
     revalidatePath(MODULE_PATH);
     redirect(
       withParams(next, {

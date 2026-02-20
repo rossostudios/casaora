@@ -24,8 +24,8 @@ import { inferColumns } from "./data-table-columns";
 import { DataTablePagination } from "./data-table-pagination";
 import { DataTableToolbar } from "./data-table-toolbar";
 import {
-  type DataTableRow,
   type DataTableProps,
+  type DataTableRow,
   type EmptyStateConfig,
   globalFilterFn,
   keysFromRows,
@@ -139,10 +139,7 @@ export function DataTable<TRow extends DataTableRow = DataTableRow>({
     (updater) => {
       setColumnVisibilityOverrides((currentOverrides) => {
         const current = { ...defaultVisibility, ...currentOverrides };
-        const next =
-          typeof updater === "function"
-            ? updater(current)
-            : updater;
+        const next = typeof updater === "function" ? updater(current) : updater;
 
         const nextOverrides: VisibilityState = {};
         for (const [key, value] of Object.entries(next)) {

@@ -79,7 +79,11 @@ function GuestLoginFormInner({ locale }: { locale: string }) {
     }
   }, [verifyQuery.data, tokenFromUrl, router]);
 
-  const requestAccessMutation = useMutation<RequestAccessResult, Error, { email: string; phone: string }>({
+  const requestAccessMutation = useMutation<
+    RequestAccessResult,
+    Error,
+    { email: string; phone: string }
+  >({
     mutationFn: async (variables) => {
       const body: Record<string, string> = {};
       if (variables.email.trim()) body.email = variables.email.trim();
@@ -130,7 +134,7 @@ function GuestLoginFormInner({ locale }: { locale: string }) {
   if (tokenFromUrl && verifyQuery.isLoading) {
     return (
       <div className="flex min-h-[50vh] items-center justify-center">
-        <p className="text-muted-foreground animate-pulse">
+        <p className="animate-pulse text-muted-foreground">
           {isEn ? "Verifying access..." : "Verificando acceso..."}
         </p>
       </div>
@@ -148,7 +152,7 @@ function GuestLoginFormInner({ locale }: { locale: string }) {
         <CardContent>
           {sent ? (
             <div className="space-y-3 text-center">
-              <p className="text-lg font-medium">
+              <p className="font-medium text-lg">
                 {isEn ? "Check your WhatsApp!" : "\u00a1Revisa tu WhatsApp!"}
               </p>
               <p className="text-muted-foreground text-sm">
@@ -184,10 +188,12 @@ function GuestLoginFormInner({ locale }: { locale: string }) {
                   value={phone}
                 />
               </label>
-              {displayError && <p className="text-sm text-red-600">{displayError}</p>}
+              {displayError && (
+                <p className="text-red-600 text-sm">{displayError}</p>
+              )}
               <Button
                 className="w-full"
-                disabled={loading || (!email.trim() && !phone.trim())}
+                disabled={loading || !(email.trim() || phone.trim())}
                 type="submit"
               >
                 {requestAccessMutation.isPending

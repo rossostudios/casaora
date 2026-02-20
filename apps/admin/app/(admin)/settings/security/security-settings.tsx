@@ -1,9 +1,8 @@
 "use client";
 
+import Image from "next/image";
 import { useCallback, useState } from "react";
 import { toast } from "sonner";
-
-import Image from "next/image";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -106,7 +105,9 @@ export function SecuritySettings({
     setEnrolling(true);
     setBusy(true);
 
-    const enrollErrMsg = isEn ? "Could not start enrollment" : "No se pudo iniciar la inscripción";
+    const enrollErrMsg = isEn
+      ? "Could not start enrollment"
+      : "No se pudo iniciar la inscripción";
     const enrollFailMsg = isEn ? "Enrollment failed" : "Falló la inscripción";
     try {
       const supabase = getSupabaseBrowserClient();
@@ -155,7 +156,9 @@ export function SecuritySettings({
 
   const handleUnenroll = useCallback(
     async (id: string) => {
-      const removeErrMsg = isEn ? "Could not remove factor" : "No se pudo eliminar el factor";
+      const removeErrMsg = isEn
+        ? "Could not remove factor"
+        : "No se pudo eliminar el factor";
       const removeFailMsg = isEn ? "Remove failed" : "Error al eliminar";
       const tfaRemovedMsg = isEn
         ? "Two-factor authentication removed"
@@ -182,7 +185,7 @@ export function SecuritySettings({
   return (
     <div className="space-y-6">
       {/* Account info */}
-      <div className="text-sm text-muted-foreground">
+      <div className="text-muted-foreground text-sm">
         {isEn ? "Signed in as" : "Sesión iniciada como"}{" "}
         <span className="font-medium text-foreground">{userEmail}</span>
       </div>
@@ -211,10 +214,10 @@ export function SecuritySettings({
                   key={f.id}
                 >
                   <div className="space-y-0.5">
-                    <p className="text-sm font-medium">
+                    <p className="font-medium text-sm">
                       {f.friendly_name || "Authenticator"}
                     </p>
-                    <p className="text-xs text-muted-foreground">
+                    <p className="text-muted-foreground text-xs">
                       {isEn ? "Added" : "Agregado"}{" "}
                       {new Date(f.created_at).toLocaleDateString()}
                     </p>
@@ -240,11 +243,11 @@ export function SecuritySettings({
           ) : null}
 
           {/* Enrollment flow */}
-          {!hasVerifiedTotp && !enrolling ? (
+          {hasVerifiedTotp || enrolling ? null : (
             <Button disabled={busy} onClick={handleEnroll}>
               {isEn ? "Enable 2FA" : "Activar 2FA"}
             </Button>
-          ) : null}
+          )}
 
           {enrolling && qrUri ? (
             <div className="space-y-4">
@@ -266,7 +269,7 @@ export function SecuritySettings({
               </div>
 
               <div className="space-y-2">
-                <p className="text-sm font-medium">
+                <p className="font-medium text-sm">
                   {isEn
                     ? "Enter the 6-digit code from your app:"
                     : "Ingresa el código de 6 dígitos de tu app:"}
@@ -320,17 +323,17 @@ export function SecuritySettings({
           <div className="rounded-lg border px-3 py-2">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium">
+                <p className="font-medium text-sm">
                   {isEn ? "Current session" : "Sesión actual"}
                 </p>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-muted-foreground text-xs">
                   {isEn ? "This browser" : "Este navegador"}
                 </p>
               </div>
               <StatusBadge label="active" tone="success" value="active" />
             </div>
           </div>
-          <p className="mt-3 text-xs text-muted-foreground">
+          <p className="mt-3 text-muted-foreground text-xs">
             {isEn
               ? "Sign out from all other devices by signing out and signing back in."
               : "Cierra sesión en otros dispositivos cerrando sesión y volviendo a iniciar."}

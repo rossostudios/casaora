@@ -93,12 +93,41 @@ export default async function OwnerSummaryReportPage() {
 
   const today = new Date();
   const monthNames = isEn
-    ? ["January","February","March","April","May","June","July","August","September","October","November","December"]
-    : ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
+    ? [
+        "January",
+        "February",
+        "March",
+        "April",
+        "May",
+        "June",
+        "July",
+        "August",
+        "September",
+        "October",
+        "November",
+        "December",
+      ]
+    : [
+        "Enero",
+        "Febrero",
+        "Marzo",
+        "Abril",
+        "Mayo",
+        "Junio",
+        "Julio",
+        "Agosto",
+        "Septiembre",
+        "Octubre",
+        "Noviembre",
+        "Diciembre",
+      ];
   const periodLabel = `${monthNames[today.getMonth()]} ${today.getFullYear()}`;
-  const orgName = typeof report.organization_name === "string"
-    ? report.organization_name
-    : isEn ? "Organization" : "Organización";
+  const orgName =
+    typeof report.organization_name === "string"
+      ? report.organization_name
+      : isEn
+        ? "Organization"
+        : "Organización";
 
   return (
     <div className="space-y-6">
@@ -110,11 +139,11 @@ export default async function OwnerSummaryReportPage() {
             </Badge>
             <div className="flex items-center gap-2">
               <OwnerStatementPdfButton
-                reportData={report}
+                isEn={isEn}
+                locale={locale}
                 orgName={orgName}
                 periodLabel={periodLabel}
-                locale={locale}
-                isEn={isEn}
+                reportData={report}
               />
               <Link
                 className={cn(buttonVariants({ variant: "ghost", size: "sm" }))}

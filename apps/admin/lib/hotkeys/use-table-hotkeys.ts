@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
+import { useHotkey } from "@tanstack/react-hotkeys";
+import { useEffect, useState } from "react";
 import { isInputFocused } from "@/lib/hotkeys/is-input-focused";
 
 type TableHotkeyOptions<T> = {
@@ -24,49 +25,54 @@ export function useTableHotkeys<T>({
     if (!enabled) setFocusedRowIndex(-1);
   }, [enabled]);
 
-  const handleKeyDown = useCallback(
-    (event: KeyboardEvent) => {
-      if (!enabled || rows.length === 0) return;
-      if (isInputFocused()) return;
-      if (event.metaKey || event.ctrlKey || event.altKey) return;
+  useHotkey("J", (e: KeyboardEvent) => {
+    if (!enabled || rows.length === 0 || isInputFocused()) return;
+    e.preventDefault();
+    setFocusedRowIndex((prev) => Math.min(prev + 1, rows.length - 1));
+  });
 
-      const key = event.key;
+  useHotkey("ArrowDown", (e: KeyboardEvent) => {
+    if (!enabled || rows.length === 0 || isInputFocused()) return;
+    e.preventDefault();
+    setFocusedRowIndex((prev) => Math.min(prev + 1, rows.length - 1));
+  });
 
-      if (key === "j" || key === "ArrowDown") {
-        event.preventDefault();
-        setFocusedRowIndex((prev) => Math.min(prev + 1, rows.length - 1));
-        return;
-      }
+  useHotkey("K", (e: KeyboardEvent) => {
+    if (!enabled || rows.length === 0 || isInputFocused()) return;
+    e.preventDefault();
+    setFocusedRowIndex((prev) => Math.max(prev - 1, prev === -1 ? -1 : 0));
+  });
 
-      if (key === "k" || key === "ArrowUp") {
-        event.preventDefault();
-        setFocusedRowIndex((prev) => Math.max(prev - 1, prev === -1 ? -1 : 0));
-        return;
-      }
+  useHotkey("ArrowUp", (e: KeyboardEvent) => {
+    if (!enabled || rows.length === 0 || isInputFocused()) return;
+    e.preventDefault();
+    setFocusedRowIndex((prev) => Math.max(prev - 1, prev === -1 ? -1 : 0));
+  });
 
-      if (key === "Enter" && focusedRowIndex >= 0 && focusedRowIndex < rows.length) {
-        event.preventDefault();
-        onOpen(rows[focusedRowIndex]);
-        return;
-      }
+  useHotkey("Enter", (e: KeyboardEvent) => {
+    if (!enabled || rows.length === 0 || isInputFocused()) return;
+    if (focusedRowIndex >= 0 && focusedRowIndex < rows.length) {
+      e.preventDefault();
+      onOpen(rows[focusedRowIndex]);
+    }
+  });
 
-      if (key === "x" && focusedRowIndex >= 0 && focusedRowIndex < rows.length && onToggleSelect) {
-        event.preventDefault();
-        onToggleSelect(rows[focusedRowIndex]);
-        return;
-      }
+  useHotkey("X", (e: KeyboardEvent) => {
+    if (!enabled || rows.length === 0 || isInputFocused()) return;
+    if (
+      focusedRowIndex >= 0 &&
+      focusedRowIndex < rows.length &&
+      onToggleSelect
+    ) {
+      e.preventDefault();
+      onToggleSelect(rows[focusedRowIndex]);
+    }
+  });
 
-      if (key === "Escape") {
-        setFocusedRowIndex(-1);
-      }
-    },
-    [enabled, focusedRowIndex, onOpen, onToggleSelect, rows]
-  );
-
-  useEffect(() => {
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [handleKeyDown]);
+  useHotkey("Escape", (e: KeyboardEvent) => {
+    if (!enabled || isInputFocused()) return;
+    setFocusedRowIndex(-1);
+  });
 
   return { focusedRowIndex, setFocusedRowIndex };
 }

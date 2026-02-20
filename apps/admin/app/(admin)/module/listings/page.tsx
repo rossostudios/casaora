@@ -29,9 +29,7 @@ function safeDecode(value: string): string {
   }
 }
 
-export default async function ListingsModulePage({
-  searchParams,
-}: PageProps) {
+export default async function ListingsModulePage({ searchParams }: PageProps) {
   const locale = await getActiveLocale();
   const isEn = locale === "en-US";
 
@@ -124,7 +122,9 @@ export default async function ListingsModulePage({
               className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
               href="/module/pricing"
             >
-              {isEn ? "Manage pricing templates" : "Gestionar plantillas de precios"}
+              {isEn
+                ? "Manage pricing templates"
+                : "Gestionar plantillas de precios"}
             </Link>
           </div>
         </CardHeader>

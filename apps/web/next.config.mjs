@@ -20,9 +20,20 @@ const nextConfig = {
         hostname: "**.supabase.co",
         pathname: "/storage/v1/object/public/**",
       },
+      {
+        protocol: "https",
+        hostname: "i.pravatar.cc",
+      },
+      {
+        protocol: "https",
+        hostname: "images.unsplash.com",
+      },
     ],
   },
   reactCompiler: true,
+  experimental: {
+    optimizePackageImports: ["@hugeicons/core-free-icons"],
+  },
   async headers() {
     return [
       {

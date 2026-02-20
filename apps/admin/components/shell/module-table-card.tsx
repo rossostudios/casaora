@@ -2,7 +2,13 @@
 
 import { ExternalLink, InboxIcon } from "@hugeicons/core-free-icons";
 import Link from "next/link";
-import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
+import {
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -15,7 +21,11 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { CopyButton } from "@/components/ui/copy-button";
-import { DataTable, type DataTableRow, type EmptyStateConfig } from "@/components/ui/data-table";
+import {
+  DataTable,
+  type DataTableRow,
+  type EmptyStateConfig,
+} from "@/components/ui/data-table";
 import { EmptyState } from "@/components/ui/empty-state";
 import { HoverLink } from "@/components/ui/hover-link";
 import { Icon } from "@/components/ui/icon";
@@ -258,7 +268,10 @@ function RelationshipRail({
   );
 }
 
-function getModuleEmptyState(slug: string, isEn: boolean): EmptyStateConfig | undefined {
+function getModuleEmptyState(
+  slug: string,
+  isEn: boolean
+): EmptyStateConfig | undefined {
   const configs: Record<string, EmptyStateConfig> = {
     reservations: {
       title: isEn ? "No reservations yet" : "Sin reservas aún",
@@ -267,7 +280,12 @@ function getModuleEmptyState(slug: string, isEn: boolean): EmptyStateConfig | un
         : "Crea una manualmente o conecta un canal OTA para importar automáticamente.",
       actionLabel: isEn ? "Create reservation" : "Crear reserva",
       actionHref: "/module/reservations",
-      secondaryActions: [{ label: isEn ? "Connect a channel" : "Conectar canal", href: "/module/channels" }],
+      secondaryActions: [
+        {
+          label: isEn ? "Connect a channel" : "Conectar canal",
+          href: "/module/channels",
+        },
+      ],
     },
     tasks: {
       title: isEn ? "No tasks yet" : "Sin tareas aún",
@@ -282,7 +300,9 @@ function getModuleEmptyState(slug: string, isEn: boolean): EmptyStateConfig | un
       description: isEn
         ? "Connect Airbnb, Booking.com, or VRBO to sync calendars via iCal."
         : "Conecta Airbnb, Booking.com o VRBO para sincronizar calendarios vía iCal.",
-      actionLabel: isEn ? "Connect your first channel" : "Conecta tu primer canal",
+      actionLabel: isEn
+        ? "Connect your first channel"
+        : "Conecta tu primer canal",
       actionHref: "/module/channels",
     },
     expenses: {
@@ -497,9 +517,13 @@ export function ModuleTableCard({
                 action={
                   moduleEmptyState ? (
                     <>
-                      {moduleEmptyState.actionLabel && moduleEmptyState.actionHref ? (
+                      {moduleEmptyState.actionLabel &&
+                      moduleEmptyState.actionHref ? (
                         <Link
-                          className={buttonVariants({ variant: "default", size: "sm" })}
+                          className={buttonVariants({
+                            variant: "default",
+                            size: "sm",
+                          })}
                           href={moduleEmptyState.actionHref}
                         >
                           {moduleEmptyState.actionLabel}
@@ -507,7 +531,10 @@ export function ModuleTableCard({
                       ) : null}
                       {moduleEmptyState.secondaryActions?.map((sa) => (
                         <Link
-                          className={buttonVariants({ variant: "outline", size: "sm" })}
+                          className={buttonVariants({
+                            variant: "outline",
+                            size: "sm",
+                          })}
                           href={sa.href}
                           key={sa.href}
                         >
@@ -516,27 +543,27 @@ export function ModuleTableCard({
                       ))}
                     </>
                   ) : (
-                  <Link
-                    className={buttonVariants({
-                      variant: "outline",
-                      size: "sm",
-                    })}
-                    href="/setup"
-                  >
-                    {isEn ? "Open onboarding" : "Abrir onboarding"}
-                  </Link>
+                    <Link
+                      className={buttonVariants({
+                        variant: "outline",
+                        size: "sm",
+                      })}
+                      href="/setup"
+                    >
+                      {isEn ? "Open onboarding" : "Abrir onboarding"}
+                    </Link>
                   )
                 }
                 description={
-                  moduleEmptyState?.description ?? (
-                  isEn
+                  moduleEmptyState?.description ??
+                  (isEn
                     ? "Manage base records stored in Supabase. Use onboarding manager to add, edit, or seed data."
-                    : "Administra registros base guardados en Supabase. Usa el administrador para agregar, editar o cargar datos demo."
-                  )
+                    : "Administra registros base guardados en Supabase. Usa el administrador para agregar, editar o cargar datos demo.")
                 }
                 icon={moduleEmptyState?.icon ?? InboxIcon}
                 title={
-                  moduleEmptyState?.title ?? (isEn ? "No records found" : "No se encontraron registros")
+                  moduleEmptyState?.title ??
+                  (isEn ? "No records found" : "No se encontraron registros")
                 }
               />
             </div>

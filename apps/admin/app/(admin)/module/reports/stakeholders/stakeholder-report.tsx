@@ -2,16 +2,6 @@
 
 import { useRouter } from "next/navigation";
 import { useCallback, useMemo, useState } from "react";
-import {
-  Area,
-  AreaChart,
-  Bar,
-  BarChart,
-  CartesianGrid,
-  XAxis,
-  YAxis,
-} from "@/lib/recharts";
-
 import { StakeholderReportPdfButton } from "@/components/reports/stakeholder-report-pdf";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -32,6 +22,15 @@ import { DatePicker } from "@/components/ui/date-picker";
 import { Select } from "@/components/ui/select";
 import { StatCard } from "@/components/ui/stat-card";
 import { formatCurrency } from "@/lib/format";
+import {
+  Area,
+  AreaChart,
+  Bar,
+  BarChart,
+  CartesianGrid,
+  XAxis,
+  YAxis,
+} from "@/lib/recharts";
 
 type FinanceMonth = {
   month: string;
@@ -143,8 +142,10 @@ export function StakeholderReport({
     asNumber(kpiDashboard?.collection_rate) > 0
       ? asNumber(kpiDashboard?.collection_rate)
       : totalsFromMonths.collectionRateSamples.length > 0
-        ? totalsFromMonths.collectionRateSamples.reduce((sum, value) => sum + value, 0) /
-          totalsFromMonths.collectionRateSamples.length
+        ? totalsFromMonths.collectionRateSamples.reduce(
+            (sum, value) => sum + value,
+            0
+          ) / totalsFromMonths.collectionRateSamples.length
         : 0;
   const avgDaysLate = asNumber(kpiDashboard?.avg_days_late);
 
@@ -305,14 +306,22 @@ export function StakeholderReport({
           <span className="block text-muted-foreground text-xs">
             {isEn ? "From" : "Desde"}
           </span>
-          <DatePicker locale={locale} onValueChange={setFromDate} value={fromDate} />
+          <DatePicker
+            locale={locale}
+            onValueChange={setFromDate}
+            value={fromDate}
+          />
         </label>
 
         <label className="space-y-1 text-sm">
           <span className="block text-muted-foreground text-xs">
             {isEn ? "To" : "Hasta"}
           </span>
-          <DatePicker locale={locale} onValueChange={setToDate} value={toDate} />
+          <DatePicker
+            locale={locale}
+            onValueChange={setToDate}
+            value={toDate}
+          />
         </label>
 
         {properties.length > 0 ? (
@@ -381,13 +390,13 @@ export function StakeholderReport({
           value={`${(collectionRate * 100).toFixed(1)}%`}
         />
         <StatCard
-          label={isEn ? "SLA risk" : "Riesgo SLA"}
-          value={`${slaBreaches}`}
           helper={
             isEn
               ? `${overdueTasks} overdue tasks`
               : `${overdueTasks} tareas vencidas`
           }
+          label={isEn ? "SLA risk" : "Riesgo SLA"}
+          value={`${slaBreaches}`}
         />
       </section>
 
@@ -395,7 +404,9 @@ export function StakeholderReport({
         <Card className="overflow-hidden border-border/80">
           <CardHeader className="space-y-1 border-border/70 border-b pb-4">
             <CardTitle className="text-base">
-              {isEn ? "Income vs expenses trend" : "Tendencia ingresos vs gastos"}
+              {isEn
+                ? "Income vs expenses trend"
+                : "Tendencia ingresos vs gastos"}
             </CardTitle>
             <CardDescription>{periodLabel}</CardDescription>
           </CardHeader>
@@ -412,7 +423,9 @@ export function StakeholderReport({
                   />
                   <YAxis
                     axisLine={false}
-                    tickFormatter={(value) => formatCurrency(value, "PYG", locale)}
+                    tickFormatter={(value) =>
+                      formatCurrency(value, "PYG", locale)
+                    }
                     tickLine={false}
                     tickMargin={8}
                     width={72}
@@ -421,13 +434,27 @@ export function StakeholderReport({
                     content={(props) => (
                       <ChartTooltipContent
                         {...props}
-                        valueFormatter={(value) => formatCurrency(value, "PYG", locale)}
+                        valueFormatter={(value) =>
+                          formatCurrency(value, "PYG", locale)
+                        }
                       />
                     )}
                   />
-                  <Bar dataKey="revenue" fill="var(--color-revenue)" radius={[6, 6, 0, 0]} />
-                  <Bar dataKey="expenses" fill="var(--color-expenses)" radius={[6, 6, 0, 0]} />
-                  <Bar dataKey="net" fill="var(--color-net)" radius={[6, 6, 0, 0]} />
+                  <Bar
+                    dataKey="revenue"
+                    fill="var(--color-revenue)"
+                    radius={[6, 6, 0, 0]}
+                  />
+                  <Bar
+                    dataKey="expenses"
+                    fill="var(--color-expenses)"
+                    radius={[6, 6, 0, 0]}
+                  />
+                  <Bar
+                    dataKey="net"
+                    fill="var(--color-net)"
+                    radius={[6, 6, 0, 0]}
+                  />
                 </BarChart>
               </ChartContainer>
             ) : (
@@ -475,9 +502,23 @@ export function StakeholderReport({
                     )}
                   />
                   <defs>
-                    <linearGradient id="stakeholderCollectionRate" x1="0" x2="0" y1="0" y2="1">
-                      <stop offset="5%" stopColor="var(--color-collection_rate_pct)" stopOpacity={0.3} />
-                      <stop offset="95%" stopColor="var(--color-collection_rate_pct)" stopOpacity={0.05} />
+                    <linearGradient
+                      id="stakeholderCollectionRate"
+                      x1="0"
+                      x2="0"
+                      y1="0"
+                      y2="1"
+                    >
+                      <stop
+                        offset="5%"
+                        stopColor="var(--color-collection_rate_pct)"
+                        stopOpacity={0.3}
+                      />
+                      <stop
+                        offset="95%"
+                        stopColor="var(--color-collection_rate_pct)"
+                        stopOpacity={0.05}
+                      />
                     </linearGradient>
                   </defs>
                   <Area
@@ -514,20 +555,36 @@ export function StakeholderReport({
           </CardHeader>
           <CardContent className="grid gap-3 md:grid-cols-2">
             <div className="rounded-lg border p-3">
-              <p className="text-muted-foreground text-xs">{isEn ? "Open tasks" : "Tareas abiertas"}</p>
+              <p className="text-muted-foreground text-xs">
+                {isEn ? "Open tasks" : "Tareas abiertas"}
+              </p>
               <p className="font-semibold text-xl tabular-nums">{openTasks}</p>
             </div>
             <div className="rounded-lg border p-3">
-              <p className="text-muted-foreground text-xs">{isEn ? "Overdue tasks" : "Tareas vencidas"}</p>
-              <p className="font-semibold text-xl tabular-nums">{overdueTasks}</p>
+              <p className="text-muted-foreground text-xs">
+                {isEn ? "Overdue tasks" : "Tareas vencidas"}
+              </p>
+              <p className="font-semibold text-xl tabular-nums">
+                {overdueTasks}
+              </p>
             </div>
             <div className="rounded-lg border p-3">
-              <p className="text-muted-foreground text-xs">{isEn ? "SLA breaches" : "Incumplimientos SLA"}</p>
-              <p className="font-semibold text-xl tabular-nums">{slaBreaches}</p>
+              <p className="text-muted-foreground text-xs">
+                {isEn ? "SLA breaches" : "Incumplimientos SLA"}
+              </p>
+              <p className="font-semibold text-xl tabular-nums">
+                {slaBreaches}
+              </p>
             </div>
             <div className="rounded-lg border p-3">
-              <p className="text-muted-foreground text-xs">{isEn ? "Upcoming check-ins / outs" : "Próximos check-ins / check-outs"}</p>
-              <p className="font-semibold text-xl tabular-nums">{upcomingCheckIns} / {upcomingCheckOuts}</p>
+              <p className="text-muted-foreground text-xs">
+                {isEn
+                  ? "Upcoming check-ins / outs"
+                  : "Próximos check-ins / check-outs"}
+              </p>
+              <p className="font-semibold text-xl tabular-nums">
+                {upcomingCheckIns} / {upcomingCheckOuts}
+              </p>
             </div>
           </CardContent>
         </Card>
@@ -547,7 +604,10 @@ export function StakeholderReport({
             {exceptions.length > 0 ? (
               <div className="space-y-2">
                 {exceptions.map((exception) => (
-                  <Alert key={`${exception.title}-${exception.detail}`} variant="warning">
+                  <Alert
+                    key={`${exception.title}-${exception.detail}`}
+                    variant="warning"
+                  >
                     <AlertTitle>{exception.title}</AlertTitle>
                     <AlertDescription>{exception.detail}</AlertDescription>
                   </Alert>
@@ -555,7 +615,9 @@ export function StakeholderReport({
               </div>
             ) : (
               <Alert>
-                <AlertTitle>{isEn ? "No critical exceptions" : "Sin excepciones críticas"}</AlertTitle>
+                <AlertTitle>
+                  {isEn ? "No critical exceptions" : "Sin excepciones críticas"}
+                </AlertTitle>
                 <AlertDescription>
                   {isEn
                     ? "No high-priority operational or financial exceptions detected in this period."
@@ -584,17 +646,32 @@ export function StakeholderReport({
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b text-left text-muted-foreground text-xs">
-                    <th className="py-2 font-medium">{isEn ? "Property" : "Propiedad"}</th>
-                    <th className="py-2 font-medium">{isEn ? "Income" : "Ingresos"}</th>
-                    <th className="py-2 font-medium">{isEn ? "Expenses" : "Gastos"}</th>
-                    <th className="py-2 font-medium">{isEn ? "Net payout" : "Liquidación neta"}</th>
-                    <th className="py-2 font-medium">{isEn ? "Occupancy" : "Ocupación"}</th>
-                    <th className="py-2 font-medium">{isEn ? "Outstanding" : "Pendientes"}</th>
+                    <th className="py-2 font-medium">
+                      {isEn ? "Property" : "Propiedad"}
+                    </th>
+                    <th className="py-2 font-medium">
+                      {isEn ? "Income" : "Ingresos"}
+                    </th>
+                    <th className="py-2 font-medium">
+                      {isEn ? "Expenses" : "Gastos"}
+                    </th>
+                    <th className="py-2 font-medium">
+                      {isEn ? "Net payout" : "Liquidación neta"}
+                    </th>
+                    <th className="py-2 font-medium">
+                      {isEn ? "Occupancy" : "Ocupación"}
+                    </th>
+                    <th className="py-2 font-medium">
+                      {isEn ? "Outstanding" : "Pendientes"}
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
                   {propertyRows.map((row) => (
-                    <tr className="border-b border-border/50" key={row.property_id}>
+                    <tr
+                      className="border-border/50 border-b"
+                      key={row.property_id}
+                    >
                       <td className="py-2">{row.property_name}</td>
                       <td className="py-2 tabular-nums">
                         {formatCurrency(row.income, "PYG", locale)}
@@ -602,14 +679,15 @@ export function StakeholderReport({
                       <td className="py-2 tabular-nums">
                         {formatCurrency(row.expenses, "PYG", locale)}
                       </td>
-                      <td className="py-2 tabular-nums font-medium">
+                      <td className="py-2 font-medium tabular-nums">
                         {formatCurrency(row.net_payout, "PYG", locale)}
                       </td>
                       <td className="py-2 tabular-nums">
                         {(row.occupancy_rate * 100).toFixed(1)}%
                       </td>
                       <td className="py-2 tabular-nums">
-                        {row.outstanding_count} · {formatCurrency(row.outstanding_amount, "PYG", locale)}
+                        {row.outstanding_count} ·{" "}
+                        {formatCurrency(row.outstanding_amount, "PYG", locale)}
                       </td>
                     </tr>
                   ))}

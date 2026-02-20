@@ -1,0 +1,26 @@
+{
+  "name": "@casaora/shared-api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/index.d.ts",
+      "default": "./src/index.js"
+    },
+    "./client": {
+      "types": "./src/client.d.ts",
+      "default": "./src/client.js"
+    },
+    "./types": {
+      "types": "./src/generated/openapi.d.ts",
+      "default": "./src/generated/openapi.js"
+    }
+  },
+  "scripts": {
+    "generate:types": "openapi-typescript ../../api/openapi.yaml --output src/generated/openapi.d.ts"
+  },
+  "devDependencies": {
+    "openapi-typescript": "^7.13.0"
+  }
+}

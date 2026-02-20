@@ -1,10 +1,9 @@
 "use client";
 
+import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-
-import { useQuery } from "@tanstack/react-query";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -54,7 +53,7 @@ export function TenantMessages({ locale }: { locale: string }) {
   if (loading) {
     return (
       <div className="flex min-h-[50vh] items-center justify-center">
-        <p className="text-muted-foreground animate-pulse">
+        <p className="animate-pulse text-muted-foreground">
           {isEn ? "Loading..." : "Cargando..."}
         </p>
       </div>
@@ -64,9 +63,7 @@ export function TenantMessages({ locale }: { locale: string }) {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">
-          {isEn ? "Messages" : "Mensajes"}
-        </h1>
+        <h1 className="font-bold text-2xl">{isEn ? "Messages" : "Mensajes"}</h1>
         <Link href="/tenant/dashboard">
           <Button size="sm" variant="outline">
             {isEn ? "Back" : "Volver"}
@@ -78,9 +75,7 @@ export function TenantMessages({ locale }: { locale: string }) {
         <Card>
           <CardContent className="py-12 text-center">
             <p className="text-muted-foreground">
-              {isEn
-                ? "No messages yet."
-                : "No hay mensajes aún."}
+              {isEn ? "No messages yet." : "No hay mensajes aún."}
             </p>
           </CardContent>
         </Card>
@@ -92,7 +87,8 @@ export function TenantMessages({ locale }: { locale: string }) {
             const status = asString(msg.status);
             const direction = asString(msg.direction) || "outbound";
             const payload = (msg.payload ?? {}) as Record<string, unknown>;
-            const body = asString(payload.body) || asString(payload.subject) || "";
+            const body =
+              asString(payload.body) || asString(payload.subject) || "";
             const sentAt = asString(msg.sent_at) || asString(msg.created_at);
 
             return (
@@ -101,12 +97,16 @@ export function TenantMessages({ locale }: { locale: string }) {
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0 flex-1">
                       <div className="mb-1 flex items-center gap-2">
-                        <span className="text-xs font-medium uppercase tracking-wide">
+                        <span className="font-medium text-xs uppercase tracking-wide">
                           {direction === "inbound"
-                            ? isEn ? "Received" : "Recibido"
-                            : isEn ? "Sent" : "Enviado"}
+                            ? isEn
+                              ? "Received"
+                              : "Recibido"
+                            : isEn
+                              ? "Sent"
+                              : "Enviado"}
                         </span>
-                        <span className="bg-muted rounded px-1.5 py-0.5 text-xs capitalize">
+                        <span className="rounded bg-muted px-1.5 py-0.5 text-xs capitalize">
                           {channel}
                         </span>
                         <StatusBadge label={status} value={status} />
@@ -116,7 +116,7 @@ export function TenantMessages({ locale }: { locale: string }) {
                       </p>
                     </div>
                     {sentAt && (
-                      <p className="text-muted-foreground shrink-0 text-xs">
+                      <p className="shrink-0 text-muted-foreground text-xs">
                         {new Date(sentAt).toLocaleDateString(locale, {
                           month: "short",
                           day: "numeric",

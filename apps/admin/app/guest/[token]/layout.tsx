@@ -2,12 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { useParams, useRouter } from "next/navigation";
-import {
-  createContext,
-  useContext,
-  useEffect,
-  type ReactNode,
-} from "react";
+import { createContext, type ReactNode, useContext, useEffect } from "react";
 
 const API_BASE =
   process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000/v1";
@@ -37,7 +32,11 @@ export default function GuestTokenLayout({
   const router = useRouter();
   const token = params.token;
 
-  const { data: ctx, isError, isLoading } = useQuery({
+  const {
+    data: ctx,
+    isError,
+    isLoading,
+  } = useQuery({
     queryKey: ["guest-verify", token],
     queryFn: async () => {
       const res = await fetch(`${API_BASE}/public/guest/verify`, {
@@ -80,7 +79,7 @@ export default function GuestTokenLayout({
   if (isLoading || !ctx) {
     return (
       <div className="flex min-h-[50vh] items-center justify-center">
-        <p className="text-muted-foreground animate-pulse">
+        <p className="animate-pulse text-muted-foreground">
           Verifying access...
         </p>
       </div>

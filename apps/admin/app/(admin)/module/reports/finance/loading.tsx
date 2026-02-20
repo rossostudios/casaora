@@ -21,13 +21,13 @@ export default function Loading() {
         <CardContent className="space-y-4">
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             {Array.from({ length: 4 }).map((_, i) => (
-              <Skeleton key={i} className="h-[100px] rounded-xl" />
+              <Skeleton className="h-[100px] rounded-xl" key={i} />
             ))}
           </div>
 
           <div className="grid gap-4 lg:grid-cols-2">
             {Array.from({ length: 2 }).map((_, i) => (
-              <Skeleton key={i} className="h-[280px] rounded-xl" />
+              <Skeleton className="h-[280px] rounded-xl" key={i} />
             ))}
           </div>
         </CardContent>

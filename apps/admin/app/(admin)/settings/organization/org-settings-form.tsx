@@ -1,9 +1,8 @@
 "use client";
 
+import Image from "next/image";
 import { useRef, useState, useTransition } from "react";
 import { toast } from "sonner";
-
-import Image from "next/image";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -55,7 +54,9 @@ export function OrgSettingsForm({ org }: { org: OrgRecord }) {
 
   async function uploadLogo(file: File) {
     if (!file.type.startsWith("image/")) {
-      toast.error(isEn ? "Please choose an image file." : "Selecciona una imagen.");
+      toast.error(
+        isEn ? "Please choose an image file." : "Selecciona una imagen."
+      );
       return;
     }
     if (file.size > MAX_LOGO_BYTES) {
@@ -118,8 +119,12 @@ export function OrgSettingsForm({ org }: { org: OrgRecord }) {
     const currencyVal = currency ? currency : undefined;
     const timezoneVal = timezone ? timezone : undefined;
     const bankNameVal = bankName.trim() ? bankName.trim() : undefined;
-    const bankAccountNumberVal = bankAccountNumber.trim() ? bankAccountNumber.trim() : undefined;
-    const bankAccountHolderVal = bankAccountHolder.trim() ? bankAccountHolder.trim() : undefined;
+    const bankAccountNumberVal = bankAccountNumber.trim()
+      ? bankAccountNumber.trim()
+      : undefined;
+    const bankAccountHolderVal = bankAccountHolder.trim()
+      ? bankAccountHolder.trim()
+      : undefined;
     const qrImageUrlVal = qrImageUrl.trim() ? qrImageUrl.trim() : undefined;
 
     startTransition(async () => {
@@ -194,7 +199,10 @@ export function OrgSettingsForm({ org }: { org: OrgRecord }) {
           {isEn ? "General" : "General"}
         </h3>
         <div className="grid gap-4 md:grid-cols-2">
-          <label className="block space-y-1 text-sm" htmlFor="org-settings-name">
+          <label
+            className="block space-y-1 text-sm"
+            htmlFor="org-settings-name"
+          >
             <span className="font-medium text-muted-foreground">
               {isEn ? "Organization name" : "Nombre de organización"}
             </span>
@@ -205,7 +213,10 @@ export function OrgSettingsForm({ org }: { org: OrgRecord }) {
               value={name}
             />
           </label>
-          <label className="block space-y-1 text-sm" htmlFor="org-settings-legal-name">
+          <label
+            className="block space-y-1 text-sm"
+            htmlFor="org-settings-legal-name"
+          >
             <span className="font-medium text-muted-foreground">
               {isEn ? "Legal name" : "Razón social"}
             </span>
@@ -228,9 +239,7 @@ export function OrgSettingsForm({ org }: { org: OrgRecord }) {
       </section>
 
       <section className="space-y-4">
-        <h3 className="font-semibold text-sm">
-          {isEn ? "Branding" : "Marca"}
-        </h3>
+        <h3 className="font-semibold text-sm">{isEn ? "Branding" : "Marca"}</h3>
         <p className="text-muted-foreground text-xs">
           {isEn
             ? "Used across booking pages and organization selectors."
@@ -241,7 +250,11 @@ export function OrgSettingsForm({ org }: { org: OrgRecord }) {
           <div className="flex h-14 w-14 items-center justify-center overflow-hidden rounded-lg border bg-muted/20">
             {logoUrl ? (
               <Image
-                alt={isEn ? "Organization logo preview" : "Vista previa del logo de organización"}
+                alt={
+                  isEn
+                    ? "Organization logo preview"
+                    : "Vista previa del logo de organización"
+                }
                 className="h-full w-full object-cover"
                 height={56}
                 src={logoUrl}
@@ -257,7 +270,9 @@ export function OrgSettingsForm({ org }: { org: OrgRecord }) {
 
           <div className="flex flex-wrap items-center gap-2">
             <Button
-              aria-label={isEn ? "Upload organization logo" : "Subir logo de organización"}
+              aria-label={
+                isEn ? "Upload organization logo" : "Subir logo de organización"
+              }
               disabled={uploadingLogo}
               onClick={() => logoInputRef.current?.click()}
               size="sm"
@@ -273,7 +288,11 @@ export function OrgSettingsForm({ org }: { org: OrgRecord }) {
                   : "Subir logo"}
             </Button>
             <Button
-              aria-label={isEn ? "Remove organization logo" : "Quitar logo de organización"}
+              aria-label={
+                isEn
+                  ? "Remove organization logo"
+                  : "Quitar logo de organización"
+              }
               disabled={!logoUrl || uploadingLogo}
               onClick={() => setLogoUrl("")}
               size="sm"
@@ -299,7 +318,10 @@ export function OrgSettingsForm({ org }: { org: OrgRecord }) {
           type="file"
         />
 
-        <label className="block space-y-1 text-sm" htmlFor="org-settings-logo-url">
+        <label
+          className="block space-y-1 text-sm"
+          htmlFor="org-settings-logo-url"
+        >
           <span className="font-medium text-muted-foreground">
             {isEn ? "Logo URL (fallback)" : "URL del logo (alternativa)"}
           </span>
@@ -318,7 +340,10 @@ export function OrgSettingsForm({ org }: { org: OrgRecord }) {
           {isEn ? "Regional" : "Regional"}
         </h3>
         <div className="grid gap-4 md:grid-cols-2">
-          <label className="block space-y-1 text-sm" htmlFor="org-settings-currency">
+          <label
+            className="block space-y-1 text-sm"
+            htmlFor="org-settings-currency"
+          >
             <span className="font-medium text-muted-foreground">
               {isEn ? "Default currency" : "Moneda predeterminada"}
             </span>
@@ -331,7 +356,10 @@ export function OrgSettingsForm({ org }: { org: OrgRecord }) {
               <option value="USD">USD (Dólar)</option>
             </Select>
           </label>
-          <label className="block space-y-1 text-sm" htmlFor="org-settings-timezone">
+          <label
+            className="block space-y-1 text-sm"
+            htmlFor="org-settings-timezone"
+          >
             <span className="font-medium text-muted-foreground">
               {isEn ? "Timezone" : "Zona horaria"}
             </span>
@@ -364,7 +392,10 @@ export function OrgSettingsForm({ org }: { org: OrgRecord }) {
             : "Utilizados para instrucciones de pago y estados del propietario."}
         </p>
         <div className="grid gap-4 md:grid-cols-2">
-          <label className="block space-y-1 text-sm" htmlFor="org-settings-bank-name">
+          <label
+            className="block space-y-1 text-sm"
+            htmlFor="org-settings-bank-name"
+          >
             <span className="font-medium text-muted-foreground">
               {isEn ? "Bank name" : "Nombre del banco"}
             </span>
@@ -375,7 +406,10 @@ export function OrgSettingsForm({ org }: { org: OrgRecord }) {
               value={bankName}
             />
           </label>
-          <label className="block space-y-1 text-sm" htmlFor="org-settings-bank-account">
+          <label
+            className="block space-y-1 text-sm"
+            htmlFor="org-settings-bank-account"
+          >
             <span className="font-medium text-muted-foreground">
               {isEn ? "Account number" : "Número de cuenta"}
             </span>
@@ -385,7 +419,10 @@ export function OrgSettingsForm({ org }: { org: OrgRecord }) {
               value={bankAccountNumber}
             />
           </label>
-          <label className="block space-y-1 text-sm" htmlFor="org-settings-bank-holder">
+          <label
+            className="block space-y-1 text-sm"
+            htmlFor="org-settings-bank-holder"
+          >
             <span className="font-medium text-muted-foreground">
               {isEn ? "Account holder" : "Titular de la cuenta"}
             </span>
@@ -395,7 +432,10 @@ export function OrgSettingsForm({ org }: { org: OrgRecord }) {
               value={bankAccountHolder}
             />
           </label>
-          <label className="block space-y-1 text-sm" htmlFor="org-settings-qr-url">
+          <label
+            className="block space-y-1 text-sm"
+            htmlFor="org-settings-qr-url"
+          >
             <span className="font-medium text-muted-foreground">
               {isEn ? "QR image URL" : "URL de imagen QR"}
             </span>

@@ -1,9 +1,9 @@
 "use client";
 
 import { PlusSignIcon } from "@hugeicons/core-free-icons";
-import { Suspense, useMemo, useState, useTransition } from "react";
-import { usePathname, useSearchParams } from "next/navigation";
 import type { ColumnDef } from "@tanstack/react-table";
+import { usePathname, useSearchParams } from "next/navigation";
+import { Suspense, useMemo, useState, useTransition } from "react";
 
 import {
   approveStatementAction,
@@ -20,8 +20,8 @@ import { NotionDataTable } from "@/components/ui/notion-data-table";
 import { Select } from "@/components/ui/select";
 import { Sheet } from "@/components/ui/sheet";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { useActiveLocale } from "@/lib/i18n/client";
 import { formatCurrency } from "@/lib/format";
+import { useActiveLocale } from "@/lib/i18n/client";
 
 type StatementRow = {
   id: string;
@@ -251,9 +251,7 @@ function StatementsManagerInner({
         header: isEn ? "Property" : "Propiedad",
         cell: ({ getValue, row }) => {
           const prop = String(getValue() ?? "");
-          const unit = String(
-            (row.original as StatementRow).unit_name ?? ""
-          );
+          const unit = String((row.original as StatementRow).unit_name ?? "");
           return (
             <span className="font-medium">
               {prop || "—"}
@@ -281,7 +279,7 @@ function StatementsManagerInner({
         header: isEn ? "Status" : "Estado",
         cell: ({ getValue }) => {
           const status = String(getValue());
-          return <StatusBadge value={status} tone={statusTone(status)} />;
+          return <StatusBadge tone={statusTone(status)} value={status} />;
         },
       },
       {
@@ -302,7 +300,7 @@ function StatementsManagerInner({
         cell: ({ row }) => {
           const data = row.original as StatementRow;
           return (
-            <span className="tabular-nums text-muted-foreground">
+            <span className="text-muted-foreground tabular-nums">
               {formatCurrency(data.operating_expenses, data.currency, locale)}
             </span>
           );
@@ -377,7 +375,7 @@ function StatementsManagerInner({
           <p className="text-muted-foreground text-xs">
             {isEn ? "Total payout statements" : "Total liquidaciones"}
           </p>
-          <p className="text-2xl font-semibold tabular-nums">
+          <p className="font-semibold text-2xl tabular-nums">
             {summaries.total}
           </p>
         </div>
@@ -385,7 +383,7 @@ function StatementsManagerInner({
           <p className="text-muted-foreground text-xs">
             {isEn ? "Drafts" : "Borradores"}
           </p>
-          <p className="text-2xl font-semibold tabular-nums">
+          <p className="font-semibold text-2xl tabular-nums">
             {summaries.drafts}
           </p>
         </div>
@@ -393,7 +391,7 @@ function StatementsManagerInner({
           <p className="text-muted-foreground text-xs">
             {isEn ? "Total revenue" : "Ingresos totales"}
           </p>
-          <p className="text-2xl font-semibold tabular-nums">
+          <p className="font-semibold text-2xl tabular-nums">
             {formatCurrency(summaries.totalRevenue, "PYG", locale)}
           </p>
         </div>
@@ -401,7 +399,7 @@ function StatementsManagerInner({
           <p className="text-muted-foreground text-xs">
             {isEn ? "Total payouts" : "Pagos totales"}
           </p>
-          <p className="text-2xl font-semibold tabular-nums">
+          <p className="font-semibold text-2xl tabular-nums">
             {formatCurrency(summaries.totalPayout, "PYG", locale)}
           </p>
         </div>

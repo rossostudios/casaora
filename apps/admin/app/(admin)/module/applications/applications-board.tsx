@@ -114,9 +114,7 @@ export function ApplicationsBoard({
                         />
                         <StatusBadge
                           label={`${qualificationBandLabel(row.qualification_band, isEn)} ${row.qualification_score > 0 ? `· ${row.qualification_score}` : ""}`}
-                          tone={qualificationBandClass(
-                            row.qualification_band
-                          )}
+                          tone={qualificationBandClass(row.qualification_band)}
                           value={row.qualification_band}
                         />
                       </div>
@@ -130,10 +128,7 @@ export function ApplicationsBoard({
                       <p className="text-muted-foreground text-xs">
                         {isEn ? "SLA due" : "SLA vence"}:{" "}
                         {row.response_sla_due_at
-                          ? formatDateTimeLabel(
-                              row.response_sla_due_at,
-                              locale
-                            )
+                          ? formatDateTimeLabel(row.response_sla_due_at, locale)
                           : "-"}
                       </p>
                       <AssignOwnerForm

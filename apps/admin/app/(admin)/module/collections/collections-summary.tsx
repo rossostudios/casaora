@@ -18,9 +18,6 @@ export function CollectionsSummary({
     <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
       {Array.from(summaries.byCurrency.entries()).map(([cur, s]) => (
         <StatCard
-          key={`outstanding-${cur}`}
-          label={`${isEn ? "Outstanding" : "Pendiente"} (${cur})`}
-          value={formatCurrency(s.outstanding, cur, locale)}
           helper={
             s.overdue > 0
               ? `${isEn ? "Overdue" : "Vencido"}: ${formatCurrency(s.overdue, cur, locale)}`
@@ -28,6 +25,9 @@ export function CollectionsSummary({
                 ? "No overdue"
                 : "Sin vencidos"
           }
+          key={`outstanding-${cur}`}
+          label={`${isEn ? "Outstanding" : "Pendiente"} (${cur})`}
+          value={formatCurrency(s.outstanding, cur, locale)}
         />
       ))}
       {Array.from(summaries.byCurrency.entries()).map(([cur, s]) => (
@@ -38,9 +38,9 @@ export function CollectionsSummary({
         />
       ))}
       <StatCard
+        helper={`${summaries.paidThisMonth}/${summaries.totalThisMonth} ${isEn ? "this month" : "este mes"}`}
         label={isEn ? "Collection rate" : "Tasa de cobro"}
         value={`${(summaries.collectionRate * 100).toFixed(1)}%`}
-        helper={`${summaries.paidThisMonth}/${summaries.totalThisMonth} ${isEn ? "this month" : "este mes"}`}
       />
     </section>
   );

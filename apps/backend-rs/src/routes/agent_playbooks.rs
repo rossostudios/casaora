@@ -72,6 +72,7 @@ async fn run_agent_playbook(
             agent_slug: Some(&agent_slug),
             chat_id: None,
             requested_by_user_id: None,
+            preferred_model: None,
         },
     )
     .await?;

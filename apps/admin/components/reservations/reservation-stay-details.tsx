@@ -8,12 +8,7 @@ import {
 } from "@hugeicons/core-free-icons";
 import Link from "next/link";
 
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Icon } from "@/components/ui/icon";
 import type { ReservationDetail } from "@/lib/features/reservations/types";
 
@@ -55,17 +50,24 @@ export function ReservationStayDetails({
   locale,
 }: StayDetailsProps) {
   const guestComposition = [
-    r.adults > 0 && `${r.adults} ${r.adults === 1 ? (isEn ? "Adult" : "Adulto") : (isEn ? "Adults" : "Adultos")}`,
-    r.children > 0 && `${r.children} ${r.children === 1 ? (isEn ? "Child" : "Niño") : (isEn ? "Children" : "Niños")}`,
-    r.infants > 0 && `${r.infants} ${r.infants === 1 ? (isEn ? "Infant" : "Infante") : (isEn ? "Infants" : "Infantes")}`,
-    `${r.pets} ${r.pets === 1 ? (isEn ? "Pet" : "Mascota") : (isEn ? "Pets" : "Mascotas")}`,
+    r.adults > 0 &&
+      `${r.adults} ${r.adults === 1 ? (isEn ? "Adult" : "Adulto") : isEn ? "Adults" : "Adultos"}`,
+    r.children > 0 &&
+      `${r.children} ${r.children === 1 ? (isEn ? "Child" : "Niño") : isEn ? "Children" : "Niños"}`,
+    r.infants > 0 &&
+      `${r.infants} ${r.infants === 1 ? (isEn ? "Infant" : "Infante") : isEn ? "Infants" : "Infantes"}`,
+    `${r.pets} ${r.pets === 1 ? (isEn ? "Pet" : "Mascota") : isEn ? "Pets" : "Mascotas"}`,
   ].filter(Boolean);
 
   return (
     <Card>
       <CardHeader className="pb-2">
         <CardTitle className="flex items-center gap-2 text-base">
-          <Icon className="text-muted-foreground" icon={Calendar03Icon} size={16} />
+          <Icon
+            className="text-muted-foreground"
+            icon={Calendar03Icon}
+            size={16}
+          />
           {isEn ? "Stay Details" : "Detalles de la estadía"}
         </CardTitle>
       </CardHeader>
@@ -109,9 +111,9 @@ export function ReservationStayDetails({
                 {r.pets}
               </span>
             ) : null}
-            {!r.adults && !r.children && !r.infants && !r.pets ? (
+            {r.adults || r.children || r.infants || r.pets ? null : (
               <span className="text-muted-foreground text-xs">-</span>
-            ) : null}
+            )}
           </div>
         </div>
 
@@ -144,20 +146,18 @@ export function ReservationStayDetails({
         ) : null}
 
         {r.channel_name ? (
-          <InfoRow label={isEn ? "Channel" : "Canal"}>
-            {r.channel_name}
-          </InfoRow>
+          <InfoRow label={isEn ? "Channel" : "Canal"}>{r.channel_name}</InfoRow>
         ) : null}
 
         {r.source ? (
-          <InfoRow label={isEn ? "Source" : "Origen"}>
-            {r.source}
-          </InfoRow>
+          <InfoRow label={isEn ? "Source" : "Origen"}>{r.source}</InfoRow>
         ) : null}
 
         {r.external_reservation_id ? (
           <InfoRow label={isEn ? "External ID" : "ID externo"}>
-            <span className="font-mono text-xs">{r.external_reservation_id}</span>
+            <span className="font-mono text-xs">
+              {r.external_reservation_id}
+            </span>
           </InfoRow>
         ) : null}
       </CardContent>

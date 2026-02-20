@@ -20,7 +20,7 @@ export function StatCard({ label, value, helper, icon }: StatCardProps) {
   return (
     <Card
       aria-label={`${label}: ${value}`}
-      className="overflow-hidden border-border/60 bg-card/98 transition-all duration-300 hover:border-border/80 hover:shadow-[var(--shadow-floating)] hover:-translate-y-[2px]"
+      className="overflow-hidden border-border/60 bg-card/98 transition-all duration-300 hover:-translate-y-[2px] hover:border-border/80 hover:shadow-[var(--shadow-floating)]"
     >
       <CardHeader className="pb-2">
         <CardDescription className="flex items-center gap-2 font-medium text-[11px] uppercase tracking-[0.15em]">
@@ -31,9 +31,7 @@ export function StatCard({ label, value, helper, icon }: StatCardProps) {
           ) : null}
           {label}
         </CardDescription>
-        <CardTitle className="text-2xl tabular-nums">
-          {value}
-        </CardTitle>
+        <CardTitle className="text-2xl tabular-nums">{value}</CardTitle>
       </CardHeader>
       {helper ? (
         <CardContent className="pt-0 text-muted-foreground/90 text-xs">

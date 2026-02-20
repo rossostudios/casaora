@@ -97,9 +97,13 @@ function SignupPageInner() {
     }
 
     setBusy(true);
-    const fullNameData = fullName.trim() ? { full_name: fullName.trim() } : undefined;
+    const fullNameData = fullName.trim()
+      ? { full_name: fullName.trim() }
+      : undefined;
     const redirectUrl = `${getSiteUrl()}/auth/callback?next=${encodeURIComponent(next)}`;
-    const errTitle = isEn ? "Could not create account" : "No se pudo crear la cuenta";
+    const errTitle = isEn
+      ? "Could not create account"
+      : "No se pudo crear la cuenta";
     const successTitle = isEn ? "Account created" : "Cuenta creada";
     const successDesc = isEn
       ? "Check your email to confirm your address."
@@ -215,7 +219,9 @@ function SignupPageInner() {
 
           <label className="block">
             <span className="mb-1 block font-medium text-muted-foreground text-xs">
-              {isEn ? "Referral code (optional)" : "Código de referido (opcional)"}
+              {isEn
+                ? "Referral code (optional)"
+                : "Código de referido (opcional)"}
             </span>
             <Input
               className="font-mono uppercase"

@@ -6,11 +6,8 @@ import {
   LeftToRightListBulletIcon,
   PlusSignIcon,
 } from "@hugeicons/core-free-icons";
-import { useMemo, useState, useRef, useCallback } from "react";
 import { useHotkey } from "@tanstack/react-hotkeys";
-import { isInputFocused } from "@/lib/hotkeys/is-input-focused";
-import { useFormSubmitHotkey } from "@/lib/hotkeys/use-form-hotkeys";
-
+import { useCallback, useMemo, useRef, useState } from "react";
 import {
   createCalendarBlockAction,
   deleteCalendarBlockAction,
@@ -24,6 +21,8 @@ import { Icon } from "@/components/ui/icon";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Sheet } from "@/components/ui/sheet";
+import { isInputFocused } from "@/lib/hotkeys/is-input-focused";
+import { useFormSubmitHotkey } from "@/lib/hotkeys/use-form-hotkeys";
 import { useActiveLocale } from "@/lib/i18n/client";
 
 type UnitRow = {
@@ -399,13 +398,13 @@ export function CalendarManager({
                   {isEn ? "Search" : "Buscar"}
                 </span>
                 <Input
-                  ref={searchInputRef}
                   onChange={(event) => setQuery(event.target.value)}
                   placeholder={
                     isEn
                       ? "Guest, unit, status..."
                       : "Huésped, unidad, estado..."
                   }
+                  ref={searchInputRef}
                   value={query}
                 />
               </label>
@@ -527,7 +526,11 @@ export function CalendarManager({
         open={open}
         title={isEn ? "New calendar block" : "Nuevo bloqueo"}
       >
-        <Form ref={formRef} action={createCalendarBlockAction} className="space-y-4">
+        <Form
+          action={createCalendarBlockAction}
+          className="space-y-4"
+          ref={formRef}
+        >
           <input name="organization_id" type="hidden" value={orgId} />
 
           <label className="block space-y-1">
@@ -557,8 +560,8 @@ export function CalendarManager({
                 {isEn ? "Starts" : "Inicio"}
               </span>
               <DatePicker
-                key={`start-${prefillStartDate ?? "empty"}`}
                 defaultValue={prefillStartDate}
+                key={`start-${prefillStartDate ?? "empty"}`}
                 locale={locale}
                 name="starts_on"
               />

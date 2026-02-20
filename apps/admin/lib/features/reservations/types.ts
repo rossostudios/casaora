@@ -74,7 +74,7 @@ export function toReservationDetail(
   if (nights === 0 && checkIn && checkOut) {
     const d1 = new Date(checkIn);
     const d2 = new Date(checkOut);
-    if (!Number.isNaN(d1.valueOf()) && !Number.isNaN(d2.valueOf())) {
+    if (!(Number.isNaN(d1.valueOf()) || Number.isNaN(d2.valueOf()))) {
       nights = Math.max(
         0,
         Math.round((d2.getTime() - d1.getTime()) / 86_400_000)

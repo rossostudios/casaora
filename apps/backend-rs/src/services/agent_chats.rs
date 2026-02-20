@@ -39,6 +39,21 @@ pub async fn list_agents(state: &AppState, org_id: &str) -> AppResult<Vec<Value>
         .collect())
 }
 
+pub fn list_models(state: &AppState) -> Vec<Value> {
+    let model_chain = state.config.openai_model_chain();
+    let primary = model_chain.first().cloned().unwrap_or_default();
+
+    model_chain
+        .into_iter()
+        .map(|model| {
+            json!({
+                "model": model,
+                "is_primary": model == primary,
+            })
+        })
+        .collect()
+}
+
 pub async fn list_chats(
     state: &AppState,
     org_id: &str,
@@ -132,21 +147,31 @@ pub async fn create_chat(
     user_id: &str,
     agent_slug: &str,
     title: Option<&str>,
+    preferred_model: Option<&str>,
 ) -> AppResult<Value> {
     let agent = get_agent_by_slug(state, agent_slug).await?;
     let fallback_title = value_str(&agent, "name").unwrap_or_else(|| "New chat".to_string());
     let chat_title = clean_title(title, &fallback_title);
+    let preferred_model = validate_preferred_model(state, preferred_model)?;
 
     let pool = db_pool(state)?;
     let row = sqlx::query(
-        "INSERT INTO ai_chats (organization_id, created_by_user_id, agent_id, title, is_archived)
-         VALUES ($1::uuid, $2::uuid, $3::uuid, $4, FALSE)
+        "INSERT INTO ai_chats (
+            organization_id,
+            created_by_user_id,
+            agent_id,
+            title,
+            preferred_model,
+            is_archived
+         )
+         VALUES ($1::uuid, $2::uuid, $3::uuid, $4, $5, FALSE)
          RETURNING row_to_json(ai_chats.*) AS row",
     )
     .bind(org_id)
     .bind(user_id)
     .bind(value_str(&agent, "id").unwrap_or_default())
     .bind(chat_title)
+    .bind(preferred_model)
     .fetch_optional(pool)
     .await
     .map_err(|error| supabase_error(state, &error))?;
@@ -156,6 +181,36 @@ pub async fn create_chat(
         .ok_or_else(|| AppError::Internal("Could not create chat.".to_string()))?;
 
     Ok(serialize_chat_summary(&chat, &agent, None))
+}
+
+pub async fn update_chat_preferences(
+    state: &AppState,
+    chat_id: &str,
+    org_id: &str,
+    user_id: &str,
+    preferred_model: Option<&str>,
+) -> AppResult<Value> {
+    let _chat = ensure_chat_owner(state, chat_id, org_id, user_id).await?;
+    let preferred_model = validate_preferred_model(state, preferred_model)?;
+    let pool = db_pool(state)?;
+
+    sqlx::query(
+        "UPDATE ai_chats
+         SET preferred_model = $1,
+             updated_at = now()
+         WHERE id = $2::uuid
+           AND organization_id = $3::uuid
+           AND created_by_user_id = $4::uuid",
+    )
+    .bind(preferred_model)
+    .bind(chat_id)
+    .bind(org_id)
+    .bind(user_id)
+    .execute(pool)
+    .await
+    .map_err(|error| supabase_error(state, &error))?;
+
+    get_chat(state, chat_id, org_id, user_id).await
 }
 
 pub async fn get_chat(
@@ -223,6 +278,7 @@ pub async fn send_chat_message(
     let chat = ensure_chat_owner(state, chat_id, org_id, user_id).await?;
     let agent_id = value_str(&chat, "agent_id").unwrap_or_default();
     let agent = get_agent_by_id(state, &agent_id).await?;
+    let preferred_model = value_str(&chat, "preferred_model");
 
     let trimmed_message = message.trim();
     if trimmed_message.is_empty() {
@@ -267,6 +323,7 @@ pub async fn send_chat_message(
             agent_slug: agent_slug.as_deref(),
             chat_id: Some(chat_id),
             requested_by_user_id: Some(user_id),
+            preferred_model: preferred_model.as_deref(),
         },
     )
     .await?;
@@ -404,6 +461,7 @@ pub async fn send_chat_message_streaming(
     let chat = ensure_chat_owner(state, chat_id, org_id, user_id).await?;
     let agent_id = value_str(&chat, "agent_id").unwrap_or_default();
     let agent = get_agent_by_id(state, &agent_id).await?;
+    let preferred_model = value_str(&chat, "preferred_model");
 
     let trimmed_message = message.trim();
     if trimmed_message.is_empty() {
@@ -449,6 +507,7 @@ pub async fn send_chat_message_streaming(
             agent_slug: agent_slug.as_deref(),
             chat_id: Some(chat_id),
             requested_by_user_id: Some(user_id),
+            preferred_model: preferred_model.as_deref(),
         },
         stream_tx,
     )
@@ -861,6 +920,7 @@ fn serialize_chat_summary(
         "agent_name": agent.as_object().and_then(|obj| obj.get("name")).cloned().unwrap_or(Value::Null),
         "agent_icon_key": agent.as_object().and_then(|obj| obj.get("icon_key")).cloned().unwrap_or(Value::Null),
         "title": chat.as_object().and_then(|obj| obj.get("title")).cloned().unwrap_or(Value::Null),
+        "preferred_model": chat.as_object().and_then(|obj| obj.get("preferred_model")).cloned().unwrap_or(Value::Null),
         "is_archived": chat.as_object().and_then(|obj| obj.get("is_archived")).and_then(Value::as_bool).unwrap_or(false),
         "last_message_at": chat
             .as_object()
@@ -919,6 +979,25 @@ fn clean_title(value: Option<&str>, fallback: &str) -> String {
     }
 
     candidate.to_string()
+}
+
+fn validate_preferred_model(
+    state: &AppState,
+    preferred_model: Option<&str>,
+) -> AppResult<Option<String>> {
+    let candidate = preferred_model.map(str::trim).unwrap_or_default();
+    if candidate.is_empty() {
+        return Ok(None);
+    }
+
+    let configured = state.config.openai_model_chain();
+    if configured.iter().any(|model| model == candidate) {
+        return Ok(Some(candidate.to_string()));
+    }
+
+    Err(AppError::BadRequest(format!(
+        "preferred_model '{candidate}' is not configured for this environment."
+    )))
 }
 
 fn coerce_limit(value: i64, default: i64, minimum: i64, maximum: i64) -> i64 {

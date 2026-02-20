@@ -1,7 +1,7 @@
 import Link from "next/link";
 
 import { Badge } from "@/components/ui/badge";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -62,16 +62,16 @@ export default async function PricingPage() {
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-16">
-      <div className="text-center mb-12">
-        <Badge variant="outline" className="mb-3">
+      <div className="mb-12 text-center">
+        <Badge className="mb-3" variant="outline">
           {isEn ? "Pricing" : "Precios"}
         </Badge>
-        <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
+        <h1 className="font-bold text-3xl tracking-tight sm:text-4xl">
           {isEn
             ? "Simple, transparent pricing"
             : "Precios simples y transparentes"}
         </h1>
-        <p className="mt-3 text-lg text-muted-foreground max-w-xl mx-auto">
+        <p className="mx-auto mt-3 max-w-xl text-lg text-muted-foreground">
           {isEn
             ? "Start for free, upgrade as you grow. All plans include a 14-day free trial."
             : "Empieza gratis, actualiza a medida que crezcas. Todos los planes incluyen 14 días de prueba gratis."}
@@ -97,11 +97,11 @@ export default async function PricingPage() {
             const isPopular = i === highlighted;
             return (
               <Card
-                key={plan.id}
                 className={cn(
                   "relative flex flex-col",
                   isPopular && "border-primary shadow-lg"
                 )}
+                key={plan.id}
               >
                 {isPopular ? (
                   <div className="absolute -top-3 left-1/2 -translate-x-1/2">
@@ -113,7 +113,7 @@ export default async function PricingPage() {
                 <CardHeader className="pb-2">
                   <CardTitle className="text-xl">{plan.name}</CardTitle>
                   <div className="mt-2">
-                    <span className="text-3xl font-bold">
+                    <span className="font-bold text-3xl">
                       {isEn
                         ? formatUSD(plan.price_usd)
                         : formatPYG(plan.price_pyg)}
@@ -125,7 +125,7 @@ export default async function PricingPage() {
                     ) : null}
                   </div>
                   {!isEn && (plan.price_usd ?? 0) > 0 ? (
-                    <p className="text-xs text-muted-foreground mt-1">
+                    <p className="mt-1 text-muted-foreground text-xs">
                       ~{formatUSD(plan.price_usd)}/mes USD
                     </p>
                   ) : null}
@@ -187,7 +187,7 @@ export default async function PricingPage() {
         </div>
       )}
 
-      <div className="mt-12 text-center text-sm text-muted-foreground">
+      <div className="mt-12 text-center text-muted-foreground text-sm">
         <p>
           {isEn
             ? "Need a custom plan for 100+ units? "

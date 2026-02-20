@@ -1,10 +1,12 @@
 "use client";
 
-import { CheckmarkCircle02Icon, Cancel01Icon } from "@hugeicons/core-free-icons";
-
+import {
+  Cancel01Icon,
+  CheckmarkCircle02Icon,
+} from "@hugeicons/core-free-icons";
+import type { ImportRowResult } from "@/app/(admin)/setup/import-actions";
 import { Icon } from "@/components/ui/icon";
 import { Progress } from "@/components/ui/progress";
-import type { ImportRowResult } from "@/app/(admin)/setup/import-actions";
 import { cn } from "@/lib/utils";
 
 type ImportProgressProps = {
@@ -37,11 +39,11 @@ export function ImportProgress({
               ? "Importing..."
               : "Importando..."}
         </span>
-        <span className="tabular-nums text-muted-foreground">
+        <span className="text-muted-foreground tabular-nums">
           {processed}/{total}
         </span>
       </div>
-      <Progress value={percent} className="h-2.5" />
+      <Progress className="h-2.5" value={percent} />
       {done ? (
         <div className="space-y-2">
           <div className="flex items-center gap-4 text-sm">
@@ -65,7 +67,9 @@ export function ImportProgress({
                     className="flex items-start gap-2 px-2 py-1 text-xs"
                     key={r.index}
                   >
-                    <span className={cn("shrink-0 font-medium text-destructive")}>
+                    <span
+                      className={cn("shrink-0 font-medium text-destructive")}
+                    >
                       {isEn ? "Row" : "Fila"} {r.index + 1}:
                     </span>
                     <span className="text-muted-foreground">{r.error}</span>

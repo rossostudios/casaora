@@ -5,6 +5,7 @@ import { notFound } from "next/navigation";
 import { OrgAccessChanged } from "@/components/shell/org-access-changed";
 import { PinButton } from "@/components/shell/pin-button";
 import { RecordRecent } from "@/components/shell/record-recent";
+import { TaskPhotoUpload } from "@/components/tasks/task-photo-upload";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -34,7 +35,6 @@ import {
 import { getActiveLocale } from "@/lib/i18n/server";
 import { getActiveOrgId } from "@/lib/org";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { TaskPhotoUpload } from "@/components/tasks/task-photo-upload";
 import { cn } from "@/lib/utils";
 
 import {

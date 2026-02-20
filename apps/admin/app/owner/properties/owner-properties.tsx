@@ -71,7 +71,7 @@ export function OwnerProperties({ locale }: { locale: string }) {
   if (loading) {
     return (
       <div className="flex min-h-[50vh] items-center justify-center">
-        <p className="text-muted-foreground animate-pulse">
+        <p className="animate-pulse text-muted-foreground">
           {isEn ? "Loading..." : "Cargando..."}
         </p>
       </div>
@@ -81,11 +81,11 @@ export function OwnerProperties({ locale }: { locale: string }) {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">
+        <h1 className="font-bold text-2xl">
           {isEn ? "Properties" : "Propiedades"}
         </h1>
         <Link
-          className="text-sm text-primary hover:underline"
+          className="text-primary text-sm hover:underline"
           href="/owner/dashboard"
         >
           {isEn ? "Back to dashboard" : "Volver al panel"}
@@ -106,7 +106,7 @@ export function OwnerProperties({ locale }: { locale: string }) {
             <Card key={row.id}>
               <CardHeader className="pb-2">
                 <div className="flex items-center justify-between gap-2">
-                  <CardTitle className="text-base truncate">
+                  <CardTitle className="truncate text-base">
                     {row.name}
                   </CardTitle>
                   <StatusBadge
@@ -115,7 +115,7 @@ export function OwnerProperties({ locale }: { locale: string }) {
                   />
                 </div>
               </CardHeader>
-              <CardContent className="space-y-1 text-sm text-muted-foreground">
+              <CardContent className="space-y-1 text-muted-foreground text-sm">
                 {row.code ? <p>Code: {row.code}</p> : null}
                 {row.address_line1 ? <p>{row.address_line1}</p> : null}
                 {row.city ? <p>{row.city}</p> : null}

@@ -68,7 +68,10 @@ export function Sheet({
   // Unmount after exit animation completes.
   useEffect(() => {
     if (!open && animatingClosed) {
-      const handle = window.setTimeout(() => setAnimatingClosed(false), ANIMATION_MS);
+      const handle = window.setTimeout(
+        () => setAnimatingClosed(false),
+        ANIMATION_MS
+      );
       return () => window.clearTimeout(handle);
     }
   }, [open, animatingClosed]);

@@ -1,11 +1,11 @@
 "use client";
 
-import { useCallback } from "react";
 import { useRouter } from "next/navigation";
+import { useCallback } from "react";
 import { toast } from "sonner";
 import {
-  useRealtimeSubscription,
   type RealtimeInsertPayload,
+  useRealtimeSubscription,
 } from "@/lib/supabase/use-realtime-subscription";
 
 type UseNewBookingToastOptions = {
@@ -24,11 +24,11 @@ export function useNewBookingToast({
       const row = payload.new;
       const guestName =
         typeof row.guest_name === "string" ? row.guest_name : "";
-      const unitName =
-        typeof row.unit_name === "string" ? row.unit_name : "";
+      const unitName = typeof row.unit_name === "string" ? row.unit_name : "";
       const id = typeof row.id === "string" ? row.id : "";
 
-      const description = [guestName, unitName].filter(Boolean).join(" — ") ||
+      const description =
+        [guestName, unitName].filter(Boolean).join(" — ") ||
         (isEn ? "New booking" : "Nueva reserva");
 
       toast.success(
@@ -42,12 +42,12 @@ export function useNewBookingToast({
               }
             : undefined,
           duration: 8000,
-        },
+        }
       );
 
       router.refresh();
     },
-    [isEn, router],
+    [isEn, router]
   );
 
   useRealtimeSubscription({

@@ -43,10 +43,9 @@ export default async function TeamSettingsPage() {
   try {
     let invitesPromiseResult: { data?: Record<string, unknown>[] };
     try {
-      invitesPromiseResult = await fetchJson<{ data?: Record<string, unknown>[] }>(
-        `/organizations/${orgId}/invites`,
-        { org_id: orgId }
-      );
+      invitesPromiseResult = await fetchJson<{
+        data?: Record<string, unknown>[];
+      }>(`/organizations/${orgId}/invites`, { org_id: orgId });
     } catch {
       invitesPromiseResult = { data: [] };
     }

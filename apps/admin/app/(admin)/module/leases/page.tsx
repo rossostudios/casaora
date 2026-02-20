@@ -1,3 +1,4 @@
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { Suspense } from "react";
 import { OrgAccessChanged } from "@/components/shell/org-access-changed";
@@ -15,7 +16,6 @@ import { errorMessage, isOrgMembershipError } from "@/lib/errors";
 import { getActiveLocale } from "@/lib/i18n/server";
 import { getActiveOrgId } from "@/lib/org";
 import { cn } from "@/lib/utils";
-import dynamic from "next/dynamic";
 
 const LeasesManager = dynamic(() =>
   import("./leases-manager").then((m) => m.LeasesManager)
@@ -125,7 +125,9 @@ export default async function LeasesModulePage({ searchParams }: PageProps) {
               className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
               href="/module/pricing"
             >
-              {isEn ? "Manage pricing templates" : "Gestionar plantillas de precios"}
+              {isEn
+                ? "Manage pricing templates"
+                : "Gestionar plantillas de precios"}
             </Link>
           </div>
         </CardHeader>

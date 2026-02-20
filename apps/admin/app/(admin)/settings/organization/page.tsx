@@ -62,7 +62,9 @@ export default async function OrganizationSettingsPage() {
   }
 
   let org: OrgRecord | null = null;
-  const orgApiFailTitle = isEn ? "API connection failed" : "Fallo de conexión a la API";
+  const orgApiFailTitle = isEn
+    ? "API connection failed"
+    : "Fallo de conexión a la API";
   const orgApiFailDesc = isEn
     ? "Could not load organization details."
     : "No se pudieron cargar los datos de la organización.";

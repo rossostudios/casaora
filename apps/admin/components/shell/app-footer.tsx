@@ -10,12 +10,18 @@ export function AppFooter({ locale }: { locale: Locale }) {
   const isEn = locale === "en-US";
 
   return (
-    <footer className="flex h-9 shrink-0 items-center justify-between border-t border-border/40 bg-background px-4 text-[11px] text-muted-foreground/70">
+    <footer className="flex h-9 shrink-0 items-center justify-between border-border/40 border-t bg-background px-4 text-[11px] text-muted-foreground/70">
       <div className="flex items-center gap-4">
-        <Link className="transition-colors hover:text-foreground" href="/documentation">
+        <Link
+          className="transition-colors hover:text-foreground"
+          href="/documentation"
+        >
           {isEn ? "Docs" : "Documentación"}
         </Link>
-        <Link className="transition-colors hover:text-foreground" href="/settings">
+        <Link
+          className="transition-colors hover:text-foreground"
+          href="/settings"
+        >
           {isEn ? "Settings" : "Ajustes"}
         </Link>
         <button
@@ -26,11 +32,13 @@ export function AppFooter({ locale }: { locale: Locale }) {
           type="button"
         >
           <Icon icon={KeyboardIcon} size={12} />
-          <span className="hidden sm:inline">{isEn ? "Shortcuts" : "Atajos"}</span>
+          <span className="hidden sm:inline">
+            {isEn ? "Shortcuts" : "Atajos"}
+          </span>
         </button>
       </div>
 
-      <span className="text-[11px] font-bold tracking-wider text-muted-foreground/70">
+      <span className="font-bold text-[11px] text-muted-foreground/70 tracking-wider">
         CASAORA
       </span>
 

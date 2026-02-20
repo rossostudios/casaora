@@ -2,12 +2,7 @@
 
 import { transitionReservationStatusAction } from "@/app/(admin)/module/reservations/actions";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form } from "@/components/ui/form";
 import type { ReservationDetail } from "@/lib/features/reservations/types";
 import { cn } from "@/lib/utils";
@@ -42,7 +37,9 @@ const STATUS_LABELS_ES: Record<string, string> = {
   no_show: "No show",
 };
 
-function statusActions(status: string): { next: string; label_en: string; label_es: string }[] {
+function statusActions(
+  status: string
+): { next: string; label_en: string; label_es: string }[] {
   const s = status.trim().toLowerCase();
   if (s === "pending") {
     return [
@@ -77,7 +74,8 @@ export function ReservationStatusTimeline({
 }: StatusTimelineProps) {
   const labels = isEn ? STATUS_LABELS_EN : STATUS_LABELS_ES;
   const currentStatus = r.status.trim().toLowerCase();
-  const isCancelled = currentStatus === "cancelled" || currentStatus === "no_show";
+  const isCancelled =
+    currentStatus === "cancelled" || currentStatus === "no_show";
   const currentIdx = isCancelled ? -1 : stepIndex(currentStatus);
   const actions = statusActions(r.status);
 
@@ -91,16 +89,17 @@ export function ReservationStatusTimeline({
       <CardContent className="space-y-4">
         <div className="flex items-center justify-between">
           {LIFECYCLE_STEPS.map((step, idx) => {
-            const isCompleted = !isCancelled && currentIdx >= 0 && idx <= currentIdx;
+            const isCompleted =
+              !isCancelled && currentIdx >= 0 && idx <= currentIdx;
             const isCurrent = !isCancelled && idx === currentIdx;
             const isFuture = !isCancelled && idx > currentIdx;
 
             return (
-              <div key={step} className="flex flex-1 items-center">
+              <div className="flex flex-1 items-center" key={step}>
                 <div className="flex flex-col items-center gap-1.5">
                   <div
                     className={cn(
-                      "flex h-8 w-8 items-center justify-center rounded-full border-2 text-xs font-semibold transition-all",
+                      "flex h-8 w-8 items-center justify-center rounded-full border-2 font-semibold text-xs transition-all",
                       isCurrent &&
                         "border-primary bg-primary text-primary-foreground ring-4 ring-primary/20",
                       isCompleted &&
@@ -113,8 +112,18 @@ export function ReservationStatusTimeline({
                     )}
                   >
                     {isCompleted && !isCurrent ? (
-                      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                      <svg
+                        className="h-4 w-4"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth={2.5}
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          d="M5 13l4 4L19 7"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
                       </svg>
                     ) : (
                       idx + 1
@@ -122,8 +131,8 @@ export function ReservationStatusTimeline({
                   </div>
                   <span
                     className={cn(
-                      "text-center text-[10px] font-medium leading-tight",
-                      isCurrent && "text-primary font-semibold",
+                      "text-center font-medium text-[10px] leading-tight",
+                      isCurrent && "font-semibold text-primary",
                       (isFuture || isCancelled) && "text-muted-foreground"
                     )}
                   >
@@ -153,9 +162,12 @@ export function ReservationStatusTimeline({
             </p>
             {r.cancelled_at ? (
               <p className="text-muted-foreground text-xs">
-                {new Date(r.cancelled_at).toLocaleDateString(isEn ? "en-US" : "es-PY", {
-                  dateStyle: "medium",
-                })}
+                {new Date(r.cancelled_at).toLocaleDateString(
+                  isEn ? "en-US" : "es-PY",
+                  {
+                    dateStyle: "medium",
+                  }
+                )}
               </p>
             ) : null}
             {r.cancel_reason ? (
@@ -169,7 +181,10 @@ export function ReservationStatusTimeline({
         {actions.length > 0 ? (
           <div className="flex flex-wrap gap-2">
             {actions.map((action) => (
-              <Form action={transitionReservationStatusAction} key={action.next}>
+              <Form
+                action={transitionReservationStatusAction}
+                key={action.next}
+              >
                 <input name="reservation_id" type="hidden" value={r.id} />
                 <input name="status" type="hidden" value={action.next} />
                 <Button

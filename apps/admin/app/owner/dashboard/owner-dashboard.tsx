@@ -1,10 +1,9 @@
 "use client";
 
+import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-
-import { useQuery } from "@tanstack/react-query";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -57,7 +56,7 @@ export function OwnerDashboard({ locale }: { locale: string }) {
   if (loading) {
     return (
       <div className="flex min-h-[50vh] items-center justify-center">
-        <p className="text-muted-foreground animate-pulse">
+        <p className="animate-pulse text-muted-foreground">
           {isEn ? "Loading..." : "Cargando..."}
         </p>
       </div>
@@ -67,9 +66,18 @@ export function OwnerDashboard({ locale }: { locale: string }) {
 
   const org = (data.organization ?? {}) as Record<string, unknown>;
   const summary = (data.summary ?? {}) as Record<string, unknown>;
-  const revenueByMonth = (data.revenue_by_month ?? []) as Record<string, unknown>[];
-  const revenueByProperty = (data.revenue_by_property ?? []) as Record<string, unknown>[];
-  const upcomingReservations = (data.upcoming_reservations ?? []) as Record<string, unknown>[];
+  const revenueByMonth = (data.revenue_by_month ?? []) as Record<
+    string,
+    unknown
+  >[];
+  const revenueByProperty = (data.revenue_by_property ?? []) as Record<
+    string,
+    unknown
+  >[];
+  const upcomingReservations = (data.upcoming_reservations ?? []) as Record<
+    string,
+    unknown
+  >[];
   const currency = asString(org.default_currency) || "PYG";
 
   // Max value for bar chart scaling
@@ -84,7 +92,7 @@ export function OwnerDashboard({ locale }: { locale: string }) {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold">
+      <h1 className="font-bold text-2xl">
         {isEn ? "Owner Dashboard" : "Panel del Propietario"}
         {asString(org.name) ? ` — ${asString(org.name)}` : ""}
       </h1>
@@ -93,44 +101,44 @@ export function OwnerDashboard({ locale }: { locale: string }) {
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardContent className="p-4 text-center">
-            <p className="text-3xl font-bold">
+            <p className="font-bold text-3xl">
               {asNumber(summary.total_properties)}
             </p>
-            <p className="mt-1 text-xs text-muted-foreground">
+            <p className="mt-1 text-muted-foreground text-xs">
               {isEn ? "Properties" : "Propiedades"}
             </p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-4 text-center">
-            <p className="text-3xl font-bold">
+            <p className="font-bold text-3xl">
               {asNumber(summary.total_units)}
             </p>
-            <p className="mt-1 text-xs text-muted-foreground">
+            <p className="mt-1 text-muted-foreground text-xs">
               {isEn ? "Units" : "Unidades"}
             </p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-4 text-center">
-            <p className="text-3xl font-bold">
+            <p className="font-bold text-3xl">
               {asNumber(summary.occupancy_rate).toFixed(1)}%
             </p>
-            <p className="mt-1 text-xs text-muted-foreground">
+            <p className="mt-1 text-muted-foreground text-xs">
               {isEn ? "Occupancy Rate" : "Tasa de Ocupación"}
             </p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-4 text-center">
-            <p className="text-3xl font-bold">
+            <p className="font-bold text-3xl">
               {formatCurrency(
                 asNumber(summary.total_collected),
                 currency,
                 locale
               )}
             </p>
-            <p className="mt-1 text-xs text-muted-foreground">
+            <p className="mt-1 text-muted-foreground text-xs">
               {isEn ? "Total Collected" : "Total Cobrado"}
             </p>
           </CardContent>
@@ -151,7 +159,10 @@ export function OwnerDashboard({ locale }: { locale: string }) {
               <div className="flex items-end gap-2" style={{ height: 140 }}>
                 {revenueByMonth.map((r) => {
                   const amount = asNumber(r.amount);
-                  const heightPct = Math.max((amount / maxMonthlyRevenue) * 100, 4);
+                  const heightPct = Math.max(
+                    (amount / maxMonthlyRevenue) * 100,
+                    4
+                  );
                   return (
                     <div
                       className="flex flex-1 flex-col items-center gap-1"
@@ -186,14 +197,18 @@ export function OwnerDashboard({ locale }: { locale: string }) {
             <CardContent className="space-y-2">
               {revenueByProperty.map((r) => {
                 const amount = asNumber(r.amount);
-                const widthPct = Math.max((amount / maxPropertyRevenue) * 100, 4);
+                const widthPct = Math.max(
+                  (amount / maxPropertyRevenue) * 100,
+                  4
+                );
                 return (
                   <div key={asString(r.property_id)}>
                     <div className="flex items-center justify-between text-sm">
                       <span className="truncate">
-                        {asString(r.property_name) || asString(r.property_id).slice(0, 8)}
+                        {asString(r.property_name) ||
+                          asString(r.property_id).slice(0, 8)}
                       </span>
-                      <span className="ml-2 text-xs text-muted-foreground">
+                      <span className="ml-2 text-muted-foreground text-xs">
                         {formatCurrency(amount, currency, locale)}
                       </span>
                     </div>
@@ -230,11 +245,11 @@ export function OwnerDashboard({ locale }: { locale: string }) {
                     {asString(r.check_in_date)} &rarr;{" "}
                     {asString(r.check_out_date)}
                   </p>
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-muted-foreground text-xs">
                     {asString(r.unit_name) || asString(r.unit_id).slice(0, 8)}
                   </p>
                 </div>
-                <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
+                <span className="rounded-full bg-primary/10 px-2 py-0.5 font-medium text-primary text-xs">
                   {asString(r.status)}
                 </span>
               </div>
@@ -252,7 +267,7 @@ export function OwnerDashboard({ locale }: { locale: string }) {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-bold">
+            <p className="font-bold text-2xl">
               {asNumber(summary.active_leases)}
             </p>
           </CardContent>
@@ -264,7 +279,7 @@ export function OwnerDashboard({ locale }: { locale: string }) {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-bold">
+            <p className="font-bold text-2xl">
               {asNumber(summary.active_reservations)}
             </p>
           </CardContent>
@@ -276,7 +291,7 @@ export function OwnerDashboard({ locale }: { locale: string }) {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-bold">
+            <p className="font-bold text-2xl">
               {asNumber(summary.pending_statements)}
             </p>
           </CardContent>
@@ -286,7 +301,7 @@ export function OwnerDashboard({ locale }: { locale: string }) {
       {/* Navigation */}
       <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-4">
         <Link href="/owner/properties">
-          <Card className="hover:border-primary cursor-pointer transition-colors">
+          <Card className="cursor-pointer transition-colors hover:border-primary">
             <CardContent className="p-4 text-center">
               <p className="font-medium">
                 {isEn ? "Properties" : "Propiedades"}
@@ -295,7 +310,7 @@ export function OwnerDashboard({ locale }: { locale: string }) {
           </Card>
         </Link>
         <Link href="/owner/statements">
-          <Card className="hover:border-primary cursor-pointer transition-colors">
+          <Card className="cursor-pointer transition-colors hover:border-primary">
             <CardContent className="p-4 text-center">
               <p className="font-medium">
                 {isEn ? "Statements" : "Estados de Cuenta"}
@@ -304,7 +319,7 @@ export function OwnerDashboard({ locale }: { locale: string }) {
           </Card>
         </Link>
         <Link href="/owner/reservations">
-          <Card className="hover:border-primary cursor-pointer transition-colors">
+          <Card className="cursor-pointer transition-colors hover:border-primary">
             <CardContent className="p-4 text-center">
               <p className="font-medium">
                 {isEn ? "Reservations" : "Reservas"}

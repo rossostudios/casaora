@@ -27,9 +27,7 @@ export function DashboardRentalKpis({
 }: DashboardRentalKpisProps) {
   return (
     <section
-      aria-label={
-        isEn ? "Rental performance" : "Rendimiento de alquileres"
-      }
+      aria-label={isEn ? "Rental performance" : "Rendimiento de alquileres"}
       className="rounded-3xl border border-border/80 bg-card/98 p-4 sm:p-5"
     >
       <h2 className="mb-3 font-medium text-[11px] text-muted-foreground uppercase tracking-[0.14em]">
@@ -47,11 +45,7 @@ export function DashboardRentalKpis({
           value={`${(numberOrZero(kpiDashboard.collection_rate) * 100).toFixed(1)}%`}
         />
         <StatCard
-          helper={
-            isEn
-              ? "Among late payments"
-              : "Entre pagos atrasados"
-          }
+          helper={isEn ? "Among late payments" : "Entre pagos atrasados"}
           icon={CalendarCheckIn01Icon}
           label={isEn ? "Avg days late" : "Promedio dias de atraso"}
           value={`${numberOrZero(kpiDashboard.avg_days_late).toFixed(1)}d`}
@@ -91,11 +85,7 @@ export function DashboardRentalKpis({
                 : "Sin datos aun"
           }
           icon={Task01Icon}
-          label={
-            isEn
-              ? "Maintenance response"
-              : "Respuesta mantenimiento"
-          }
+          label={isEn ? "Maintenance response" : "Respuesta mantenimiento"}
           value={
             kpiDashboard.avg_maintenance_response_hours != null
               ? `${numberOrZero(kpiDashboard.avg_maintenance_response_hours).toFixed(0)}h`
@@ -103,9 +93,7 @@ export function DashboardRentalKpis({
           }
         />
         <StatCard
-          helper={
-            isEn ? "Next 60 days" : "Próximos 60 días"
-          }
+          helper={isEn ? "Next 60 days" : "Próximos 60 días"}
           icon={File01Icon}
           label={isEn ? "Expiring leases" : "Contratos por vencer"}
           value={String(numberOrZero(kpiDashboard.expiring_leases_60d))}

@@ -1,11 +1,13 @@
 "use client";
 
 import { Form as BaseForm } from "@base-ui/react/form";
-import type { ComponentPropsWithoutRef } from "react";
+import { type ComponentPropsWithRef, forwardRef } from "react";
 import { cn } from "@/lib/utils";
 
-type FormProps = ComponentPropsWithoutRef<typeof BaseForm>;
+type FormProps = ComponentPropsWithRef<typeof BaseForm>;
 
-export function Form({ className, ...props }: FormProps) {
-  return <BaseForm className={cn(className)} {...props} />;
-}
+export const Form = forwardRef<HTMLFormElement, FormProps>(
+  ({ className, ...props }, ref) => {
+    return <BaseForm className={cn(className)} ref={ref} {...props} />;
+  }
+);

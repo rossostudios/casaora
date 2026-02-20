@@ -2,12 +2,7 @@
 
 import { InformationCircleIcon } from "@hugeicons/core-free-icons";
 import Link from "next/link";
-import {
-  createContext,
-  useContext,
-  useState,
-  type ReactNode,
-} from "react";
+import { createContext, type ReactNode, useContext, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -36,10 +31,7 @@ function shortId(value: string): string {
   return `${value.slice(0, 8)}…${value.slice(-4)}`;
 }
 
-function asDateLabel(
-  value: string,
-  locale: "en-US" | "es-PY"
-): string | null {
+function asDateLabel(value: string, locale: "en-US" | "es-PY"): string | null {
   if (!(ISO_DATE_TIME_RE.test(value) || ISO_DATE_RE.test(value))) return null;
   const date = new Date(value);
   if (Number.isNaN(date.valueOf())) return null;
@@ -74,7 +66,7 @@ function toLabel(value: unknown): string {
 const DetailsCtx = createContext<{
   open: boolean;
   toggle: (next?: boolean) => void;
-}>({ open: false, toggle: () => { } });
+}>({ open: false, toggle: () => {} });
 
 export function DetailsProvider({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false);
@@ -104,7 +96,7 @@ export function DetailsTrigger({ isEn, fieldCount }: DetailsTriggerProps) {
   return (
     <Button
       className={cn(
-        "h-9 rounded-xl border-border/40 bg-background/40 px-3 gap-2 hover:bg-background/80",
+        "h-9 gap-2 rounded-xl border-border/40 bg-background/40 px-3 hover:bg-background/80",
         open && "bg-background/80 ring-1 ring-primary/30"
       )}
       onClick={() => toggle()}
@@ -163,7 +155,7 @@ export function DetailsPanel({
         {links.length > 0 ? (
           <>
             <div className="space-y-2">
-              <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
+              <p className="font-mono text-[10px] text-muted-foreground uppercase tracking-widest">
                 {isEn ? "RELATED WORKFLOWS" : "FLUJOS RELACIONADOS"}
               </p>
               <div className="flex flex-wrap gap-2">
@@ -199,11 +191,7 @@ export function DetailsPanel({
 
             const fkHref = (() => {
               const directBase = FOREIGN_KEY_HREF_BASE_BY_KEY[key];
-              if (
-                directBase &&
-                typeof value === "string" &&
-                isUuid(value)
-              ) {
+              if (directBase && typeof value === "string" && isUuid(value)) {
                 return `${directBase}/${value}`;
               }
 
@@ -246,9 +234,7 @@ export function DetailsPanel({
                     <Link
                       className={cn(
                         "inline-flex items-center text-primary underline-offset-4 hover:underline",
-                        key.endsWith("_name")
-                          ? "text-sm"
-                          : "font-mono text-xs",
+                        key.endsWith("_name") ? "text-sm" : "font-mono text-xs",
                         showMonospace && !key.endsWith("_name")
                           ? "break-all"
                           : ""
@@ -263,18 +249,10 @@ export function DetailsPanel({
                     </Link>
                   ) : typeof value === "boolean" ? (
                     key === "is_active" ? (
-                      <StatusBadge
-                        value={value ? "active" : "inactive"}
-                      />
+                      <StatusBadge value={value ? "active" : "inactive"} />
                     ) : (
                       <p className="text-foreground text-sm">
-                        {value
-                          ? isEn
-                            ? "Yes"
-                            : "Si"
-                          : isEn
-                            ? "No"
-                            : "No"}
+                        {value ? (isEn ? "Yes" : "Si") : isEn ? "No" : "No"}
                       </p>
                     )
                   ) : typeof value === "number" ? (

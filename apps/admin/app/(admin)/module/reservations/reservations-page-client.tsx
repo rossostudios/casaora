@@ -30,4 +30,3 @@ export function ReservationHeaderButtons({ isEn }: { isEn: boolean }) {
     </div>
   );
 }
-

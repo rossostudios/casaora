@@ -1,16 +1,15 @@
 "use client";
 
-import { SparklesIcon } from "@hugeicons/core-free-icons";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useCallback, useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Locale } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import { CHAT_LINKS } from "./sidebar-constants";
-import { NavLinkRow, ShortcutBlock } from "./sidebar-nav-link";
-import type { ChatAgentItem, ChatSummaryItem } from "./sidebar-types";
-import { isRouteActive, normalizeAgentItems, normalizeChatItems } from "./sidebar-utils";
+import { ShortcutBlock } from "./sidebar-nav-link";
+import type { ChatSummaryItem } from "./sidebar-types";
+import { isRouteActive, normalizeChatItems } from "./sidebar-utils";
 
 export function SidebarChatTab({
   locale,
@@ -35,45 +34,23 @@ export function SidebarChatTab({
   const { data: chatData, isLoading: chatLoading } = useQuery({
     queryKey: ["sidebar-chat-data", orgId, showArchivedChats],
     queryFn: async () => {
-      if (!orgId) return { agents: [] as ChatAgentItem[], chats: [] as ChatSummaryItem[] };
+      if (!orgId) return { chats: [] as ChatSummaryItem[] };
 
-      const [agentsResponse, chatsResponse] = await Promise.all([
-        fetch(`/api/agent/agents?org_id=${encodeURIComponent(orgId)}`, {
+      const response = await fetch(
+        `/api/agent/chats?org_id=${encodeURIComponent(orgId)}&archived=${showArchivedChats ? "true" : "false"}&limit=8`,
+        {
           method: "GET",
           cache: "no-store",
           headers: { Accept: "application/json" },
-        }),
-        fetch(
-          `/api/agent/chats?org_id=${encodeURIComponent(orgId)}&archived=${showArchivedChats ? "true" : "false"}&limit=8`,
-          {
-            method: "GET",
-            cache: "no-store",
-            headers: { Accept: "application/json" },
-          }
-        ),
-      ]);
+        }
+      );
 
-      const agentsPayload = (await agentsResponse.json()) as unknown;
-      const chatsPayload = (await chatsResponse.json()) as unknown;
+      const payload = (await response.json()) as unknown;
 
-      if (!agentsResponse.ok) {
+      if (!response.ok) {
         const message =
-          agentsPayload &&
-          typeof agentsPayload === "object" &&
-          "error" in agentsPayload
-            ? String((agentsPayload as { error?: unknown }).error)
-            : isEn
-              ? "Could not load agents."
-              : "No se pudieron cargar los agentes.";
-        throw new Error(message);
-      }
-
-      if (!chatsResponse.ok) {
-        const message =
-          chatsPayload &&
-          typeof chatsPayload === "object" &&
-          "error" in chatsPayload
-            ? String((chatsPayload as { error?: unknown }).error)
+          payload && typeof payload === "object" && "error" in payload
+            ? String((payload as { error?: unknown }).error)
             : isEn
               ? "Could not load chats."
               : "No se pudieron cargar los chats.";
@@ -81,19 +58,19 @@ export function SidebarChatTab({
       }
 
       return {
-        agents: normalizeAgentItems(agentsPayload),
-        chats: normalizeChatItems(chatsPayload),
+        chats: normalizeChatItems(payload),
       };
     },
     enabled: Boolean(orgId),
     retry: false,
   });
 
-  const chatAgents = chatData?.agents ?? [];
   const recentChats = chatData?.chats ?? [];
 
   const loadChatData = useCallback(async () => {
-    await queryClient.invalidateQueries({ queryKey: ["sidebar-chat-data", orgId, showArchivedChats] });
+    await queryClient.invalidateQueries({
+      queryKey: ["sidebar-chat-data", orgId, showArchivedChats],
+    });
   }, [queryClient, orgId, showArchivedChats]);
 
   const mutateRecentChat = useCallback(
@@ -102,7 +79,9 @@ export function SidebarChatTab({
       setChatBusyId(chatId);
       setChatError(null);
 
-      const fallbackErr = isEn ? "Chat update failed." : "La actualización del chat falló.";
+      const fallbackErr = isEn
+        ? "Chat update failed."
+        : "La actualización del chat falló.";
       try {
         let response: Response;
         if (action === "delete") {
@@ -172,38 +151,6 @@ export function SidebarChatTab({
       <section className="space-y-1.5">
         <div className="flex items-center justify-between px-2">
           <h3 className="font-medium text-[10px] text-sidebar-foreground/40 uppercase tracking-[0.08em]">
-            {isEn ? "Agent catalog" : "Catálogo de agentes"}
-          </h3>
-          <Link
-            className="text-[11px] text-sidebar-foreground/55 hover:text-sidebar-foreground"
-            href="/app/agents"
-          >
-            {isEn ? "Open" : "Abrir"}
-          </Link>
-        </div>
-        <div className="space-y-1">
-          {chatAgents.slice(0, 6).map((agent) => (
-            <NavLinkRow
-              active={pathname.startsWith("/app/agents")}
-              href={`/app/agents?agent=${encodeURIComponent(agent.slug)}`}
-              icon={SparklesIcon}
-              key={agent.id}
-              label={agent.name}
-            />
-          ))}
-          {!chatLoading && chatAgents.length === 0 ? (
-            <p className="px-2 py-1.5 text-[12px] text-sidebar-foreground/50">
-              {isEn
-                ? "No agents available."
-                : "No hay agentes disponibles."}
-            </p>
-          ) : null}
-        </div>
-      </section>
-
-      <section className="space-y-1.5">
-        <div className="flex items-center justify-between px-2">
-          <h3 className="font-medium text-[10px] text-sidebar-foreground/40 uppercase tracking-[0.08em]">
             {isEn ? "Recent chats" : "Chats recientes"}
           </h3>
           <button
@@ -225,9 +172,7 @@ export function SidebarChatTab({
         </div>
 
         {chatError ? (
-          <p className="px-2 py-1 text-[11px] text-red-400">
-            {chatError}
-          </p>
+          <p className="px-2 py-1 text-[11px] text-red-400">{chatError}</p>
         ) : null}
 
         <div className="space-y-0.5">
@@ -248,9 +193,7 @@ export function SidebarChatTab({
                 <div className="truncate font-medium">{chat.title}</div>
                 <div className="truncate text-[11px] text-sidebar-foreground/50">
                   {chat.latest_message_preview ||
-                    (isEn
-                      ? "No messages yet."
-                      : "Todavía no hay mensajes.")}
+                    (isEn ? "No messages yet." : "Todavía no hay mensajes.")}
                 </div>
               </Link>
 
@@ -259,12 +202,8 @@ export function SidebarChatTab({
                   className="rounded px-1.5 py-1 text-[10px] text-sidebar-foreground/55 hover:bg-sidebar-accent hover:text-sidebar-foreground"
                   disabled={chatBusyId !== null}
                   onClick={() => {
-                    const action = chat.is_archived
-                      ? "restore"
-                      : "archive";
-                    mutateRecentChat(chat.id, action).catch(
-                      () => undefined
-                    );
+                    const action = chat.is_archived ? "restore" : "archive";
+                    mutateRecentChat(chat.id, action).catch(() => undefined);
                   }}
                   type="button"
                 >
@@ -284,9 +223,7 @@ export function SidebarChatTab({
                       setChatDeleteArmedId(chat.id);
                       return;
                     }
-                    mutateRecentChat(chat.id, "delete").catch(
-                      () => undefined
-                    );
+                    mutateRecentChat(chat.id, "delete").catch(() => undefined);
                     setChatDeleteArmedId(null);
                   }}
                   type="button"
@@ -318,9 +255,7 @@ export function SidebarChatTab({
 
         <Link
           className="inline-flex w-full items-center justify-center rounded-lg border border-sidebar-border/50 px-2 py-1.5 text-[12px] text-sidebar-foreground/60 hover:text-sidebar-foreground"
-          href={
-            showArchivedChats ? "/app/chats?archived=1" : "/app/chats"
-          }
+          href={showArchivedChats ? "/app/chats?archived=1" : "/app/chats"}
         >
           {isEn ? "Open full history" : "Abrir historial completo"}
         </Link>

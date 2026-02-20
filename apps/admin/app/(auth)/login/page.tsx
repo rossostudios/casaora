@@ -124,10 +124,9 @@ function LoginPageInner() {
       },
     });
     if (error) {
-      toast.error(
-        isEn ? "Could not sign in" : "No se pudo iniciar sesión",
-        { description: error.message }
-      );
+      toast.error(isEn ? "Could not sign in" : "No se pudo iniciar sesión", {
+        description: error.message,
+      });
     }
   };
 
@@ -139,10 +138,10 @@ function LoginPageInner() {
       </div>
 
       {/* Heading */}
-      <h1 className="text-2xl font-semibold tracking-tight">
+      <h1 className="font-semibold text-2xl tracking-tight">
         {isEn ? "Welcome back!" : "¡Bienvenido de nuevo!"}
       </h1>
-      <p className="mt-2 text-sm text-muted-foreground">
+      <p className="mt-2 text-muted-foreground text-sm">
         {isEn
           ? "Enter email & password to continue."
           : "Ingresa tu correo y contraseña para continuar."}
@@ -180,11 +179,9 @@ function LoginPageInner() {
           />
           <Input
             autoComplete="current-password"
-            className="h-12 rounded-full pl-10 pr-11 text-sm"
+            className="h-12 rounded-full pr-11 pl-10 text-sm"
             onChange={(e) => setPassword(e.target.value)}
-            placeholder={
-              isEn ? "Enter your password" : "Ingresa tu contraseña"
-            }
+            placeholder={isEn ? "Enter your password" : "Ingresa tu contraseña"}
             type={showPassword ? "text" : "password"}
             value={password}
           />
@@ -200,14 +197,14 @@ function LoginPageInner() {
 
         {/* Remember me + Forgot password */}
         <div className="flex items-center justify-between">
-          <label className="flex cursor-pointer items-center gap-2 text-sm select-none">
+          <label className="flex cursor-pointer select-none items-center gap-2 text-sm">
             <Checkbox />
             <span className="text-muted-foreground">
               {isEn ? "Remember me" : "Recordarme"}
             </span>
           </label>
           <Link
-            className="text-sm font-semibold transition-colors hover:text-primary"
+            className="font-semibold text-sm transition-colors hover:text-primary"
             href="/forgot-password"
           >
             {isEn ? "Forgot password" : "Olvidé mi contraseña"}
@@ -233,7 +230,7 @@ function LoginPageInner() {
       {/* Divider */}
       <div className="my-6 flex w-full items-center gap-4">
         <div className="h-px flex-1 bg-border" />
-        <span className="text-xs text-muted-foreground">
+        <span className="text-muted-foreground text-xs">
           {isEn ? "Or sign in with" : "O inicia sesión con"}
         </span>
         <div className="h-px flex-1 bg-border" />
@@ -262,7 +259,7 @@ function LoginPageInner() {
       </div>
 
       {/* Create account */}
-      <p className="mt-8 text-sm text-muted-foreground">
+      <p className="mt-8 text-muted-foreground text-sm">
         {isEn ? "Don't have an account? " : "¿No tienes una cuenta? "}
         <Link
           className="font-medium text-foreground underline underline-offset-4 transition-colors hover:text-primary"

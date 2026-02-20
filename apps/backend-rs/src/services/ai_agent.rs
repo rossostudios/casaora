@@ -33,6 +33,8 @@ pub enum AgentStreamEvent {
     Done {
         content: String,
         tool_trace: Vec<Value>,
+        model_used: Option<String>,
+        fallback_used: bool,
     },
     #[serde(rename = "error")]
     Error { message: String },
@@ -69,6 +71,7 @@ pub struct RunAiAgentChatParams<'a> {
     pub agent_slug: Option<&'a str>,
     pub chat_id: Option<&'a str>,
     pub requested_by_user_id: Option<&'a str>,
+    pub preferred_model: Option<&'a str>,
 }
 
 pub fn list_supported_tables() -> Vec<String> {
@@ -184,8 +187,13 @@ pub async fn run_ai_agent_chat(
 
     let max_steps = std::cmp::max(1, state.config.ai_agent_max_tool_steps);
     for _ in 0..max_steps {
-        let (completion, call_model, call_fallback) =
-            call_openai_chat_completion(state, &messages, Some(&tool_definitions)).await?;
+        let (completion, call_model, call_fallback) = call_openai_chat_completion(
+            state,
+            &messages,
+            Some(&tool_definitions),
+            params.preferred_model,
+        )
+        .await?;
         model_used = call_model;
         fallback_used = fallback_used || call_fallback;
 
@@ -308,7 +316,7 @@ pub async fn run_ai_agent_chat(
     }
 
     let (final_completion, final_model, final_fallback) =
-        call_openai_chat_completion(state, &messages, None).await?;
+        call_openai_chat_completion(state, &messages, None, params.preferred_model).await?;
     if !final_model.trim().is_empty() {
         model_used = final_model;
     }
@@ -383,6 +391,8 @@ pub async fn run_ai_agent_chat_streaming(
             .send(AgentStreamEvent::Done {
                 content: message.clone(),
                 tool_trace: Vec::new(),
+                model_used: None,
+                fallback_used: false,
             })
             .await;
 
@@ -438,8 +448,13 @@ pub async fn run_ai_agent_chat_streaming(
 
     let max_steps = std::cmp::max(1, state.config.ai_agent_max_tool_steps);
     for _ in 0..max_steps {
-        let (completion, call_model, call_fallback) =
-            call_openai_chat_completion(state, &messages, Some(&tool_definitions)).await?;
+        let (completion, call_model, call_fallback) = call_openai_chat_completion(
+            state,
+            &messages,
+            Some(&tool_definitions),
+            params.preferred_model,
+        )
+        .await?;
         model_used = call_model;
         fallback_used = fallback_used || call_fallback;
 
@@ -576,6 +591,12 @@ pub async fn run_ai_agent_chat_streaming(
                 .send(AgentStreamEvent::Done {
                     content: assistant_text.clone(),
                     tool_trace: tool_trace.clone(),
+                    model_used: if model_used.trim().is_empty() {
+                        None
+                    } else {
+                        Some(model_used.clone())
+                    },
+                    fallback_used,
                 })
                 .await;
             return Ok(build_agent_result(
@@ -591,7 +612,7 @@ pub async fn run_ai_agent_chat_streaming(
     }
 
     let (final_completion, final_model, final_fallback) =
-        call_openai_chat_completion(state, &messages, None).await?;
+        call_openai_chat_completion(state, &messages, None, params.preferred_model).await?;
     if !final_model.trim().is_empty() {
         model_used = final_model;
     }
@@ -623,6 +644,12 @@ pub async fn run_ai_agent_chat_streaming(
         .send(AgentStreamEvent::Done {
             content: reply.clone(),
             tool_trace: tool_trace.clone(),
+            model_used: if model_used.trim().is_empty() {
+                None
+            } else {
+                Some(model_used.clone())
+            },
+            fallback_used,
         })
         .await;
 
@@ -671,6 +698,7 @@ async fn call_openai_chat_completion(
     state: &AppState,
     messages: &[Value],
     tools: Option<&[Value]>,
+    preferred_model: Option<&str>,
 ) -> AppResult<(Value, String, bool)> {
     let api_key = state
         .config
@@ -685,12 +713,13 @@ async fn call_openai_chat_completion(
             )
         })?;
 
-    let model_chain = state.config.openai_model_chain();
+    let model_chain = with_preferred_model(state.config.openai_model_chain(), preferred_model);
     if model_chain.is_empty() {
         return Err(AppError::ServiceUnavailable(
             "No OpenAI model is configured.".to_string(),
         ));
     }
+    let chat_completions_url = state.config.openai_chat_completions_url();
 
     let mut last_error: Option<AppError> = None;
     let mut fallback_used = false;
@@ -707,7 +736,7 @@ async fn call_openai_chat_completion(
 
         let response = match state
             .http_client
-            .post("https://api.openai.com/v1/chat/completions")
+            .post(&chat_completions_url)
             .header("Authorization", format!("Bearer {api_key}"))
             .header("Content-Type", "application/json")
             .header("Accept", "application/json")
@@ -799,6 +828,29 @@ async fn call_openai_chat_completion(
 
     Err(last_error
         .unwrap_or_else(|| AppError::Dependency("AI provider request failed.".to_string())))
+}
+
+fn with_preferred_model(model_chain: Vec<String>, preferred_model: Option<&str>) -> Vec<String> {
+    let preferred = preferred_model
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .unwrap_or_default();
+    if preferred.is_empty() {
+        return model_chain;
+    }
+
+    if !model_chain.iter().any(|model| model == preferred) {
+        return model_chain;
+    }
+
+    let mut next = Vec::with_capacity(model_chain.len());
+    next.push(preferred.to_string());
+    for model in model_chain {
+        if model != preferred {
+            next.push(model);
+        }
+    }
+    next
 }
 
 fn extract_content_text(content: Option<&Value>) -> String {
@@ -1761,6 +1813,7 @@ async fn tool_delegate_to_agent(
         agent_slug: Some(&slug),
         chat_id: None,
         requested_by_user_id: None,
+        preferred_model: None,
     };
 
     match Box::pin(run_ai_agent_chat(state, params)).await {
@@ -2640,6 +2693,7 @@ mod tests {
             agent_slug: None,
             chat_id: None,
             requested_by_user_id: None,
+            preferred_model: None,
         };
 
         let payload = run_ai_agent_chat_streaming(&state, params, tx)
@@ -2657,9 +2711,13 @@ mod tests {
             Some(AgentStreamEvent::Done {
                 content,
                 tool_trace,
+                model_used,
+                fallback_used,
             }) => {
                 assert_eq!(content, AI_AGENT_DISABLED_MESSAGE);
                 assert!(tool_trace.is_empty());
+                assert!(model_used.is_none());
+                assert!(!fallback_used);
             }
             other => panic!("expected done event second, got {:?}", other),
         }

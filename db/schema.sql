@@ -1136,6 +1136,8 @@ CREATE TABLE ai_chats (
   created_by_user_id uuid NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,
   agent_id uuid NOT NULL REFERENCES ai_agents(id) ON DELETE RESTRICT,
   title text NOT NULL,
+  preferred_model text
+    CHECK (preferred_model IS NULL OR btrim(preferred_model) <> ''),
   is_archived boolean NOT NULL DEFAULT false,
   last_message_at timestamptz NOT NULL DEFAULT now(),
   created_at timestamptz NOT NULL DEFAULT now(),

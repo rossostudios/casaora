@@ -223,9 +223,7 @@ export async function generateCollectionsAction(formData: FormData) {
   ).toUpperCase();
 
   if (count <= 0 || count > 36) {
-    redirect(
-      withParams(next, { error: "count must be between 1 and 36" })
-    );
+    redirect(withParams(next, { error: "count must be between 1 and 36" }));
   }
   if (!start_date) {
     redirect(withParams(next, { error: "start_date is required" }));

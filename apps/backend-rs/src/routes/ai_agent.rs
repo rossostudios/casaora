@@ -116,6 +116,7 @@ async fn ai_agent_chat(
             agent_slug: None,
             chat_id: None,
             requested_by_user_id: Some(&user_id),
+            preferred_model: None,
         },
     )
     .await?;

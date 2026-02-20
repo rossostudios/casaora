@@ -7,21 +7,23 @@ type ListingFeesCardProps = {
 
 export function ListingFeesCard({ isEn, listing }: ListingFeesCardProps) {
   const oneTimeFees = listing.feeLines.filter(
-    (l) => l.feeType === "one_time" || l.feeType === "deposit" || l.feeType === "move_in"
+    (l) =>
+      l.feeType === "one_time" ||
+      l.feeType === "deposit" ||
+      l.feeType === "move_in"
   );
   const recurringFees = listing.feeLines.filter(
     (l) => l.feeType === "recurring" || l.feeType === "monthly"
   );
   const otherFees = listing.feeLines.filter(
-    (l) =>
-      !oneTimeFees.includes(l) && !recurringFees.includes(l)
+    (l) => !(oneTimeFees.includes(l) || recurringFees.includes(l))
   );
 
   const canCategorize = oneTimeFees.length > 0 || recurringFees.length > 0;
 
   return (
     <section>
-      <h2 className="mb-4 font-serif text-xl font-medium tracking-tight text-[var(--marketplace-text)]">
+      <h2 className="mb-4 font-medium font-serif text-[var(--marketplace-text)] text-xl tracking-tight">
         {isEn ? "Fee breakdown" : "Desglose de costos"}
       </h2>
       <div className="h-px bg-[#e8e4df]" />
@@ -31,21 +33,21 @@ export function ListingFeesCard({ isEn, listing }: ListingFeesCardProps) {
           <>
             {oneTimeFees.length > 0 ? (
               <div>
-                <p className="mb-3 text-xs font-medium uppercase tracking-widest text-[var(--marketplace-text-muted)]">
+                <p className="mb-3 font-medium text-[var(--marketplace-text-muted)] text-xs uppercase tracking-widest">
                   {isEn ? "Move-in costs" : "Costos de ingreso"}
                 </p>
                 <div className="space-y-2">
                   {oneTimeFees.map((line) => (
                     <FeeLineRow
-                      key={line.key}
-                      label={line.label}
                       amount={line.amountLabel}
                       feeType={line.feeType}
                       isEn={isEn}
+                      key={line.key}
+                      label={line.label}
                     />
                   ))}
                 </div>
-                <div className="mt-3 flex justify-between border-t border-[#e8e4df] pt-3 text-sm font-semibold text-[var(--marketplace-text)]">
+                <div className="mt-3 flex justify-between border-[#e8e4df] border-t pt-3 font-semibold text-[var(--marketplace-text)] text-sm">
                   <span>{isEn ? "Move-in total" : "Total ingreso"}</span>
                   <span>{listing.totalMoveInLabel}</span>
                 </div>
@@ -54,21 +56,21 @@ export function ListingFeesCard({ isEn, listing }: ListingFeesCardProps) {
 
             {recurringFees.length > 0 ? (
               <div>
-                <p className="mb-3 text-xs font-medium uppercase tracking-widest text-[var(--marketplace-text-muted)]">
+                <p className="mb-3 font-medium text-[var(--marketplace-text-muted)] text-xs uppercase tracking-widest">
                   {isEn ? "Monthly" : "Mensual"}
                 </p>
                 <div className="space-y-2">
                   {recurringFees.map((line) => (
                     <FeeLineRow
-                      key={line.key}
-                      label={line.label}
                       amount={line.amountLabel}
                       feeType={line.feeType}
                       isEn={isEn}
+                      key={line.key}
+                      label={line.label}
                     />
                   ))}
                 </div>
-                <div className="mt-3 flex justify-between border-t border-[#e8e4df] pt-3 text-sm font-semibold text-[var(--marketplace-text)]">
+                <div className="mt-3 flex justify-between border-[#e8e4df] border-t pt-3 font-semibold text-[var(--marketplace-text)] text-sm">
                   <span>{isEn ? "Monthly total" : "Total mensual"}</span>
                   <span>{listing.monthlyRecurringLabel}</span>
                 </div>
@@ -79,11 +81,11 @@ export function ListingFeesCard({ isEn, listing }: ListingFeesCardProps) {
               <div className="space-y-2">
                 {otherFees.map((line) => (
                   <FeeLineRow
-                    key={line.key}
-                    label={line.label}
                     amount={line.amountLabel}
                     feeType={line.feeType}
                     isEn={isEn}
+                    key={line.key}
+                    label={line.label}
                   />
                 ))}
               </div>
@@ -93,15 +95,15 @@ export function ListingFeesCard({ isEn, listing }: ListingFeesCardProps) {
           <>
             {listing.feeLines.map((line) => (
               <FeeLineRow
-                key={line.key}
-                label={line.label}
                 amount={line.amountLabel}
                 feeType={line.feeType}
                 isEn={isEn}
+                key={line.key}
+                label={line.label}
               />
             ))}
             {listing.feeLines.length === 0 ? (
-              <p className="text-sm text-[var(--marketplace-text-muted)]">
+              <p className="text-[var(--marketplace-text-muted)] text-sm">
                 {isEn
                   ? "No fee lines configured yet."
                   : "Todavía no hay líneas de costo configuradas."}
@@ -111,7 +113,7 @@ export function ListingFeesCard({ isEn, listing }: ListingFeesCardProps) {
         )}
 
         <div className="rounded-xl bg-[var(--marketplace-bg-muted)] p-4">
-          <p className="mb-3 font-serif text-sm font-medium text-[var(--marketplace-text)]">
+          <p className="mb-3 font-medium font-serif text-[var(--marketplace-text)] text-sm">
             {isEn ? "Rental details" : "Detalles del alquiler"}
           </p>
           <div className="grid gap-2 text-sm sm:grid-cols-2">
@@ -129,7 +131,9 @@ export function ListingFeesCard({ isEn, listing }: ListingFeesCardProps) {
             </p>
             <p className="text-[var(--marketplace-text-muted)]">
               {isEn ? "Parking spaces" : "Estacionamiento"}:{" "}
-              <span className="text-[var(--marketplace-text)]">{listing.parkingSpaces ?? 0}</span>
+              <span className="text-[var(--marketplace-text)]">
+                {listing.parkingSpaces ?? 0}
+              </span>
             </p>
             <p className="text-[var(--marketplace-text-muted)]">
               {isEn ? "Minimum lease" : "Contrato mínimo"}:{" "}
@@ -176,14 +180,18 @@ function FeeLineRow({
   return (
     <div className="flex min-w-0 items-center justify-between gap-3 py-1.5 text-sm">
       <div className="min-w-0">
-        <p className="line-clamp-2 font-medium text-[var(--marketplace-text)]">{label}</p>
+        <p className="line-clamp-2 font-medium text-[var(--marketplace-text)]">
+          {label}
+        </p>
         {isRefundable ? (
-          <span className="text-[10px] font-medium text-emerald-600">
+          <span className="font-medium text-[10px] text-emerald-600">
             {isEn ? "Refundable" : "Reembolsable"}
           </span>
         ) : null}
       </div>
-      <p className="shrink-0 text-right font-medium tabular-nums text-[var(--marketplace-text)]">{amount}</p>
+      <p className="shrink-0 text-right font-medium text-[var(--marketplace-text)] tabular-nums">
+        {amount}
+      </p>
     </div>
   );
 }

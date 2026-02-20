@@ -4,7 +4,8 @@ import {
 } from "@hugeicons/core-free-icons";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-
+import { BackgroundCheckCard } from "@/components/guests/background-check-card";
+import { VerificationCard } from "@/components/guests/verification-card";
 import { OrgAccessChanged } from "@/components/shell/org-access-changed";
 import { PinButton } from "@/components/shell/pin-button";
 import { RecordRecent } from "@/components/shell/record-recent";
@@ -28,9 +29,6 @@ import { getActiveLocale } from "@/lib/i18n/server";
 import { getActiveOrgId } from "@/lib/org";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { cn } from "@/lib/utils";
-
-import { BackgroundCheckCard } from "@/components/guests/background-check-card";
-import { VerificationCard } from "@/components/guests/verification-card";
 
 import { GuestProfileActions } from "../guest-profile-actions";
 
@@ -178,7 +176,9 @@ async function fetchGuest(options: {
     background_check_status: asOptionalString(record.background_check_status),
     background_check_date: asOptionalString(record.background_check_date),
     background_check_notes: asOptionalString(record.background_check_notes),
-    background_check_report_url: asOptionalString(record.background_check_report_url),
+    background_check_report_url: asOptionalString(
+      record.background_check_report_url
+    ),
   };
 
   if (!guest.organization_id) {
@@ -214,14 +214,14 @@ function DocumentExpiryRow({
 
     if (expiry < todayIso) {
       badge = (
-        <Badge variant="destructive" className="ml-2 text-[11px]">
+        <Badge className="ml-2 text-[11px]" variant="destructive">
           {isEn ? "Expired" : "Vencido"}
         </Badge>
       );
     } else if (expiry < threshold) {
       badge = (
         <Badge
-          className="ml-2 border-amber-300 bg-amber-100 text-amber-800 text-[11px] dark:border-amber-700 dark:bg-amber-950 dark:text-amber-300"
+          className="ml-2 border-amber-300 bg-amber-100 text-[11px] text-amber-800 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-300"
           variant="outline"
         >
           {isEn ? "Expiring soon" : "Vence pronto"}

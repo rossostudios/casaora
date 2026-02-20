@@ -17,7 +17,7 @@ type ShortcutsHelpProps = {
 
 function Kbd({ children }: { children: string }) {
   return (
-    <kbd className="inline-flex h-6 min-w-6 items-center justify-center rounded-md border border-border/80 bg-muted/60 px-1.5 font-mono text-xs font-medium text-foreground shadow-[0_1px_0_1px_rgba(0,0,0,0.04)]">
+    <kbd className="inline-flex h-6 min-w-6 items-center justify-center rounded-md border border-border/80 bg-muted/60 px-1.5 font-medium font-mono text-foreground text-xs shadow-[0_1px_0_1px_rgba(0,0,0,0.04)]">
       {children}
     </kbd>
   );
@@ -39,7 +39,11 @@ function KeyDisplay({ keys, isMac }: { keys: string[]; isMac: boolean }) {
   });
 }
 
-export function ShortcutsHelp({ open, onOpenChange, locale }: ShortcutsHelpProps) {
+export function ShortcutsHelp({
+  open,
+  onOpenChange,
+  locale,
+}: ShortcutsHelpProps) {
   const isMac = useIsMac();
   const isEn = locale === "en-US";
   const panelRef = useRef<HTMLDivElement>(null);
@@ -54,7 +58,8 @@ export function ShortcutsHelp({ open, onOpenChange, locale }: ShortcutsHelpProps
       }
     };
     window.addEventListener("keydown", onKeyDown, { capture: true });
-    return () => window.removeEventListener("keydown", onKeyDown, { capture: true });
+    return () =>
+      window.removeEventListener("keydown", onKeyDown, { capture: true });
   }, [open, onOpenChange]);
 
   if (!open) return null;
@@ -102,11 +107,11 @@ export function ShortcutsHelp({ open, onOpenChange, locale }: ShortcutsHelpProps
                       className="flex items-center justify-between gap-3 rounded-lg px-2 py-1.5"
                       key={shortcut.id}
                     >
-                      <span className="text-sm text-foreground/90">
+                      <span className="text-foreground/90 text-sm">
                         {shortcut.localizedLabel}
                       </span>
                       <span className="flex shrink-0 items-center gap-1">
-                        <KeyDisplay keys={shortcut.keys} isMac={isMac} />
+                        <KeyDisplay isMac={isMac} keys={shortcut.keys} />
                       </span>
                     </div>
                   ))}

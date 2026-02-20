@@ -31,9 +31,7 @@ export function DashboardNeedsAttention({
             className="flex items-center justify-between gap-3 py-2.5"
             key={item.key}
           >
-            <p className="text-sm">
-              {isEn ? item.labelEn : item.labelEs}
-            </p>
+            <p className="text-sm">{isEn ? item.labelEn : item.labelEs}</p>
             <Link
               className={cn(
                 buttonVariants({ variant: "outline", size: "sm" }),

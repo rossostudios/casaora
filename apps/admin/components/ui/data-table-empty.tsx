@@ -59,12 +59,7 @@ export function DataTableEmpty({
               ))}
             </>
           ) : rowHrefBase &&
-            [
-              "organizations",
-              "properties",
-              "units",
-              "integrations",
-            ].includes(
+            ["organizations", "properties", "units", "integrations"].includes(
               String(rowHrefBase.split("/").filter(Boolean).pop())
             ) ? (
             <Link
@@ -82,14 +77,15 @@ export function DataTableEmpty({
         }
         className="py-14"
         description={
-          emptyStateConfig?.description ?? (
-          isEn
+          emptyStateConfig?.description ??
+          (isEn
             ? "As you add data (onboarding, operations, or channels), it will show up here."
-            : "Cuando agregues datos (onboarding, operaciones o canales), aparecerán aquí."
-          )
+            : "Cuando agregues datos (onboarding, operaciones o canales), aparecerán aquí.")
         }
         icon={emptyStateConfig?.icon ?? InboxIcon}
-        title={emptyStateConfig?.title ?? (isEn ? "No records" : "Sin registros")}
+        title={
+          emptyStateConfig?.title ?? (isEn ? "No records" : "Sin registros")
+        }
       />
     );
   }
@@ -98,12 +94,7 @@ export function DataTableEmpty({
     <EmptyState
       action={
         active ? (
-          <Button
-            onClick={reset}
-            size="sm"
-            type="button"
-            variant="outline"
-          >
+          <Button onClick={reset} size="sm" type="button" variant="outline">
             {isEn ? "Reset table" : "Reiniciar tabla"}
           </Button>
         ) : null

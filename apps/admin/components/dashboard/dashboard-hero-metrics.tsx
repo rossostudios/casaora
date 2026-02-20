@@ -40,34 +40,34 @@ export function DashboardHeroMetrics({
     >
       <Link href="/module/leases">
         <StatCard
+          helper={occupancyHelper}
           icon={Home01Icon}
           label={isEn ? "Occupancy rate" : "Tasa de ocupacion"}
           value={occupancyRate}
-          helper={occupancyHelper}
         />
       </Link>
       <Link href="/module/reports/finance">
         <StatCard
+          helper={revenueHelper}
           icon={ChartIcon}
           label={isEn ? "Monthly revenue" : "Ingresos mensuales"}
           value={reportGross}
-          helper={revenueHelper}
         />
       </Link>
       <Link href="/module/collections">
         <StatCard
+          helper={collectionHelper}
           icon={Invoice01Icon}
           label={isEn ? "Collection rate" : "Tasa de cobro"}
           value={collectionRate}
-          helper={collectionHelper}
         />
       </Link>
       <Link href="/module/applications">
         <StatCard
+          helper={pipelineHelper}
           icon={File01Icon}
           label={isEn ? "Pipeline" : "Pipeline"}
           value={pipelineValue}
-          helper={pipelineHelper}
         />
       </Link>
     </section>

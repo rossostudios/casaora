@@ -51,7 +51,9 @@ export function CreatePropertySheet({
     amenitiesHint: isEn
       ? "Separate values with commas (e.g., pool, gym, elevator)."
       : "Separa valores con comas (ej: piscina, gimnasio, ascensor).",
-    accessInstructions: isEn ? "Access instructions" : "Instrucciones de acceso",
+    accessInstructions: isEn
+      ? "Access instructions"
+      : "Instrucciones de acceso",
     wifiName: isEn ? "Shared WiFi name" : "Nombre WiFi compartido",
     wifiPassword: isEn ? "Shared WiFi password" : "Clave WiFi compartida",
     assetOwnerName: isEn ? "Asset owner name" : "Nombre del titular del activo",
@@ -94,7 +96,9 @@ export function CreatePropertySheet({
               </span>
               <Select defaultValue="active" name="status">
                 <option value="active">{isEn ? "Active" : "Activa"}</option>
-                <option value="inactive">{isEn ? "Inactive" : "Inactiva"}</option>
+                <option value="inactive">
+                  {isEn ? "Inactive" : "Inactiva"}
+                </option>
               </Select>
             </label>
             <label className="grid gap-1">
@@ -103,7 +107,9 @@ export function CreatePropertySheet({
               </span>
               <Select defaultValue="" name="property_type">
                 <option value="">
-                  {isEn ? "Select type (optional)" : "Seleccionar tipo (opcional)"}
+                  {isEn
+                    ? "Select type (optional)"
+                    : "Seleccionar tipo (opcional)"}
                 </option>
                 <option value="apartment_building">
                   {isEn ? "Apartment building" : "Edificio de apartamentos"}
@@ -140,7 +146,10 @@ export function CreatePropertySheet({
               <span className="font-medium text-muted-foreground text-xs">
                 {copy.addressLine2}
               </span>
-              <Input name="address_line2" placeholder="Depto 4B / Torre Norte" />
+              <Input
+                name="address_line2"
+                placeholder="Depto 4B / Torre Norte"
+              />
             </label>
             <label className="grid gap-1">
               <span className="font-medium text-muted-foreground text-xs">
@@ -182,13 +191,23 @@ export function CreatePropertySheet({
               <span className="font-medium text-muted-foreground text-xs">
                 {copy.latitude}
               </span>
-              <Input name="latitude" placeholder="-25.2854" step="any" type="number" />
+              <Input
+                name="latitude"
+                placeholder="-25.2854"
+                step="any"
+                type="number"
+              />
             </label>
             <label className="grid gap-1">
               <span className="font-medium text-muted-foreground text-xs">
                 {copy.longitude}
               </span>
-              <Input name="longitude" placeholder="-57.5780" step="any" type="number" />
+              <Input
+                name="longitude"
+                placeholder="-57.5780"
+                step="any"
+                type="number"
+              />
             </label>
           </div>
         </section>

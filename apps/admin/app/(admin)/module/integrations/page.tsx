@@ -48,24 +48,26 @@ export default async function IntegrationsModulePage({
   let events: Record<string, unknown>[] = [];
   try {
     [integrations, units, events] = await Promise.all([
-      fetchList("/integrations", orgId, 200) as Promise<Record<string, unknown>[]>,
+      fetchList("/integrations", orgId, 200) as Promise<
+        Record<string, unknown>[]
+      >,
       fetchList("/units", orgId, 500) as Promise<Record<string, unknown>[]>,
-      fetchList("/integration-events", orgId, 100) as Promise<Record<string, unknown>[]>,
+      fetchList("/integration-events", orgId, 100) as Promise<
+        Record<string, unknown>[]
+      >,
     ]);
   } catch (err) {
     if (isOrgMembershipError(errorMessage(err)))
       return <OrgAccessChanged orgId={orgId} />;
     return (
-        <Card>
+      <Card>
         <CardHeader>
           <CardTitle>{isEn ? "Channels" : "Canales"}</CardTitle>
         </CardHeader>
         <CardContent>
           <Alert variant="destructive">
             <AlertDescription>
-              {isEn
-                ? "Failed to load channels."
-                : "Error al cargar canales."}
+              {isEn ? "Failed to load channels." : "Error al cargar canales."}
             </AlertDescription>
           </Alert>
         </CardContent>

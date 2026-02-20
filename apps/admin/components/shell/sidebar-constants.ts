@@ -1,6 +1,6 @@
 import {
-  CheckmarkCircle02Icon,
   ChartIcon,
+  CheckmarkCircle02Icon,
   Home01Icon,
   InboxIcon,
   MailOpen01Icon,

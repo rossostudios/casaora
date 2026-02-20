@@ -21,7 +21,9 @@ export function SendGuestPortalLink({
   async function handleSend() {
     setLoading(true);
     setError("");
-    const fallbackMsg = isEn ? "Failed to send link." : "No se pudo enviar el enlace.";
+    const fallbackMsg = isEn
+      ? "Failed to send link."
+      : "No se pudo enviar el enlace.";
     try {
       await authedFetch<{ message: string }>(
         `/reservations/${encodeURIComponent(reservationId)}/guest-portal-link`,
@@ -41,7 +43,7 @@ export function SendGuestPortalLink({
 
   if (sent) {
     return (
-      <p className="text-sm text-green-600">
+      <p className="text-green-600 text-sm">
         {isEn
           ? "Guest portal link sent!"
           : "¡Enlace del portal de huésped enviado!"}
@@ -66,7 +68,7 @@ export function SendGuestPortalLink({
             ? "Send Guest Portal Link"
             : "Enviar Enlace Portal Huésped"}
       </Button>
-      {error && <p className="text-xs text-red-600">{error}</p>}
+      {error && <p className="text-red-600 text-xs">{error}</p>}
     </div>
   );
 }

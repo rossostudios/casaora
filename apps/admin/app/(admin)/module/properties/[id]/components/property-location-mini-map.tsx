@@ -21,7 +21,7 @@ export function PropertyLocationMiniMap({
   const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN || "";
 
   useEffect(() => {
-    if (!containerRef.current || !token) return;
+    if (!(containerRef.current && token)) return;
 
     mapboxgl.accessToken = token;
 
@@ -36,9 +36,7 @@ export function PropertyLocationMiniMap({
       interactive: false,
     });
 
-    new mapboxgl.Marker()
-      .setLngLat([center.lng, center.lat])
-      .addTo(map);
+    new mapboxgl.Marker().setLngLat([center.lng, center.lat]).addTo(map);
 
     mapRef.current = map;
 
@@ -70,7 +68,7 @@ function ExpandedMap({ city, token }: { city: string; token: string }) {
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!containerRef.current || !token) return;
+    if (!(containerRef.current && token)) return;
 
     mapboxgl.accessToken = token;
     const center = cityToCoordinates(city);

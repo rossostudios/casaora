@@ -111,9 +111,11 @@ export function OwnerStatements({ locale }: { locale: string }) {
           const rawCollections = data.collections;
           const rawExpenses = data.expenses;
           let collectionsArr: Record<string, unknown>[] = [];
-          if (rawCollections != null) collectionsArr = rawCollections as Record<string, unknown>[];
+          if (rawCollections != null)
+            collectionsArr = rawCollections as Record<string, unknown>[];
           let expensesArr: Record<string, unknown>[] = [];
-          if (rawExpenses != null) expensesArr = rawExpenses as Record<string, unknown>[];
+          if (rawExpenses != null)
+            expensesArr = rawExpenses as Record<string, unknown>[];
           setDetails((prev) => ({
             ...prev,
             [id]: {
@@ -134,7 +136,7 @@ export function OwnerStatements({ locale }: { locale: string }) {
   if (loading) {
     return (
       <div className="flex min-h-[50vh] items-center justify-center">
-        <p className="text-muted-foreground animate-pulse">
+        <p className="animate-pulse text-muted-foreground">
           {isEn ? "Loading..." : "Cargando..."}
         </p>
       </div>
@@ -144,11 +146,11 @@ export function OwnerStatements({ locale }: { locale: string }) {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">
+        <h1 className="font-bold text-2xl">
           {isEn ? "Owner Statements" : "Estados de Cuenta"}
         </h1>
         <Link
-          className="text-sm text-primary hover:underline"
+          className="text-primary text-sm hover:underline"
           href="/owner/dashboard"
         >
           {isEn ? "Back to dashboard" : "Volver al panel"}
@@ -175,32 +177,37 @@ export function OwnerStatements({ locale }: { locale: string }) {
                     <CardTitle className="text-base">
                       {row.period_label || row.created_at.slice(0, 7)}
                     </CardTitle>
-                    <StatusBadge
-                      label={row.status}
-                      value={row.status}
-                    />
+                    <StatusBadge label={row.status} value={row.status} />
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-3">
                   <div className="grid gap-3 sm:grid-cols-3">
                     <div>
-                      <p className="text-xs text-muted-foreground">
+                      <p className="text-muted-foreground text-xs">
                         {isEn ? "Revenue" : "Ingresos"}
                       </p>
                       <p className="font-medium">
-                        {formatCurrency(row.total_revenue, row.currency, locale)}
+                        {formatCurrency(
+                          row.total_revenue,
+                          row.currency,
+                          locale
+                        )}
                       </p>
                     </div>
                     <div>
-                      <p className="text-xs text-muted-foreground">
+                      <p className="text-muted-foreground text-xs">
                         {isEn ? "Expenses" : "Gastos"}
                       </p>
                       <p className="font-medium">
-                        {formatCurrency(row.total_expenses, row.currency, locale)}
+                        {formatCurrency(
+                          row.total_expenses,
+                          row.currency,
+                          locale
+                        )}
                       </p>
                     </div>
                     <div>
-                      <p className="text-xs text-muted-foreground">
+                      <p className="text-muted-foreground text-xs">
                         {isEn ? "Net Payout" : "Pago Neto"}
                       </p>
                       <p className="font-semibold text-lg">
@@ -234,14 +241,14 @@ export function OwnerStatements({ locale }: { locale: string }) {
                   {isExpanded ? (
                     <div className="space-y-3 rounded-lg border bg-muted/20 p-3">
                       {detailLoading && !detail ? (
-                        <p className="animate-pulse text-sm text-muted-foreground">
+                        <p className="animate-pulse text-muted-foreground text-sm">
                           {isEn ? "Loading..." : "Cargando..."}
                         </p>
                       ) : detail ? (
                         <>
                           {detail.collections.length > 0 ? (
                             <div>
-                              <p className="mb-1 text-xs font-medium text-muted-foreground uppercase">
+                              <p className="mb-1 font-medium text-muted-foreground text-xs uppercase">
                                 {isEn ? "Collections" : "Cobros"}
                               </p>
                               <div className="space-y-1">
@@ -250,9 +257,16 @@ export function OwnerStatements({ locale }: { locale: string }) {
                                     className="flex items-center justify-between rounded bg-background px-2 py-1 text-sm"
                                     key={asString(c.id)}
                                   >
-                                    <span>{asString(c.label) || asString(c.due_date)}</span>
+                                    <span>
+                                      {asString(c.label) ||
+                                        asString(c.due_date)}
+                                    </span>
                                     <span className="font-medium">
-                                      {formatCurrency(asNumber(c.amount), row.currency, locale)}
+                                      {formatCurrency(
+                                        asNumber(c.amount),
+                                        row.currency,
+                                        locale
+                                      )}
                                     </span>
                                   </div>
                                 ))}
@@ -261,7 +275,7 @@ export function OwnerStatements({ locale }: { locale: string }) {
                           ) : null}
                           {detail.expenses.length > 0 ? (
                             <div>
-                              <p className="mb-1 text-xs font-medium text-muted-foreground uppercase">
+                              <p className="mb-1 font-medium text-muted-foreground text-xs uppercase">
                                 {isEn ? "Expenses" : "Gastos"}
                               </p>
                               <div className="space-y-1">
@@ -270,18 +284,29 @@ export function OwnerStatements({ locale }: { locale: string }) {
                                     className="flex items-center justify-between rounded bg-background px-2 py-1 text-sm"
                                     key={asString(e.id)}
                                   >
-                                    <span>{asString(e.description) || asString(e.expense_date)}</span>
+                                    <span>
+                                      {asString(e.description) ||
+                                        asString(e.expense_date)}
+                                    </span>
                                     <span className="font-medium text-red-600 dark:text-red-400">
-                                      -{formatCurrency(asNumber(e.amount), row.currency, locale)}
+                                      -
+                                      {formatCurrency(
+                                        asNumber(e.amount),
+                                        row.currency,
+                                        locale
+                                      )}
                                     </span>
                                   </div>
                                 ))}
                               </div>
                             </div>
                           ) : null}
-                          {detail.collections.length === 0 && detail.expenses.length === 0 ? (
-                            <p className="text-sm text-muted-foreground">
-                              {isEn ? "No line items for this period." : "Sin detalles para este período."}
+                          {detail.collections.length === 0 &&
+                          detail.expenses.length === 0 ? (
+                            <p className="text-muted-foreground text-sm">
+                              {isEn
+                                ? "No line items for this period."
+                                : "Sin detalles para este período."}
                             </p>
                           ) : null}
                         </>

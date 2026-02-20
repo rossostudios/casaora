@@ -6,8 +6,7 @@ import {
   PencilEdit01Icon,
 } from "@hugeicons/core-free-icons";
 import Image from "next/image";
-import { useCallback, useState } from "react";
-
+import { useCallback, useRef, useState } from "react";
 import { DocumentUpload } from "@/app/(admin)/module/documents/document-upload";
 import { Button } from "@/components/ui/button";
 import { Form } from "@/components/ui/form";
@@ -15,6 +14,7 @@ import { Icon } from "@/components/ui/icon";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { useFormSubmitHotkey } from "@/lib/hotkeys/use-form-hotkeys";
 import { useActiveLocale } from "@/lib/i18n/client";
 
 import type { GuestCrmRow, SheetMode } from "./guests-crm-types";
@@ -76,8 +76,11 @@ export function GuestForm({
     record?.id_document_url ?? ""
   );
 
+  const formRef = useRef<HTMLFormElement>(null);
+  useFormSubmitHotkey(formRef);
+
   return (
-    <Form action={action} className="grid gap-5">
+    <Form action={action} className="grid gap-5" ref={formRef}>
       <input name="next" type="hidden" value="/module/guests" />
       <input name="id_document_url" type="hidden" value={idDocumentUrl} />
       {isCreate ? (

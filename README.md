@@ -3,6 +3,8 @@
 Supabase-first platform for short-term rental operations in Paraguay, with:
 - `Axum + SQLx` Rust backend (`apps/backend-rs`)
 - `Next.js` admin frontend (`apps/admin`)
+- `Next.js` public marketing/portal app (`apps/web`)
+- `Expo + React Native` mobile app scaffold (`apps/mobile`)
 - PostgreSQL schema and RLS policies (`db/schema.sql`)
 - PRD and API contract (`docs/PRD.md`, `api/openapi.yaml`)
 
@@ -10,6 +12,9 @@ Supabase-first platform for short-term rental operations in Paraguay, with:
 
 - `apps/backend-rs`: Rust/Axum API server with all `/v1` routers
 - `apps/admin`: Next.js admin console wired to API modules
+- `apps/web`: Next.js public-facing web app
+- `apps/mobile`: Expo Router mobile app (iOS/Android)
+- `packages/shared-api`: shared API helpers + OpenAPI type exports
 - `db/schema.sql`: Multi-tenant Postgres schema compatible with Supabase and Neon
 - `api/openapi.yaml`: Endpoint contract
 - `docs/PRD.md`: Product requirements
@@ -68,6 +73,27 @@ npm run dev
 
 Admin app:
 - `http://localhost:3000`
+
+## 4) Mobile Setup (Expo)
+
+```bash
+cd /Users/christopher/Desktop/puerta-abierta/apps/mobile
+cp .env.example .env.local
+npm install
+npm run ios
+# or npm run android
+```
+
+Set:
+- `EXPO_PUBLIC_API_BASE_URL=http://localhost:8000/v1`
+- `EXPO_PUBLIC_DEFAULT_ORG_ID=<org_uuid>` (optional; otherwise first `/me` membership org is used)
+- `EXPO_PUBLIC_SUPABASE_URL=<your_supabase_url>`
+- `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY=<your_publishable_key>`
+  - fallback supported: `EXPO_PUBLIC_SUPABASE_ANON_KEY=<legacy_anon_key>`
+
+Mobile app uses:
+- `@casaora/shared-api/client` for fetch helpers
+- `@casaora/shared-api/types` for shared API contracts
 
 ## Current Module Coverage
 

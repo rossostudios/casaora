@@ -1,13 +1,12 @@
 "use client";
 
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useState } from "react";
 
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Textarea } from "@/components/ui/textarea";
@@ -72,9 +71,7 @@ function dueLabel(days: number, isEn: boolean): string {
   }
   if (days === 0) return isEn ? "Due today" : "Vence hoy";
   if (days === 1) return isEn ? "Due tomorrow" : "Vence mañana";
-  return isEn
-    ? `Due in ${days} days`
-    : `Vence en ${days} días`;
+  return isEn ? `Due in ${days} days` : `Vence en ${days} días`;
 }
 
 export function TenantPayments({ locale }: { locale: string }) {
@@ -133,17 +130,29 @@ export function TenantPayments({ locale }: { locale: string }) {
         const notesVal = asString(r.notes);
 
         let currencyVal = "PYG";
-        if (currency) { currencyVal = currency; }
+        if (currency) {
+          currencyVal = currency;
+        }
         let paidAtVal: string | null = null;
-        if (paidAt) { paidAtVal = paidAt; }
+        if (paidAt) {
+          paidAtVal = paidAt;
+        }
         let payMethodVal: string | null = null;
-        if (payMethod) { payMethodVal = payMethod; }
+        if (payMethod) {
+          payMethodVal = payMethod;
+        }
         let payRefVal: string | null = null;
-        if (payRef) { payRefVal = payRef; }
+        if (payRef) {
+          payRefVal = payRef;
+        }
         let payLinkRefVal: string | null = null;
-        if (payLinkRef) { payLinkRefVal = payLinkRef; }
+        if (payLinkRef) {
+          payLinkRefVal = payLinkRef;
+        }
         let notesResult: string | null = null;
-        if (notesVal) { notesResult = notesVal; }
+        if (notesVal) {
+          notesResult = notesVal;
+        }
 
         return {
           id: asString(r.id),
@@ -180,13 +189,21 @@ export function TenantPayments({ locale }: { locale: string }) {
             const bHolder = asString(bd.bank_account_holder);
             const bRuc = asString(bd.bank_ruc);
             let bankName: string | null = null;
-            if (bName) { bankName = bName; }
+            if (bName) {
+              bankName = bName;
+            }
             let bankAcct: string | null = null;
-            if (bAcct) { bankAcct = bAcct; }
+            if (bAcct) {
+              bankAcct = bAcct;
+            }
             let bankHolder: string | null = null;
-            if (bHolder) { bankHolder = bHolder; }
+            if (bHolder) {
+              bankHolder = bHolder;
+            }
             let bankRuc: string | null = null;
-            if (bRuc) { bankRuc = bRuc; }
+            if (bRuc) {
+              bankRuc = bRuc;
+            }
             setBankDetails({
               bank_name: bankName,
               bank_account_number: bankAcct,
@@ -258,7 +275,7 @@ export function TenantPayments({ locale }: { locale: string }) {
   if (loading) {
     return (
       <div className="flex min-h-[40vh] items-center justify-center">
-        <p className="text-muted-foreground animate-pulse">
+        <p className="animate-pulse text-muted-foreground">
           {isEn ? "Loading..." : "Cargando..."}
         </p>
       </div>
@@ -275,7 +292,7 @@ export function TenantPayments({ locale }: { locale: string }) {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">
+        <h1 className="font-bold text-2xl">
           {isEn ? "My Payments" : "Mis Pagos"}
         </h1>
         <Link href="/tenant/dashboard">
@@ -288,7 +305,7 @@ export function TenantPayments({ locale }: { locale: string }) {
       {submitSuccess && (
         <Card className="border-green-200 bg-green-50 dark:border-green-900 dark:bg-green-950">
           <CardContent className="p-4">
-            <p className="text-sm font-medium text-green-800 dark:text-green-200">
+            <p className="font-medium text-green-800 text-sm dark:text-green-200">
               {isEn
                 ? "Payment reported successfully! Your property manager will confirm it shortly."
                 : "¡Pago reportado exitosamente! Tu administrador lo confirmará pronto."}
@@ -300,7 +317,7 @@ export function TenantPayments({ locale }: { locale: string }) {
       {/* Pending / Upcoming Payments */}
       {unpaid.length > 0 && (
         <div className="space-y-3">
-          <h2 className="text-lg font-semibold">
+          <h2 className="font-semibold text-lg">
             {isEn ? "Pending Payments" : "Pagos Pendientes"}
           </h2>
           {unpaid.map((p) => {
@@ -310,7 +327,6 @@ export function TenantPayments({ locale }: { locale: string }) {
 
             return (
               <Card
-                key={p.id}
                 className={
                   isOverdue
                     ? "border-red-200 dark:border-red-900"
@@ -318,18 +334,19 @@ export function TenantPayments({ locale }: { locale: string }) {
                       ? "border-amber-200 dark:border-amber-900"
                       : ""
                 }
+                key={p.id}
               >
                 <CardContent className="p-4">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-xl font-bold">
+                      <p className="font-bold text-xl">
                         {formatCurrency(p.amount, p.currency, locale)}
                       </p>
                       <p className="text-muted-foreground text-sm">
                         {isEn ? "Due:" : "Vence:"} {p.due_date}
                       </p>
                       <p
-                        className={`text-xs font-medium ${isOverdue ? "text-red-600 dark:text-red-400" : days <= 3 ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground"}`}
+                        className={`font-medium text-xs ${isOverdue ? "text-red-600 dark:text-red-400" : days <= 3 ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground"}`}
                       >
                         {dueLabel(days, isEn)}
                       </p>
@@ -340,8 +357,8 @@ export function TenantPayments({ locale }: { locale: string }) {
                         value={p.status}
                       />
                       <Button
-                        size="sm"
                         onClick={() => handleExpand(p.id)}
+                        size="sm"
                         variant={isExpanded ? "secondary" : "default"}
                       >
                         {isExpanded
@@ -363,7 +380,7 @@ export function TenantPayments({ locale }: { locale: string }) {
                         (bankDetails.bank_name ||
                           bankDetails.bank_account_number) && (
                           <div className="rounded-lg bg-blue-50 p-3 dark:bg-blue-950">
-                            <p className="mb-2 text-sm font-semibold text-blue-800 dark:text-blue-200">
+                            <p className="mb-2 font-semibold text-blue-800 text-sm dark:text-blue-200">
                               {isEn
                                 ? "Bank Transfer Details"
                                 : "Datos para Transferencia"}
@@ -405,18 +422,16 @@ export function TenantPayments({ locale }: { locale: string }) {
 
                       {/* Payment method */}
                       <div>
-                        <label className="text-sm font-medium">
+                        <label className="font-medium text-sm">
                           {isEn ? "Payment Method" : "Método de Pago"}
                         </label>
                         <select
-                          className="border-input bg-background mt-1 w-full rounded-md border px-3 py-2 text-sm"
-                          value={paymentMethod}
+                          className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                           onChange={(e) => setPaymentMethod(e.target.value)}
+                          value={paymentMethod}
                         >
                           <option value="bank_transfer">
-                            {isEn
-                              ? "Bank Transfer"
-                              : "Transferencia Bancaria"}
+                            {isEn ? "Bank Transfer" : "Transferencia Bancaria"}
                           </option>
                           <option value="cash">
                             {isEn ? "Cash" : "Efectivo"}
@@ -432,55 +447,57 @@ export function TenantPayments({ locale }: { locale: string }) {
 
                       {/* Reference number */}
                       <div>
-                        <label className="text-sm font-medium">
+                        <label className="font-medium text-sm">
                           {isEn
                             ? "Payment Reference / Transaction #"
                             : "Referencia / Nro. de Transacción"}
                         </label>
                         <Input
                           className="mt-1"
+                          onChange={(e) => setPaymentReference(e.target.value)}
                           placeholder={
                             isEn
                               ? "e.g. Transfer #12345"
                               : "ej. Transferencia #12345"
                           }
                           value={paymentReference}
-                          onChange={(e) => setPaymentReference(e.target.value)}
                         />
                       </div>
 
                       {/* Receipt URL */}
                       <div>
-                        <label className="text-sm font-medium">
+                        <label className="font-medium text-sm">
                           {isEn
                             ? "Receipt URL (optional)"
                             : "URL del Comprobante (opcional)"}
                         </label>
                         <Input
                           className="mt-1"
+                          onChange={(e) => setReceiptUrl(e.target.value)}
                           placeholder={
                             isEn
                               ? "Paste link to receipt image"
                               : "Pegar enlace a imagen del comprobante"
                           }
                           value={receiptUrl}
-                          onChange={(e) => setReceiptUrl(e.target.value)}
                         />
                       </div>
 
                       {/* Notes */}
                       <div>
-                        <label className="text-sm font-medium">
+                        <label className="font-medium text-sm">
                           {isEn ? "Notes (optional)" : "Notas (opcional)"}
                         </label>
                         <Textarea
                           className="mt-1"
-                          rows={2}
-                          placeholder={
-                            isEn ? "Any additional info" : "Información adicional"
-                          }
-                          value={notes}
                           onChange={(e) => setNotes(e.target.value)}
+                          placeholder={
+                            isEn
+                              ? "Any additional info"
+                              : "Información adicional"
+                          }
+                          rows={2}
+                          value={notes}
                         />
                       </div>
 
@@ -509,11 +526,11 @@ export function TenantPayments({ locale }: { locale: string }) {
       {/* Paid / History */}
       {paid.length > 0 && (
         <div className="space-y-3">
-          <h2 className="text-lg font-semibold">
+          <h2 className="font-semibold text-lg">
             {isEn ? "Payment History" : "Historial"}
           </h2>
           {paid.map((p) => (
-            <Card key={p.id} className="opacity-75">
+            <Card className="opacity-75" key={p.id}>
               <CardContent className="flex items-center justify-between p-4">
                 <div>
                   <p className="font-medium">

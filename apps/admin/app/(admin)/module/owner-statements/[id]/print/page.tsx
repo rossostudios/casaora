@@ -23,7 +23,7 @@ export default async function AdminStatementPrintPage({ params }: PageProps) {
   try {
     const res = await fetchJson<Record<string, unknown>>(
       `/owner-statements/${encodeURIComponent(id)}`,
-      { org_id: orgId },
+      { org_id: orgId }
     );
     statement = res;
     if (Array.isArray(res.collections)) {

@@ -61,9 +61,7 @@ export function DesktopResizableShell({
           defaultSize="20%"
           maxSize="40%"
           minSize="14%"
-          onResize={(size) =>
-            onSidebarCollapsedChange(size.asPercentage === 0)
-          }
+          onResize={(size) => onSidebarCollapsedChange(size.asPercentage === 0)}
           panelRef={sidebarPanelRef}
         >
           <SidebarNew

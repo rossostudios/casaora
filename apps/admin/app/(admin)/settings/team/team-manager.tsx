@@ -17,7 +17,8 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import type { Locale } from "@/lib/i18n";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000/v1";
+const API_BASE =
+  process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000/v1";
 
 async function apiPost(path: string, body: Record<string, unknown>) {
   const res = await fetch(`${API_BASE}${path}`, {
@@ -190,10 +191,10 @@ export function TeamManager({
                     </p>
                   )}
                 </div>
-                <Badge variant="secondary" className="ml-2 shrink-0">
+                <Badge className="ml-2 shrink-0" variant="secondary">
                   {isEn
-                    ? roleInfo?.labelEn ?? role
-                    : roleInfo?.labelEs ?? role}
+                    ? (roleInfo?.labelEn ?? role)
+                    : (roleInfo?.labelEs ?? role)}
                 </Badge>
               </div>
             );
@@ -224,7 +225,7 @@ export function TeamManager({
 
               return (
                 <div
-                  className="flex items-center justify-between rounded-lg border border-dashed border-border/80 px-4 py-3"
+                  className="flex items-center justify-between rounded-lg border border-border/80 border-dashed px-4 py-3"
                   key={invId || i}
                 >
                   <div className="min-w-0">
@@ -232,18 +233,18 @@ export function TeamManager({
                     <p className="text-muted-foreground text-xs">
                       {isEn ? "Role:" : "Rol:"}{" "}
                       {isEn
-                        ? roleInfo?.labelEn ?? role
-                        : roleInfo?.labelEs ?? role}
+                        ? (roleInfo?.labelEn ?? role)
+                        : (roleInfo?.labelEs ?? role)}
                       {expiresAt &&
                         ` · ${isEn ? "Expires" : "Expira"} ${expiresAt.slice(0, 10)}`}
                     </p>
                   </div>
                   <Button
+                    className="shrink-0 text-red-600 hover:text-red-700"
                     disabled={loading}
                     onClick={() => handleRevoke(invId)}
                     size="sm"
                     variant="ghost"
-                    className="shrink-0 text-red-600 hover:text-red-700"
                   >
                     {isEn ? "Revoke" : "Revocar"}
                   </Button>
@@ -273,7 +274,9 @@ export function TeamManager({
                 aria-label="Email"
                 disabled={loading}
                 onChange={(e) => setInviteEmail(e.target.value)}
-                placeholder={isEn ? "colleague@example.com" : "colega@ejemplo.com"}
+                placeholder={
+                  isEn ? "colleague@example.com" : "colega@ejemplo.com"
+                }
                 type="email"
                 value={inviteEmail}
               />

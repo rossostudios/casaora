@@ -134,8 +134,12 @@ export function NotificationBell({ locale, orgId }: NotificationBellProps) {
       };
 
       let anyFailed = false;
-      if (!countRes.ok) { anyFailed = true; }
-      if (!listRes.ok) { anyFailed = true; }
+      if (!countRes.ok) {
+        anyFailed = true;
+      }
+      if (!listRes.ok) {
+        anyFailed = true;
+      }
       if (anyFailed) {
         let countError = "";
         if (typeof countPayload.error === "string") {

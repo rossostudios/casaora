@@ -70,7 +70,9 @@ function OwnerLoginFormInner({ locale }: { locale: string }) {
     const fallbackError = isEn
       ? "Could not send access link."
       : "No se pudo enviar el enlace de acceso.";
-    const networkError = isEn ? "Network error. Please try again." : "Error de red. Intenta de nuevo.";
+    const networkError = isEn
+      ? "Network error. Please try again."
+      : "Error de red. Intenta de nuevo.";
     try {
       const res = await fetch(`${API_BASE}/public/owner/request-access`, {
         method: "POST",
@@ -126,7 +128,7 @@ function OwnerLoginFormInner({ locale }: { locale: string }) {
           </div>
         ) : (
           <>
-            <p className="text-sm text-muted-foreground">
+            <p className="text-muted-foreground text-sm">
               {isEn
                 ? "Enter the email associated with your owner account to receive an access link."
                 : "Ingresa el correo asociado a tu cuenta de propietario para recibir un enlace de acceso."}
@@ -137,9 +139,7 @@ function OwnerLoginFormInner({ locale }: { locale: string }) {
               type="email"
               value={email}
             />
-            {error ? (
-              <p className="text-sm text-red-600">{error}</p>
-            ) : null}
+            {error ? <p className="text-red-600 text-sm">{error}</p> : null}
             <Button
               className="w-full"
               disabled={busy || !email.trim()}

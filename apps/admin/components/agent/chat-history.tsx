@@ -66,7 +66,10 @@ const CHAT_SKELETON_KEYS = [
   "chat-skeleton-6",
 ];
 
-async function fetchChats(orgId: string, archived: boolean): Promise<AgentChatSummary[]> {
+async function fetchChats(
+  orgId: string,
+  archived: boolean
+): Promise<AgentChatSummary[]> {
   const archivedParam = archived ? "true" : "false";
   const response = await fetch(
     `/api/agent/chats?org_id=${encodeURIComponent(orgId)}&archived=${archivedParam}&limit=80`,
@@ -112,7 +115,11 @@ export function ChatHistory({
     queryFn: () => fetchChats(orgId, archived),
   });
 
-  const mutateChatMutation = useMutation<void, Error, { chatId: string; action: "archive" | "restore" | "delete" }>({
+  const mutateChatMutation = useMutation<
+    void,
+    Error,
+    { chatId: string; action: "archive" | "restore" | "delete" }
+  >({
     mutationFn: async ({ chatId, action }) => {
       let response: Response;
       if (action === "delete") {
@@ -151,16 +158,19 @@ export function ChatHistory({
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["agent-chats", orgId, archived] });
+      queryClient.invalidateQueries({
+        queryKey: ["agent-chats", orgId, archived],
+      });
       router.refresh();
     },
   });
 
   const chats = chatsQuery.data ?? [];
   const loading = chatsQuery.isLoading;
-  const error = chatsQuery.error?.message ?? mutateChatMutation.error?.message ?? null;
+  const error =
+    chatsQuery.error?.message ?? mutateChatMutation.error?.message ?? null;
   const busyChatId = mutateChatMutation.isPending
-    ? mutateChatMutation.variables?.chatId ?? null
+    ? (mutateChatMutation.variables?.chatId ?? null)
     : null;
 
   return (
@@ -245,7 +255,9 @@ export function ChatHistory({
                   </div>
                   <p className="line-clamp-2 text-muted-foreground text-xs">
                     {chat.latest_message_preview ||
-                      (isEn ? "No messages yet." : "Todav\u00eda no hay mensajes.")}
+                      (isEn
+                        ? "No messages yet."
+                        : "Todav\u00eda no hay mensajes.")}
                   </p>
                   <p className="text-[11px] text-muted-foreground">
                     {isEn ? "Updated" : "Actualizado"}:{" "}
@@ -269,7 +281,10 @@ export function ChatHistory({
                       const nextAction = chat.is_archived
                         ? "restore"
                         : "archive";
-                      mutateChatMutation.mutate({ chatId: chat.id, action: nextAction });
+                      mutateChatMutation.mutate({
+                        chatId: chat.id,
+                        action: nextAction,
+                      });
                     }}
                     size="sm"
                     variant="outline"
@@ -303,7 +318,10 @@ export function ChatHistory({
                         setDeleteArmedId(chat.id);
                         return;
                       }
-                      mutateChatMutation.mutate({ chatId: chat.id, action: "delete" });
+                      mutateChatMutation.mutate({
+                        chatId: chat.id,
+                        action: "delete",
+                      });
                       setDeleteArmedId(null);
                     }}
                     size="sm"

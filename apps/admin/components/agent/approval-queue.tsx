@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -14,7 +14,6 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import type { Locale } from "@/lib/i18n";
-import { cn } from "@/lib/utils";
 
 type Approval = {
   id: string;
@@ -100,7 +99,7 @@ export function ApprovalQueue({ orgId, locale }: ApprovalQueueProps) {
           <CardTitle className="text-base">
             {isEn ? "Pending approvals" : "Aprobaciones pendientes"}
           </CardTitle>
-          <Badge variant="secondary" className="font-mono">
+          <Badge className="font-mono" variant="secondary">
             {approvals.length}
           </Badge>
         </div>
@@ -113,14 +112,14 @@ export function ApprovalQueue({ orgId, locale }: ApprovalQueueProps) {
       <CardContent className="space-y-3">
         {approvals.map((approval) => (
           <div
-            className="rounded-xl border border-border/60 bg-card p-3 space-y-2"
+            className="space-y-2 rounded-xl border border-border/60 bg-card p-3"
             key={approval.id}
           >
             <div className="flex flex-wrap items-center gap-2">
-              <Badge variant="outline" className="font-mono text-[11px]">
+              <Badge className="font-mono text-[11px]" variant="outline">
                 {approval.agent_slug}
               </Badge>
-              <Badge variant="secondary" className="font-mono text-[11px]">
+              <Badge className="font-mono text-[11px]" variant="secondary">
                 {approval.tool_name}
               </Badge>
               <span className="text-[11px] text-muted-foreground">

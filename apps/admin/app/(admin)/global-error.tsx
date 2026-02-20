@@ -55,7 +55,6 @@ export default function GlobalError({
             </p>
           )}
           <button
-            type="button"
             onClick={reset}
             style={{
               padding: "8px 20px",
@@ -67,6 +66,7 @@ export default function GlobalError({
               color: "#fff",
               cursor: "pointer",
             }}
+            type="button"
           >
             Try again
           </button>
