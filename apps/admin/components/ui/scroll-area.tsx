@@ -1,50 +1,58 @@
-"use client";
+"use client"
 
-import { ScrollArea as ScrollAreaPrimitive } from "@base-ui/react/scroll-area";
-import type { ComponentPropsWithoutRef } from "react";
+import * as React from "react"
+import { ScrollArea as ScrollAreaPrimitive } from "radix-ui"
 
-import { cn } from "@/lib/utils";
+import { cn } from "@/lib/utils"
 
-type ScrollAreaProps = ComponentPropsWithoutRef<
-  typeof ScrollAreaPrimitive.Root
-> & {
-  contentClassName?: string;
-  viewportClassName?: string;
-  withHorizontalScrollbar?: boolean;
-};
-
-export function ScrollArea({
-  children,
+function ScrollArea({
   className,
-  contentClassName,
-  viewportClassName,
-  withHorizontalScrollbar = false,
+  children,
   ...props
-}: ScrollAreaProps) {
+}: React.ComponentProps<typeof ScrollAreaPrimitive.Root>) {
   return (
     <ScrollAreaPrimitive.Root
+      data-slot="scroll-area"
+      className={cn("relative", className)}
+      {...props}
+    >
+      <ScrollAreaPrimitive.Viewport
+        data-slot="scroll-area-viewport"
+        className="focus-visible:ring-ring/50 size-full rounded-[inherit] transition-[color,box-shadow] outline-none focus-visible:ring-[3px] focus-visible:outline-1"
+      >
+        {children}
+      </ScrollAreaPrimitive.Viewport>
+      <ScrollBar />
+      <ScrollAreaPrimitive.Corner />
+    </ScrollAreaPrimitive.Root>
+  )
+}
+
+function ScrollBar({
+  className,
+  orientation = "vertical",
+  ...props
+}: React.ComponentProps<typeof ScrollAreaPrimitive.ScrollAreaScrollbar>) {
+  return (
+    <ScrollAreaPrimitive.ScrollAreaScrollbar
+      data-slot="scroll-area-scrollbar"
+      orientation={orientation}
       className={cn(
-        "relative h-full min-h-0 w-full overflow-hidden",
+        "flex touch-none p-px transition-colors select-none",
+        orientation === "vertical" &&
+          "h-full w-2.5 border-l border-l-transparent",
+        orientation === "horizontal" &&
+          "h-2.5 flex-col border-t border-t-transparent",
         className
       )}
       {...props}
     >
-      <ScrollAreaPrimitive.Viewport
-        className={cn(
-          "h-full min-h-0 w-full overflow-y-auto overflow-x-hidden overscroll-contain",
-          viewportClassName
-        )}
-      >
-        <ScrollAreaPrimitive.Content
-          className={cn("min-h-full", contentClassName)}
-        >
-          {children}
-        </ScrollAreaPrimitive.Content>
-      </ScrollAreaPrimitive.Viewport>
-
-      <ScrollAreaPrimitive.Scrollbar className="hidden" orientation="vertical">
-        <ScrollAreaPrimitive.Thumb />
-      </ScrollAreaPrimitive.Scrollbar>
-    </ScrollAreaPrimitive.Root>
-  );
+      <ScrollAreaPrimitive.ScrollAreaThumb
+        data-slot="scroll-area-thumb"
+        className="bg-border relative flex-1 rounded-full"
+      />
+    </ScrollAreaPrimitive.ScrollAreaScrollbar>
+  )
 }
+
+export { ScrollArea, ScrollBar }

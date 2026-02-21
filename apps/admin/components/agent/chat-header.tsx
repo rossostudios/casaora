@@ -8,6 +8,7 @@ import {
   SparklesIcon,
 } from "@hugeicons/core-free-icons";
 
+import { getModelDisplayName } from "@/components/agent/model-display";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
@@ -17,7 +18,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { Skeleton } from "@/components/ui/skeleton";
-import type { AgentModelOption } from "@/lib/api";
+import type { AgentDefinition, AgentModelOption } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 export function ChatHeader({
@@ -41,6 +42,10 @@ export function ChatHeader({
   onDeleteArm,
   onDeleteConfirm,
   onDeleteCancel,
+  agents,
+  selectedAgentSlug,
+  onAgentChange,
+  selectedAgentName,
 }: {
   chatTitle?: string;
   loading: boolean;
@@ -62,11 +67,17 @@ export function ChatHeader({
   onDeleteArm: () => void;
   onDeleteConfirm: () => void;
   onDeleteCancel: () => void;
+  agents?: AgentDefinition[];
+  selectedAgentSlug?: string;
+  onAgentChange?: (slug: string) => void;
+  selectedAgentName?: string;
 }) {
+  const activeAgents = agents?.filter((a) => a.is_active !== false) ?? [];
+
   return (
     <div
       className={cn(
-        "glass-chrome sticky top-0 z-10 flex shrink-0 items-center justify-between px-4 py-2.5",
+        "sticky top-0 z-10 flex shrink-0 items-center justify-between border-b border-border/40 bg-background/80 px-4 py-2.5 backdrop-blur-sm",
         isEmbedded && "bg-card/95"
       )}
     >
@@ -80,9 +91,53 @@ export function ChatHeader({
                 <div className="flex h-6 w-6 items-center justify-center rounded-md bg-gradient-to-br from-[var(--sidebar-primary)] to-[var(--sidebar-primary)]/70 text-white">
                   <Icon className="h-3 w-3" icon={SparklesIcon} />
                 </div>
-                <h2 className="truncate font-semibold text-sm">
-                  {chatTitle || "Zoey"}
-                </h2>
+
+                {/* Agent selector dropdown (only in non-detail routes with multiple agents) */}
+                {!isChatDetailRoute && activeAgents.length > 1 && onAgentChange ? (
+                  <PopoverRoot>
+                    <PopoverTrigger
+                      className="flex items-center gap-1"
+                      disabled={isSending}
+                    >
+                      <h2 className="truncate font-semibold text-sm hover:text-foreground/80">
+                        {chatTitle || selectedAgentName || (isEn ? "New Chat" : "Nuevo Chat")}
+                      </h2>
+                      <svg className="h-3 w-3 text-muted-foreground" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                        <path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    </PopoverTrigger>
+                    <PopoverContent align="start" className="w-64 p-1.5">
+                      <div className="px-2 py-1.5 font-medium text-[11px] text-muted-foreground uppercase tracking-wider">
+                        {isEn ? "Agent" : "Agente"}
+                      </div>
+                      {activeAgents.map((agent) => (
+                        <button
+                          className={cn(
+                            "flex w-full flex-col gap-0.5 rounded-lg px-2.5 py-2 text-left transition-colors hover:bg-muted/60",
+                            agent.slug === selectedAgentSlug &&
+                              "bg-[var(--sidebar-primary)]/8 text-[var(--sidebar-primary)]"
+                          )}
+                          key={agent.slug}
+                          onClick={() => onAgentChange(agent.slug)}
+                          type="button"
+                        >
+                          <span className="truncate text-sm font-medium">
+                            {agent.name}
+                          </span>
+                          {agent.description ? (
+                            <span className="truncate text-xs text-muted-foreground">
+                              {agent.description}
+                            </span>
+                          ) : null}
+                        </button>
+                      ))}
+                    </PopoverContent>
+                  </PopoverRoot>
+                ) : (
+                  <h2 className="truncate font-semibold text-sm">
+                    {chatTitle || selectedAgentName || (isEn ? "New Chat" : "Nuevo Chat")}
+                  </h2>
+                )}
               </div>
 
               {!isChatDetailRoute && modelOptions.length > 0 ? (
@@ -95,9 +150,9 @@ export function ChatHeader({
                       className="cursor-pointer font-mono font-normal text-[10px] transition-colors hover:bg-muted"
                       variant="outline"
                     >
-                      {selectedModel ||
-                        primaryModel ||
-                        (isEn ? "Model" : "Modelo")}
+                      {getModelDisplayName(
+                        selectedModel || primaryModel
+                      ) || (isEn ? "Model" : "Modelo")}
                     </Badge>
                   </PopoverTrigger>
                   <PopoverContent align="start" className="w-52 p-1.5">
@@ -116,7 +171,7 @@ export function ChatHeader({
                         type="button"
                       >
                         <span className="truncate font-mono text-xs">
-                          {model.model}
+                          {getModelDisplayName(model.model)}
                         </span>
                         {model.is_primary ? (
                           <Badge
@@ -128,6 +183,13 @@ export function ChatHeader({
                         ) : null}
                       </button>
                     ))}
+                    <div className="mt-1 border-t border-border/40 px-2.5 py-2">
+                      <span className="text-[10px] text-muted-foreground">
+                        {isEn
+                          ? "More models coming soon"
+                          : "Más modelos próximamente"}
+                      </span>
+                    </div>
                   </PopoverContent>
                 </PopoverRoot>
               ) : null}

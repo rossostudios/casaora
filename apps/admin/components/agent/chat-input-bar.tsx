@@ -14,6 +14,7 @@ import type { ChatAttachment } from "@/components/agent/use-chat-attachments";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { Textarea } from "@/components/ui/textarea";
+import { ScrollingWaveform } from "@/components/ui/waveform";
 import { cn } from "@/lib/utils";
 
 export function ChatInputBar({
@@ -26,6 +27,7 @@ export function ChatInputBar({
   isEmbedded,
   editingSourceId,
   onCancelEdit,
+  agentName,
   // Voice
   voiceSupported,
   voiceModeActive,
@@ -47,6 +49,7 @@ export function ChatInputBar({
   isEmbedded: boolean;
   editingSourceId: string | null;
   onCancelEdit: () => void;
+  agentName?: string;
   // Voice
   voiceSupported?: boolean;
   voiceModeActive?: boolean;
@@ -65,6 +68,8 @@ export function ChatInputBar({
   const canSend =
     !isSending && (draft.trim() || (attachments?.length && attachmentsReady));
 
+  const placeholderName = agentName || (isEn ? "Agent" : "Agente");
+
   return (
     <div
       className={cn(
@@ -76,7 +81,7 @@ export function ChatInputBar({
     >
       <div className="mx-auto max-w-3xl space-y-3">
         {editingSourceId ? (
-          <div className="glass-inner flex items-center justify-between rounded-xl px-3 py-2 text-[11px] text-muted-foreground">
+          <div className="flex items-center justify-between rounded-xl border border-border/60 bg-muted/30 px-3 py-2 text-[11px] text-muted-foreground">
             <span>
               {isEn
                 ? "Editing a previous message before resend"
@@ -96,7 +101,16 @@ export function ChatInputBar({
 
         {voiceModeActive && isListening ? (
           <div className="flex items-center gap-2 px-1">
-            <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-[var(--sidebar-primary)]" />
+            <ScrollingWaveform
+              barColor="var(--sidebar-primary)"
+              barCount={24}
+              barGap={2}
+              barRadius={2}
+              barWidth={3}
+              className="w-20"
+              height={16}
+              speed={30}
+            />
             <span className="text-[11px] text-muted-foreground">
               {isEn ? "Voice mode — listening..." : "Modo voz — escuchando..."}
             </span>
@@ -110,7 +124,7 @@ export function ChatInputBar({
           />
         ) : null}
 
-        <div className="glass-surface relative flex rounded-2xl shadow-md transition-shadow focus-within:ring-1 focus-within:ring-[var(--sidebar-primary)]/30 hover:shadow-lg">
+        <div className="relative flex rounded-2xl border border-border/60 bg-card shadow-md transition-shadow focus-within:ring-1 focus-within:ring-[var(--sidebar-primary)]/30 hover:shadow-lg">
           <div className="flex items-end gap-1 py-2.5 pl-3">
             {onAddFiles ? (
               <>
@@ -185,7 +199,11 @@ export function ChatInputBar({
                 onSend();
               }
             }}
-            placeholder={isEn ? "Message Zoey..." : "Enviar mensaje a Zoey..."}
+            placeholder={
+              isEn
+                ? `Message ${placeholderName}...`
+                : `Enviar mensaje a ${placeholderName}...`
+            }
             rows={1}
             value={displayValue}
           />

@@ -1,8 +1,8 @@
 "use client";
 
-import type { AgentChatMessage, AgentChatSummary } from "@/lib/api";
+import type { AgentChatMessage, AgentChatSummary, AgentDefinition } from "@/lib/api";
 
-export const ZOEY_PROMPTS: { "en-US": string[]; "es-PY": string[] } = {
+export const QUICK_PROMPTS: { "en-US": string[]; "es-PY": string[] } = {
   "en-US": [
     "Give me today's top 5 priorities.",
     "Show all guests arriving in the next 7 days.",
@@ -60,6 +60,25 @@ function normalizeChat(payload: unknown): AgentChatSummary | null {
 }
 
 export { normalizeChat };
+
+export function normalizeAgents(payload: unknown): AgentDefinition[] {
+  if (!payload || typeof payload !== "object") return [];
+  const data = (payload as { data?: unknown[] }).data;
+  if (!Array.isArray(data)) return [];
+  return data
+    .filter((item): item is AgentDefinition =>
+      Boolean(item && typeof item === "object")
+    )
+    .map((item) => ({
+      id: String(item.id ?? ""),
+      slug: String(item.slug ?? ""),
+      name: String(item.name ?? ""),
+      description: String(item.description ?? ""),
+      icon_key: typeof item.icon_key === "string" ? item.icon_key : undefined,
+      is_active: Boolean(item.is_active ?? true),
+    }))
+    .filter((item) => item.id && item.slug && item.name);
+}
 
 function normalizeMessages(payload: unknown): AgentChatMessage[] {
   if (!payload || typeof payload !== "object") return [];

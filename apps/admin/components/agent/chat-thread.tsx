@@ -17,20 +17,27 @@ import { ChatEmptyState } from "@/components/agent/chat-empty-state";
 import { ChatHeader } from "@/components/agent/chat-header";
 import { ChatInputBar } from "@/components/agent/chat-input-bar";
 import {
-  ChatMessageBubble,
+  ChatMessage,
   type DisplayMessage,
-} from "@/components/agent/chat-message-bubble";
+} from "@/components/agent/chat-message";
 import {
   fetchThread,
   MESSAGE_SKELETON_KEYS,
+  normalizeAgents,
   normalizeChat,
+  QUICK_PROMPTS,
   type ThreadData,
-  ZOEY_PROMPTS,
 } from "@/components/agent/chat-thread-types";
 import {
   ChatToolEventStrip,
   type StreamToolEvent,
 } from "@/components/agent/chat-tool-event";
+import { Message, MessageContent } from "@/components/ui/message";
+import {
+  Conversation,
+  ConversationContent,
+  ConversationScrollButton,
+} from "@/components/ui/conversation";
 import { useChatAttachments } from "@/components/agent/use-chat-attachments";
 import { useVoiceChat } from "@/components/agent/use-voice-chat";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -39,6 +46,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import type {
   AgentChatMessage,
   AgentChatSummary,
+  AgentDefinition,
   AgentModelOption,
 } from "@/lib/api";
 import type { Locale } from "@/lib/i18n";
@@ -49,8 +57,6 @@ type StreamMeta = {
   fallback_used?: boolean;
   tool_trace?: AgentChatMessage["tool_trace"];
 };
-
-const BACKEND_AGENT_SLUG = "guest-concierge";
 
 function normalizeModels(payload: unknown): AgentModelOption[] {
   if (!payload || typeof payload !== "object") return [];
@@ -103,6 +109,7 @@ export function ChatThread({
   orgId,
   locale,
   chatId,
+  defaultAgentSlug,
   mode = "full",
   freshKey,
 }: {
@@ -136,6 +143,9 @@ export function ChatThread({
   const [streamMetaByMessageId, setStreamMetaByMessageId] = useState<
     Record<string, StreamMeta>
   >({});
+  const [selectedAgentSlug, setSelectedAgentSlug] = useState<string>(
+    defaultAgentSlug || "guest-concierge"
+  );
 
   const activeChatIdRef = useRef<string | undefined>(chatId);
   const pendingSendRef = useRef<{
@@ -143,11 +153,65 @@ export function ChatThread({
     message: string;
     fallbackAttempted: boolean;
   } | null>(null);
-  const messageViewportRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     activeChatIdRef.current = activeChatId;
   }, [activeChatId]);
+
+  // --- agent definitions query --------------------------------------------
+  const agentsQuery = useQuery<AgentDefinition[], Error>({
+    queryKey: ["agents", orgId],
+    queryFn: async () => {
+      const res = await fetch(
+        `/api/agent/agents?org_id=${encodeURIComponent(orgId)}`,
+        {
+          method: "GET",
+          cache: "no-store",
+          headers: { Accept: "application/json" },
+        }
+      );
+      const payload = (await res.json()) as unknown;
+      if (!res.ok) return [];
+      return normalizeAgents(payload);
+    },
+    staleTime: 60_000,
+    enabled: !!orgId,
+    retry: false,
+  });
+
+  const activeAgents = useMemo(
+    () => (agentsQuery.data ?? []).filter((a) => a.is_active !== false),
+    [agentsQuery.data]
+  );
+
+  // Auto-select: prefer guest-concierge, fallback to first active
+  useEffect(() => {
+    if (activeAgents.length === 0) return;
+    const currentExists = activeAgents.some(
+      (a) => a.slug === selectedAgentSlug
+    );
+    if (!currentExists) {
+      const preferred = activeAgents.find(
+        (a) => a.slug === "guest-concierge"
+      );
+      setSelectedAgentSlug(preferred?.slug ?? activeAgents[0].slug);
+    }
+  }, [activeAgents, selectedAgentSlug]);
+
+  const selectedAgent = useMemo(
+    () => activeAgents.find((a) => a.slug === selectedAgentSlug) ?? null,
+    [activeAgents, selectedAgentSlug]
+  );
+
+  const handleAgentChange = useCallback(
+    (slug: string) => {
+      setSelectedAgentSlug(slug);
+      // Switching agents starts a fresh thread
+      resetToFreshThread();
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    []
+  );
 
   // --- queries -------------------------------------------------------------
   const threadQuery = useQuery<ThreadData, Error>({
@@ -232,7 +296,7 @@ export function ChatThread({
     error: chatError,
     clearError,
   } = useChat<UIMessage>({
-    id: activeChatId ? `agent-${activeChatId}` : "agent-draft-zoey",
+    id: activeChatId ? `agent-${activeChatId}` : "agent-draft",
     transport,
     onData: (part: DataUIPart<UIDataTypes>) => {
       const typed = part as { type: string; data?: unknown };
@@ -507,27 +571,8 @@ export function ChatThread({
     voice.speak(lastAssistant.content);
   }, [displayMessages, isSending, voice]);
 
-  // --- auto-scroll ---------------------------------------------------------
-  useEffect(() => {
-    const vp = messageViewportRef.current;
-    if (!vp) return;
-    if (
-      displayMessages.length > 0 ||
-      isSending ||
-      streamToolEvents.length > 0 ||
-      streamStatus
-    ) {
-      vp.scrollTop = vp.scrollHeight;
-    }
-  }, [
-    displayMessages.length,
-    isSending,
-    streamStatus,
-    streamToolEvents.length,
-  ]);
-
   // --- quick prompts -------------------------------------------------------
-  const quickPrompts = ZOEY_PROMPTS[locale];
+  const quickPrompts = QUICK_PROMPTS[locale];
 
   // --- actions -------------------------------------------------------------
   const ensureChatId = async (): Promise<string> => {
@@ -537,7 +582,7 @@ export function ChatThread({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         org_id: orgId,
-        agent_slug: BACKEND_AGENT_SLUG,
+        agent_slug: selectedAgentSlug,
         preferred_model: selectedModel || null,
       }),
     });
@@ -735,12 +780,13 @@ export function ChatThread({
       className={cn(
         "relative flex h-full flex-col",
         isEmbedded
-          ? "glass-surface min-h-[38rem] overflow-hidden rounded-3xl shadow-[0_24px_60px_-40px_hsl(var(--foreground)/0.65)]"
+          ? "min-h-[38rem] overflow-hidden rounded-3xl border border-border/60 bg-card shadow-[0_24px_60px_-40px_hsl(var(--foreground)/0.65)]"
           : "min-h-[calc(100vh-4rem)] bg-background"
       )}
     >
       {/* Header */}
       <ChatHeader
+        agents={activeAgents}
         busy={busy}
         chatTitle={chat?.title}
         deleteArmed={deleteArmed}
@@ -752,6 +798,7 @@ export function ChatThread({
         loading={loading}
         modelBusy={modelBusy}
         modelOptions={modelOptions}
+        onAgentChange={handleAgentChange}
         onArchiveToggle={() => {
           const action = chat?.is_archived ? "restore" : "archive";
           mutateChat(action).catch(() => undefined);
@@ -769,20 +816,21 @@ export function ChatThread({
         }
         onNewThread={() => resetToFreshThread()}
         primaryModel={primaryModel}
+        selectedAgentName={selectedAgent?.name}
+        selectedAgentSlug={selectedAgentSlug}
         selectedModel={selectedModel}
       />
 
-      {/* Message area */}
-      <div
+      {/* Message area — Conversation auto-scroll wrapper */}
+      <Conversation
         className={cn(
-          "flex-1 overflow-y-auto p-4 pb-48 sm:p-6",
-          isEmbedded ? "pb-52" : ""
+          "flex-1 p-0",
+          isEmbedded ? "pb-52" : "pb-48"
         )}
-        ref={messageViewportRef}
       >
-        <div
+        <ConversationContent
           className={cn(
-            "mx-auto flex flex-col space-y-5",
+            "mx-auto flex flex-col space-y-5 p-4 sm:p-6",
             isEmbedded ? "max-w-4xl" : "max-w-3xl"
           )}
         >
@@ -809,6 +857,8 @@ export function ChatThread({
             ))
           ) : displayMessages.length === 0 ? (
             <ChatEmptyState
+              agentDescription={selectedAgent?.description}
+              agentName={selectedAgent?.name}
               disabled={isSending}
               isEn={isEn}
               onSendPrompt={(prompt) => {
@@ -818,7 +868,7 @@ export function ChatThread({
             />
           ) : (
             displayMessages.map((msg) => (
-              <ChatMessageBubble
+              <ChatMessage
                 isEn={isEn}
                 isSending={isSending}
                 key={msg.id}
@@ -844,38 +894,43 @@ export function ChatThread({
 
           {/* Streaming indicator */}
           {isSending ? (
-            <div className="flex gap-3">
+            <Message className="items-start py-2" from="assistant">
               <div className="mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-[var(--sidebar-primary)] to-[var(--sidebar-primary)]/70 text-white">
                 <Icon
                   className="h-3.5 w-3.5 animate-spin"
                   icon={Loading03Icon}
                 />
               </div>
-              <div className="min-w-0 flex-1 space-y-2 py-1">
-                {streamStatus ? (
-                  <p className="text-[12px] text-muted-foreground">
-                    {streamStatus}
-                  </p>
-                ) : null}
+              <MessageContent variant="flat">
+                <div className="min-w-0 flex-1 space-y-2 py-1">
+                  {streamStatus ? (
+                    <p className="text-[12px] text-muted-foreground">
+                      {streamStatus}
+                    </p>
+                  ) : null}
 
-                {streamToolEvents.length > 0 ? (
-                  <ChatToolEventStrip events={streamToolEvents} isEn={isEn} />
-                ) : null}
+                  {streamToolEvents.length > 0 ? (
+                    <ChatToolEventStrip events={streamToolEvents} isEn={isEn} />
+                  ) : null}
 
-                {streamToolEvents.length === 0 && !streamStatus ? (
-                  <p className="flex items-center gap-2 text-muted-foreground text-sm">
-                    <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-[var(--sidebar-primary)]" />
-                    {isEn ? "Thinking..." : "Pensando..."}
-                  </p>
-                ) : null}
-              </div>
-            </div>
+                  {streamToolEvents.length === 0 && !streamStatus ? (
+                    <p className="flex items-center gap-2 text-muted-foreground text-sm">
+                      <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-[var(--sidebar-primary)]" />
+                      {isEn ? "Thinking..." : "Pensando..."}
+                    </p>
+                  ) : null}
+                </div>
+              </MessageContent>
+            </Message>
           ) : null}
-        </div>
-      </div>
+        </ConversationContent>
+
+        <ConversationScrollButton />
+      </Conversation>
 
       {/* Input bar */}
       <ChatInputBar
+        agentName={selectedAgent?.name}
         attachments={attachmentHook.attachments}
         attachmentsReady={attachmentHook.allReady}
         draft={draft}
