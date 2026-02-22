@@ -280,16 +280,16 @@ export default async function MarketplaceListingPage({
       </main>
 
       <ListingMobileCta
-        isEn={isEn}
-        monthlyLabel={listing.monthlyRecurringLabel}
-        monthlyUsdApprox={listing.monthlyRecurringUsdApprox}
-        slug={slug}
-        whatsappUrl={listing.whatsappUrl}
         bookingUrl={
           listing.bookingEnabled && listing.organizationSlug
             ? `/booking/${encodeURIComponent(listing.organizationSlug)}`
             : null
         }
+        isEn={isEn}
+        monthlyLabel={listing.monthlyRecurringLabel}
+        monthlyUsdApprox={listing.monthlyRecurringUsdApprox}
+        slug={slug}
+        whatsappUrl={listing.whatsappUrl}
       />
 
       <RecentlyViewedTracker slug={slug} />

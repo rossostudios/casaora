@@ -49,7 +49,7 @@ export function DesktopResizableShell({
       data-shell-mode={viewportMode}
     >
       {/* Ambient color fields — the liquid glass sidebar refracts these */}
-      <div className="pointer-events-none absolute -left-[6%] -top-[8%] z-0 h-[45%] w-[28%] rounded-full bg-sidebar-primary/[0.14] blur-[100px]" />
+      <div className="pointer-events-none absolute -top-[8%] -left-[6%] z-0 h-[45%] w-[28%] rounded-full bg-sidebar-primary/[0.14] blur-[100px]" />
       <div className="pointer-events-none absolute bottom-[5%] left-[2%] z-0 h-[35%] w-[22%] rounded-full bg-indigo-500/[0.08] blur-[100px]" />
       <div className="pointer-events-none absolute top-[30%] -left-[4%] z-0 h-[25%] w-[18%] rounded-full bg-cyan-400/[0.06] blur-[80px]" />
 

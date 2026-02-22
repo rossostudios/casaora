@@ -1,8 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 
 type Job = {
   id: string;
@@ -34,7 +34,11 @@ type Props = {
 const API_BASE =
   process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000/v1";
 
-async function vendorFetch<T>(path: string, token: string, init?: RequestInit): Promise<T> {
+async function vendorFetch<T>(
+  path: string,
+  token: string,
+  init?: RequestInit
+): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
     ...init,
     headers: {
@@ -50,7 +54,7 @@ async function vendorFetch<T>(path: string, token: string, init?: RequestInit): 
   return res.json() as Promise<T>;
 }
 
-export function VendorPortal({ token, vendorName, organizationId }: Props) {
+export function VendorPortal({ token, vendorName }: Props) {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [selected, setSelected] = useState<JobDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -74,7 +78,10 @@ export function VendorPortal({ token, vendorName, organizationId }: Props) {
   const selectJob = useCallback(
     async (id: string) => {
       try {
-        const detail = await vendorFetch<JobDetail>(`/vendor/jobs/${id}`, token);
+        const detail = await vendorFetch<JobDetail>(
+          `/vendor/jobs/${id}`,
+          token
+        );
         setSelected(detail);
       } catch (err) {
         console.error("Failed to load job detail:", err);
@@ -114,55 +121,57 @@ export function VendorPortal({ token, vendorName, organizationId }: Props) {
   };
 
   return (
-    <div className="max-w-2xl mx-auto p-4 space-y-6">
+    <div className="mx-auto max-w-2xl space-y-6 p-4">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-bold">Vendor Portal</h1>
-          <p className="text-sm text-muted-foreground">
-            Welcome, {vendorName}
-          </p>
+          <h1 className="font-bold text-xl">Vendor Portal</h1>
+          <p className="text-muted-foreground text-sm">Welcome, {vendorName}</p>
         </div>
       </div>
 
       {/* Job list */}
       {loading && (
-        <p className="text-sm text-muted-foreground py-8 text-center">
+        <p className="py-8 text-center text-muted-foreground text-sm">
           Loading jobs...
         </p>
       )}
 
-      {!loading && !selected && (
+      {!(loading || selected) && (
         <div className="space-y-3">
-          <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
+          <h2 className="font-medium text-muted-foreground text-sm uppercase tracking-wide">
             Assigned Jobs ({jobs.length})
           </h2>
           {jobs.length === 0 && (
             <div className="rounded-xl border p-6 text-center">
-              <p className="text-sm text-muted-foreground">
+              <p className="text-muted-foreground text-sm">
                 No jobs assigned at this time.
               </p>
             </div>
           )}
           {jobs.map((job) => (
             <button
+              className="w-full space-y-2 rounded-xl border p-4 text-left transition-colors hover:bg-muted/50"
               key={job.id}
               onClick={() => selectJob(job.id)}
-              className="w-full text-left rounded-xl border p-4 space-y-2 hover:bg-muted/50 transition-colors"
+              type="button"
             >
               <div className="flex items-start justify-between gap-2">
                 <span className="font-semibold text-sm">{job.title}</span>
-                <Badge variant={priorityColor(job.priority)} className="text-[10px] shrink-0">
+                <Badge
+                  className="shrink-0 text-[10px]"
+                  variant={priorityColor(job.priority)}
+                >
                   {job.priority}
                 </Badge>
               </div>
-              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <div className="flex items-center gap-2 text-muted-foreground text-xs">
                 <span className={statusColor(job.status)}>{job.status}</span>
                 {job.property_name && <span>· {job.property_name}</span>}
                 {job.unit_name && <span>· {job.unit_name}</span>}
               </div>
               {job.due_at && (
-                <p className="text-xs text-muted-foreground">
+                <p className="text-muted-foreground text-xs">
                   Due: {new Date(job.due_at).toLocaleDateString()}
                 </p>
               )}
@@ -175,30 +184,36 @@ export function VendorPortal({ token, vendorName, organizationId }: Props) {
       {selected && (
         <div className="space-y-4">
           <button
+            className="text-muted-foreground text-sm transition-colors hover:text-foreground"
             onClick={() => setSelected(null)}
-            className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+            type="button"
           >
             ← Back to jobs
           </button>
 
-          <div className="rounded-xl border p-5 space-y-4">
+          <div className="space-y-4 rounded-xl border p-5">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <h2 className="text-lg font-bold">{selected.title}</h2>
-                <div className="flex items-center gap-2 mt-1">
-                  <span className={`text-sm font-medium ${statusColor(selected.status)}`}>
+                <h2 className="font-bold text-lg">{selected.title}</h2>
+                <div className="mt-1 flex items-center gap-2">
+                  <span
+                    className={`font-medium text-sm ${statusColor(selected.status)}`}
+                  >
                     {selected.status}
                   </span>
-                  <Badge variant={priorityColor(selected.priority)} className="text-[10px]">
+                  <Badge
+                    className="text-[10px]"
+                    variant={priorityColor(selected.priority)}
+                  >
                     {selected.priority}
                   </Badge>
                 </div>
               </div>
               {selected.status !== "done" && (
                 <Button
-                  size="sm"
                   disabled={completing}
                   onClick={handleComplete}
+                  size="sm"
                 >
                   {completing ? "Completing..." : "Mark Complete"}
                 </Button>
@@ -206,13 +221,13 @@ export function VendorPortal({ token, vendorName, organizationId }: Props) {
             </div>
 
             {selected.description && (
-              <p className="text-sm text-muted-foreground leading-relaxed">
+              <p className="text-muted-foreground text-sm leading-relaxed">
                 {selected.description}
               </p>
             )}
 
             {selected.due_at && (
-              <p className="text-xs text-muted-foreground">
+              <p className="text-muted-foreground text-xs">
                 Due: {new Date(selected.due_at).toLocaleDateString()}
               </p>
             )}
@@ -220,24 +235,24 @@ export function VendorPortal({ token, vendorName, organizationId }: Props) {
             {/* Checklist */}
             {selected.items && selected.items.length > 0 && (
               <div className="space-y-2">
-                <h3 className="text-sm font-medium">Checklist</h3>
+                <h3 className="font-medium text-sm">Checklist</h3>
                 {selected.items
                   .sort((a, b) => a.sort_order - b.sort_order)
                   .map((item) => (
                     <div
-                      key={item.id}
                       className="flex items-center gap-2 rounded-lg border px-3 py-2"
+                      key={item.id}
                     >
                       <input
-                        type="checkbox"
                         checked={item.is_completed}
-                        readOnly
                         className="rounded"
+                        readOnly
+                        type="checkbox"
                       />
                       <span
                         className={`text-sm ${
                           item.is_completed
-                            ? "line-through text-muted-foreground"
+                            ? "text-muted-foreground line-through"
                             : ""
                         }`}
                       >

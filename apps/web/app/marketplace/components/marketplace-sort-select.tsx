@@ -23,7 +23,10 @@ const SORT_OPTIONS = [
 export function MarketplaceSortSelect({
   isEn,
   value,
-}: { isEn: boolean; value: string }) {
+}: {
+  isEn: boolean;
+  value: string;
+}) {
   return (
     <Suspense
       fallback={
@@ -35,10 +38,7 @@ export function MarketplaceSortSelect({
   );
 }
 
-function SortSelectInner({
-  isEn,
-  value,
-}: { isEn: boolean; value: string }) {
+function SortSelectInner({ isEn, value }: { isEn: boolean; value: string }) {
   const router = useRouter();
   const searchParams = useSearchParams();
 

@@ -288,18 +288,15 @@ export const MODULES: ModuleDef[] = [
     endpoint: "/ai-agents",
     description:
       "Configura prompts, herramientas y políticas de aprobación de agentes IA.",
-    description_en:
-      "Configure AI agent prompts, tools, and approval policies.",
+    description_en: "Configure AI agent prompts, tools, and approval policies.",
   },
   {
     slug: "reviews",
     label: "Reseñas",
     label_en: "Reviews",
     endpoint: "/reviews",
-    description:
-      "Gestiona reseñas de huéspedes y respuestas sugeridas por IA.",
-    description_en:
-      "Manage guest reviews and AI-suggested responses.",
+    description: "Gestiona reseñas de huéspedes y respuestas sugeridas por IA.",
+    description_en: "Manage guest reviews and AI-suggested responses.",
   },
 ];
 

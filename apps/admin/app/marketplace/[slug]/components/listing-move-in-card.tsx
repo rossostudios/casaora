@@ -63,7 +63,7 @@ export function ListingMoveInCard({
         ) : null}
 
         <Link
-          className="flex h-11 w-full items-center justify-center rounded-xl border border-[var(--marketplace-border)] font-medium text-sm text-[var(--marketplace-text)] transition-colors hover:bg-[var(--marketplace-bg-muted)]"
+          className="flex h-11 w-full items-center justify-center rounded-xl border border-[var(--marketplace-border)] font-medium text-[var(--marketplace-text)] text-sm transition-colors hover:bg-[var(--marketplace-bg-muted)]"
           href={`/marketplace/apply/${encodeURIComponent(slug)}`}
         >
           {isEn ? "Apply now" : "Aplicar ahora"}

@@ -2,10 +2,7 @@
 
 import { SparklesIcon } from "@hugeicons/core-free-icons";
 
-import {
-  Suggestion,
-  Suggestions,
-} from "@/components/ai-elements/suggestion";
+import { Suggestion, Suggestions } from "@/components/ai-elements/suggestion";
 import { Icon } from "@/components/ui/icon";
 
 export function ChatEmptyState({

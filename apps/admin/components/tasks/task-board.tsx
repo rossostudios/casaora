@@ -47,10 +47,7 @@ export function TaskBoard({
   return (
     <section className="grid gap-3 xl:grid-cols-3">
       {boardLanes.map((lane) => (
-        <article
-          className="glass-surface rounded-3xl p-3"
-          key={lane.key}
-        >
+        <article className="glass-surface rounded-3xl p-3" key={lane.key}>
           <div className="mb-2 flex items-center justify-between">
             <p className="font-semibold text-lg">
               {localizedTaskStatusLabel(isEn, lane.status)}

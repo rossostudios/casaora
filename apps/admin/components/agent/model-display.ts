@@ -5,7 +5,7 @@ const MODEL_DISPLAY_NAMES: Record<string, string> = {
   "gpt-4.1": "GPT-4.1",
   "gpt-4.1-mini": "GPT-4.1 mini",
   "gpt-4.1-nano": "GPT-4.1 nano",
-  "o3": "o3",
+  o3: "o3",
   "o3-mini": "o3 mini",
   "o4-mini": "o4 mini",
   "claude-sonnet-4-5-20250514": "Claude Sonnet 4.5",

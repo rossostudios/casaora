@@ -1,6 +1,10 @@
 "use client";
 
-import type { AgentChatMessage, AgentChatSummary, AgentDefinition } from "@/lib/api";
+import type {
+  AgentChatMessage,
+  AgentChatSummary,
+  AgentDefinition,
+} from "@/lib/api";
 
 export const QUICK_PROMPTS: { "en-US": string[]; "es-PY": string[] } = {
   "en-US": [

@@ -53,7 +53,7 @@ const TableFooter = forwardRef<
 >(({ className, ...props }, ref) => (
   <tfoot
     className={cn(
-      "border-t bg-white/25 dark:bg-white/[0.03] text-muted-foreground text-xs",
+      "border-t bg-white/25 text-muted-foreground text-xs dark:bg-white/[0.03]",
       className
     )}
     ref={ref}

@@ -165,47 +165,46 @@ export function StatementPrintView({
       </section>
 
       {/* Tax / Fees Summary */}
-      {taxSummary &&
-        (taxSummary.managementFee || taxSummary.ivaAmount) ? (
-          <section className="mb-6">
-            <h3 className="mb-2 font-semibold text-gray-500 text-xs uppercase tracking-wide">
-              {isEn ? "Fees & Taxes" : "Comisiones e Impuestos"}
-            </h3>
-            <table className="w-full text-sm">
-              <tbody>
-                {taxSummary.managementFee ? (
-                  <tr className="border-gray-100 border-b">
-                    <td className="py-1.5">
-                      {isEn ? "Management Fee" : "Comisión de Administración"}
-                    </td>
-                    <td className="py-1.5 text-right text-red-600">
-                      -{fmt(taxSummary.managementFee)}
-                    </td>
-                  </tr>
-                ) : null}
-                {taxSummary.ivaAmount ? (
-                  <tr className="border-gray-100 border-b">
-                    <td className="py-1.5">
-                      IVA ({taxSummary.ivaRatePct ?? 10}%)
-                    </td>
-                    <td className="py-1.5 text-right text-red-600">
-                      -{fmt(taxSummary.ivaAmount)}
-                    </td>
-                  </tr>
-                ) : null}
-                {taxSummary.irpApplicable ? (
-                  <tr className="border-gray-100 border-b">
-                    <td className="py-1.5 text-gray-500" colSpan={2}>
-                      {isEn
-                        ? "IRP applicable — income tracked for annual filing"
-                        : "IRP aplicable — ingreso registrado para declaración anual"}
-                    </td>
-                  </tr>
-                ) : null}
-              </tbody>
-            </table>
-          </section>
-        ) : null}
+      {taxSummary && (taxSummary.managementFee || taxSummary.ivaAmount) ? (
+        <section className="mb-6">
+          <h3 className="mb-2 font-semibold text-gray-500 text-xs uppercase tracking-wide">
+            {isEn ? "Fees & Taxes" : "Comisiones e Impuestos"}
+          </h3>
+          <table className="w-full text-sm">
+            <tbody>
+              {taxSummary.managementFee ? (
+                <tr className="border-gray-100 border-b">
+                  <td className="py-1.5">
+                    {isEn ? "Management Fee" : "Comisión de Administración"}
+                  </td>
+                  <td className="py-1.5 text-right text-red-600">
+                    -{fmt(taxSummary.managementFee)}
+                  </td>
+                </tr>
+              ) : null}
+              {taxSummary.ivaAmount ? (
+                <tr className="border-gray-100 border-b">
+                  <td className="py-1.5">
+                    IVA ({taxSummary.ivaRatePct ?? 10}%)
+                  </td>
+                  <td className="py-1.5 text-right text-red-600">
+                    -{fmt(taxSummary.ivaAmount)}
+                  </td>
+                </tr>
+              ) : null}
+              {taxSummary.irpApplicable ? (
+                <tr className="border-gray-100 border-b">
+                  <td className="py-1.5 text-gray-500" colSpan={2}>
+                    {isEn
+                      ? "IRP applicable — income tracked for annual filing"
+                      : "IRP aplicable — ingreso registrado para declaración anual"}
+                  </td>
+                </tr>
+              ) : null}
+            </tbody>
+          </table>
+        </section>
+      ) : null}
 
       {/* Net Payout */}
       <section className="rounded-lg border-2 border-gray-900 p-4">

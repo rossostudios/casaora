@@ -149,9 +149,9 @@ export default async function PricingModulePage({ searchParams }: PageProps) {
         <CardContent>
           <Suspense fallback={null}>
             <PricingRecommendations
-              orgId={orgId}
               initialRecommendations={recommendations}
               locale={locale}
+              orgId={orgId}
             />
           </Suspense>
         </CardContent>

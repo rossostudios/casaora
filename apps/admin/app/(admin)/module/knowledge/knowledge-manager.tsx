@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useState } from "react";
 import { Cancel01Icon } from "@hugeicons/core-free-icons";
+import { useCallback, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -10,7 +10,6 @@ import { Input } from "@/components/ui/input";
 import { Sheet } from "@/components/ui/sheet";
 import { Textarea } from "@/components/ui/textarea";
 import { authedFetch } from "@/lib/api-client";
-import { cn } from "@/lib/utils";
 
 type KnowledgeDocument = {
   id: string;
@@ -144,40 +143,45 @@ export function KnowledgeManager({ orgId, initialDocuments, locale }: Props) {
           <h3 className="font-medium text-sm">
             {isEn ? "Documents" : "Documentos"}
           </h3>
-          <Badge variant="secondary" className="text-[10px] tabular-nums">
+          <Badge className="text-[10px] tabular-nums" variant="secondary">
             {documents.length}
           </Badge>
         </div>
         <Button
-          variant="ghost"
-          size="sm"
-          className="text-xs h-7"
+          className="h-7 text-xs"
           onClick={() => setShowCreateForm((v) => !v)}
+          size="sm"
+          variant="ghost"
         >
           {showCreateForm
-            ? isEn ? "Cancel" : "Cancelar"
-            : isEn ? "+ Add Document" : "+ Agregar Documento"}
+            ? isEn
+              ? "Cancel"
+              : "Cancelar"
+            : isEn
+              ? "+ Add Document"
+              : "+ Agregar Documento"}
         </Button>
       </div>
 
       {/* Create form — progressive disclosure */}
       {showCreateForm && (
-        <div className="border border-border/50 rounded-lg p-4 space-y-3">
+        <div className="space-y-3 rounded-lg border border-border/50 p-4">
           <div className="grid gap-3 sm:grid-cols-2">
             <Input
+              onChange={(e) => setNewTitle(e.target.value)}
               placeholder={isEn ? "Document title" : "Titulo del documento"}
               value={newTitle}
-              onChange={(e) => setNewTitle(e.target.value)}
             />
             <Input
+              onChange={(e) => setNewSourceUrl(e.target.value)}
               placeholder={
                 isEn ? "Source URL (optional)" : "URL de origen (opcional)"
               }
               value={newSourceUrl}
-              onChange={(e) => setNewSourceUrl(e.target.value)}
             />
           </div>
           <Textarea
+            onChange={(e) => setNewContent(e.target.value)}
             placeholder={
               isEn
                 ? "Paste document content here. It will be split into chunks and embedded for AI search."
@@ -185,12 +189,11 @@ export function KnowledgeManager({ orgId, initialDocuments, locale }: Props) {
             }
             rows={5}
             value={newContent}
-            onChange={(e) => setNewContent(e.target.value)}
           />
           <div className="flex items-center gap-3">
             <Button
-              onClick={handleCreate}
               disabled={isCreating || !newTitle.trim()}
+              onClick={handleCreate}
               size="sm"
             >
               {isCreating
@@ -202,7 +205,7 @@ export function KnowledgeManager({ orgId, initialDocuments, locale }: Props) {
                   : "Agregar y Procesar"}
             </Button>
             {isCreating && (
-              <p className="text-xs text-muted-foreground animate-pulse">
+              <p className="animate-pulse text-muted-foreground text-xs">
                 {isEn
                   ? "Splitting and embedding content..."
                   : "Dividiendo e indexando contenido..."}
@@ -215,16 +218,14 @@ export function KnowledgeManager({ orgId, initialDocuments, locale }: Props) {
       {/* Document list */}
       {documents.length === 0 && (
         <div className="rounded-lg border border-border/50 py-12 text-center">
-          <p className="text-sm text-muted-foreground mb-3">
-            {isEn
-              ? "No knowledge documents yet."
-              : "No hay documentos aun."}
+          <p className="mb-3 text-muted-foreground text-sm">
+            {isEn ? "No knowledge documents yet." : "No hay documentos aun."}
           </p>
           <Button
-            variant="ghost"
-            size="sm"
             className="text-xs"
             onClick={() => setShowCreateForm(true)}
+            size="sm"
+            variant="ghost"
           >
             {isEn ? "+ Add Document" : "+ Agregar Documento"}
           </Button>
@@ -232,47 +233,44 @@ export function KnowledgeManager({ orgId, initialDocuments, locale }: Props) {
       )}
 
       {documents.length > 0 && (
-        <div className="rounded-lg border border-border/50 divide-y divide-border/40 overflow-hidden">
+        <div className="divide-y divide-border/40 overflow-hidden rounded-lg border border-border/50">
           {documents.map((doc) => (
             <div
+              className="flex items-center justify-between gap-3 px-4 py-3 transition-colors hover:bg-muted/20"
               key={doc.id}
-              className="flex items-center justify-between gap-3 px-4 py-3 hover:bg-muted/20 transition-colors"
             >
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
-                  <p className="font-medium text-sm truncate">{doc.title}</p>
+                  <p className="truncate font-medium text-sm">{doc.title}</p>
                   <Badge
+                    className="shrink-0 text-[10px] tabular-nums"
                     variant="secondary"
-                    className="text-[10px] tabular-nums shrink-0"
                   >
-                    {doc.chunk_count ?? 0}{" "}
-                    {isEn ? "chunks" : "fragmentos"}
+                    {doc.chunk_count ?? 0} {isEn ? "chunks" : "fragmentos"}
                   </Badge>
                   {doc.has_embeddings ? (
                     <Badge
+                      className="status-tone-success shrink-0 text-[10px]"
                       variant="outline"
-                      className="text-[10px] status-tone-success shrink-0"
                     >
                       {isEn ? "Embedded" : "Indexado"}
                     </Badge>
                   ) : (
-                    <Badge variant="outline" className="text-[10px] shrink-0">
+                    <Badge className="shrink-0 text-[10px]" variant="outline">
                       {isEn ? "Not embedded" : "Sin indexar"}
                     </Badge>
                   )}
                 </div>
-                <div className="flex items-center gap-2 mt-0.5 text-xs text-muted-foreground">
-                  {doc.created_at && (
-                    <span>{formatDate(doc.created_at)}</span>
-                  )}
+                <div className="mt-0.5 flex items-center gap-2 text-muted-foreground text-xs">
+                  {doc.created_at && <span>{formatDate(doc.created_at)}</span>}
                   {doc.source_url && (
                     <>
                       <span>·</span>
                       <a
+                        className="underline transition-colors hover:text-foreground"
                         href={doc.source_url}
-                        target="_blank"
                         rel="noopener noreferrer"
-                        className="underline hover:text-foreground transition-colors"
+                        target="_blank"
                       >
                         {isEn ? "source" : "origen"}
                       </a>
@@ -280,40 +278,40 @@ export function KnowledgeManager({ orgId, initialDocuments, locale }: Props) {
                   )}
                 </div>
               </div>
-              <div className="flex items-center gap-1 shrink-0">
+              <div className="flex shrink-0 items-center gap-1">
                 <Button
-                  variant="ghost"
-                  size="sm"
                   className="h-7 text-xs"
                   onClick={() => handleViewChunks(doc)}
+                  size="sm"
+                  variant="ghost"
                 >
                   {isEn ? "View" : "Ver"}
                 </Button>
                 {confirmDeleteId === doc.id ? (
                   <div className="flex items-center gap-1">
                     <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-7 text-xs text-destructive hover:text-destructive"
+                      className="h-7 text-destructive text-xs hover:text-destructive"
                       onClick={() => handleDelete(doc.id)}
+                      size="sm"
+                      variant="ghost"
                     >
                       {isEn ? "Confirm" : "Confirmar"}
                     </Button>
                     <Button
-                      variant="ghost"
-                      size="sm"
                       className="h-7 text-xs"
                       onClick={() => setConfirmDeleteId(null)}
+                      size="sm"
+                      variant="ghost"
                     >
                       <Icon icon={Cancel01Icon} size={12} />
                     </Button>
                   </div>
                 ) : (
                   <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-7 text-xs text-destructive hover:text-destructive"
+                    className="h-7 text-destructive text-xs hover:text-destructive"
                     onClick={() => setConfirmDeleteId(doc.id)}
+                    size="sm"
+                    variant="ghost"
                   >
                     {isEn ? "Delete" : "Eliminar"}
                   </Button>
@@ -326,20 +324,20 @@ export function KnowledgeManager({ orgId, initialDocuments, locale }: Props) {
 
       {/* Chunks sheet */}
       <Sheet
-        open={sheetOpen}
-        onOpenChange={setSheetOpen}
-        title={selectedDoc?.title}
         description={`${chunks.length} ${isEn ? "chunks" : "fragmentos"}`}
+        onOpenChange={setSheetOpen}
+        open={sheetOpen}
+        title={selectedDoc?.title}
       >
         <div>
           {loadingChunks && (
-            <p className="text-sm text-muted-foreground animate-pulse py-4">
+            <p className="animate-pulse py-4 text-muted-foreground text-sm">
               {isEn ? "Loading..." : "Cargando..."}
             </p>
           )}
           {!loadingChunks && chunks.length === 0 && (
             <div className="py-8 text-center">
-              <p className="text-sm text-muted-foreground">
+              <p className="text-muted-foreground text-sm">
                 {isEn
                   ? "No chunks found. Process the document to create chunks."
                   : "No se encontraron fragmentos. Procese el documento para crear fragmentos."}
@@ -349,25 +347,25 @@ export function KnowledgeManager({ orgId, initialDocuments, locale }: Props) {
           {chunks.length > 0 && (
             <div className="divide-y divide-border/40">
               {chunks.map((chunk) => (
-                <div key={chunk.id} className="py-3 space-y-1.5">
+                <div className="space-y-1.5 py-3" key={chunk.id}>
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-medium text-muted-foreground tabular-nums">
+                    <span className="font-medium text-muted-foreground text-xs tabular-nums">
                       {isEn ? "Chunk" : "Fragmento"} #{chunk.chunk_index}
                     </span>
                     {chunk.has_embedding ? (
                       <Badge
+                        className="status-tone-success text-[10px]"
                         variant="outline"
-                        className="text-[10px] status-tone-success"
                       >
                         {isEn ? "embedded" : "indexado"}
                       </Badge>
                     ) : (
-                      <Badge variant="outline" className="text-[10px]">
+                      <Badge className="text-[10px]" variant="outline">
                         {isEn ? "no vector" : "sin vector"}
                       </Badge>
                     )}
                   </div>
-                  <p className="text-sm whitespace-pre-wrap leading-relaxed">
+                  <p className="whitespace-pre-wrap text-sm leading-relaxed">
                     {chunk.content}
                   </p>
                 </div>

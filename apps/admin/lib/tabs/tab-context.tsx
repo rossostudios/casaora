@@ -40,7 +40,8 @@ export function useTabContext(): TabContextValue | null {
 
 export function useTabContextStrict(): TabContextValue {
   const ctx = useContext(TabContext);
-  if (!ctx) throw new Error("useTabContextStrict must be used within TabProvider");
+  if (!ctx)
+    throw new Error("useTabContextStrict must be used within TabProvider");
   return ctx;
 }
 
@@ -107,7 +108,7 @@ export function TabProvider({
       switchingRef.current = true;
       router.push(p + s);
     },
-    [locale, router],
+    [locale, router]
   );
 
   const closeTab = useCallback(
@@ -125,7 +126,7 @@ export function TabProvider({
         return next;
       });
     },
-    [router],
+    [router]
   );
 
   const switchTabFn = useCallback(
@@ -140,7 +141,7 @@ export function TabProvider({
         return next;
       });
     },
-    [router],
+    [router]
   );
 
   return (

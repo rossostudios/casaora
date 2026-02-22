@@ -6,26 +6,26 @@
   color-scheme: light;
 
   /* ── Backgrounds ── */
-  --background: #ffffff;
-  --foreground: #0f0f10;
+  --background: color-mix(in srgb, var(--color-mauve-50) 38%, #ffffff);
+  --foreground: color-mix(in srgb, var(--color-mauve-950) 90%, #0f0f12);
 
   --card: #ffffff;
-  --card-foreground: #0f0f10;
-  --popover: #ffffff;
-  --popover-foreground: #0f0f10;
+  --card-foreground: var(--foreground);
+  --popover: color-mix(in srgb, #ffffff 90%, var(--color-mauve-50));
+  --popover-foreground: var(--foreground);
 
-  /* ── Primary (Orange - Innovation, Energy) ── */
-  --primary: #ea580c;
+  /* ── Primary (Mauve - Innovation, Energy) ── */
+  --primary: var(--color-mauve-600);
   --primary-foreground: #ffffff;
 
-  /* ── Secondary / Muted (Warm Beige/Sand Tones) ── */
-  --secondary: #f5f5dc;
-  --secondary-foreground: #171717;
-  --muted: #f5f5f3;
-  --muted-foreground: #737373;
+  /* ── Secondary / Muted (Mauve Tints) ── */
+  --secondary: color-mix(in srgb, var(--color-mauve-100) 84%, #ffffff);
+  --secondary-foreground: var(--color-mauve-900);
+  --muted: color-mix(in srgb, var(--color-mauve-100) 62%, #ffffff);
+  --muted-foreground: var(--color-mauve-700);
 
-  /* ── Accent (Soft Terracotta - Energy, Action) ── */
-  --accent: #e27d60;
+  /* ── Accent (Soft Mauve - Energy, Action) ── */
+  --accent: var(--color-mauve-500);
   --accent-foreground: #ffffff;
 
   /* ── Destructive ── */
@@ -33,34 +33,42 @@
   --destructive-foreground: #ffffff;
 
   /* ── Borders ── */
-  --border: #e5e5e5;
-  --input: #e5e5e5;
-  --ring: #ea580c;
+  --border: color-mix(in srgb, var(--color-mauve-300) 62%, #ffffff);
+  --input: color-mix(in srgb, var(--color-mauve-300) 58%, #ffffff);
+  --ring: var(--color-mauve-600);
 
   /* ── Marketing-specific ── */
   --hero-glow: radial-gradient(
     ellipse 80% 60% at 50% 0%,
-    rgba(234, 88, 12, 0.08) 0%,
+    color-mix(in srgb, var(--color-mauve-600) 8%, transparent) 0%,
     transparent 70%
   );
-  --section-alt: #fafafa;
-  --surface-subtle: #fdfdfd;
+  --section-alt: color-mix(in srgb, var(--color-mauve-100) 52%, #ffffff);
+  --surface-subtle: color-mix(in srgb, var(--color-mauve-50) 34%, #ffffff);
 
   --radius: 0.75rem;
 
   /* ── Marketplace ── */
-  --marketplace-bg: #faf8f5;
-  --marketplace-bg-muted: #f5f2ed;
+  --marketplace-bg: color-mix(in srgb, var(--color-mauve-50) 36%, #ffffff);
+  --marketplace-bg-muted: color-mix(
+    in srgb,
+    var(--color-mauve-100) 52%,
+    #ffffff
+  );
   --marketplace-surface: var(--marketplace-bg-muted);
-  --marketplace-surface-muted: #faf8f5;
-  --marketplace-text: #1a1a1a;
-  --marketplace-text-muted: #6b6560;
-  --marketplace-hero-glow: #f5ede8;
+  --marketplace-surface-muted: color-mix(
+    in srgb,
+    var(--color-mauve-50) 30%,
+    #ffffff
+  );
+  --marketplace-text: color-mix(in srgb, var(--color-mauve-950) 88%, #101015);
+  --marketplace-text-muted: var(--color-mauve-700);
+  --marketplace-hero-glow: color-mix(in srgb, var(--color-mauve-200) 48%, #fff);
   --marketplace-hero-gradient: linear-gradient(
     135deg,
-    #faf8f5 0%,
-    #f5ede8 50%,
-    #faf8f5 100%
+    var(--color-mauve-50) 0%,
+    color-mix(in srgb, var(--color-mauve-100) 92%, #ffffff) 50%,
+    var(--color-mauve-50) 100%
   );
   --marketplace-card-shadow:
     0 2px 8px rgba(0, 0, 0, 0.04), 0 12px 40px rgba(0, 0, 0, 0.06);
@@ -73,70 +81,106 @@
 .dark {
   color-scheme: dark;
 
-  --background: #0a0a0a;
-  --foreground: #ededed;
+  --background: color-mix(
+    in srgb,
+    var(--color-mauve-950) 78%,
+    var(--color-mauve-900)
+  );
+  --foreground: color-mix(in srgb, var(--color-mauve-50) 86%, var(--color-mauve-100));
 
-  --card: #121212;
-  --card-foreground: #ededed;
-  --popover: #121212;
-  --popover-foreground: #ededed;
+  --card: color-mix(
+    in srgb,
+    var(--color-mauve-900) 34%,
+    var(--color-mauve-950)
+  );
+  --card-foreground: var(--foreground);
+  --popover: color-mix(
+    in srgb,
+    var(--color-mauve-900) 24%,
+    var(--color-mauve-950)
+  );
+  --popover-foreground: var(--foreground);
 
-  --primary: #f97316;
+  --primary: var(--color-mauve-500);
   --primary-foreground: #ffffff;
 
-  --secondary: #1f1f1f;
-  --secondary-foreground: #ededed;
-  --muted: #1f1f1f;
-  --muted-foreground: #a3a3a3;
+  --secondary: color-mix(in srgb, var(--color-mauve-900) 82%, var(--color-mauve-800));
+  --secondary-foreground: color-mix(
+    in srgb,
+    var(--color-mauve-50) 70%,
+    var(--color-mauve-100)
+  );
+  --muted: color-mix(in srgb, var(--color-mauve-900) 74%, var(--color-mauve-800));
+  --muted-foreground: color-mix(
+    in srgb,
+    var(--color-mauve-300) 76%,
+    var(--color-mauve-200)
+  );
 
-  --accent: #d97757;
+  --accent: color-mix(in srgb, var(--color-mauve-700) 64%, var(--color-mauve-800));
   --accent-foreground: #ffffff;
 
   --destructive: #7f1d1d;
   --destructive-foreground: #ffffff;
 
-  --border: #262626;
-  --input: #262626;
-  --ring: #f97316;
+  --border: color-mix(in srgb, var(--color-mauve-700) 64%, var(--color-mauve-800));
+  --input: color-mix(in srgb, var(--color-mauve-700) 58%, var(--color-mauve-800));
+  --ring: var(--color-mauve-500);
 
   --hero-glow: radial-gradient(
     ellipse 80% 60% at 50% 0%,
-    rgba(249, 115, 22, 0.15) 0%,
+    color-mix(in srgb, var(--color-mauve-500) 15%, transparent) 0%,
     transparent 70%
   );
-  --section-alt: #0d0d0d;
-  --surface-subtle: #111111;
+  --section-alt: color-mix(in srgb, var(--color-mauve-950) 74%, var(--color-mauve-900));
+  --surface-subtle: color-mix(
+    in srgb,
+    var(--color-mauve-900) 78%,
+    var(--color-mauve-800)
+  );
 
   /* ── Marketplace (dark) ── */
-  --marketplace-bg: #0a0a0a;
-  --marketplace-bg-muted: #1f1f1f;
-  --marketplace-surface: #1f1f1f;
-  --marketplace-surface-muted: #111111;
-  --marketplace-text: #ededed;
-  --marketplace-text-muted: #a3a3a3;
-  --marketplace-hero-glow: #221a1c;
+  --marketplace-bg: var(--background);
+  --marketplace-bg-muted: var(--secondary);
+  --marketplace-surface: var(--secondary);
+  --marketplace-surface-muted: var(--surface-subtle);
+  --marketplace-text: var(--foreground);
+  --marketplace-text-muted: color-mix(
+    in srgb,
+    var(--color-mauve-300) 76%,
+    var(--color-mauve-200)
+  );
+  --marketplace-hero-glow: color-mix(
+    in srgb,
+    var(--color-mauve-700) 58%,
+    var(--color-mauve-800)
+  );
   --marketplace-hero-gradient: linear-gradient(
     135deg,
-    #191817 0%,
-    #1e1a1b 40%,
-    #221a1c 100%
+    var(--color-mauve-950) 0%,
+    color-mix(in srgb, var(--color-mauve-900) 80%, var(--color-mauve-800)) 40%,
+    color-mix(in srgb, var(--color-mauve-800) 72%, var(--color-mauve-700)) 100%
   );
   --marketplace-card-shadow:
-    0 2px 8px rgba(0, 0, 0, 0.2), 0 12px 40px rgba(0, 0, 0, 0.3);
+    0 2px 8px color-mix(in srgb, var(--color-mauve-950) 28%, transparent),
+    0 12px 40px color-mix(in srgb, var(--color-mauve-950) 42%, transparent);
   --marketplace-card-hover-shadow:
-    0 8px 24px rgba(0, 0, 0, 0.3), 0 24px 48px rgba(0, 0, 0, 0.4);
+    0 8px 24px color-mix(in srgb, var(--color-mauve-900) 34%, transparent),
+    0 24px 48px color-mix(in srgb, var(--color-mauve-950) 50%, transparent);
   --marketplace-map-road: rgba(180, 180, 180, 0.08);
   --marketplace-map-road-strong: rgba(200, 200, 200, 0.1);
 }
 
 @theme inline {
-  --font-sans: var(--font-diatype,
-      ui-sans-serif,
-      system-ui,
-      -apple-system,
-      BlinkMacSystemFont,
-      "Segoe UI",
-      sans-serif);
+  --font-sans: var(
+    --font-diatype,
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif
+  );
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -183,27 +227,51 @@
 
 @layer utilities {
   .bg-casaora-gradient {
-    background: linear-gradient(135deg, #c2410c 0%, #ea580c 100%);
+    background: linear-gradient(
+      135deg,
+      var(--color-mauve-700) 0%,
+      var(--color-mauve-600) 100%
+    );
   }
 
   .bg-casaora-gradient-warm {
-    background: linear-gradient(135deg, #ea580c 0%, #d97757 100%);
+    background: linear-gradient(
+      135deg,
+      var(--color-mauve-600) 0%,
+      var(--color-mauve-500) 100%
+    );
   }
 
   .bg-casaora-gradient-hero {
-    background: linear-gradient(to right, #c2410c, #ea580c);
+    background: linear-gradient(
+      to right,
+      var(--color-mauve-700),
+      var(--color-mauve-600)
+    );
   }
 
   .bg-casaora-gradient-subtle {
-    background: linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%);
+    background: linear-gradient(
+      135deg,
+      var(--color-mauve-50) 0%,
+      var(--color-mauve-100) 100%
+    );
   }
 
   .dark .bg-casaora-gradient-subtle {
-    background: linear-gradient(135deg, #431407 0%, #7c2d12 100%);
+    background: linear-gradient(
+      135deg,
+      var(--color-mauve-950) 0%,
+      var(--color-mauve-900) 100%
+    );
   }
 
   .text-casaora-gradient {
-    background: linear-gradient(135deg, #ea580c, #f97316);
+    background: linear-gradient(
+      135deg,
+      var(--color-mauve-600),
+      var(--color-mauve-500)
+    );
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
@@ -211,14 +279,14 @@
 
   .shadow-casaora {
     box-shadow:
-      0 0 0 1px rgba(234, 88, 12, 0.08),
-      0 4px 12px rgba(234, 88, 12, 0.08);
+      0 0 0 1px color-mix(in srgb, var(--color-mauve-600) 8%, transparent),
+      0 4px 12px color-mix(in srgb, var(--color-mauve-600) 8%, transparent);
   }
 
   .dark .shadow-casaora {
     box-shadow:
-      0 0 0 1px rgba(249, 115, 22, 0.12),
-      0 4px 12px rgba(249, 115, 22, 0.1);
+      0 0 0 1px color-mix(in srgb, var(--color-mauve-500) 12%, transparent),
+      0 4px 12px color-mix(in srgb, var(--color-mauve-500) 10%, transparent);
   }
 
   .animate-marquee {
@@ -227,8 +295,12 @@
 }
 
 @keyframes marquee {
-  0% { transform: translateX(0%); }
-  100% { transform: translateX(-50%); }
+  0% {
+    transform: translateX(0%);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

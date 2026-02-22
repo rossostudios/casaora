@@ -5,12 +5,13 @@ import { NextResponse } from "next/server";
 import { getSupabaseAnonKey, getSupabaseUrl } from "@/lib/supabase/config";
 
 const ADMIN_URL = process.env.NEXT_PUBLIC_ADMIN_URL ?? "http://localhost:3000";
+const PROTOCOL_REGEX = /^[a-z]+:/i;
 
 function safeNext(value: string | null): string {
   const fallback = `${ADMIN_URL}/app`;
   if (!value) return fallback;
   // Block javascript: and other dangerous protocols
-  if (/^[a-z]+:/i.test(value) && !value.startsWith("http")) return fallback;
+  if (PROTOCOL_REGEX.test(value) && !value.startsWith("http")) return fallback;
   // Allow relative paths (but not protocol-relative //evil.com)
   if (value.startsWith("/") && !value.startsWith("//")) return value;
   // Allow redirects to admin app — reject embedded credentials

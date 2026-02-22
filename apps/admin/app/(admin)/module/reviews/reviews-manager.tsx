@@ -1,9 +1,9 @@
 "use client";
 
 import { useCallback, useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { authedFetch } from "@/lib/api-client";
 
 import type { ReviewRow } from "./reviews-types";
@@ -87,9 +87,7 @@ export function ReviewsManager({ orgId, initialReviews, locale }: Props) {
         });
         setReviews((prev) =>
           prev.map((r) =>
-            r.id === reviewId
-              ? { ...r, response_status: "published" }
-              : r
+            r.id === reviewId ? { ...r, response_status: "published" } : r
           )
         );
       } catch {
@@ -117,7 +115,11 @@ export function ReviewsManager({ orgId, initialReviews, locale }: Props) {
         setReviews((prev) =>
           prev.map((r) =>
             r.id === reviewId
-              ? { ...r, response_text: responseText.trim(), response_status: "draft" }
+              ? {
+                  ...r,
+                  response_text: responseText.trim(),
+                  response_status: "draft",
+                }
               : r
           )
         );
@@ -172,9 +174,9 @@ export function ReviewsManager({ orgId, initialReviews, locale }: Props) {
         {(["pending", "draft", "published", "skipped"] as const).map((s) => (
           <Button
             key={s}
-            variant={statusFilter === s ? "default" : "outline"}
-            size="sm"
             onClick={() => handleFilterChange(s)}
+            size="sm"
+            variant={statusFilter === s ? "default" : "outline"}
           >
             {s === "pending"
               ? isEn
@@ -196,7 +198,7 @@ export function ReviewsManager({ orgId, initialReviews, locale }: Props) {
       </div>
 
       {reviews.length === 0 && (
-        <p className="text-sm text-muted-foreground py-4">
+        <p className="py-4 text-muted-foreground text-sm">
           {isEn
             ? "No reviews in this status."
             : "No hay reseñas en este estado."}
@@ -205,15 +207,15 @@ export function ReviewsManager({ orgId, initialReviews, locale }: Props) {
 
       <div className="space-y-4">
         {reviews.map((review) => (
-          <div key={review.id} className="rounded-lg border p-4 space-y-3">
+          <div className="space-y-3 rounded-lg border p-4" key={review.id}>
             {/* Header */}
             <div className="flex items-start justify-between gap-3">
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-sm font-semibold">
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="font-semibold text-sm">
                     {review.guest_name || (isEn ? "Anonymous" : "Anónimo")}
                   </span>
-                  <Badge variant="outline" className="text-[10px]">
+                  <Badge className="text-[10px]" variant="outline">
                     {review.platform}
                   </Badge>
                   <span className={`text-sm ${ratingColor(review.rating)}`}>
@@ -221,13 +223,13 @@ export function ReviewsManager({ orgId, initialReviews, locale }: Props) {
                   </span>
                 </div>
                 {review.property_name && (
-                  <p className="text-xs text-muted-foreground mt-0.5">
+                  <p className="mt-0.5 text-muted-foreground text-xs">
                     {review.property_name}
                   </p>
                 )}
               </div>
               {review.review_date && (
-                <span className="text-xs text-muted-foreground shrink-0">
+                <span className="shrink-0 text-muted-foreground text-xs">
                   {new Date(review.review_date).toLocaleDateString()}
                 </span>
               )}
@@ -235,36 +237,36 @@ export function ReviewsManager({ orgId, initialReviews, locale }: Props) {
 
             {/* Review text */}
             {review.review_text && (
-              <p className="text-sm leading-relaxed">
-                {review.review_text}
-              </p>
+              <p className="text-sm leading-relaxed">{review.review_text}</p>
             )}
 
             {/* AI Suggestion */}
             {review.ai_suggested_response &&
               review.response_status === "pending" && (
-                <div className="rounded-md bg-muted/50 p-3 space-y-2">
-                  <p className="text-xs font-medium text-muted-foreground">
-                    {isEn ? "AI Suggested Response" : "Respuesta Sugerida por IA"}
+                <div className="space-y-2 rounded-md bg-muted/50 p-3">
+                  <p className="font-medium text-muted-foreground text-xs">
+                    {isEn
+                      ? "AI Suggested Response"
+                      : "Respuesta Sugerida por IA"}
                   </p>
                   <p className="text-sm leading-relaxed">
                     {review.ai_suggested_response}
                   </p>
                   <div className="flex gap-1">
                     <Button
-                      size="sm"
                       disabled={updating === review.id}
                       onClick={() => handleAcceptSuggestion(review)}
+                      size="sm"
                     >
                       {isEn ? "Use this" : "Usar esta"}
                     </Button>
                     <Button
-                      variant="ghost"
-                      size="sm"
                       onClick={() => {
                         setEditingResponse(review.id);
                         setResponseText(review.ai_suggested_response ?? "");
                       }}
+                      size="sm"
+                      variant="ghost"
                     >
                       {isEn ? "Edit" : "Editar"}
                     </Button>
@@ -274,17 +276,17 @@ export function ReviewsManager({ orgId, initialReviews, locale }: Props) {
 
             {/* Draft response */}
             {review.response_text && review.response_status === "draft" && (
-              <div className="rounded-md bg-green-50 dark:bg-green-950/20 p-3 space-y-2">
-                <p className="text-xs font-medium text-green-700 dark:text-green-400">
+              <div className="space-y-2 rounded-md bg-green-50 p-3 dark:bg-green-950/20">
+                <p className="font-medium text-green-700 text-xs dark:text-green-400">
                   {isEn ? "Draft Response" : "Borrador de Respuesta"}
                 </p>
                 <p className="text-sm leading-relaxed">
                   {review.response_text}
                 </p>
                 <Button
-                  size="sm"
                   disabled={updating === review.id}
                   onClick={() => handlePublish(review.id)}
+                  size="sm"
                 >
                   {isEn ? "Publish" : "Publicar"}
                 </Button>
@@ -295,29 +297,29 @@ export function ReviewsManager({ orgId, initialReviews, locale }: Props) {
             {editingResponse === review.id && (
               <div className="space-y-2">
                 <textarea
-                  value={responseText}
+                  className="w-full resize-y rounded-lg border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                   onChange={(e) => setResponseText(e.target.value)}
-                  rows={4}
-                  className="w-full rounded-lg border bg-background px-3 py-2 text-sm resize-y focus:outline-none focus:ring-2 focus:ring-ring"
                   placeholder={
                     isEn ? "Write your response..." : "Escribe tu respuesta..."
                   }
+                  rows={4}
+                  value={responseText}
                 />
                 <div className="flex gap-1">
                   <Button
-                    size="sm"
                     disabled={updating === review.id || !responseText.trim()}
                     onClick={() => handleSaveCustomResponse(review.id)}
+                    size="sm"
                   >
                     {isEn ? "Save Draft" : "Guardar Borrador"}
                   </Button>
                   <Button
-                    variant="ghost"
-                    size="sm"
                     onClick={() => {
                       setEditingResponse(null);
                       setResponseText("");
                     }}
+                    size="sm"
+                    variant="ghost"
                   >
                     {isEn ? "Cancel" : "Cancelar"}
                   </Button>
@@ -331,20 +333,20 @@ export function ReviewsManager({ orgId, initialReviews, locale }: Props) {
               editingResponse !== review.id && (
                 <div className="flex gap-1">
                   <Button
-                    variant="outline"
-                    size="sm"
                     onClick={() => {
                       setEditingResponse(review.id);
                       setResponseText("");
                     }}
+                    size="sm"
+                    variant="outline"
                   >
                     {isEn ? "Write Response" : "Escribir Respuesta"}
                   </Button>
                   <Button
-                    variant="ghost"
-                    size="sm"
                     disabled={updating === review.id}
                     onClick={() => handleSkip(review.id)}
+                    size="sm"
+                    variant="ghost"
                   >
                     {isEn ? "Skip" : "Omitir"}
                   </Button>
@@ -357,10 +359,10 @@ export function ReviewsManager({ orgId, initialReviews, locale }: Props) {
               editingResponse !== review.id && (
                 <div className="flex justify-end">
                   <Button
-                    variant="ghost"
-                    size="sm"
                     disabled={updating === review.id}
                     onClick={() => handleSkip(review.id)}
+                    size="sm"
+                    variant="ghost"
                   >
                     {isEn ? "Skip" : "Omitir"}
                   </Button>

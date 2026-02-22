@@ -1,19 +1,19 @@
 "use client";
 
-import { useCallback, useState } from "react";
 import {
   ArrowDown01Icon,
   CheckmarkCircle02Icon,
   Database02Icon,
-  MessageSearch01Icon,
   MailSend01Icon,
+  MessageSearch01Icon,
   Settings02Icon,
   SparklesIcon,
   TestTube01Icon,
   Wrench01Icon,
 } from "@hugeicons/core-free-icons";
 import type { IconSvgElement } from "@hugeicons/react";
-
+import { useCallback, useState } from "react";
+import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -23,7 +23,6 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { authedFetch } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
-import { toast } from "sonner";
 
 import type { AgentRow } from "./agent-config-types";
 
@@ -225,12 +224,12 @@ export function AgentConfigManager({ orgId, initialAgents, locale }: Props) {
   }, []);
 
   const handleTest = useCallback(async () => {
-    if (!selected || !testInput.trim()) return;
+    if (!(selected && testInput.trim())) return;
     setTesting(true);
     setTestResult("");
     try {
       const res = await authedFetch<{ reply?: string; content?: string }>(
-        `/agent/chats`,
+        "/agent/chats",
         {
           method: "POST",
           body: JSON.stringify({
@@ -268,19 +267,20 @@ export function AgentConfigManager({ orgId, initialAgents, locale }: Props) {
     <div className="flex gap-6">
       {/* Agent list — left panel */}
       <div className="w-64 shrink-0 space-y-1">
-        <p className="text-xs font-medium text-muted-foreground mb-3 uppercase tracking-[0.15em]">
+        <p className="mb-3 font-medium text-muted-foreground text-xs uppercase tracking-[0.15em]">
           {isEn ? "Agents" : "Agentes"}
         </p>
         {agents.map((agent) => (
           <button
-            key={agent.slug}
-            onClick={() => selectAgent(agent.slug)}
             className={cn(
-              "w-full text-left px-3 py-2 rounded-md transition-colors",
+              "w-full rounded-md px-3 py-2 text-left transition-colors",
               selected?.slug === agent.slug
                 ? "bg-muted/60 text-foreground"
                 : "text-muted-foreground hover:bg-muted/40 hover:text-foreground"
             )}
+            key={agent.slug}
+            onClick={() => selectAgent(agent.slug)}
+            type="button"
           >
             <div className="flex items-center gap-2.5">
               <span
@@ -289,16 +289,16 @@ export function AgentConfigManager({ orgId, initialAgents, locale }: Props) {
                   agent.is_active ? "bg-emerald-500" : "bg-muted-foreground/30"
                 )}
               />
-              <span className="font-medium text-sm truncate">{agent.name}</span>
+              <span className="truncate font-medium text-sm">{agent.name}</span>
             </div>
-            <p className="text-xs text-muted-foreground mt-0.5 ml-[18px] truncate">
+            <p className="mt-0.5 ml-[18px] truncate text-muted-foreground text-xs">
               {agent.description}
             </p>
           </button>
         ))}
         {agents.length === 0 && (
           <div className="py-8 text-center">
-            <p className="text-sm text-muted-foreground">
+            <p className="text-muted-foreground text-sm">
               {isEn ? "No agents configured." : "No hay agentes configurados."}
             </p>
           </div>
@@ -306,10 +306,10 @@ export function AgentConfigManager({ orgId, initialAgents, locale }: Props) {
       </div>
 
       {/* Detail panel — right */}
-      <div className="flex-1 min-w-0">
-        {!selected && !loading && (
-          <div className="flex items-center justify-center h-64">
-            <p className="text-sm text-muted-foreground">
+      <div className="min-w-0 flex-1">
+        {!(selected || loading) && (
+          <div className="flex h-64 items-center justify-center">
+            <p className="text-muted-foreground text-sm">
               {isEn
                 ? "Select an agent to configure."
                 : "Seleccione un agente para configurar."}
@@ -318,8 +318,8 @@ export function AgentConfigManager({ orgId, initialAgents, locale }: Props) {
         )}
 
         {loading && (
-          <div className="flex items-center justify-center h-64">
-            <p className="text-sm text-muted-foreground animate-pulse">
+          <div className="flex h-64 items-center justify-center">
+            <p className="animate-pulse text-muted-foreground text-sm">
               {isEn ? "Loading..." : "Cargando..."}
             </p>
           </div>
@@ -328,21 +328,18 @@ export function AgentConfigManager({ orgId, initialAgents, locale }: Props) {
         {selected && !loading && (
           <div className="space-y-5">
             {/* Header section */}
-            <div className="flex items-center justify-between gap-4 pb-4 border-b border-border/50">
+            <div className="flex items-center justify-between gap-4 border-border/50 border-b pb-4">
               <div className="min-w-0">
-                <h3 className="text-base font-semibold truncate">
+                <h3 className="truncate font-semibold text-base">
                   {selected.name}
                 </h3>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-muted-foreground text-xs">
                   {selected.description}
                 </p>
               </div>
-              <div className="flex items-center gap-3 shrink-0">
-                <label className="flex items-center gap-2 text-sm cursor-pointer">
-                  <Switch
-                    checked={isActive}
-                    onCheckedChange={setIsActive}
-                  />
+              <div className="flex shrink-0 items-center gap-3">
+                <label className="flex cursor-pointer items-center gap-2 text-sm">
+                  <Switch checked={isActive} onCheckedChange={setIsActive} />
                   <span className="text-muted-foreground">
                     {isActive
                       ? isEn
@@ -354,15 +351,22 @@ export function AgentConfigManager({ orgId, initialAgents, locale }: Props) {
                   </span>
                 </label>
                 <Button
-                  variant="ghost"
-                  size="sm"
                   className="h-8 w-8 p-0"
                   onClick={() => setTestOpen((v) => !v)}
+                  size="sm"
                   title={isEn ? "Test Agent" : "Probar Agente"}
+                  variant="ghost"
                 >
-                  <Icon icon={TestTube01Icon} size={16} className={cn("text-muted-foreground", testOpen && "text-foreground")} />
+                  <Icon
+                    className={cn(
+                      "text-muted-foreground",
+                      testOpen && "text-foreground"
+                    )}
+                    icon={TestTube01Icon}
+                    size={16}
+                  />
                 </Button>
-                <Button size="sm" disabled={saving} onClick={handleSave}>
+                <Button disabled={saving} onClick={handleSave} size="sm">
                   {saving
                     ? isEn
                       ? "Saving..."
@@ -376,22 +380,22 @@ export function AgentConfigManager({ orgId, initialAgents, locale }: Props) {
 
             {/* System prompt */}
             <div className="space-y-2">
-              <label className="text-sm font-medium block">
+              <label className="block font-medium text-sm">
                 {isEn ? "System Prompt" : "Prompt del Sistema"}
               </label>
               <Textarea
-                value={prompt}
+                className="resize-y font-mono text-[13px]"
                 onChange={(e) => setPrompt(e.target.value)}
-                rows={10}
-                className="font-mono text-[13px] resize-y"
                 placeholder={
                   isEn
                     ? "Enter system instructions for this agent..."
                     : "Ingresa las instrucciones del sistema para este agente..."
                 }
+                rows={10}
+                value={prompt}
               />
               <div className="flex justify-end">
-                <Badge variant="secondary" className="text-[10px] tabular-nums">
+                <Badge className="text-[10px] tabular-nums" variant="secondary">
                   {prompt.length.toLocaleString()}{" "}
                   {isEn ? "characters" : "caracteres"}
                 </Badge>
@@ -401,26 +405,26 @@ export function AgentConfigManager({ orgId, initialAgents, locale }: Props) {
             {/* Tools — categorized */}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <label className="text-sm font-medium">
+                <label className="font-medium text-sm">
                   {isEn ? "Allowed Tools" : "Herramientas Permitidas"}
                 </label>
                 <div className="flex items-center gap-2">
-                  <Badge variant="outline" className="text-[10px] tabular-nums">
+                  <Badge className="text-[10px] tabular-nums" variant="outline">
                     {enabledTools.size}/{ALL_TOOLS.length}
                   </Badge>
                   <Button
-                    variant="ghost"
-                    size="sm"
-                    className="text-xs h-7"
+                    className="h-7 text-xs"
                     onClick={() => setEnabledTools(new Set(ALL_TOOLS))}
+                    size="sm"
+                    variant="ghost"
                   >
                     {isEn ? "All" : "Todo"}
                   </Button>
                   <Button
-                    variant="ghost"
-                    size="sm"
-                    className="text-xs h-7"
+                    className="h-7 text-xs"
                     onClick={() => setEnabledTools(new Set())}
+                    size="sm"
+                    variant="ghost"
                   >
                     {isEn ? "None" : "Ninguno"}
                   </Button>
@@ -437,36 +441,38 @@ export function AgentConfigManager({ orgId, initialAgents, locale }: Props) {
 
                   return (
                     <div
+                      className="border-border/40 border-b last:border-b-0"
                       key={cat.key}
-                      className="border-b border-border/40 last:border-b-0"
                     >
                       <button
+                        className="flex w-full items-center justify-between px-3 py-2.5 text-left transition-colors hover:bg-muted/30"
                         onClick={() => toggleCollapse(cat.key)}
-                        className="flex items-center justify-between w-full px-3 py-2.5 text-left hover:bg-muted/30 transition-colors"
+                        type="button"
                       >
                         <div className="flex items-center gap-2">
                           <Icon
+                            className="text-muted-foreground"
                             icon={cat.icon}
                             size={14}
-                            className="text-muted-foreground"
                           />
-                          <span className="text-sm font-medium">
+                          <span className="font-medium text-sm">
                             {isEn ? cat.labelEn : cat.labelEs}
                           </span>
                           <Badge
-                            variant={allEnabled ? "default" : "secondary"}
                             className="text-[10px] tabular-nums"
+                            variant={allEnabled ? "default" : "secondary"}
                           >
                             {enabledCount}/{cat.tools.length}
                           </Badge>
                         </div>
                         <div className="flex items-center gap-2">
                           <button
+                            className="text-[11px] text-muted-foreground transition-colors hover:text-foreground"
                             onClick={(e) => {
                               e.stopPropagation();
                               toggleCategory(cat);
                             }}
-                            className="text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+                            type="button"
                           >
                             {allEnabled
                               ? isEn
@@ -477,21 +483,21 @@ export function AgentConfigManager({ orgId, initialAgents, locale }: Props) {
                                 : "Seleccionar todo"}
                           </button>
                           <Icon
-                            icon={ArrowDown01Icon}
-                            size={12}
                             className={cn(
                               "text-muted-foreground transition-transform",
                               isCollapsed ? "-rotate-90" : "rotate-0"
                             )}
+                            icon={ArrowDown01Icon}
+                            size={12}
                           />
                         </div>
                       </button>
                       {!isCollapsed && (
-                        <div className="px-3 pb-2.5 grid gap-1.5 sm:grid-cols-2">
+                        <div className="grid gap-1.5 px-3 pb-2.5 sm:grid-cols-2">
                           {cat.tools.map((tool) => (
                             <label
+                              className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1 transition-colors hover:bg-muted/30"
                               key={tool}
-                              className="flex items-center gap-2 py-1 px-2 rounded-lg hover:bg-muted/30 cursor-pointer transition-colors"
                             >
                               <Checkbox
                                 checked={enabledTools.has(tool)}
@@ -512,10 +518,10 @@ export function AgentConfigManager({ orgId, initialAgents, locale }: Props) {
 
             {/* Test panel — progressive disclosure */}
             {testOpen && (
-              <div className="border-t border-border/50 pt-4 space-y-3">
+              <div className="space-y-3 border-border/50 border-t pt-4">
                 <div className="flex gap-2">
                   <Input
-                    value={testInput}
+                    className="flex-1"
                     onChange={(e) => setTestInput(e.target.value)}
                     onKeyDown={(e) => {
                       if (e.key === "Enter" && !e.shiftKey) handleTest();
@@ -525,12 +531,12 @@ export function AgentConfigManager({ orgId, initialAgents, locale }: Props) {
                         ? "Type a test message..."
                         : "Escribe un mensaje de prueba..."
                     }
-                    className="flex-1"
+                    value={testInput}
                   />
                   <Button
-                    size="sm"
                     disabled={testing || !testInput.trim()}
                     onClick={handleTest}
+                    size="sm"
                   >
                     {testing
                       ? isEn
@@ -542,7 +548,7 @@ export function AgentConfigManager({ orgId, initialAgents, locale }: Props) {
                   </Button>
                 </div>
                 {testResult && (
-                  <div className="rounded-lg bg-muted/50 p-3 text-sm whitespace-pre-wrap leading-relaxed max-h-64 overflow-y-auto">
+                  <div className="max-h-64 overflow-y-auto whitespace-pre-wrap rounded-lg bg-muted/50 p-3 text-sm leading-relaxed">
                     {testResult}
                   </div>
                 )}

@@ -1,9 +1,9 @@
 "use client";
 
 import { useCallback, useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { authedFetch } from "@/lib/api-client";
 
 type Recommendation = {
@@ -98,9 +98,9 @@ export function PricingRecommendations({
         {(["pending", "approved", "dismissed"] as const).map((s) => (
           <Button
             key={s}
-            variant={statusFilter === s ? "default" : "outline"}
-            size="sm"
             onClick={() => handleFilterChange(s)}
+            size="sm"
+            variant={statusFilter === s ? "default" : "outline"}
           >
             {s === "pending"
               ? isEn
@@ -118,7 +118,7 @@ export function PricingRecommendations({
       </div>
 
       {recommendations.length === 0 && (
-        <p className="text-sm text-muted-foreground py-4">
+        <p className="py-4 text-muted-foreground text-sm">
           {isEn
             ? "No pricing recommendations in this status."
             : "No hay recomendaciones de precios en este estado."}
@@ -127,24 +127,21 @@ export function PricingRecommendations({
 
       <div className="space-y-3">
         {recommendations.map((rec) => (
-          <div
-            key={rec.id}
-            className="rounded-lg border p-4 space-y-2"
-          >
+          <div className="space-y-2 rounded-lg border p-4" key={rec.id}>
             <div className="flex items-start justify-between gap-3">
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <Badge variant="outline" className="text-xs shrink-0">
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge className="shrink-0 text-xs" variant="outline">
                     {rec.recommendation_type.replace(/_/g, " ")}
                   </Badge>
                   <span
-                    className={`text-xs font-medium ${confidenceColor(rec.confidence)}`}
+                    className={`font-medium text-xs ${confidenceColor(rec.confidence)}`}
                   >
                     {(rec.confidence * 100).toFixed(0)}%{" "}
                     {isEn ? "confidence" : "confianza"}
                   </span>
                   {rec.date_range_start && rec.date_range_end && (
-                    <span className="text-xs text-muted-foreground">
+                    <span className="text-muted-foreground text-xs">
                       {rec.date_range_start} → {rec.date_range_end}
                     </span>
                   )}
@@ -152,11 +149,11 @@ export function PricingRecommendations({
 
                 {/* Rate comparison */}
                 {rec.current_rate != null && rec.recommended_rate != null && (
-                  <div className="flex items-center gap-2 mt-1.5">
-                    <span className="text-sm text-muted-foreground line-through">
+                  <div className="mt-1.5 flex items-center gap-2">
+                    <span className="text-muted-foreground text-sm line-through">
                       {formatRate(rec.current_rate)}
                     </span>
-                    <span className="text-sm font-semibold">
+                    <span className="font-semibold text-sm">
                       {formatRate(rec.recommended_rate)}
                     </span>
                     {rec.revenue_impact_estimate != null && (
@@ -175,25 +172,25 @@ export function PricingRecommendations({
                   </div>
                 )}
 
-                <p className="text-sm text-muted-foreground mt-1.5 leading-relaxed">
+                <p className="mt-1.5 text-muted-foreground text-sm leading-relaxed">
                   {rec.reasoning}
                 </p>
               </div>
 
               {statusFilter === "pending" && (
-                <div className="flex items-center gap-1 shrink-0">
+                <div className="flex shrink-0 items-center gap-1">
                   <Button
-                    size="sm"
                     disabled={updating === rec.id}
                     onClick={() => handleAction(rec.id, "approved")}
+                    size="sm"
                   >
                     {isEn ? "Approve" : "Aprobar"}
                   </Button>
                   <Button
-                    variant="ghost"
-                    size="sm"
                     disabled={updating === rec.id}
                     onClick={() => handleAction(rec.id, "dismissed")}
+                    size="sm"
+                    variant="ghost"
                   >
                     {isEn ? "Dismiss" : "Descartar"}
                   </Button>

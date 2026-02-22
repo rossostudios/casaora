@@ -14,9 +14,9 @@ import type { PanelImperativeHandle } from "react-resizable-panels";
 import { AppFooter } from "@/components/shell/app-footer";
 import { CommandPalette } from "@/components/shell/command-palette";
 import { ShortcutsHelp } from "@/components/shell/shortcuts-help";
-import { TabBar } from "@/components/shell/tab-bar";
 import type { MemberRole, ViewportMode } from "@/components/shell/sidebar-new";
 import { SidebarNew } from "@/components/shell/sidebar-new";
+import { TabBar } from "@/components/shell/tab-bar";
 import { Topbar } from "@/components/shell/topbar";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useGlobalHotkeys } from "@/lib/hotkeys/use-global-hotkeys";
@@ -51,6 +51,7 @@ const DESKTOP_QUERY = "(min-width: 1280px)";
 const TABLET_QUERY = "(min-width: 768px) and (max-width: 1279px)";
 const SHEET_LOCK_COUNT_ATTR = "data-pa-scroll-lock-count";
 const SHEET_LOCK_PREV_OVERFLOW_ATTR = "data-pa-scroll-lock-prev-overflow";
+const BASE_UI_SCROLL_LOCK_ATTR = "data-base-ui-scroll-locked";
 
 function hasOpenModalDialog(): boolean {
   const dialogs = document.querySelectorAll<HTMLElement>(
@@ -58,6 +59,7 @@ function hasOpenModalDialog(): boolean {
   );
 
   for (const dialog of dialogs) {
+    if (dialog.hasAttribute("hidden")) continue;
     if (dialog.hasAttribute("data-closed")) continue;
     if (dialog.getAttribute("aria-hidden") === "true") continue;
 
@@ -70,9 +72,32 @@ function hasOpenModalDialog(): boolean {
   return false;
 }
 
-function clearStalePageScrollLock(): void {
+function clearPageScrollStyles(): void {
   const body = document.body;
   const html = document.documentElement;
+
+  // Our custom sheet lock styles.
+  body.style.removeProperty("overflow");
+  body.style.removeProperty("overflow-x");
+  body.style.removeProperty("overflow-y");
+  body.style.removeProperty("scroll-behavior");
+
+  // Base UI / floating-ui scroll lock styles.
+  body.style.removeProperty("position");
+  body.style.removeProperty("height");
+  body.style.removeProperty("width");
+  body.style.removeProperty("box-sizing");
+
+  html.style.removeProperty("overflow");
+  html.style.removeProperty("overflow-x");
+  html.style.removeProperty("overflow-y");
+  html.style.removeProperty("scroll-behavior");
+  html.style.removeProperty("scrollbar-gutter");
+  html.removeAttribute(BASE_UI_SCROLL_LOCK_ATTR);
+}
+
+function clearStalePageScrollLock(): void {
+  const body = document.body;
   const lockCount = Number.parseInt(
     body.getAttribute(SHEET_LOCK_COUNT_ATTR) ?? "0",
     10
@@ -81,12 +106,7 @@ function clearStalePageScrollLock(): void {
     return;
   }
 
-  if (body.style.overflow === "hidden") {
-    body.style.removeProperty("overflow");
-  }
-  if (html.style.overflow === "hidden") {
-    html.style.removeProperty("overflow");
-  }
+  clearPageScrollStyles();
   body.removeAttribute(SHEET_LOCK_COUNT_ATTR);
   body.removeAttribute(SHEET_LOCK_PREV_OVERFLOW_ATTR);
 }
@@ -187,6 +207,26 @@ function AdminShellV2({
     );
     return () => window.clearTimeout(handle);
   }, [effectiveIsMobileDrawerOpen, pathname, viewportMode]);
+
+  useEffect(() => {
+    const onWindowFocus = () => clearStalePageScrollLock();
+    const onPageShow = () => clearStalePageScrollLock();
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        clearStalePageScrollLock();
+      }
+    };
+
+    window.addEventListener("focus", onWindowFocus);
+    window.addEventListener("pageshow", onPageShow);
+    document.addEventListener("visibilitychange", onVisibilityChange);
+
+    return () => {
+      window.removeEventListener("focus", onWindowFocus);
+      window.removeEventListener("pageshow", onPageShow);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
+  }, []);
 
   const isDesktop = viewportMode === "desktop";
   const showNavToggle = true;

@@ -46,7 +46,8 @@ export function buildTabLabel(pathname: string, locale: Locale): string {
   if (parts[0] === "setup") return "Onboarding";
   if (parts[0] === "settings") return isEn ? "Settings" : "Configuración";
   if (parts[0] === "account") return isEn ? "Account" : "Cuenta";
-  if (parts[0] === "documentation") return isEn ? "Documentation" : "Documentación";
+  if (parts[0] === "documentation")
+    return isEn ? "Documentation" : "Documentación";
 
   if (parts[0] === "module") {
     const slug = parts[1] ?? "";
@@ -64,7 +65,7 @@ export function buildTabLabel(pathname: string, locale: Locale): string {
   }
 
   // Fallback: humanize last segment
-  const last = parts[parts.length - 1];
+  const last = parts.at(-1) ?? "";
   return humanizeSegment(last);
 }
 

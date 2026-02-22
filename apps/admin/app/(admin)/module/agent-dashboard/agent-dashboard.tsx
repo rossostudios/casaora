@@ -82,30 +82,28 @@ export function AgentDashboard({ initialStats, locale }: Props) {
       {/* KPI Cards */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
+          icon={SparklesIcon}
           label={isEn ? "Active Agents" : "Agentes Activos"}
           value={`${agents.active}/${agents.total}`}
-          icon={SparklesIcon}
         />
         <StatCard
+          helper={`${approvals.pending ?? 0} ${isEn ? "pending" : "pendiente"} · ${approvals.approved ?? 0} ${isEn ? "approved" : "aprobado"}`}
+          icon={CheckmarkCircle02Icon}
           label={isEn ? "Approvals (24h)" : "Aprobaciones (24h)"}
           value={String(approvals.total ?? 0)}
-          icon={CheckmarkCircle02Icon}
-          helper={`${approvals.pending ?? 0} ${isEn ? "pending" : "pendiente"} · ${approvals.approved ?? 0} ${isEn ? "approved" : "aprobado"}`}
         />
         <StatCard
+          helper={interventionHelper}
+          icon={AlertCircleIcon}
           label={isEn ? "Intervention Rate" : "Tasa de Intervención"}
           value={
-            (approvals.total ?? 0) > 0
-              ? `${interventionRate.toFixed(0)}%`
-              : "—"
+            (approvals.total ?? 0) > 0 ? `${interventionRate.toFixed(0)}%` : "—"
           }
-          icon={AlertCircleIcon}
-          helper={interventionHelper}
         />
         <StatCard
+          icon={Database02Icon}
           label={isEn ? "Memories Stored" : "Memorias Almacenadas"}
           value={String(memoryCount)}
-          icon={Database02Icon}
         />
       </div>
 
@@ -117,7 +115,7 @@ export function AgentDashboard({ initialStats, locale }: Props) {
 
         {recentActivity.length === 0 && (
           <div className="rounded-lg border border-border/50 py-12 text-center">
-            <p className="text-sm text-muted-foreground">
+            <p className="text-muted-foreground text-sm">
               {isEn
                 ? "No agent activity recorded yet."
                 : "No hay actividad de agentes registrada aún."}
@@ -126,38 +124,41 @@ export function AgentDashboard({ initialStats, locale }: Props) {
         )}
 
         {recentActivity.length > 0 && (
-          <div className="rounded-lg border border-border/50 divide-y divide-border/40 overflow-hidden">
+          <div className="divide-y divide-border/40 overflow-hidden rounded-lg border border-border/50">
             {recentActivity.map((item, i) => (
               <div
-                key={i}
-                className="px-4 py-3 hover:bg-muted/20 transition-colors"
+                className="px-4 py-3 transition-colors hover:bg-muted/20"
+                key={`${item.tool_name}-${item.created_at}-${i}`}
               >
                 <div className="flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-2 min-w-0">
+                  <div className="flex min-w-0 items-center gap-2">
                     {item.agent_slug && (
                       <Badge
+                        className="shrink-0 font-normal text-[10px]"
                         variant="secondary"
-                        className="text-[10px] font-normal shrink-0"
                       >
                         {item.agent_slug}
                       </Badge>
                     )}
-                    <span className="text-sm font-medium truncate">
+                    <span className="truncate font-medium text-sm">
                       {item.tool_name.replace(/_/g, " ")}
                     </span>
                     <Badge
+                      className={cn(
+                        "shrink-0 text-[10px]",
+                        statusTone(item.status)
+                      )}
                       variant="outline"
-                      className={cn("text-[10px] shrink-0", statusTone(item.status))}
                     >
                       {item.status}
                     </Badge>
                   </div>
-                  <span className="text-[11px] text-muted-foreground shrink-0 tabular-nums">
+                  <span className="shrink-0 text-[11px] text-muted-foreground tabular-nums">
                     {relativeTime(item.created_at)}
                   </span>
                 </div>
                 {item.reasoning && (
-                  <p className="text-xs text-muted-foreground mt-1 line-clamp-1">
+                  <p className="mt-1 line-clamp-1 text-muted-foreground text-xs">
                     {item.reasoning}
                   </p>
                 )}

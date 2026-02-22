@@ -1,9 +1,4 @@
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { fetchJson, getApiBaseUrl } from "@/lib/api";
 import { errorMessage, isOrgMembershipError } from "@/lib/errors";
 import { getActiveLocale } from "@/lib/i18n/server";
@@ -15,7 +10,7 @@ type PageProps = {
   searchParams: Promise<Record<string, string>>;
 };
 
-export default async function AgentDashboardPage({}: PageProps) {
+export default async function AgentDashboardPage(_props: PageProps) {
   const locale = await getActiveLocale();
   const orgId = await getActiveOrgId();
   const isEn = locale === "en-US";
@@ -29,7 +24,7 @@ export default async function AgentDashboardPage({}: PageProps) {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-muted-foreground text-sm">
             {isEn
               ? "Select an organization from the sidebar."
               : "Seleccione una organización del menú lateral."}
@@ -54,7 +49,7 @@ export default async function AgentDashboardPage({}: PageProps) {
             <CardTitle>{isEn ? "Access denied" : "Acceso denegado"}</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-sm text-muted-foreground">{message}</p>
+            <p className="text-muted-foreground text-sm">{message}</p>
           </CardContent>
         </Card>
       );
@@ -67,8 +62,8 @@ export default async function AgentDashboardPage({}: PageProps) {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-sm text-muted-foreground">{message}</p>
-          <p className="text-xs text-muted-foreground mt-1">
+          <p className="text-muted-foreground text-sm">{message}</p>
+          <p className="mt-1 text-muted-foreground text-xs">
             {getApiBaseUrl()}
           </p>
         </CardContent>
@@ -91,7 +86,7 @@ export default async function AgentDashboardPage({}: PageProps) {
         </div>
       </header>
 
-      <AgentDashboard orgId={orgId} initialStats={stats} locale={locale} />
+      <AgentDashboard initialStats={stats} locale={locale} orgId={orgId} />
     </div>
   );
 }

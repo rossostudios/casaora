@@ -44,8 +44,8 @@ export default function TermsPage() {
             </h2>
             <p>
               Property managers are responsible for the accuracy of their
-              listings. Casaora does not guarantee the accuracy, completeness, or
-              availability of any listing information.
+              listings. Casaora does not guarantee the accuracy, completeness,
+              or availability of any listing information.
             </p>
           </div>
 

@@ -32,91 +32,108 @@ export function Stepper() {
   const opacity = useTransform(scrollYProgress, [0, 0.3, 0.7, 1], [0, 1, 1, 0]);
 
   return (
-    <section ref={containerRef} className="relative bg-background dark:bg-black py-24 md:py-32 overflow-hidden">
+    <section
+      className="relative overflow-hidden bg-background py-24 md:py-32 dark:bg-black"
+      ref={containerRef}
+    >
       <div className="container mx-auto max-w-[1400px] px-4 md:px-8">
-
         {/* Header - Split Layout */}
-        <div className="mb-20 flex flex-col md:flex-row md:items-end md:justify-between gap-8">
+        <div className="mb-20 flex flex-col gap-8 md:flex-row md:items-end md:justify-between">
           <motion.div
             className="max-w-2xl"
             initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
             transition={{ duration: 0.7 }}
+            viewport={{ once: true }}
+            whileInView={{ opacity: 1, y: 0 }}
           >
-            <h2 className="text-4xl md:text-5xl lg:text-6xl font-medium tracking-tight text-foreground dark:text-white mb-6">
-              From chaotic to <span className="italic font-serif text-[#FF6A13]">seamless</span> in three steps.
+            <h2 className="mb-6 font-medium text-4xl text-foreground tracking-tight md:text-5xl lg:text-6xl dark:text-white">
+              From chaotic to{" "}
+              <span className="font-serif text-mauve-500 italic">seamless</span>{" "}
+              in three steps.
             </h2>
           </motion.div>
           <motion.div
             className="max-w-md"
             initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
             transition={{ duration: 0.7, delay: 0.1 }}
+            viewport={{ once: true }}
+            whileInView={{ opacity: 1, y: 0 }}
           >
-            <p className="text-muted-foreground dark:text-[#888] text-lg md:text-xl leading-relaxed">
-              We've distilled property management into a streamlined workflow. Set up once, and let Casaora handle the heavy lifting while you scale.
+            <p className="text-lg text-muted-foreground leading-relaxed md:text-xl dark:text-[#888]">
+              We've distilled property management into a streamlined workflow.
+              Set up once, and let Casaora handle the heavy lifting while you
+              scale.
             </p>
           </motion.div>
         </div>
 
         {/* Big Product Window Mockup */}
         <motion.div
-          className="relative w-full rounded-[2rem] border border-border dark:border-white/10 bg-card dark:bg-[#0a0a0a] shadow-2xl dark:shadow-none overflow-hidden"
-          style={{ y, opacity }}
+          className="relative w-full overflow-hidden rounded-[2rem] border border-border bg-card shadow-2xl dark:border-white/10 dark:bg-[#0a0a0a] dark:shadow-none"
           initial={{ opacity: 0, scale: 0.95 }}
-          whileInView={{ opacity: 1, scale: 1 }}
-          viewport={{ once: true, margin: "-100px" }}
+          style={{ y, opacity }}
           transition={{ duration: 0.8, ease: "easeOut" }}
+          viewport={{ once: true, margin: "-100px" }}
+          whileInView={{ opacity: 1, scale: 1 }}
         >
           {/* Subtle top glow */}
-          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-3/4 h-px bg-gradient-to-r from-transparent via-[#FF6A13]/50 to-transparent" />
-          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-1/2 h-24 bg-[#FF6A13]/10 blur-[80px] rounded-full pointer-events-none" />
+          <div className="absolute top-0 left-1/2 h-px w-3/4 -translate-x-1/2 bg-gradient-to-r from-transparent via-mauve-500/50 to-transparent" />
+          <div className="pointer-events-none absolute top-0 left-1/2 h-24 w-1/2 -translate-x-1/2 rounded-full bg-mauve-500/10 blur-[80px]" />
 
           {/* Window Header (Browser/App bar) */}
-          <div className="flex items-center px-6 py-4 border-b border-border dark:border-white/5 bg-muted/30 dark:bg-white/[0.02]">
+          <div className="flex items-center border-border border-b bg-muted/30 px-6 py-4 dark:border-white/5 dark:bg-white/[0.02]">
             <div className="flex gap-2">
-              <div className="w-3 h-3 rounded-full bg-black/10 dark:bg-white/10" />
-              <div className="w-3 h-3 rounded-full bg-black/10 dark:bg-white/10" />
-              <div className="w-3 h-3 rounded-full bg-black/10 dark:bg-white/10" />
+              <div className="h-3 w-3 rounded-full bg-black/10 dark:bg-white/10" />
+              <div className="h-3 w-3 rounded-full bg-black/10 dark:bg-white/10" />
+              <div className="h-3 w-3 rounded-full bg-black/10 dark:bg-white/10" />
             </div>
-            <div className="mx-auto px-4 py-1.5 rounded-md bg-background dark:bg-white/5 border border-border dark:border-white/5 text-[10px] text-muted-foreground dark:text-white/40 font-mono tracking-wider">
+            <div className="mx-auto rounded-md border border-border bg-background px-4 py-1.5 font-mono text-[10px] text-muted-foreground tracking-wider dark:border-white/5 dark:bg-white/5 dark:text-white/40">
               CASAORA.APP / DASHBOARD
             </div>
           </div>
 
           {/* Abstract UI Inside Window */}
-          <div className="p-8 md:p-12 lg:p-16 relative aspect-auto min-h-[500px] flex flex-col items-center justify-center">
-
+          <div className="relative flex aspect-auto min-h-[500px] flex-col items-center justify-center p-8 md:p-12 lg:p-16">
             {/* Dynamic background grid or lines */}
             <div className="absolute inset-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_50%,#000_70%,transparent_100%)]" />
 
             {/* UI Elements representation */}
-            <div className="relative z-10 w-full max-w-4xl grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="relative z-10 grid w-full max-w-4xl grid-cols-1 gap-6 md:grid-cols-3">
               {steps.map((step, idx) => (
                 <motion.div
-                  key={step.number}
-                  className="flex flex-col p-6 rounded-xl border border-border dark:border-white/10 bg-background/80 dark:bg-[#111]/80 backdrop-blur-sm shadow-sm dark:shadow-none"
+                  className="flex flex-col rounded-xl border border-border bg-background/80 p-6 shadow-sm backdrop-blur-sm dark:border-white/10 dark:bg-[#111]/80 dark:shadow-none"
                   initial={{ opacity: 0, y: 20 }}
-                  whileInView={{ opacity: 1, y: 0 }}
+                  key={step.number}
+                  transition={{ delay: 0.3 + idx * 0.15, duration: 0.5 }}
                   viewport={{ once: true }}
-                  transition={{ delay: 0.3 + (idx * 0.15), duration: 0.5 }}
+                  whileInView={{ opacity: 1, y: 0 }}
                 >
-                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#FF6A13]/20 to-transparent flex items-center justify-center mb-6 border border-[#FF6A13]/20">
-                    <span className="text-[#FF6A13] font-mono text-sm">{step.number}</span>
+                  <div className="mb-6 flex h-10 w-10 items-center justify-center rounded-full border border-mauve-500/20 bg-gradient-to-br from-mauve-500/20 to-transparent">
+                    <span className="font-mono text-mauve-500 text-sm">
+                      {step.number}
+                    </span>
                   </div>
-                  <h4 className="text-foreground dark:text-white font-medium mb-2">{step.title}</h4>
-                  <p className="text-muted-foreground dark:text-[#666] text-sm leading-relaxed">{step.description}</p>
+                  <h4 className="mb-2 font-medium text-foreground dark:text-white">
+                    {step.title}
+                  </h4>
+                  <p className="text-muted-foreground text-sm leading-relaxed dark:text-[#666]">
+                    {step.description}
+                  </p>
 
                   {/* Mock progress/data bar */}
-                  <div className="mt-6 w-full h-1.5 rounded-full bg-muted dark:bg-white/5 overflow-hidden">
+                  <div className="mt-6 h-1.5 w-full overflow-hidden rounded-full bg-muted dark:bg-white/5">
                     <motion.div
-                      className="h-full bg-gradient-to-r from-[#FF6A13]/50 to-[#FF6A13]"
+                      className="h-full bg-gradient-to-r from-mauve-500/50 to-mauve-500"
                       initial={{ width: "0%" }}
-                      whileInView={{ width: idx === 0 ? "100%" : idx === 1 ? "60%" : "30%" }}
+                      transition={{
+                        delay: 0.8 + idx * 0.2,
+                        duration: 1.5,
+                        ease: "easeOut",
+                      }}
                       viewport={{ once: true }}
-                      transition={{ delay: 0.8 + (idx * 0.2), duration: 1.5, ease: "easeOut" }}
+                      whileInView={{
+                        width: idx === 0 ? "100%" : idx === 1 ? "60%" : "30%",
+                      }}
                     />
                   </div>
                 </motion.div>
@@ -124,23 +141,26 @@ export function Stepper() {
             </div>
 
             {/* Central floating abstract elements to simulate data/charts */}
-            <div className="mt-12 w-full max-w-4xl relative h-48 rounded-xl border border-border dark:border-white/5 bg-muted/10 dark:bg-white/[0.01] flex items-end justify-between p-6 gap-2 overflow-hidden shadow-inner dark:shadow-none">
-              <div className="absolute inset-0 bg-gradient-to-t from-[#FF6A13]/5 to-transparent mix-blend-overlay" />
+            <div className="relative mt-12 flex h-48 w-full max-w-4xl items-end justify-between gap-2 overflow-hidden rounded-xl border border-border bg-muted/10 p-6 shadow-inner dark:border-white/5 dark:bg-white/[0.01] dark:shadow-none">
+              <div className="absolute inset-0 bg-gradient-to-t from-mauve-500/5 to-transparent mix-blend-overlay" />
               {Array.from({ length: 12 }).map((_, i) => (
                 <motion.div
-                  key={i}
-                  className="w-full bg-foreground/10 dark:bg-white/10 rounded-t-sm"
+                  className="w-full rounded-t-sm bg-foreground/10 dark:bg-white/10"
                   initial={{ height: 0 }}
-                  whileInView={{ height: `${30 + Math.random() * 60}%` }}
+                  // biome-ignore lint/suspicious/noArrayIndexKey: purely decorative static loop
+                  key={i}
+                  transition={{
+                    delay: 0.5 + i * 0.05,
+                    duration: 0.8,
+                    ease: "easeOut",
+                  }}
                   viewport={{ once: true }}
-                  transition={{ delay: 0.5 + (i * 0.05), duration: 0.8, ease: "easeOut" }}
+                  whileInView={{ height: `${30 + Math.random() * 60}%` }}
                 />
               ))}
             </div>
-
           </div>
         </motion.div>
-
       </div>
     </section>
   );

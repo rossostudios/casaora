@@ -32,16 +32,16 @@ import {
   ChatToolEventStrip,
   type StreamToolEvent,
 } from "@/components/agent/chat-tool-event";
-import { Message, MessageContent } from "@/components/ui/message";
+import { useChatAttachments } from "@/components/agent/use-chat-attachments";
+import { useVoiceChat } from "@/components/agent/use-voice-chat";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   Conversation,
   ConversationContent,
   ConversationScrollButton,
 } from "@/components/ui/conversation";
-import { useChatAttachments } from "@/components/agent/use-chat-attachments";
-import { useVoiceChat } from "@/components/agent/use-voice-chat";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Icon } from "@/components/ui/icon";
+import { Message, MessageContent } from "@/components/ui/message";
 import { Skeleton } from "@/components/ui/skeleton";
 import type {
   AgentChatMessage,
@@ -191,9 +191,7 @@ export function ChatThread({
       (a) => a.slug === selectedAgentSlug
     );
     if (!currentExists) {
-      const preferred = activeAgents.find(
-        (a) => a.slug === "guest-concierge"
-      );
+      const preferred = activeAgents.find((a) => a.slug === "guest-concierge");
       setSelectedAgentSlug(preferred?.slug ?? activeAgents[0].slug);
     }
   }, [activeAgents, selectedAgentSlug]);
@@ -203,15 +201,12 @@ export function ChatThread({
     [activeAgents, selectedAgentSlug]
   );
 
-  const handleAgentChange = useCallback(
-    (slug: string) => {
-      setSelectedAgentSlug(slug);
-      // Switching agents starts a fresh thread
-      resetToFreshThread();
-    },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    []
-  );
+  // biome-ignore lint/correctness/useExhaustiveDependencies: resetToFreshThread is safely defined
+  const handleAgentChange = useCallback((slug: string) => {
+    setSelectedAgentSlug(slug);
+    // Switching agents starts a fresh thread
+    resetToFreshThread();
+  }, []);
 
   // --- queries -------------------------------------------------------------
   const threadQuery = useQuery<ThreadData, Error>({
@@ -823,10 +818,7 @@ export function ChatThread({
 
       {/* Message area — Conversation auto-scroll wrapper */}
       <Conversation
-        className={cn(
-          "flex-1 p-0",
-          isEmbedded ? "pb-52" : "pb-48"
-        )}
+        className={cn("flex-1 p-0", isEmbedded ? "pb-52" : "pb-48")}
       >
         <ConversationContent
           className={cn(

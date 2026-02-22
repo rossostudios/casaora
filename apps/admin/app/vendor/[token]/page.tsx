@@ -19,23 +19,28 @@ export default async function VendorPage({ params }: PageProps) {
   let error: string | null = null;
 
   try {
-    auth = await fetchPublicJson<VerifyResponse>("/public/vendor/verify", undefined, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ token }),
-      cache: "no-store",
-    });
+    auth = await fetchPublicJson<VerifyResponse>(
+      "/public/vendor/verify",
+      undefined,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token }),
+        cache: "no-store",
+      }
+    );
   } catch (err) {
     error = err instanceof Error ? err.message : "Invalid or expired link.";
   }
 
-  if (!auth?.authenticated || !auth.organization_id) {
+  if (!(auth?.authenticated && auth.organization_id)) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background p-4">
-        <div className="rounded-xl border p-8 max-w-md w-full text-center space-y-3">
-          <h1 className="text-xl font-bold">Access Denied</h1>
-          <p className="text-sm text-muted-foreground">
-            {error || "This link is invalid or has expired. Please contact your property manager for a new access link."}
+      <div className="flex min-h-screen items-center justify-center bg-background p-4">
+        <div className="w-full max-w-md space-y-3 rounded-xl border p-8 text-center">
+          <h1 className="font-bold text-xl">Access Denied</h1>
+          <p className="text-muted-foreground text-sm">
+            {error ||
+              "This link is invalid or has expired. Please contact your property manager for a new access link."}
           </p>
         </div>
       </div>
@@ -45,9 +50,9 @@ export default async function VendorPage({ params }: PageProps) {
   return (
     <div className="min-h-screen bg-background">
       <VendorPortal
+        organizationId={auth.organization_id}
         token={token}
         vendorName={auth.vendor_name ?? "Vendor"}
-        organizationId={auth.organization_id}
       />
     </div>
   );

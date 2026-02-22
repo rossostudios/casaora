@@ -32,7 +32,7 @@ const testimonials = [
     author: "Diego R.",
     role: "Boutique Hotel Owner",
     image: "https://i.pravatar.cc/150?u=diego",
-  }
+  },
 ];
 
 // Duplicate for infinite scroll effect
@@ -40,48 +40,47 @@ const duplicatedTestimonials = [...testimonials, ...testimonials];
 
 export function Testimonials() {
   return (
-    <section className="bg-section-alt dark:bg-black py-24 md:py-32 overflow-hidden border-t border-border dark:border-white/5">
-      <div className="container mx-auto px-4 mb-20 text-center">
+    <section className="overflow-hidden border-border border-t bg-section-alt py-24 md:py-32 dark:border-white/5 dark:bg-black">
+      <div className="container mx-auto mb-20 px-4 text-center">
         <motion.h2
-          className="font-medium text-4xl tracking-tight text-foreground dark:text-white md:text-5xl lg:text-6xl"
+          className="font-medium text-4xl text-foreground tracking-tight md:text-5xl lg:text-6xl dark:text-white"
           initial={{ opacity: 0, y: 20 }}
           viewport={{ once: true }}
           whileInView={{ opacity: 1, y: 0 }}
         >
           Loved by{" "}
-          <span className="font-serif text-[#FF6A13] italic">top managers</span>
+          <span className="font-serif text-mauve-500 italic">top managers</span>
         </motion.h2>
       </div>
 
-      <div className="relative flex overflow-x-hidden group">
-
+      <div className="group relative flex overflow-x-hidden">
         {/* Fading edges for marquee */}
-        <div className="absolute top-0 bottom-0 left-0 w-32 bg-gradient-to-r from-section-alt to-transparent dark:from-black dark:to-transparent z-10 pointer-events-none" />
-        <div className="absolute top-0 bottom-0 right-0 w-32 bg-gradient-to-l from-section-alt to-transparent dark:from-black dark:to-transparent z-10 pointer-events-none" />
+        <div className="pointer-events-none absolute top-0 bottom-0 left-0 z-10 w-32 bg-gradient-to-r from-section-alt to-transparent dark:from-black dark:to-transparent" />
+        <div className="pointer-events-none absolute top-0 right-0 bottom-0 z-10 w-32 bg-gradient-to-l from-section-alt to-transparent dark:from-black dark:to-transparent" />
 
-        <div className="py-8 animate-marquee flex items-center shrink-0 w-max group-hover:[animation-play-state:paused]">
+        <div className="flex w-max shrink-0 animate-marquee items-center py-8 group-hover:[animation-play-state:paused]">
           {duplicatedTestimonials.map((testimonial, idx) => (
             <div
+              className="relative mx-4 w-[350px] shrink-0 overflow-hidden rounded-2xl border border-border bg-card p-8 transition-colors hover:bg-muted/50 md:w-[450px] md:p-10 dark:border-white/10 dark:bg-[#111] dark:hover:bg-[#151515]"
               key={`${testimonial.author}-${idx}`}
-              className="relative w-[350px] md:w-[450px] shrink-0 mx-4 overflow-hidden rounded-2xl border border-border dark:border-white/10 bg-card dark:bg-[#111] p-8 md:p-10 transition-colors hover:bg-muted/50 dark:hover:bg-[#151515]"
             >
               <Quote className="absolute top-8 right-8 h-8 w-8 text-black/5 dark:text-white/5" />
-              <p className="relative z-10 mb-8 font-serif text-foreground dark:text-[#ececec] text-lg leading-relaxed md:text-xl">
+              <p className="relative z-10 mb-8 font-serif text-foreground text-lg leading-relaxed md:text-xl dark:text-[#ececec]">
                 "{testimonial.quote}"
               </p>
               <div className="relative z-10 flex items-center gap-4">
                 <Image
                   alt={testimonial.author}
-                  className="h-10 w-10 rounded-full border border-border dark:border-white/10 object-cover opacity-80"
+                  className="h-10 w-10 rounded-full border border-border object-cover opacity-80 dark:border-white/10"
                   height={40}
                   src={testimonial.image}
                   width={40}
                 />
                 <div>
-                  <div className="font-medium text-foreground dark:text-white text-sm">
+                  <div className="font-medium text-foreground text-sm dark:text-white">
                     {testimonial.author}
                   </div>
-                  <div className="text-muted-foreground dark:text-[#888] text-xs">
+                  <div className="text-muted-foreground text-xs dark:text-[#888]">
                     {testimonial.role}
                   </div>
                 </div>

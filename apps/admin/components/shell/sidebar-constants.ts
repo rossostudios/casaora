@@ -21,25 +21,25 @@ export const PRIMARY_TABS: Array<{
   icon: typeof Home01Icon;
   label: { "es-PY": string; "en-US": string };
 }> = [
-    {
-      key: "home",
-      href: "/app",
-      icon: Home01Icon,
-      label: { "es-PY": "Inicio", "en-US": "Home" },
-    },
-    {
-      key: "chat",
-      href: "/app/agents",
-      icon: Message01Icon,
-      label: { "es-PY": "Agente", "en-US": "Agent" },
-    },
-    {
-      key: "inbox",
-      href: "/module/messaging",
-      icon: InboxIcon,
-      label: { "es-PY": "Inbox", "en-US": "Inbox" },
-    },
-  ];
+  {
+    key: "home",
+    href: "/app",
+    icon: Home01Icon,
+    label: { "es-PY": "Inicio", "en-US": "Home" },
+  },
+  {
+    key: "chat",
+    href: "/app/agents",
+    icon: Message01Icon,
+    label: { "es-PY": "Agente", "en-US": "Agent" },
+  },
+  {
+    key: "inbox",
+    href: "/module/messaging",
+    icon: InboxIcon,
+    label: { "es-PY": "Inbox", "en-US": "Inbox" },
+  },
+];
 
 export const CHAT_LINKS: RouteLinkDef[] = [
   {

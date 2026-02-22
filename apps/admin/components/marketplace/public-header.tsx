@@ -4,9 +4,8 @@ import { HeartAddIcon, Menu01Icon } from "@hugeicons/core-free-icons";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, useSyncExternalStore } from "react";
-
-import { CasaoraLogo } from "@/components/ui/casaora-logo";
 import { LanguageSelector } from "@/components/preferences/language-selector";
+import { CasaoraLogo } from "@/components/ui/casaora-logo";
 import { Icon } from "@/components/ui/icon";
 import { Sheet } from "@/components/ui/sheet";
 import {

@@ -8,16 +8,15 @@ import {
   VolumeHighIcon,
 } from "@hugeicons/core-free-icons";
 import { useCallback, useState } from "react";
-
-import { getModelDisplayName } from "@/components/agent/model-display";
 import {
   ToolTraceBadges,
   type ToolTraceEntry,
 } from "@/components/agent/chat-tool-event";
-import { Message, MessageContent } from "@/components/ui/message";
-import { Response } from "@/components/ui/response";
+import { getModelDisplayName } from "@/components/agent/model-display";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
+import { Message, MessageContent } from "@/components/ui/message";
+import { Response } from "@/components/ui/response";
 import { cn } from "@/lib/utils";
 
 export type DisplayMessage = {
@@ -58,11 +57,11 @@ export function ChatMessage({
       className={cn("py-2", isUser ? "" : "items-start")}
       from={message.role}
     >
-      {!isUser ? (
+      {isUser ? null : (
         <div className="mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-[var(--sidebar-primary)] to-[var(--sidebar-primary)]/70 text-white">
           <Icon className="h-3.5 w-3.5" icon={SparklesIcon} />
         </div>
-      ) : null}
+      )}
 
       <MessageContent variant={isUser ? "contained" : "flat"}>
         {isUser ? (

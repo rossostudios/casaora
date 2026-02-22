@@ -55,7 +55,7 @@ function DropdownMenuItem({
   return (
     <MenuPrimitive.Item
       className={cn(
-        "relative flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none transition-colors focus:bg-white/40 focus:text-accent-foreground dark:focus:bg-white/[0.08] data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
+        "relative flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none transition-colors focus:bg-white/40 focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50 dark:focus:bg-white/[0.08]",
         className
       )}
       {...props}
@@ -81,7 +81,10 @@ function DropdownMenuSeparator({
 }: ComponentPropsWithoutRef<typeof MenuPrimitive.Separator>) {
   return (
     <MenuPrimitive.Separator
-      className={cn("-mx-1 my-1 h-px bg-foreground/[0.06] dark:bg-white/[0.06]", className)}
+      className={cn(
+        "-mx-1 my-1 h-px bg-foreground/[0.06] dark:bg-white/[0.06]",
+        className
+      )}
       {...props}
     />
   );

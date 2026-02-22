@@ -62,26 +62,26 @@ export function MarketplaceResultsLayout({
           <MarketplaceSortSelect isEn={isEn} value={sortValue} />
 
           {hasMapToken ? (
-          <button
-            className={cn(
-              "hidden items-center gap-1.5 rounded-xl border px-3 py-1.5 font-medium text-xs transition-all duration-300 ease-out hover:scale-[1.02] active:scale-[0.98] lg:inline-flex",
-              showMap
-                ? "border-[var(--marketplace-text)]/30 bg-[var(--marketplace-bg-muted)] text-[var(--marketplace-text)]"
-                : "border-[#e8e4df] text-[var(--marketplace-text-muted)] hover:text-[var(--marketplace-text)]"
-            )}
-            onClick={() => setShowMap((v) => !v)}
-            type="button"
-          >
-            <Icon icon={MapsLocation01Icon} size={13} />
-            {showMap
-              ? isEn
-                ? "Hide map"
-                : "Ocultar mapa"
-              : isEn
-                ? "Show map"
-                : "Ver mapa"}
-          </button>
-        ) : null}
+            <button
+              className={cn(
+                "hidden items-center gap-1.5 rounded-xl border px-3 py-1.5 font-medium text-xs transition-all duration-300 ease-out hover:scale-[1.02] active:scale-[0.98] lg:inline-flex",
+                showMap
+                  ? "border-[var(--marketplace-text)]/30 bg-[var(--marketplace-bg-muted)] text-[var(--marketplace-text)]"
+                  : "border-[#e8e4df] text-[var(--marketplace-text-muted)] hover:text-[var(--marketplace-text)]"
+              )}
+              onClick={() => setShowMap((v) => !v)}
+              type="button"
+            >
+              <Icon icon={MapsLocation01Icon} size={13} />
+              {showMap
+                ? isEn
+                  ? "Hide map"
+                  : "Ocultar mapa"
+                : isEn
+                  ? "Show map"
+                  : "Ver mapa"}
+            </button>
+          ) : null}
         </div>
       </div>
 

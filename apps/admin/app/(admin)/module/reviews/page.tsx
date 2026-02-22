@@ -17,7 +17,7 @@ type PageProps = {
   searchParams: Promise<Record<string, string>>;
 };
 
-export default async function ReviewsPage({}: PageProps) {
+export default async function ReviewsPage(_props: PageProps) {
   const locale = await getActiveLocale();
   const orgId = await getActiveOrgId();
   const isEn = locale === "en-US";
@@ -31,7 +31,7 @@ export default async function ReviewsPage({}: PageProps) {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-muted-foreground text-sm">
             {isEn
               ? "Select an organization from the sidebar."
               : "Seleccione una organización del menú lateral."}
@@ -58,7 +58,7 @@ export default async function ReviewsPage({}: PageProps) {
             <CardTitle>{isEn ? "Access denied" : "Acceso denegado"}</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-sm text-muted-foreground">{message}</p>
+            <p className="text-muted-foreground text-sm">{message}</p>
           </CardContent>
         </Card>
       );
@@ -71,8 +71,8 @@ export default async function ReviewsPage({}: PageProps) {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-sm text-muted-foreground">{message}</p>
-          <p className="text-xs text-muted-foreground mt-1">
+          <p className="text-muted-foreground text-sm">{message}</p>
+          <p className="mt-1 text-muted-foreground text-xs">
             {getApiBaseUrl()}
           </p>
         </CardContent>
@@ -95,9 +95,9 @@ export default async function ReviewsPage({}: PageProps) {
         </CardHeader>
         <CardContent>
           <ReviewsManager
-            orgId={orgId}
             initialReviews={reviews}
             locale={locale}
+            orgId={orgId}
           />
         </CardContent>
       </Card>

@@ -61,7 +61,7 @@ function ProductNavItem({ isActive }: { isActive: boolean }) {
             transition={{ duration: 0.2, ease: "easeOut" }}
           >
             <div className="flex bg-card/50">
-              <div className="flex flex-1 flex-col gap-1 border-r border-border/30 p-4">
+              <div className="flex flex-1 flex-col gap-1 border-border/30 border-r p-4">
                 <div className="mb-2 px-3 font-semibold text-muted-foreground text-xs uppercase tracking-wider">
                   Intake
                 </div>
@@ -124,7 +124,7 @@ function ProductNavItem({ isActive }: { isActive: boolean }) {
               </div>
             </div>
 
-            <div className="flex items-center justify-between border-t border-border/30 bg-muted/30 px-6 py-4 transition-colors hover:bg-muted/50">
+            <div className="flex items-center justify-between border-border/30 border-t bg-muted/30 px-6 py-4 transition-colors hover:bg-muted/50">
               <span className="font-medium text-foreground text-sm">
                 New: Advanced filters and share issues in private teams
               </span>

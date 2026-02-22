@@ -36,7 +36,7 @@ export function createTab(
   pathname: string,
   search: string,
   label: string,
-  moduleSlug?: string,
+  moduleSlug?: string
 ): Tab {
   return {
     id: crypto.randomUUID(),
@@ -51,7 +51,7 @@ export function defaultTabState(
   pathname: string,
   search: string,
   label: string,
-  moduleSlug?: string,
+  moduleSlug?: string
 ): TabState {
   const tab = createTab(pathname, search, label, moduleSlug);
   return { tabs: [tab], activeTabId: tab.id };
@@ -90,14 +90,14 @@ export function updateActiveTab(
   pathname: string,
   search: string,
   label: string,
-  moduleSlug?: string,
+  moduleSlug?: string
 ): TabState {
   return {
     ...state,
     tabs: state.tabs.map((t) =>
       t.id === state.activeTabId
         ? { ...t, pathname, search, label, moduleSlug }
-        : t,
+        : t
     ),
   };
 }

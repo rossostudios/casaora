@@ -77,7 +77,7 @@ export function ChatHeader({
   return (
     <div
       className={cn(
-        "sticky top-0 z-10 flex shrink-0 items-center justify-between border-b border-border/40 bg-background/80 px-4 py-2.5 backdrop-blur-sm",
+        "sticky top-0 z-10 flex shrink-0 items-center justify-between border-border/40 border-b bg-background/80 px-4 py-2.5 backdrop-blur-sm",
         isEmbedded && "bg-card/95"
       )}
     >
@@ -93,17 +93,33 @@ export function ChatHeader({
                 </div>
 
                 {/* Agent selector dropdown (only in non-detail routes with multiple agents) */}
-                {!isChatDetailRoute && activeAgents.length > 1 && onAgentChange ? (
+                {!isChatDetailRoute &&
+                activeAgents.length > 1 &&
+                onAgentChange ? (
                   <PopoverRoot>
                     <PopoverTrigger
                       className="flex items-center gap-1"
                       disabled={isSending}
                     >
                       <h2 className="truncate font-semibold text-sm hover:text-foreground/80">
-                        {chatTitle || selectedAgentName || (isEn ? "New Chat" : "Nuevo Chat")}
+                        {chatTitle ||
+                          selectedAgentName ||
+                          (isEn ? "New Chat" : "Nuevo Chat")}
                       </h2>
-                      <svg className="h-3 w-3 text-muted-foreground" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-                        <path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
+                      <svg
+                        aria-label="Expand chevron"
+                        className="h-3 w-3 text-muted-foreground"
+                        fill="none"
+                        role="img"
+                        stroke="currentColor"
+                        strokeWidth={2}
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          d="M6 9l6 6 6-6"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
                       </svg>
                     </PopoverTrigger>
                     <PopoverContent align="start" className="w-64 p-1.5">
@@ -121,11 +137,11 @@ export function ChatHeader({
                           onClick={() => onAgentChange(agent.slug)}
                           type="button"
                         >
-                          <span className="truncate text-sm font-medium">
+                          <span className="truncate font-medium text-sm">
                             {agent.name}
                           </span>
                           {agent.description ? (
-                            <span className="truncate text-xs text-muted-foreground">
+                            <span className="truncate text-muted-foreground text-xs">
                               {agent.description}
                             </span>
                           ) : null}
@@ -135,7 +151,9 @@ export function ChatHeader({
                   </PopoverRoot>
                 ) : (
                   <h2 className="truncate font-semibold text-sm">
-                    {chatTitle || selectedAgentName || (isEn ? "New Chat" : "Nuevo Chat")}
+                    {chatTitle ||
+                      selectedAgentName ||
+                      (isEn ? "New Chat" : "Nuevo Chat")}
                   </h2>
                 )}
               </div>
@@ -150,9 +168,8 @@ export function ChatHeader({
                       className="cursor-pointer font-mono font-normal text-[10px] transition-colors hover:bg-muted"
                       variant="outline"
                     >
-                      {getModelDisplayName(
-                        selectedModel || primaryModel
-                      ) || (isEn ? "Model" : "Modelo")}
+                      {getModelDisplayName(selectedModel || primaryModel) ||
+                        (isEn ? "Model" : "Modelo")}
                     </Badge>
                   </PopoverTrigger>
                   <PopoverContent align="start" className="w-52 p-1.5">
@@ -183,7 +200,7 @@ export function ChatHeader({
                         ) : null}
                       </button>
                     ))}
-                    <div className="mt-1 border-t border-border/40 px-2.5 py-2">
+                    <div className="mt-1 border-border/40 border-t px-2.5 py-2">
                       <span className="text-[10px] text-muted-foreground">
                         {isEn
                           ? "More models coming soon"

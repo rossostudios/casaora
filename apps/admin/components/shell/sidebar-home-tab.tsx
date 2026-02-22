@@ -160,7 +160,9 @@ export function SidebarHomeTab({
 
         return (
           <div key={section.key}>
-            {index > 0 && <Separator className="mx-2 mb-2 h-px bg-white/30 dark:bg-white/[0.06]" />}
+            {index > 0 && (
+              <Separator className="mx-2 mb-2 h-px bg-white/30 dark:bg-white/[0.06]" />
+            )}
             <Collapsible
               onOpenChange={() => toggleSection(section.key)}
               open={!isCollapsed}

@@ -35,7 +35,7 @@ function TabItem({
         onClose(tab.id);
       }
     },
-    [tab.id, canClose, onClose],
+    [tab.id, canClose, onClose]
   );
 
   return (
@@ -45,7 +45,7 @@ function TabItem({
         "group/tab relative flex h-8 max-w-[200px] shrink-0 items-center gap-1.5 rounded-md px-2.5 text-[12px] leading-tight transition-colors",
         isActive
           ? "bg-background text-foreground shadow-sm"
-          : "text-muted-foreground hover:bg-muted/60 hover:text-foreground",
+          : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
       )}
       onAuxClick={handleAuxClick}
       onClick={() => onSwitch(tab.id)}
@@ -56,33 +56,26 @@ function TabItem({
       <Icon
         className={cn(
           "shrink-0",
-          isActive ? "text-foreground/70" : "text-muted-foreground/60",
+          isActive ? "text-foreground/70" : "text-muted-foreground/60"
         )}
         icon={tabIcon}
         size={13}
       />
       <span className="truncate">{tab.label}</span>
       {canClose && (
-        <span
+        <button
           className={cn(
             "ml-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-sm transition-colors hover:bg-muted-foreground/20",
-            isActive ? "opacity-100" : "opacity-0 group-hover/tab:opacity-100",
+            isActive ? "opacity-100" : "opacity-0 group-hover/tab:opacity-100"
           )}
           onClick={(e) => {
             e.stopPropagation();
             onClose(tab.id);
           }}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              e.stopPropagation();
-              onClose(tab.id);
-            }
-          }}
-          role="button"
-          tabIndex={0}
+          type="button"
         >
           <Icon icon={Cancel01Icon} size={10} />
-        </span>
+        </button>
       )}
     </button>
   );
@@ -107,6 +100,8 @@ function OverflowMenu({
   }, []);
 
   return (
+    // biome-ignore lint/a11y/noNoninteractiveElementInteractions: acceptable for tab bar dropdown blur
+    // biome-ignore lint/a11y/noStaticElementInteractions: acceptable for tab bar dropdown blur
     <div className="relative" onBlur={handleBlur} ref={ref}>
       <button
         aria-label="All tabs"
@@ -126,7 +121,7 @@ function OverflowMenu({
                   "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[12px] transition-colors hover:bg-muted",
                   tab.id === activeTabId
                     ? "font-medium text-foreground"
-                    : "text-muted-foreground",
+                    : "text-muted-foreground"
                 )}
                 key={tab.id}
                 onClick={() => {
@@ -160,7 +155,7 @@ export function TabBar() {
       className="flex shrink-0 items-center gap-0.5 border-border/60 border-b bg-muted/30 px-2 py-1"
       role="tablist"
     >
-      <div className="flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto scrollbar-none">
+      <div className="scrollbar-none flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto">
         {tabs.map((tab) => (
           <TabItem
             canClose={canClose}

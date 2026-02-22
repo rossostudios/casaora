@@ -68,8 +68,6 @@ export function AdminStatementPrint({
         periodLabel={
           asString(statement.period_label) || asString(statement.month)
         }
-        totalExpenses={asNumber(statement.total_expenses)}
-        totalRevenue={asNumber(statement.total_revenue)}
         taxSummary={
           statement.tax_summary
             ? {
@@ -86,6 +84,8 @@ export function AdminStatementPrint({
               }
             : null
         }
+        totalExpenses={asNumber(statement.total_expenses)}
+        totalRevenue={asNumber(statement.total_revenue)}
       />
     </div>
   );

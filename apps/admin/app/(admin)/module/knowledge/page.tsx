@@ -1,10 +1,5 @@
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { fetchList } from "@/lib/api";
 import { errorMessage, isOrgMembershipError } from "@/lib/errors";
 import { getActiveLocale } from "@/lib/i18n/server";
@@ -16,9 +11,7 @@ type PageProps = {
   searchParams: Promise<{ success?: string; error?: string }>;
 };
 
-export default async function KnowledgeModulePage({
-  searchParams,
-}: PageProps) {
+export default async function KnowledgeModulePage({ searchParams }: PageProps) {
   const locale = await getActiveLocale();
   const orgId = await getActiveOrgId();
   const { success, error } = await searchParams;
@@ -33,7 +26,7 @@ export default async function KnowledgeModulePage({
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-muted-foreground text-sm">
             {isEn
               ? "Select an organization from the sidebar."
               : "Seleccione una organización del menú lateral."}
@@ -52,12 +45,10 @@ export default async function KnowledgeModulePage({
       return (
         <Card>
           <CardHeader>
-            <CardTitle>
-              {isEn ? "Access denied" : "Acceso denegado"}
-            </CardTitle>
+            <CardTitle>{isEn ? "Access denied" : "Acceso denegado"}</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-sm text-muted-foreground">{message}</p>
+            <p className="text-muted-foreground text-sm">{message}</p>
           </CardContent>
         </Card>
       );
@@ -70,7 +61,7 @@ export default async function KnowledgeModulePage({
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-sm text-muted-foreground">{message}</p>
+          <p className="text-muted-foreground text-sm">{message}</p>
         </CardContent>
       </Card>
     );
@@ -103,9 +94,9 @@ export default async function KnowledgeModulePage({
       </header>
 
       <KnowledgeManager
-        orgId={orgId}
         initialDocuments={documents}
         locale={locale}
+        orgId={orgId}
       />
     </div>
   );
