@@ -39,10 +39,7 @@ export function AppFooter({ locale }: { locale: Locale }) {
         </button>
       </div>
 
-      <span className="inline-flex items-center gap-1.5 font-bold text-[11px] text-muted-foreground/70 tracking-wider">
-        <CasaoraLogo className="inline-flex" size={14} />
-        CASAORA
-      </span>
+      <CasaoraLogo className="text-muted-foreground/70" size={20} />
 
       <div className="flex items-center gap-4">
         <Link className="transition-colors hover:text-foreground" href="/setup">

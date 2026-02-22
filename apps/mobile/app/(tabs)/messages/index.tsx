@@ -1,4 +1,5 @@
 import { Link } from "expo-router";
+import FontAwesome from "@expo/vector-icons/FontAwesome";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
@@ -125,6 +126,10 @@ function ThreadRow({ item }: { item: MessageThread; orgId: string }) {
         {item.channel && (
           <View style={styles.channelRow}>
             <View style={styles.channelChip}>
+              {(() => {
+                const iconInfo = getChannelIcon(item.channel);
+                return <FontAwesome name={iconInfo.name as any} size={12} color={iconInfo.color} style={{ marginRight: 6 }} />;
+              })()}
               <Text style={styles.channelText}>{item.channel}</Text>
             </View>
             {item.guest_phone && (
@@ -159,6 +164,15 @@ function formatTime(value: string) {
   return new Intl.DateTimeFormat("en-US", { dateStyle: "short" }).format(parsed);
 }
 
+function getChannelIcon(channel?: string | null): { name: string; color: string } {
+  const ch = channel?.toLowerCase() || "";
+  if (ch.includes("airbnb")) return { name: "commenting", color: "#FF5A5F" }; // Fallback since FA4 doesn't have airbnb by default if not recent
+  if (ch.includes("whatsapp")) return { name: "whatsapp", color: "#25D366" };
+  if (ch.includes("vrbo")) return { name: "home", color: "#005161" };
+  if (ch.includes("booking")) return { name: "building", color: "#003580" };
+  return { name: "comments", color: "#1b6f65" };
+}
+
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#f7f7f5" },
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
@@ -176,7 +190,7 @@ const styles = StyleSheet.create({
   unreadBadge: { backgroundColor: "#FF5D46", borderRadius: 999, minWidth: 20, height: 20, alignItems: "center", justifyContent: "center", paddingHorizontal: 6 },
   unreadText: { fontSize: 11, fontWeight: "800", color: "#fff" },
   channelRow: { flexDirection: "row", alignItems: "center", gap: 8 },
-  channelChip: { backgroundColor: "#ebefef", borderRadius: 999, paddingHorizontal: 8, paddingVertical: 2 },
+  channelChip: { flexDirection: "row", alignItems: "center", backgroundColor: "#ebefef", borderRadius: 999, paddingHorizontal: 8, paddingVertical: 4 },
   channelText: { fontSize: 11, fontWeight: "600", color: "#4c5f65" },
   phone: { fontSize: 12, color: "#587078" },
   preview: { fontSize: 14, color: "#4c5f65", lineHeight: 20 },

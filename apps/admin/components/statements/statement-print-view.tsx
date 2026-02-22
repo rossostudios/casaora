@@ -59,9 +59,8 @@ export function StatementPrintView({
       {/* Header */}
       <div className="mb-8 flex items-center justify-between border-b pb-6">
         <div className="flex items-center gap-3">
-          <CasaoraLogo size={32} />
           <div>
-            <h1 className="font-bold text-lg">Casaora</h1>
+            <CasaoraLogo size={36} />
             <p className="text-gray-500 text-xs">{orgName}</p>
           </div>
         </div>

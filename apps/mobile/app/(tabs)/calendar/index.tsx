@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, useRef } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -15,30 +15,33 @@ import {
   type Reservation,
 } from "@/lib/api";
 
-type DateFilter = "today" | "week" | "all";
+const DAYS_TO_SHOW = 40;
+const PAST_DAYS = 7;
 
-const DATE_FILTERS: Array<{ key: DateFilter; label: string }> = [
-  { key: "today", label: "Today" },
-  { key: "week", label: "This week" },
-  { key: "all", label: "All" },
-];
+function generateDates() {
+  const dates = [];
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
 
-function dateRange(filter: DateFilter): { from?: string; to?: string } {
-  const now = new Date();
-  const today = now.toISOString().slice(0, 10);
-
-  if (filter === "today") return { from: today, to: today };
-  if (filter === "week") {
-    const end = new Date(now.getTime() + 7 * 86_400_000);
-    return { from: today, to: end.toISOString().slice(0, 10) };
+  for (let i = -PAST_DAYS; i < DAYS_TO_SHOW - PAST_DAYS; i++) {
+    const d = new Date(today);
+    d.setDate(d.getDate() + i);
+    dates.push(d);
   }
-  return {};
+  return dates;
+}
+
+const ALL_DATES = generateDates();
+
+function formatDateKey(date: Date) {
+  return date.toISOString().slice(0, 10);
 }
 
 export default function ReservationsScreen() {
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [orgId, setOrgId] = useState<string | null>(null);
-  const [dateFilter, setDateFilter] = useState<DateFilter>("today");
+  const [selectedDateStr, setSelectedDateStr] = useState<string>(formatDateKey(new Date()));
+  const datesListRef = useRef<FlatList<Date>>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -66,8 +69,10 @@ export default function ReservationsScreen() {
       setError(null);
 
       try {
-        const { from, to } = dateRange(dateFilter);
-        const rows = await listReservations({ orgId, from, to, limit: 100 });
+        // Fetch a broader range to allow local filtering without re-fetching every tap
+        const from = formatDateKey(ALL_DATES[0]);
+        const to = formatDateKey(ALL_DATES[ALL_DATES.length - 1]);
+        const rows = await listReservations({ orgId, from, to, limit: 1000 });
         setReservations(rows);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Unable to load reservations");
@@ -76,47 +81,72 @@ export default function ReservationsScreen() {
         setRefreshing(false);
       }
     },
-    [orgId, dateFilter]
+    [orgId]
   );
 
   useEffect(() => {
     if (orgId) loadReservations(false);
-  }, [orgId, dateFilter, loadReservations]);
+  }, [orgId, loadReservations]);
 
   const refreshControl = useMemo(
     () => <RefreshControl refreshing={refreshing} onRefresh={() => loadReservations(true)} />,
     [loadReservations, refreshing]
   );
 
-  const arrivals = reservations.filter((r) => {
-    const today = new Date().toISOString().slice(0, 10);
-    return r.check_in?.slice(0, 10) === today;
-  });
-  const departures = reservations.filter((r) => {
-    const today = new Date().toISOString().slice(0, 10);
-    return r.check_out?.slice(0, 10) === today;
-  });
+  // Filter locally by selected date
+  const selectedReservations = useMemo(() => {
+    return reservations.filter((r) => {
+      const inStr = r.check_in?.slice(0, 10) || "";
+      const outStr = r.check_out?.slice(0, 10) || "";
+      return selectedDateStr >= inStr && selectedDateStr <= outStr;
+    });
+  }, [reservations, selectedDateStr]);
+
+  const arrivals = selectedReservations.filter((r) => r.check_in?.slice(0, 10) === selectedDateStr);
+  const departures = selectedReservations.filter((r) => r.check_out?.slice(0, 10) === selectedDateStr);
+
+  // Scroll to current date on mount
+  useEffect(() => {
+    setTimeout(() => {
+      if (datesListRef.current) {
+        datesListRef.current.scrollToIndex({ index: PAST_DAYS, animated: true, viewPosition: 0.5 });
+      }
+    }, 500);
+  }, []);
 
   return (
     <View style={styles.container}>
-      <View style={styles.filterRow}>
-        {DATE_FILTERS.map((f) => {
-          const active = f.key === dateFilter;
-          return (
-            <Pressable
-              key={f.key}
-              onPress={() => setDateFilter(f.key)}
-              style={[styles.filterChip, active ? styles.filterChipActive : null]}
-            >
-              <Text style={[styles.filterText, active ? styles.filterTextActive : null]}>
-                {f.label}
-              </Text>
-            </Pressable>
-          );
-        })}
+      <View style={styles.calendarStrip}>
+        <FlatList
+          ref={datesListRef}
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.calendarContent}
+          data={ALL_DATES}
+          keyExtractor={(d) => d.toISOString()}
+          getItemLayout={(data, index) => (
+            { length: 60, offset: 60 * index, index }
+          )}
+          renderItem={({ item: d }) => {
+            const dateStr = formatDateKey(d);
+            const active = dateStr === selectedDateStr;
+            const dayName = new Intl.DateTimeFormat("en-US", { weekday: "short" }).format(d);
+            const dayNum = d.getDate();
+
+            return (
+              <Pressable
+                onPress={() => setSelectedDateStr(dateStr)}
+                style={[styles.dateCell, active ? styles.dateCellActive : null]}
+              >
+                <Text style={[styles.dayName, active ? styles.textActive : null]}>{dayName}</Text>
+                <Text style={[styles.dayNum, active ? styles.textActive : null]}>{dayNum}</Text>
+              </Pressable>
+            );
+          }}
+        />
       </View>
 
-      {dateFilter === "today" && (arrivals.length > 0 || departures.length > 0) && (
+      {selectedDateStr === formatDateKey(new Date()) && (arrivals.length > 0 || departures.length > 0) && (
         <View style={styles.summaryRow}>
           <View style={[styles.summaryCard, styles.summaryArrival]}>
             <Text style={styles.summaryNumber}>{arrivals.length}</Text>
@@ -136,9 +166,9 @@ export default function ReservationsScreen() {
       ) : (
         <FlatList
           contentContainerStyle={
-            reservations.length === 0 ? styles.emptyContainer : styles.listContainer
+            selectedReservations.length === 0 ? styles.emptyContainer : styles.listContainer
           }
-          data={reservations}
+          data={selectedReservations}
           keyExtractor={(item) => item.id}
           refreshControl={refreshControl}
           renderItem={({ item }) => <ReservationCard item={item} />}
@@ -215,11 +245,13 @@ function chipForStatus(status: string) {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#f7f7f5" },
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
-  filterRow: { flexDirection: "row", gap: 8, paddingHorizontal: 14, paddingTop: 12, paddingBottom: 8 },
-  filterChip: { borderWidth: 1, borderColor: "#d8dede", borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6, backgroundColor: "#fff" },
-  filterChipActive: { backgroundColor: "#1b6f65", borderColor: "#1b6f65" },
-  filterText: { color: "#2c3d42", fontSize: 12, fontWeight: "600" },
-  filterTextActive: { color: "#fff" },
+  calendarStrip: { backgroundColor: "#fff", paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: "#e2e6e6" },
+  calendarContent: { paddingHorizontal: 14, gap: 8 },
+  dateCell: { width: 52, paddingVertical: 10, alignItems: "center", justifyContent: "center", borderRadius: 12, backgroundColor: "#f7f7f5" },
+  dateCellActive: { backgroundColor: "#1b6f65" },
+  dayName: { fontSize: 11, fontWeight: "600", color: "#587078", textTransform: "uppercase", marginBottom: 4 },
+  dayNum: { fontSize: 18, fontWeight: "700", color: "#1f3136" },
+  textActive: { color: "#fff" },
   summaryRow: { flexDirection: "row", gap: 10, paddingHorizontal: 14, paddingBottom: 8 },
   summaryCard: { flex: 1, borderRadius: 12, padding: 12, alignItems: "center" },
   summaryArrival: { backgroundColor: "#dbe8f6" },

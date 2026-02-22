@@ -117,6 +117,14 @@ export const SECTIONS: SectionDef[] = [
       "es-PY": "Portafolio",
       "en-US": "Portfolio",
     },
+    routeLinks: [
+      {
+        href: "/app/portfolio",
+        icon: ChartIcon,
+        label: { "es-PY": "Análisis", "en-US": "Analytics" },
+        roles: ["owner_admin", "operator"],
+      },
+    ],
     moduleSlugs: ["properties", "units", "integrations"],
     roles: ["owner_admin", "operator"],
   },

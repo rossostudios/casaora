@@ -21,8 +21,7 @@ export default function AuthLayout({
             className="flex items-center gap-2 font-bold text-foreground text-lg tracking-tight transition-opacity hover:opacity-80"
             href="/"
           >
-            <CasaoraLogo size={24} />
-            CASAORA
+            <CasaoraLogo size={32} />
           </Link>
         </div>
 

@@ -175,6 +175,30 @@ pub async fn run_background_scheduler(state: AppState) {
                 run_stalled_application_scan(&pool, engine_mode).await;
             });
         }
+
+        // 09:30 — Run scheduled agent playbooks
+        {
+            let st = state.clone();
+            tokio::spawn(async move {
+                run_scheduled_agent_playbooks(&st).await;
+            });
+        }
+
+        // 10:00 — Nightly portfolio snapshot capture
+        {
+            let pool = pool.clone();
+            tokio::spawn(async move {
+                run_portfolio_snapshots(&pool).await;
+            });
+        }
+
+        // 10:30 — Maintenance SLA monitoring
+        {
+            let pool = pool.clone();
+            tokio::spawn(async move {
+                run_maintenance_sla_scan(&pool).await;
+            });
+        }
     }
 }
 
@@ -273,6 +297,130 @@ async fn run_anomaly_scan_all_orgs(state: &AppState) {
 
     if scanned > 0 {
         tracing::info!(orgs = scanned, "Scheduler: anomaly scans completed");
+    }
+}
+
+/// Run scheduled agent playbooks from the agent_schedules table.
+async fn run_scheduled_agent_playbooks(state: &AppState) {
+    let pool = match state.db_pool.as_ref() {
+        Some(p) => p,
+        None => return,
+    };
+
+    // Fetch due schedules
+    let rows = sqlx::query_as::<_, (String, String, String, String, String)>(
+        "SELECT id::text, org_id::text, agent_slug, playbook_name, message
+         FROM agent_schedules
+         WHERE is_active = true
+           AND (next_run_at IS NULL OR next_run_at <= now())
+         LIMIT 50",
+    )
+    .fetch_all(pool)
+    .await
+    .unwrap_or_default();
+
+    let mut ran = 0_u32;
+    for (schedule_id, org_id, agent_slug, _playbook_name, message) in &rows {
+        // Look up agent
+        let agent: Option<(String, Option<String>, Option<serde_json::Value>)> =
+            sqlx::query_as(
+                "SELECT name, system_prompt, allowed_tools FROM ai_agents WHERE slug = $1 AND is_active = true LIMIT 1",
+            )
+            .bind(agent_slug)
+            .fetch_optional(pool)
+            .await
+            .ok()
+            .flatten();
+
+        let Some((agent_name, system_prompt, allowed_tools_json)) = agent else {
+            tracing::warn!(agent_slug, "Scheduled agent not found or inactive");
+            continue;
+        };
+
+        let target_tools: Vec<String> = allowed_tools_json
+            .and_then(|v| v.as_array().cloned())
+            .unwrap_or_default()
+            .into_iter()
+            .filter_map(|v| v.as_str().map(ToOwned::to_owned))
+            .collect();
+
+        let params = crate::services::ai_agent::RunAiAgentChatParams {
+            org_id,
+            role: "operator",
+            message,
+            conversation: &[],
+            allow_mutations: true,
+            confirm_write: true,
+            agent_name: &agent_name,
+            agent_prompt: system_prompt.as_deref(),
+            allowed_tools: Some(&target_tools),
+            agent_slug: Some(agent_slug),
+            chat_id: None,
+            requested_by_user_id: None,
+            preferred_model: None,
+        };
+
+        match crate::services::ai_agent::run_ai_agent_chat(state, params).await {
+            Ok(_) => ran += 1,
+            Err(e) => {
+                tracing::warn!(agent_slug, error = %e, "Scheduled playbook failed");
+            }
+        }
+
+        // Update last_run_at and compute next_run_at
+        sqlx::query(
+            "UPDATE agent_schedules SET last_run_at = now(),
+             next_run_at = now() + interval '24 hours'
+             WHERE id = $1::uuid",
+        )
+        .bind(schedule_id)
+        .execute(pool)
+        .await
+        .ok();
+    }
+
+    if ran > 0 {
+        tracing::info!(ran, "Scheduler: agent playbooks completed");
+    }
+}
+
+/// Capture nightly portfolio snapshots for all active organizations.
+async fn run_portfolio_snapshots(pool: &sqlx::PgPool) {
+    let org_ids: Vec<(String,)> = sqlx::query_as(
+        "SELECT id::text FROM organizations WHERE is_active = true LIMIT 100",
+    )
+    .fetch_all(pool)
+    .await
+    .unwrap_or_default();
+
+    for (org_id,) in &org_ids {
+        crate::services::portfolio::capture_portfolio_snapshot(pool, org_id).await;
+    }
+
+    if !org_ids.is_empty() {
+        tracing::info!(orgs = org_ids.len(), "Scheduler: portfolio snapshots captured");
+    }
+}
+
+/// Scan for maintenance requests with breached SLAs.
+async fn run_maintenance_sla_scan(pool: &sqlx::PgPool) {
+    let breached = sqlx::query(
+        "UPDATE maintenance_requests
+         SET sla_breached = true, updated_at = now()
+         WHERE status NOT IN ('completed', 'closed')
+           AND sla_breached = false
+           AND (
+               (sla_response_deadline IS NOT NULL AND sla_response_deadline < now())
+               OR (sla_resolution_deadline IS NOT NULL AND sla_resolution_deadline < now())
+           )
+         RETURNING id::text, organization_id::text",
+    )
+    .fetch_all(pool)
+    .await
+    .unwrap_or_default();
+
+    if !breached.is_empty() {
+        tracing::info!(count = breached.len(), "Scheduler: maintenance SLA breaches flagged");
     }
 }
 

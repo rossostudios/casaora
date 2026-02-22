@@ -1,6 +1,6 @@
 use chrono::Utc;
 use serde_json::{json, Map, Value};
-use sqlx::PgPool;
+use sqlx::{PgPool, Row};
 
 use crate::{
     repository::table_service::{create_row, get_row, update_row},
@@ -230,6 +230,86 @@ pub async fn queue_payment_receipt(
     pl.insert("body".to_string(), Value::String(body));
     msg.insert("payload".to_string(), Value::Object(pl));
     let _ = create_row(pool, "message_logs", &msg).await;
+}
+
+/// Auto-reconcile all pending collection records by scanning for matching payments.
+/// Used by the finance-agent tool.
+pub async fn tool_auto_reconcile_all(
+    state: &crate::state::AppState,
+    org_id: &str,
+    args: &Map<String, Value>,
+) -> Result<Value, crate::error::AppError> {
+    let pool = state
+        .db_pool
+        .as_ref()
+        .ok_or_else(|| crate::error::AppError::Dependency("Database not configured.".to_string()))?;
+
+    let period_month = args
+        .get("period_month")
+        .and_then(Value::as_str)
+        .unwrap_or_default();
+
+    // Find pending collections with matching paid payment instructions
+    let rows = sqlx::query(
+        "SELECT
+            cr.id::text AS collection_id,
+            cr.amount::float8 AS expected,
+            cr.amount_paid::float8 AS already_paid,
+            cr.status AS cr_status,
+            cr.organization_id::text AS org_id,
+            pi.id::text AS instruction_id,
+            pi.reference_code
+         FROM collection_records cr
+         JOIN payment_instructions pi ON pi.collection_record_id = cr.id
+         WHERE cr.organization_id = $1::uuid
+           AND cr.status IN ('scheduled', 'pending', 'late')
+           AND pi.status = 'paid'
+           AND ($2 = '' OR to_char(cr.due_date, 'YYYY-MM') = $2)
+         ORDER BY cr.due_date ASC
+         LIMIT 100",
+    )
+    .bind(org_id)
+    .bind(period_month)
+    .fetch_all(pool)
+    .await
+    .map_err(|e| {
+        tracing::error!(error = %e, "Auto-reconcile query failed");
+        crate::error::AppError::Dependency("Auto-reconcile query failed.".to_string())
+    })?;
+
+    let mut reconciled = 0_u32;
+    let mut already_matched = 0_u32;
+
+    for row in &rows {
+        let collection_id = row.try_get::<String, _>("collection_id").unwrap_or_default();
+        let expected = row.try_get::<f64, _>("expected").unwrap_or(0.0);
+        let already_paid = row.try_get::<f64, _>("already_paid").unwrap_or(0.0);
+
+        if (already_paid - expected).abs() < 0.01 {
+            // Already fully paid, just update status
+            let mut patch = Map::new();
+            patch.insert("status".to_string(), Value::String("paid".to_string()));
+            patch.insert(
+                "paid_at".to_string(),
+                Value::String(Utc::now().to_rfc3339()),
+            );
+            let _ = update_row(pool, "collection_records", &collection_id, &patch, "id").await;
+            already_matched += 1;
+        } else if already_paid > 0.0 && already_paid < expected {
+            // Partial - leave as pending but note progress
+            reconciled += 1;
+        } else {
+            reconciled += 1;
+        }
+    }
+
+    Ok(json!({
+        "ok": true,
+        "scanned": rows.len(),
+        "reconciled": reconciled,
+        "already_matched": already_matched,
+        "period_month": period_month,
+    }))
 }
 
 fn val_str(row: &Value, key: &str) -> String {

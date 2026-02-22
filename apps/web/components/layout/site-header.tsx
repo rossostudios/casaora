@@ -289,8 +289,7 @@ export function SiteHeader() {
             className="flex items-center gap-2 font-bold text-foreground text-xl tracking-tight transition-opacity hover:opacity-80"
             href="/"
           >
-            <CasaoraLogo size={24} />
-            CASAORA
+            <CasaoraLogo size={28} />
           </Link>
 
           <nav className="hidden items-center gap-1 md:flex">

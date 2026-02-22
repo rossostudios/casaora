@@ -81,10 +81,7 @@ export function PublicHeader({ locale }: { locale: HeaderLocale }) {
             className="inline-flex items-center gap-2.5 transition-opacity hover:opacity-80"
             href="/"
           >
-            <CasaoraLogo className="inline-flex" size={28} />
-            <span className="font-bold text-[var(--marketplace-text)] text-xl tracking-tight">
-              CASAORA
-            </span>
+            <CasaoraLogo className="text-[var(--marketplace-text)]" size={36} />
           </Link>
 
           <nav className="hidden items-center gap-1 lg:flex">

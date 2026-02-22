@@ -39,30 +39,34 @@ export default function TabLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: "Overview",
+          title: "Dashboard",
           tabBarIcon: ({ color }) => <TabBarIcon name="home" color={color} />,
         }}
       />
       <Tabs.Screen
-        name="reservations"
+        name="calendar"
         options={{
-          title: "Reservations",
+          title: "Calendar",
           headerShown: false,
           tabBarIcon: ({ color }) => <TabBarIcon name="calendar" color={color} />,
         }}
       />
       <Tabs.Screen
+        name="reservations"
+        options={{
+          href: null,
+        }}
+      />
+      <Tabs.Screen
         name="tasks"
         options={{
-          title: "Tasks",
-          headerShown: false,
-          tabBarIcon: ({ color }) => <TabBarIcon name="list-ul" color={color} />,
+          href: null,
         }}
       />
       <Tabs.Screen
         name="messages"
         options={{
-          title: "Messages",
+          title: "Inbox",
           headerShown: false,
           tabBarIcon: ({ color }) => <TabBarIcon name="comments" color={color} />,
         }}
@@ -70,17 +74,13 @@ export default function TabLayout() {
       <Tabs.Screen
         name="notifications"
         options={{
-          title: "Alerts",
-          headerShown: false,
-          tabBarIcon: ({ color }) => <TabBarIcon name="bell" color={color} />,
+          href: null,
         }}
       />
       <Tabs.Screen
         name="profile"
         options={{
-          title: "Profile",
-          headerShown: false,
-          tabBarIcon: ({ color }) => <TabBarIcon name="user" color={color} />,
+          href: null,
         }}
       />
       {/* Hide legacy Setup tab */}
@@ -88,6 +88,14 @@ export default function TabLayout() {
         name="two"
         options={{
           href: null,
+        }}
+      />
+      <Tabs.Screen
+        name="menu"
+        options={{
+          title: "Menu",
+          headerShown: false,
+          tabBarIcon: ({ color }) => <TabBarIcon name="bars" color={color} />,
         }}
       />
     </Tabs>

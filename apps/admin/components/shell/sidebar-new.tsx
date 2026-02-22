@@ -161,7 +161,7 @@ function SidebarContent({
             icon={AiVoiceGeneratorIcon}
             size={14}
           />
-          {isEn ? "Ask Agent" : "Preguntar al agente"}
+          {isEn ? "Ask Casaora AI" : "Pregunta a Casaora AI"}
         </Link>
         <SidebarAccount collapsed={false} locale={locale} orgId={orgId} />
       </div>

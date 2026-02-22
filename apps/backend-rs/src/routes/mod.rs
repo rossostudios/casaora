@@ -35,6 +35,7 @@ pub mod owner_portal;
 pub mod owner_statements;
 pub mod payments;
 pub mod platform;
+pub mod portfolio;
 pub mod pricing;
 pub mod properties;
 pub mod public_ical;
@@ -47,6 +48,7 @@ pub mod subscriptions;
 pub mod tasks;
 pub mod tenant;
 pub mod vendor_portal;
+pub mod voice_agent;
 pub mod workflows;
 
 async fn public_fx_rate(State(state): State<AppState>) -> Json<Value> {
@@ -101,5 +103,7 @@ pub fn v1_router() -> Router<AppState> {
         .merge(approvals::router())
         .merge(vendor_portal::router())
         .merge(reviews::router())
+        .merge(portfolio::router())
+        .merge(voice_agent::router())
         .merge(demo::router())
 }

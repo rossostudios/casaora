@@ -31,10 +31,7 @@ export function SiteFooter() {
         <div className="grid gap-12 sm:grid-cols-2 lg:grid-cols-4">
           {/* Brand */}
           <div className="space-y-4">
-            <div className="flex items-center gap-2.5">
-              <CasaoraLogo size={28} />
-              <span className="font-bold text-lg tracking-tight">CASAORA</span>
-            </div>
+            <CasaoraLogo size={36} />
             <p className="font-serif text-muted-foreground text-sm italic">
               The operating system for property management.
             </p>

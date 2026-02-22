@@ -1,4 +1,4 @@
-import Image from "next/image";
+import { cn } from "@/lib/utils";
 
 export function CasaoraLogo({
   className,
@@ -7,22 +7,18 @@ export function CasaoraLogo({
   className?: string;
   size?: number;
 }) {
+  const fontSize = Math.round(size * 0.56);
+
   return (
-    <span className={className}>
-      <Image
-        alt="Casaora"
-        className="block dark:hidden"
-        height={size}
-        src="/casaora-light.svg"
-        width={size}
-      />
-      <Image
-        alt="Casaora"
-        className="hidden dark:block"
-        height={size}
-        src="/casaora-dark.svg"
-        width={size}
-      />
+    <span
+      aria-label="Casaora"
+      className={cn(
+        "inline-flex select-none items-center font-black tracking-tighter",
+        className
+      )}
+      style={{ fontSize: `${fontSize}px`, lineHeight: 1 }}
+    >
+      casaora
     </span>
   );
 }

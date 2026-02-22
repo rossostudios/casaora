@@ -973,3 +973,87 @@ export function fetchAgentInbox(
 }> {
   return fetchJson("/agent/inbox", { org_id: orgId, limit });
 }
+
+// ── Portfolio API ──
+
+export type PortfolioKpis = {
+  total_units: number;
+  occupied_units: number;
+  occupancy: number;
+  monthly_revenue: number;
+  monthly_expenses: number;
+  noi: number;
+  revpar: number;
+};
+
+export type PortfolioPropertyComparison = {
+  property_id: string;
+  property_name: string;
+  total_units: number;
+  occupied_units: number;
+  occupancy: number;
+  monthly_revenue: number;
+};
+
+export type PortfolioSnapshot = {
+  date: string;
+  total_units: number;
+  occupied_units: number;
+  revenue: string;
+  expenses: string;
+  noi: string;
+  occupancy: number;
+  revpar: string;
+};
+
+export type ScenarioProjection = {
+  month: number;
+  revenue: number;
+  expenses: number;
+  noi: number;
+  cumulative_noi: number;
+};
+
+export type ScenarioSummary = {
+  total_noi: number;
+  annualized_noi: number;
+  roi_pct: number;
+  cap_rate_pct: number;
+  break_even_month: number | null;
+  projection_months: number;
+};
+
+export function fetchPortfolioKpis(orgId: string): Promise<PortfolioKpis> {
+  return fetchJson("/portfolio/kpis", { org_id: orgId });
+}
+
+export function fetchPortfolioComparison(
+  orgId: string
+): Promise<{ properties: PortfolioPropertyComparison[] }> {
+  return fetchJson("/portfolio/comparison", { org_id: orgId });
+}
+
+export function fetchPortfolioSnapshots(
+  orgId: string,
+  limit = 30
+): Promise<{ snapshots: PortfolioSnapshot[] }> {
+  return fetchJson("/portfolio/snapshots", { org_id: orgId, limit });
+}
+
+export function simulateScenario(payload: {
+  org_id: string;
+  base_revenue: number;
+  base_expenses: number;
+  revenue_growth_pct?: number;
+  expense_growth_pct?: number;
+  projection_months?: number;
+  initial_investment?: number;
+}): Promise<{
+  projections: ScenarioProjection[];
+  summary: ScenarioSummary;
+}> {
+  return postJson("/portfolio/simulate", payload) as Promise<{
+    projections: ScenarioProjection[];
+    summary: ScenarioSummary;
+  }>;
+}

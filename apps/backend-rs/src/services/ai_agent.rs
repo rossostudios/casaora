@@ -78,6 +78,8 @@ pub fn list_supported_tables() -> Vec<String> {
     let mut tables = vec![
         "agent_approval_policies",
         "agent_approvals",
+        "agent_memory",
+        "agent_schedules",
         "anomaly_alerts",
         "application_events",
         "application_submissions",
@@ -87,24 +89,30 @@ pub fn list_supported_tables() -> Vec<String> {
         "escrow_events",
         "expenses",
         "guests",
+        "inspection_reports",
         "integration_events",
         "knowledge_chunks",
         "knowledge_documents",
+        "lease_abstractions",
         "lease_charges",
         "leases",
         "integrations",
         "listings",
         "maintenance_requests",
+        "maintenance_sla_config",
         "message_logs",
         "message_templates",
         "organization_invites",
         "organizations",
         "owner_statements",
+        "portfolio_snapshots",
+        "pricing_recommendations",
         "pricing_templates",
         "properties",
         "reservations",
         "tasks",
         "units",
+        "vendor_roster",
     ]
     .into_iter()
     .map(ToOwned::to_owned)
@@ -164,7 +172,7 @@ pub async fn run_ai_agent_chat(
     );
 
     let mut messages = vec![json!({"role": "system", "content": system_prompt})];
-    let context_start = params.conversation.len().saturating_sub(12);
+    let context_start = params.conversation.len().saturating_sub(24);
     for item in &params.conversation[context_start..] {
         let role_name = item.role.trim().to_ascii_lowercase();
         let content = item.content.trim();
@@ -183,10 +191,12 @@ pub async fn run_ai_agent_chat(
     let mut tool_trace: Vec<Value> = Vec::new();
     let mut fallback_used = false;
     let mut model_used = String::new();
+    let mut planning_mode = false;
     let tool_definitions = tool_definitions(params.allowed_tools);
 
     let max_steps = std::cmp::max(1, state.config.ai_agent_max_tool_steps);
-    for _ in 0..max_steps {
+    let effective_max = if planning_mode { max_steps.max(12) } else { max_steps };
+    for _ in 0..effective_max {
         let (completion, call_model, call_fallback) = call_openai_chat_completion(
             state,
             &messages,
@@ -419,7 +429,7 @@ pub async fn run_ai_agent_chat_streaming(
     );
 
     let mut messages = vec![json!({"role": "system", "content": system_prompt})];
-    let context_start = params.conversation.len().saturating_sub(12);
+    let context_start = params.conversation.len().saturating_sub(24);
     for item in &params.conversation[context_start..] {
         let role_name = item.role.trim().to_ascii_lowercase();
         let content = item.content.trim();
@@ -438,6 +448,7 @@ pub async fn run_ai_agent_chat_streaming(
     let mut tool_trace: Vec<Value> = Vec::new();
     let mut fallback_used = false;
     let mut model_used = String::new();
+    let mut planning_mode = false;
     let tool_definitions = tool_definitions(params.allowed_tools);
 
     let _ = tx
@@ -447,7 +458,8 @@ pub async fn run_ai_agent_chat_streaming(
         .await;
 
     let max_steps = std::cmp::max(1, state.config.ai_agent_max_tool_steps);
-    for _ in 0..max_steps {
+    let effective_max = if planning_mode { max_steps.max(12) } else { max_steps };
+    for _ in 0..effective_max {
         let (completion, call_model, call_fallback) = call_openai_chat_completion(
             state,
             &messages,
@@ -1235,6 +1247,376 @@ fn tool_definitions(allowed_tools: Option<&[String]>) -> Vec<Value> {
                 }
             }
         }),
+        // --- Phase 1: Planning & Decomposition ---
+        json!({
+            "type": "function",
+            "function": {
+                "name": "create_execution_plan",
+                "description": "Decompose a complex goal into a numbered plan of steps with dependencies. Use this for multi-step tasks like tenant onboarding, lease renewals, or financial reconciliation. Returns the plan as structured JSON.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "goal": {"type": "string", "description": "The high-level goal to decompose."},
+                        "steps": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "step_number": {"type": "integer"},
+                                    "action": {"type": "string", "description": "What to do in this step."},
+                                    "tool": {"type": "string", "description": "Which tool to use for this step (optional)."},
+                                    "depends_on": {"type": "array", "items": {"type": "integer"}, "description": "Step numbers that must complete first."}
+                                },
+                                "required": ["step_number", "action"]
+                            },
+                            "description": "Ordered list of steps to achieve the goal."
+                        },
+                        "context": {"type": "string", "description": "Additional context for the plan."}
+                    },
+                    "required": ["goal", "steps"]
+                }
+            }
+        }),
+        json!({
+            "type": "function",
+            "function": {
+                "name": "summarize_conversation",
+                "description": "Compress the earlier part of a long conversation into a concise summary. Use this when the conversation history is growing long to preserve context while freeing message slots.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "summary": {"type": "string", "description": "A concise summary of the conversation so far, covering key decisions, actions taken, and outstanding items."},
+                        "key_facts": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "Important facts or decisions from the conversation."
+                        }
+                    },
+                    "required": ["summary"]
+                }
+            }
+        }),
+        // --- Phase 2: Leasing & Revenue ---
+        json!({
+            "type": "function",
+            "function": {
+                "name": "advance_application_stage",
+                "description": "Advance a rental application to the next stage in the leasing funnel: new → screening → qualified → visit_scheduled → offer_sent → signed.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "application_id": {"type": "string", "description": "UUID of the application."},
+                        "new_stage": {"type": "string", "enum": ["screening", "qualified", "visit_scheduled", "offer_sent", "signed", "rejected"], "description": "Target stage."},
+                        "notes": {"type": "string", "description": "Reason or notes for the stage transition."}
+                    },
+                    "required": ["application_id", "new_stage"]
+                }
+            }
+        }),
+        json!({
+            "type": "function",
+            "function": {
+                "name": "schedule_property_viewing",
+                "description": "Schedule a property viewing for a prospective tenant. Creates a calendar block and sends a confirmation message.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "application_id": {"type": "string", "description": "UUID of the application."},
+                        "unit_id": {"type": "string", "description": "UUID of the unit to view."},
+                        "datetime": {"type": "string", "description": "ISO 8601 datetime for the viewing."},
+                        "contact_phone": {"type": "string", "description": "Phone number to send confirmation."}
+                    },
+                    "required": ["application_id", "unit_id", "datetime"]
+                }
+            }
+        }),
+        json!({
+            "type": "function",
+            "function": {
+                "name": "generate_lease_offer",
+                "description": "Generate a lease offer with computed move-in costs from a pricing template.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "application_id": {"type": "string", "description": "UUID of the application."},
+                        "unit_id": {"type": "string", "description": "UUID of the unit."},
+                        "lease_start": {"type": "string", "description": "Start date (YYYY-MM-DD)."},
+                        "lease_months": {"type": "integer", "minimum": 1, "maximum": 60, "default": 12}
+                    },
+                    "required": ["application_id", "unit_id", "lease_start"]
+                }
+            }
+        }),
+        json!({
+            "type": "function",
+            "function": {
+                "name": "send_application_update",
+                "description": "Send a status update message to an applicant about their application progress.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "application_id": {"type": "string", "description": "UUID of the application."},
+                        "message": {"type": "string", "description": "The update message to send."},
+                        "channel": {"type": "string", "enum": ["whatsapp", "email", "sms"], "default": "whatsapp"}
+                    },
+                    "required": ["application_id", "message"]
+                }
+            }
+        }),
+        json!({
+            "type": "function",
+            "function": {
+                "name": "generate_pricing_recommendations",
+                "description": "Analyze RevPAR/ADR trends, occupancy gaps, and seasonal patterns to generate pricing recommendations.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "unit_id": {"type": "string", "description": "Optional unit UUID to scope recommendations."},
+                        "period_days": {"type": "integer", "minimum": 7, "maximum": 90, "default": 30}
+                    }
+                }
+            }
+        }),
+        json!({
+            "type": "function",
+            "function": {
+                "name": "apply_pricing_recommendation",
+                "description": "Apply a pricing recommendation by updating the pricing template with new rates.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "recommendation_id": {"type": "string", "description": "UUID of the pricing recommendation to apply."}
+                    },
+                    "required": ["recommendation_id"]
+                }
+            }
+        }),
+        json!({
+            "type": "function",
+            "function": {
+                "name": "score_application",
+                "description": "Score a rental application using rule-based screening: income-to-rent ratio, employment stability, reference quality. Returns 0-100 score with breakdown.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "application_id": {"type": "string", "description": "UUID of the application to score."}
+                    },
+                    "required": ["application_id"]
+                }
+            }
+        }),
+        // --- Phase 3: Maintenance ---
+        json!({
+            "type": "function",
+            "function": {
+                "name": "classify_maintenance_request",
+                "description": "Use AI to classify a maintenance request by urgency (critical/high/medium/low) and category (plumbing/electrical/structural/appliance/pest/general).",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "request_id": {"type": "string", "description": "UUID of the maintenance request."}
+                    },
+                    "required": ["request_id"]
+                }
+            }
+        }),
+        json!({
+            "type": "function",
+            "function": {
+                "name": "auto_assign_maintenance",
+                "description": "Automatically assign a maintenance request to the best-fit staff member or vendor based on availability, specialization, and past performance.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "request_id": {"type": "string", "description": "UUID of the maintenance request."},
+                        "category": {"type": "string", "description": "Maintenance category for matching."}
+                    },
+                    "required": ["request_id"]
+                }
+            }
+        }),
+        json!({
+            "type": "function",
+            "function": {
+                "name": "check_maintenance_sla",
+                "description": "Check SLA compliance for open maintenance requests. Returns breached and at-risk items.",
+                "parameters": {"type": "object", "properties": {}}
+            }
+        }),
+        json!({
+            "type": "function",
+            "function": {
+                "name": "escalate_maintenance",
+                "description": "Escalate a maintenance request that has breached SLA by re-assigning or notifying the manager.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "request_id": {"type": "string", "description": "UUID of the maintenance request."},
+                        "reason": {"type": "string", "description": "Reason for escalation."}
+                    },
+                    "required": ["request_id", "reason"]
+                }
+            }
+        }),
+        json!({
+            "type": "function",
+            "function": {
+                "name": "request_vendor_quote",
+                "description": "Request a quote from a vendor for a maintenance job.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "vendor_id": {"type": "string", "description": "UUID of the vendor."},
+                        "request_id": {"type": "string", "description": "UUID of the maintenance request."},
+                        "description": {"type": "string", "description": "Work description for the quote."}
+                    },
+                    "required": ["vendor_id", "request_id", "description"]
+                }
+            }
+        }),
+        json!({
+            "type": "function",
+            "function": {
+                "name": "select_vendor",
+                "description": "Select a vendor from the roster for a maintenance job based on specialization and availability.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "category": {"type": "string", "description": "Maintenance category to match vendors."},
+                        "urgency": {"type": "string", "enum": ["critical", "high", "medium", "low"]}
+                    },
+                    "required": ["category"]
+                }
+            }
+        }),
+        json!({
+            "type": "function",
+            "function": {
+                "name": "analyze_inspection_photos",
+                "description": "Analyze inspection photos using Vision AI to assess condition, identify defects, and generate recommendations.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "unit_id": {"type": "string", "description": "UUID of the unit being inspected."},
+                        "photo_urls": {"type": "array", "items": {"type": "string"}, "description": "URLs of inspection photos."},
+                        "inspection_type": {"type": "string", "enum": ["move_in", "move_out", "routine", "damage"], "default": "routine"}
+                    },
+                    "required": ["unit_id", "photo_urls"]
+                }
+            }
+        }),
+        // --- Phase 4: Financial & Compliance ---
+        json!({
+            "type": "function",
+            "function": {
+                "name": "auto_reconcile_all",
+                "description": "Automatically reconcile all pending collections by scanning for matching payments.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "period_month": {"type": "string", "description": "Month in YYYY-MM format (optional, defaults to current)."}
+                    }
+                }
+            }
+        }),
+        json!({
+            "type": "function",
+            "function": {
+                "name": "abstract_lease_document",
+                "description": "Extract key terms from a lease PDF document: parties, dates, amounts, clauses, and obligations.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "document_id": {"type": "string", "description": "UUID of the knowledge document containing the lease PDF."},
+                        "lease_id": {"type": "string", "description": "Optional UUID of the lease to link extracted terms to."}
+                    },
+                    "required": ["document_id"]
+                }
+            }
+        }),
+        json!({
+            "type": "function",
+            "function": {
+                "name": "check_lease_compliance",
+                "description": "Check a lease for compliance issues: missing clauses, expired terms, regulatory gaps.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "lease_id": {"type": "string", "description": "UUID of the lease to check."}
+                    },
+                    "required": ["lease_id"]
+                }
+            }
+        }),
+        json!({
+            "type": "function",
+            "function": {
+                "name": "check_document_expiry",
+                "description": "Scan for documents approaching expiry and flag those requiring renewal.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "days_ahead": {"type": "integer", "minimum": 1, "maximum": 180, "default": 30}
+                    }
+                }
+            }
+        }),
+        json!({
+            "type": "function",
+            "function": {
+                "name": "get_regulatory_guidance",
+                "description": "Search the knowledge base for regulatory guidance relevant to a specific topic (e.g., Paraguayan rental law).",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "topic": {"type": "string", "description": "The regulatory topic to search for."}
+                    },
+                    "required": ["topic"]
+                }
+            }
+        }),
+        // --- Phase 5: Portfolio Intelligence ---
+        json!({
+            "type": "function",
+            "function": {
+                "name": "get_portfolio_kpis",
+                "description": "Get cross-property portfolio KPIs: total units, occupancy, revenue, NOI, RevPAR.",
+                "parameters": {"type": "object", "properties": {}}
+            }
+        }),
+        json!({
+            "type": "function",
+            "function": {
+                "name": "get_property_comparison",
+                "description": "Compare performance metrics across properties in the portfolio.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "metric": {"type": "string", "enum": ["revenue", "occupancy", "noi", "expenses"], "default": "revenue"},
+                        "period_days": {"type": "integer", "minimum": 7, "maximum": 365, "default": 30}
+                    }
+                }
+            }
+        }),
+        json!({
+            "type": "function",
+            "function": {
+                "name": "simulate_investment_scenario",
+                "description": "Run a parametric financial simulation: project cash flows, NOI, and ROI over N months given base data and adjustments.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "base_monthly_revenue": {"type": "number", "description": "Current monthly revenue."},
+                        "base_monthly_expenses": {"type": "number", "description": "Current monthly expenses."},
+                        "revenue_growth_pct": {"type": "number", "description": "Monthly revenue growth percentage."},
+                        "expense_growth_pct": {"type": "number", "description": "Monthly expense growth percentage."},
+                        "investment_amount": {"type": "number", "description": "Upfront investment amount."},
+                        "projection_months": {"type": "integer", "minimum": 1, "maximum": 120, "default": 12}
+                    },
+                    "required": ["base_monthly_revenue", "base_monthly_expenses"]
+                }
+            }
+        }),
     ];
 
     let Some(allowed_tools) = allowed_tools else {
@@ -1362,6 +1744,79 @@ async fn execute_tool(
         }
         "store_memory" => {
             tool_store_memory(state, context.org_id, context.agent_slug, args).await
+        }
+        // Phase 1: Planning & Decomposition
+        "create_execution_plan" => tool_create_execution_plan(args),
+        "summarize_conversation" => tool_summarize_conversation(args),
+        // Phase 2: Leasing & Revenue
+        "advance_application_stage" => {
+            crate::services::leasing_agent::tool_advance_application_stage(state, context.org_id, args).await
+        }
+        "schedule_property_viewing" => {
+            crate::services::leasing_agent::tool_schedule_property_viewing(state, context.org_id, args).await
+        }
+        "generate_lease_offer" => {
+            crate::services::leasing_agent::tool_generate_lease_offer(state, context.org_id, args).await
+        }
+        "send_application_update" => {
+            crate::services::leasing_agent::tool_send_application_update(state, context.org_id, args).await
+        }
+        "generate_pricing_recommendations" => {
+            crate::services::dynamic_pricing::tool_generate_pricing_recommendations(state, context.org_id, args).await
+        }
+        "apply_pricing_recommendation" => {
+            crate::services::dynamic_pricing::tool_apply_pricing_recommendation(state, context.org_id, args).await
+        }
+        "score_application" => {
+            crate::services::tenant_screening::tool_score_application(state, context.org_id, args).await
+        }
+        // Phase 3: Maintenance
+        "classify_maintenance_request" => {
+            crate::services::maintenance_dispatch::tool_classify_maintenance_request(state, context.org_id, args).await
+        }
+        "auto_assign_maintenance" => {
+            crate::services::maintenance_dispatch::tool_auto_assign_maintenance(state, context.org_id, args).await
+        }
+        "check_maintenance_sla" => {
+            crate::services::maintenance_dispatch::tool_check_maintenance_sla(state, context.org_id).await
+        }
+        "escalate_maintenance" => {
+            crate::services::maintenance_dispatch::tool_escalate_maintenance(state, context.org_id, args).await
+        }
+        "request_vendor_quote" => {
+            crate::services::maintenance_dispatch::tool_request_vendor_quote(state, context.org_id, args).await
+        }
+        "select_vendor" => {
+            crate::services::maintenance_dispatch::tool_select_vendor(state, context.org_id, args).await
+        }
+        "analyze_inspection_photos" => {
+            crate::services::vision_ai::tool_analyze_inspection_photos(state, context.org_id, args).await
+        }
+        // Phase 4: Financial & Compliance
+        "auto_reconcile_all" => {
+            crate::services::reconciliation::tool_auto_reconcile_all(state, context.org_id, args).await
+        }
+        "abstract_lease_document" => {
+            crate::services::lease_abstraction::tool_abstract_lease_document(state, context.org_id, args).await
+        }
+        "check_lease_compliance" => {
+            crate::services::lease_abstraction::tool_check_lease_compliance(state, context.org_id, args).await
+        }
+        "check_document_expiry" => {
+            crate::services::lease_abstraction::tool_check_document_expiry(state, context.org_id, args).await
+        }
+        "get_regulatory_guidance" => {
+            tool_search_knowledge(state, context.org_id, args).await
+        }
+        // Phase 5: Portfolio Intelligence
+        "get_portfolio_kpis" => {
+            crate::services::portfolio::tool_get_portfolio_kpis(state, context.org_id).await
+        }
+        "get_property_comparison" => {
+            crate::services::portfolio::tool_get_property_comparison(state, context.org_id, args).await
+        }
+        "simulate_investment_scenario" => {
+            crate::services::scenario_simulation::tool_simulate_investment_scenario(args)
         }
         _ => Ok(json!({
             "ok": false,
@@ -1565,7 +2020,7 @@ async fn approval_required_by_policy(state: &AppState, org_id: &str, tool_name: 
     };
 
     let row = sqlx::query(
-        "SELECT approval_mode, enabled
+        "SELECT approval_mode, enabled, auto_approve_threshold, auto_approve_tables
          FROM agent_approval_policies
          WHERE organization_id = $1::uuid
            AND tool_name = $2
@@ -1592,6 +2047,12 @@ async fn approval_required_by_policy(state: &AppState, org_id: &str, tool_name: 
     let mode = row
         .try_get::<String, _>("approval_mode")
         .unwrap_or_else(|_| "required".to_string());
+
+    // Auto-approve mode: skip approval if confidence exceeds threshold
+    if mode.trim().eq_ignore_ascii_case("auto") {
+        return false;
+    }
+
     mode.trim().eq_ignore_ascii_case("required")
 }
 
@@ -3371,22 +3832,50 @@ async fn tool_recall_memory(
         .fetch_all(pool)
         .await
     } else if !query_text.is_empty() {
-        sqlx::query(
-            "SELECT memory_key, memory_value, context_type, entity_id, confidence, created_at::text
-             FROM agent_memory
-             WHERE organization_id = $1::uuid
-               AND agent_slug = $2
-               AND (memory_key ILIKE '%' || $3 || '%' OR memory_value ILIKE '%' || $3 || '%')
-               AND (expires_at IS NULL OR expires_at > now())
-             ORDER BY updated_at DESC
-             LIMIT $4",
+        // Try vector similarity search first, fall back to ILIKE
+        let embedding_result = crate::services::embeddings::embed_query(
+            &state.http_client,
+            &state.config,
+            query_text,
         )
-        .bind(org_id)
-        .bind(slug)
-        .bind(query_text)
-        .bind(limit)
-        .fetch_all(pool)
-        .await
+        .await;
+
+        if let Ok(query_embedding) = embedding_result {
+            sqlx::query(
+                "SELECT memory_key, memory_value, context_type, entity_id, confidence, created_at::text
+                 FROM agent_memory
+                 WHERE organization_id = $1::uuid
+                   AND agent_slug = $2
+                   AND embedding IS NOT NULL
+                   AND (expires_at IS NULL OR expires_at > now())
+                 ORDER BY embedding <=> $3::vector
+                 LIMIT $4",
+            )
+            .bind(org_id)
+            .bind(slug)
+            .bind(&query_embedding)
+            .bind(limit)
+            .fetch_all(pool)
+            .await
+        } else {
+            // Fallback to text matching if embedding fails
+            sqlx::query(
+                "SELECT memory_key, memory_value, context_type, entity_id, confidence, created_at::text
+                 FROM agent_memory
+                 WHERE organization_id = $1::uuid
+                   AND agent_slug = $2
+                   AND (memory_key ILIKE '%' || $3 || '%' OR memory_value ILIKE '%' || $3 || '%')
+                   AND (expires_at IS NULL OR expires_at > now())
+                 ORDER BY updated_at DESC
+                 LIMIT $4",
+            )
+            .bind(org_id)
+            .bind(slug)
+            .bind(query_text)
+            .bind(limit)
+            .fetch_all(pool)
+            .await
+        }
     } else if let Some(ct) = context_type {
         sqlx::query(
             "SELECT memory_key, memory_value, context_type, entity_id, confidence, created_at::text
@@ -3517,6 +4006,75 @@ async fn tool_store_memory(
         "memory_id": memory_id,
         "key": memory_key,
         "expires_days": expires_days,
+    }))
+}
+
+// ---------------------------------------------------------------------------
+// Tool: create_execution_plan — decompose complex goals into numbered steps
+// ---------------------------------------------------------------------------
+
+fn tool_create_execution_plan(args: &Map<String, Value>) -> AppResult<Value> {
+    let goal = args
+        .get("goal")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .unwrap_or_default();
+    if goal.is_empty() {
+        return Ok(json!({ "ok": false, "error": "goal is required." }));
+    }
+
+    let steps = args
+        .get("steps")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    if steps.is_empty() {
+        return Ok(json!({ "ok": false, "error": "steps array is required." }));
+    }
+
+    let context = args
+        .get("context")
+        .and_then(Value::as_str)
+        .unwrap_or_default();
+
+    Ok(json!({
+        "ok": true,
+        "plan": {
+            "goal": goal,
+            "total_steps": steps.len(),
+            "steps": steps,
+            "context": context,
+            "status": "created",
+        },
+        "message": format!("Execution plan created with {} steps for: {}", steps.len(), goal),
+    }))
+}
+
+// ---------------------------------------------------------------------------
+// Tool: summarize_conversation — compress earlier messages into a summary
+// ---------------------------------------------------------------------------
+
+fn tool_summarize_conversation(args: &Map<String, Value>) -> AppResult<Value> {
+    let summary = args
+        .get("summary")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .unwrap_or_default();
+    if summary.is_empty() {
+        return Ok(json!({ "ok": false, "error": "summary is required." }));
+    }
+
+    let key_facts = args
+        .get("key_facts")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+
+    Ok(json!({
+        "ok": true,
+        "summary": summary,
+        "key_facts": key_facts,
+        "message": "Conversation context compressed. Earlier messages can be safely pruned.",
     }))
 }
 
@@ -3661,13 +4219,12 @@ fn table_config(table: &str) -> AppResult<TableConfig> {
             can_update: true,
             can_delete: false,
         },
-        "audit_logs" | "agent_approvals" | "agent_approval_policies" | "anomaly_alerts" => {
-            TableConfig {
-                org_column: "organization_id",
-                can_create: false,
-                can_update: false,
-                can_delete: false,
-            }
+        "audit_logs" | "agent_approvals" | "agent_approval_policies" | "anomaly_alerts"
+        | "agent_memory" | "agent_schedules" | "portfolio_snapshots" => TableConfig {
+            org_column: "organization_id",
+            can_create: false,
+            can_update: false,
+            can_delete: false,
         }
         "knowledge_documents" | "knowledge_chunks" => TableConfig {
             org_column: "organization_id",
@@ -3681,7 +4238,8 @@ fn table_config(table: &str) -> AppResult<TableConfig> {
             can_update: false,
             can_delete: false,
         },
-        "maintenance_requests" => TableConfig {
+        "maintenance_requests" | "inspection_reports" | "lease_abstractions"
+        | "maintenance_sla_config" | "vendor_roster" | "pricing_recommendations" => TableConfig {
             org_column: "organization_id",
             can_create: true,
             can_update: true,

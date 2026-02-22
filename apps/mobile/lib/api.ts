@@ -24,6 +24,9 @@ export type TaskItem = {
   photo_urls?: string[] | null;
 };
 
+export type Property = components["schemas"]["Property"];
+export type PropertyListResponse = paths["/properties"]["get"]["responses"]["200"]["content"]["application/json"];
+
 export async function fetchHealth(): Promise<HealthResponse> {
   return fetchJson<HealthResponse>("/health", {
     baseUrl: getApiBaseUrl(),
@@ -374,6 +377,28 @@ export async function markNotificationRead(params: {
       },
     }
   );
+}
+
+// ── Properties ──
+
+export async function listProperties(params: {
+  orgId: string;
+  limit?: number;
+}): Promise<Property[]> {
+  const payload = await fetchJson<PropertyListResponse>("/properties", {
+    baseUrl: getApiBaseUrl(),
+    method: "GET",
+    includeJsonContentType: false,
+    query: {
+      org_id: params.orgId,
+      limit: params.limit ?? 100,
+    },
+    headers: {
+      Authorization: `Bearer ${await getAccessToken()}`,
+    },
+  });
+
+  return Array.isArray(payload.data) ? payload.data : [];
 }
 
 // ── Helpers ──

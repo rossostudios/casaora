@@ -1,132 +1,161 @@
-import { useEffect, useState } from "react";
-import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useCallback, useEffect, useState } from "react";
+import { ActivityIndicator, RefreshControl, ScrollView, StyleSheet, Text, View, Pressable } from "react-native";
+import { Link } from "expo-router";
+import FontAwesome from "@expo/vector-icons/FontAwesome";
 
 import { useAuth } from "@/lib/auth";
-import { fetchHealth, fetchMe, type HealthResponse, type MeResponse } from "@/lib/api";
-import { getApiBaseUrl } from "@/lib/config";
+import {
+  listMessageThreads,
+  listReservations,
+  listTasks,
+  resolveActiveOrgId,
+  type Reservation,
+  type Task,
+  type MessageThread,
+} from "@/lib/api";
 
-type LoadState = {
-  loading: boolean;
-  error: string | null;
+type DashboardStats = {
+  arrivals: number;
+  departures: number;
+  pendingTasks: number;
+  unreadMessages: number;
 };
 
-export default function OverviewScreen() {
+export default function DashboardScreen() {
   const { session, configError } = useAuth();
-  const [health, setHealth] = useState<HealthResponse | null>(null);
-  const [me, setMe] = useState<MeResponse | null>(null);
-  const [healthState, setHealthState] = useState<LoadState>({
-    loading: true,
-    error: null,
-  });
-  const [meState, setMeState] = useState<LoadState>({
-    loading: true,
-    error: null,
-  });
+  const [orgId, setOrgId] = useState<string | null>(null);
+  const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    let mounted = true;
-
-    const run = async () => {
-      setHealthState({ loading: true, error: null });
-      try {
-        const response = await fetchHealth();
-        if (mounted) {
-          setHealth(response);
-        }
-      } catch (err) {
-        if (mounted) {
-          setHealthState({
-            loading: false,
-            error: err instanceof Error ? err.message : "Failed to load backend health",
-          });
-        }
-      } finally {
-        if (mounted) {
-          setHealthState((current) => ({ ...current, loading: false }));
-        }
-      }
-    };
-
-    run();
-    return () => {
-      mounted = false;
-    };
-  }, []);
-
-  useEffect(() => {
-    let mounted = true;
-
+    let cancelled = false;
     if (!session) {
-      setMe(null);
-      setMeState({ loading: false, error: "Sign in to load /me." });
+      setLoading(false);
       return;
     }
 
-    const run = async () => {
-      setMeState({ loading: true, error: null });
-      try {
-        const response = await fetchMe();
-        if (mounted) {
-          setMe(response);
-        }
-      } catch (err) {
-        if (mounted) {
-          setMeState({
-            loading: false,
-            error: err instanceof Error ? err.message : "Failed to load user context",
-          });
-        }
-      } finally {
-        if (mounted) {
-          setMeState((current) => ({ ...current, loading: false }));
-        }
-      }
-    };
+    resolveActiveOrgId()
+      .then((id) => {
+        if (!cancelled) setOrgId(id);
+      })
+      .catch((err) => {
+        if (!cancelled) setError("Could not resolve organization.");
+      });
+    return () => { cancelled = true; };
+  }, [session]);
 
-    run();
-    return () => {
-      mounted = false;
-    };
-  }, [session?.access_token]);
+  const loadData = useCallback(async (isRefresh = false) => {
+    if (!orgId) return;
+    if (isRefresh) setRefreshing(true);
+    else setLoading(true);
+    setError(null);
+
+    try {
+      const today = new Date().toISOString().slice(0, 10);
+
+      const [res, tasks, threads] = await Promise.all([
+        listReservations({ orgId, from: today, to: today, limit: 100 }),
+        listTasks({ orgId, status: "todo", limit: 50 }),
+        listMessageThreads({ orgId, limit: 50 }),
+      ]);
+
+      const arrivals = res.filter((r) => r.check_in?.slice(0, 10) === today).length;
+      const departures = res.filter((r) => r.check_out?.slice(0, 10) === today).length;
+      const unreadMessages = threads.filter((t) => (t.unread_count ?? 0) > 0).length;
+
+      setStats({
+        arrivals,
+        departures,
+        pendingTasks: tasks.length,
+        unreadMessages,
+      });
+    } catch (err) {
+      setError("Failed to load dashboard data.");
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [orgId]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
+
+  if (!session) {
+    return (
+      <View style={styles.center}>
+        <Text style={styles.error}>Sign in to view dashboard.</Text>
+      </View>
+    );
+  }
 
   return (
-    <ScrollView contentInsetAdjustmentBehavior="automatic" contentContainerStyle={styles.container}>
-      <Text style={styles.title}>Casaora Mobile</Text>
-      <Text style={styles.subtitle}>Backend: {getApiBaseUrl()}</Text>
-
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>Backend Health</Text>
-        {healthState.loading ? <ActivityIndicator size="small" /> : null}
-
-        {!healthState.loading && health ? (
-          <View style={styles.stack}>
-            <Text style={styles.ok}>Status: {health.status}</Text>
-            <Text style={styles.body}>Server time: {health.now}</Text>
-          </View>
-        ) : null}
-
-        {!healthState.loading && healthState.error ? (
-          <Text style={styles.error}>{healthState.error}</Text>
-        ) : null}
+    <ScrollView
+      contentInsetAdjustmentBehavior="automatic"
+      contentContainerStyle={styles.container}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => loadData(true)} />}
+    >
+      <View style={styles.header}>
+        <Text style={styles.title}>Dashboard</Text>
+        <Text style={styles.subtitle}>Welcome back to Casaora.</Text>
       </View>
 
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>Authenticated User</Text>
-        {meState.loading ? <ActivityIndicator size="small" /> : null}
+      {error ? <Text style={styles.error}>{error}</Text> : null}
+      {configError ? <Text style={styles.error}>{configError}</Text> : null}
 
-        {!meState.loading && me ? (
-          <View style={styles.stack}>
-            <Text style={styles.body}>User ID: {String(me.user?.id ?? "-")}</Text>
-            <Text style={styles.body}>Email: {String(me.user?.email ?? "-")}</Text>
-            <Text style={styles.body}>
-              Memberships: {Array.isArray(me.memberships) ? me.memberships.length : 0}
-            </Text>
+      {loading && !refreshing && !stats ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="small" />
+        </View>
+      ) : stats ? (
+        <View style={styles.grid}>
+          <View style={styles.row}>
+            <Link href={"/(tabs)/calendar" as any} asChild>
+              <Pressable style={[styles.card, styles.cardArrival]}>
+                <View style={styles.cardHeader}>
+                  <FontAwesome name="sign-in" size={20} color="#1f3136" />
+                </View>
+                <Text style={styles.cardValue}>{stats.arrivals}</Text>
+                <Text style={styles.cardLabel}>Arrivals Today</Text>
+              </Pressable>
+            </Link>
+
+            <Link href={"/(tabs)/calendar" as any} asChild>
+              <Pressable style={[styles.card, styles.cardDeparture]}>
+                <View style={styles.cardHeader}>
+                  <FontAwesome name="sign-out" size={20} color="#1f3136" />
+                </View>
+                <Text style={styles.cardValue}>{stats.departures}</Text>
+                <Text style={styles.cardLabel}>Departures Today</Text>
+              </Pressable>
+            </Link>
           </View>
-        ) : null}
 
-        {!meState.loading && meState.error ? <Text style={styles.error}>{meState.error}</Text> : null}
-        {configError ? <Text style={styles.error}>{configError}</Text> : null}
-      </View>
+          <View style={styles.row}>
+            <Link href="/(tabs)/messages" asChild>
+              <Pressable style={[styles.card, styles.cardMessage]}>
+                <View style={styles.cardHeader}>
+                  <FontAwesome name="comments-o" size={20} color="#1f3136" />
+                </View>
+                <Text style={styles.cardValue}>{stats.unreadMessages}</Text>
+                <Text style={styles.cardLabel}>Unread Chats</Text>
+              </Pressable>
+            </Link>
+
+            <Link href={"/(tabs)/menu" as any} asChild>
+              <Pressable style={[styles.card, styles.cardTask]}>
+                <View style={styles.cardHeader}>
+                  <FontAwesome name="list-ul" size={20} color="#1f3136" />
+                </View>
+                <Text style={styles.cardValue}>{stats.pendingTasks}</Text>
+                <Text style={styles.cardLabel}>Pending Tasks</Text>
+              </Pressable>
+            </Link>
+          </View>
+        </View>
+      ) : null}
     </ScrollView>
   );
 }
@@ -135,48 +164,80 @@ const styles = StyleSheet.create({
   container: {
     flexGrow: 1,
     paddingHorizontal: 20,
-    paddingTop: 24,
+    paddingTop: 60,
     paddingBottom: 40,
-    gap: 16,
+    gap: 24,
     backgroundColor: "#f7f7f5",
   },
+  center: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#f7f7f5",
+  },
+  loadingContainer: {
+    paddingVertical: 40,
+    alignItems: "center",
+  },
+  header: {
+    gap: 4,
+  },
   title: {
-    fontSize: 28,
+    fontSize: 32,
     fontWeight: "700",
     color: "#1e2b2f",
   },
   subtitle: {
-    fontSize: 13,
+    fontSize: 15,
     color: "#5f6e73",
   },
-  card: {
-    borderRadius: 14,
-    padding: 16,
-    backgroundColor: "#ffffff",
-    borderWidth: 1,
-    borderColor: "#e2e6e6",
+  grid: {
     gap: 12,
   },
-  cardTitle: {
-    fontSize: 16,
+  row: {
+    flexDirection: "row",
+    gap: 12,
+  },
+  card: {
+    flex: 1,
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: "#e2e6e6",
+  },
+  cardHeader: {
+    marginBottom: 12,
+  },
+  cardValue: {
+    fontSize: 36,
+    fontWeight: "700",
+    color: "#1f3136",
+    marginBottom: 4,
+  },
+  cardLabel: {
+    fontSize: 13,
     fontWeight: "600",
-    color: "#223238",
+    color: "#4c5f65",
   },
-  stack: {
-    gap: 6,
+  cardArrival: {
+    backgroundColor: "#dbe8f6",
   },
-  ok: {
-    color: "#166534",
-    fontSize: 15,
-    fontWeight: "600",
+  cardDeparture: {
+    backgroundColor: "#fce7c5",
   },
-  body: {
-    color: "#334045",
-    fontSize: 14,
+  cardMessage: {
+    backgroundColor: "#e8f2e2",
+  },
+  cardTask: {
+    backgroundColor: "#f2e2e8",
   },
   error: {
     color: "#b91c1c",
-    fontSize: 13,
-    lineHeight: 18,
+    fontSize: 14,
+    backgroundColor: "#fef2f2",
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#fecaca",
   },
 });
