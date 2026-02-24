@@ -255,7 +255,7 @@ export function ApprovalQueue({ orgId, locale }: ApprovalQueueProps) {
   if (approvals.length === 0) return null;
 
   return (
-    <Card className="border-amber-500/30 bg-amber-500/5">
+    <Card className="border-amber-500/30 bg-amber-500/5" style={{ contain: "content" } as React.CSSProperties}>
       <CardHeader className="space-y-2">
         <div className="flex items-center gap-2">
           <CardTitle className="text-base">

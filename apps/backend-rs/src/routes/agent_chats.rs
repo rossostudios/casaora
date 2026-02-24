@@ -6,6 +6,7 @@ use axum::{
     response::sse::{Event, Sse},
     Json,
 };
+use chrono::Timelike;
 use serde::Deserialize;
 use serde_json::{Map, Value};
 use tokio_stream::wrappers::ReceiverStream;
@@ -120,6 +121,34 @@ pub fn router() -> axum::Router<AppState> {
         .route(
             "/agent/evaluations/summary",
             axum::routing::get(get_evaluations_summary),
+        )
+        .route(
+            "/agent/chats/contextual-prompts",
+            axum::routing::get(get_contextual_prompts),
+        )
+        .route(
+            "/agent/memory",
+            axum::routing::get(list_agent_memory),
+        )
+        .route(
+            "/agent/memory/{memory_id}",
+            axum::routing::delete(delete_agent_memory),
+        )
+        .route(
+            "/agent/pii-intercepts",
+            axum::routing::get(list_pii_intercepts),
+        )
+        .route(
+            "/agent/boundary-rules",
+            axum::routing::get(list_boundary_rules),
+        )
+        .route(
+            "/agent/boundary-rules/{rule_id}",
+            axum::routing::put(update_boundary_rule),
+        )
+        .route(
+            "/agent/security-audit",
+            axum::routing::get(get_security_audit),
         )
 }
 
@@ -790,8 +819,387 @@ async fn post_message_feedback(
 
     Ok(Json(serde_json::json!({
         "ok": true,
+        "registered": true,
+        "memory_updated": reason.is_some(),
         "message_id": path.message_id,
         "feedback_rating": rating,
         "feedback_reason": reason,
+    })))
+}
+
+// ---------------------------------------------------------------------------
+// Contextual Prompts (S13.2)
+// ---------------------------------------------------------------------------
+
+async fn get_contextual_prompts(
+    State(state): State<AppState>,
+    Query(query): Query<AgentOrgQuery>,
+    headers: HeaderMap,
+) -> AppResult<Json<Value>> {
+    let user_id = require_user_id(&state, &headers).await?;
+    assert_org_member(&state, &user_id, &query.org_id).await?;
+
+    let pool = state
+        .db_pool
+        .as_ref()
+        .ok_or_else(|| AppError::Dependency("Database not configured.".into()))?;
+
+    let mut suggestions: Vec<Value> = Vec::new();
+
+    // Check for pending approvals
+    let pending_count: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM agent_approvals WHERE organization_id = $1::uuid AND status = 'pending'",
+    )
+    .bind(&query.org_id)
+    .fetch_one(pool)
+    .await
+    .unwrap_or(0);
+
+    if pending_count > 0 {
+        suggestions.push(serde_json::json!({
+            "text": format!("Review {} pending approval{}", pending_count, if pending_count > 1 { "s" } else { "" }),
+            "category": "approvals"
+        }));
+    }
+
+    // Check for active anomalies
+    let anomaly_count: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM anomaly_alerts WHERE organization_id = $1::uuid AND is_dismissed = false AND detected_at >= now() - interval '24 hours'",
+    )
+    .bind(&query.org_id)
+    .fetch_one(pool)
+    .await
+    .unwrap_or(0);
+
+    if anomaly_count > 0 {
+        suggestions.push(serde_json::json!({
+            "text": format!("Investigate {} active anomal{}", anomaly_count, if anomaly_count > 1 { "ies" } else { "y" }),
+            "category": "anomalies"
+        }));
+    }
+
+    // Check for upcoming check-ins
+    let checkin_count: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM reservations WHERE organization_id = $1::uuid AND check_in_date = CURRENT_DATE AND status IN ('confirmed', 'pending')",
+    )
+    .bind(&query.org_id)
+    .fetch_one(pool)
+    .await
+    .unwrap_or(0);
+
+    if checkin_count > 0 {
+        suggestions.push(serde_json::json!({
+            "text": format!("Prepare for {} check-in{} today", checkin_count, if checkin_count > 1 { "s" } else { "" }),
+            "category": "operations"
+        }));
+    }
+
+    // Check for overdue tasks
+    let overdue_count: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM tasks WHERE organization_id = $1::uuid AND status NOT IN ('done', 'cancelled') AND due_date < CURRENT_DATE",
+    )
+    .bind(&query.org_id)
+    .fetch_one(pool)
+    .await
+    .unwrap_or(0);
+
+    if overdue_count > 0 {
+        suggestions.push(serde_json::json!({
+            "text": format!("Address {} overdue task{}", overdue_count, if overdue_count > 1 { "s" } else { "" }),
+            "category": "tasks"
+        }));
+    }
+
+    // Time-based suggestion
+    let hour = chrono::Utc::now().hour();
+    if hour < 12 {
+        suggestions.push(serde_json::json!({
+            "text": "Give me today's top priorities",
+            "category": "general"
+        }));
+    } else {
+        suggestions.push(serde_json::json!({
+            "text": "Summarize today's activity so far",
+            "category": "general"
+        }));
+    }
+
+    Ok(Json(serde_json::json!({
+        "data": suggestions
+    })))
+}
+
+// ---------------------------------------------------------------------------
+// Approval Policies (S14.2)
+// ---------------------------------------------------------------------------
+
+async fn get_approval_policies(
+    State(state): State<AppState>,
+    Query(query): Query<AgentOrgQuery>,
+    headers: HeaderMap,
+) -> AppResult<Json<Value>> {
+    let user_id = require_user_id(&state, &headers).await?;
+    assert_org_member(&state, &user_id, &query.org_id).await?;
+
+    let pool = state
+        .db_pool
+        .as_ref()
+        .ok_or_else(|| AppError::Dependency("Database not configured.".into()))?;
+
+    let rows: Vec<Value> = sqlx::query(
+        "SELECT row_to_json(t) AS row FROM agent_approval_policies t WHERE organization_id = $1::uuid",
+    )
+    .bind(&query.org_id)
+    .fetch_all(pool)
+    .await
+    .unwrap_or_default()
+    .into_iter()
+    .filter_map(|row| row.try_get::<Value, _>("row").ok())
+    .collect();
+
+    Ok(Json(serde_json::json!({ "data": rows })))
+}
+
+// ---------------------------------------------------------------------------
+// Governance endpoints (S15.4)
+// ---------------------------------------------------------------------------
+
+async fn list_agent_memory(
+    State(state): State<AppState>,
+    Query(query): Query<AgentOrgQuery>,
+    headers: HeaderMap,
+) -> AppResult<Json<Value>> {
+    let user_id = require_user_id(&state, &headers).await?;
+    assert_org_member(&state, &user_id, &query.org_id).await?;
+
+    let pool = state
+        .db_pool
+        .as_ref()
+        .ok_or_else(|| AppError::Dependency("Database not configured.".into()))?;
+
+    let rows: Vec<Value> = sqlx::query(
+        "SELECT id, agent_slug, memory_tier, memory_key AS content, score, created_at
+         FROM agent_memory WHERE organization_id = $1::uuid
+         ORDER BY created_at DESC LIMIT 200",
+    )
+    .bind(&query.org_id)
+    .fetch_all(pool)
+    .await
+    .unwrap_or_default()
+    .into_iter()
+    .filter_map(|row| {
+        Some(serde_json::json!({
+            "id": row.try_get::<String, _>("id").ok()?,
+            "agent_slug": row.try_get::<String, _>("agent_slug").unwrap_or_default(),
+            "memory_tier": row.try_get::<String, _>("memory_tier").unwrap_or_else(|_| "episodic".into()),
+            "content": row.try_get::<String, _>("content").unwrap_or_default(),
+            "score": row.try_get::<f64, _>("score").ok(),
+            "created_at": row.try_get::<String, _>("created_at").unwrap_or_default(),
+        }))
+    })
+    .collect();
+
+    Ok(Json(serde_json::json!({ "data": rows })))
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct MemoryPath {
+    memory_id: String,
+}
+
+async fn delete_agent_memory(
+    State(state): State<AppState>,
+    Path(path): Path<MemoryPath>,
+    Query(query): Query<AgentOrgQuery>,
+    headers: HeaderMap,
+) -> AppResult<Json<Value>> {
+    let user_id = require_user_id(&state, &headers).await?;
+    assert_org_member(&state, &user_id, &query.org_id).await?;
+
+    let pool = state
+        .db_pool
+        .as_ref()
+        .ok_or_else(|| AppError::Dependency("Database not configured.".into()))?;
+
+    sqlx::query("DELETE FROM agent_memory WHERE id = $1::uuid AND organization_id = $2::uuid")
+        .bind(&path.memory_id)
+        .bind(&query.org_id)
+        .execute(pool)
+        .await
+        .map_err(|e| {
+            tracing::error!(error = %e, "Failed to delete agent memory");
+            AppError::Dependency("Failed to delete memory.".to_string())
+        })?;
+
+    Ok(Json(serde_json::json!({ "ok": true, "id": path.memory_id })))
+}
+
+async fn list_pii_intercepts(
+    State(state): State<AppState>,
+    Query(query): Query<AgentOrgQuery>,
+    headers: HeaderMap,
+) -> AppResult<Json<Value>> {
+    let user_id = require_user_id(&state, &headers).await?;
+    assert_org_member(&state, &user_id, &query.org_id).await?;
+
+    let pool = state
+        .db_pool
+        .as_ref()
+        .ok_or_else(|| AppError::Dependency("Database not configured.".into()))?;
+
+    // Return from pii_intercept_log if table exists, otherwise empty
+    let rows: Vec<Value> = sqlx::query(
+        "SELECT id, agent_slug, pii_type, action_taken, detected_at
+         FROM pii_intercept_log WHERE organization_id = $1::uuid
+         ORDER BY detected_at DESC LIMIT 200",
+    )
+    .bind(&query.org_id)
+    .fetch_all(pool)
+    .await
+    .unwrap_or_default()
+    .into_iter()
+    .filter_map(|row| {
+        Some(serde_json::json!({
+            "id": row.try_get::<String, _>("id").ok()?,
+            "agent_slug": row.try_get::<String, _>("agent_slug").unwrap_or_default(),
+            "pii_type": row.try_get::<String, _>("pii_type").unwrap_or_default(),
+            "action_taken": row.try_get::<String, _>("action_taken").unwrap_or_else(|_| "blocked".into()),
+            "detected_at": row.try_get::<String, _>("detected_at").unwrap_or_default(),
+        }))
+    })
+    .collect();
+
+    Ok(Json(serde_json::json!({ "data": rows })))
+}
+
+async fn list_boundary_rules(
+    State(state): State<AppState>,
+    Query(query): Query<AgentOrgQuery>,
+    headers: HeaderMap,
+) -> AppResult<Json<Value>> {
+    let user_id = require_user_id(&state, &headers).await?;
+    assert_org_member(&state, &user_id, &query.org_id).await?;
+
+    let pool = state
+        .db_pool
+        .as_ref()
+        .ok_or_else(|| AppError::Dependency("Database not configured.".into()))?;
+
+    let rows: Vec<Value> = sqlx::query(
+        "SELECT id, category, is_blocked, custom_response
+         FROM agent_boundary_rules WHERE organization_id = $1::uuid
+         ORDER BY category",
+    )
+    .bind(&query.org_id)
+    .fetch_all(pool)
+    .await
+    .unwrap_or_default()
+    .into_iter()
+    .filter_map(|row| {
+        Some(serde_json::json!({
+            "id": row.try_get::<String, _>("id").ok()?,
+            "category": row.try_get::<String, _>("category").unwrap_or_default(),
+            "is_blocked": row.try_get::<bool, _>("is_blocked").unwrap_or(false),
+            "custom_response": row.try_get::<Option<String>, _>("custom_response").ok().flatten(),
+        }))
+    })
+    .collect();
+
+    Ok(Json(serde_json::json!({ "data": rows })))
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct BoundaryRulePath {
+    rule_id: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct UpdateBoundaryRuleInput {
+    is_blocked: bool,
+    custom_response: Option<String>,
+}
+
+async fn update_boundary_rule(
+    State(state): State<AppState>,
+    Path(path): Path<BoundaryRulePath>,
+    Query(query): Query<AgentOrgQuery>,
+    headers: HeaderMap,
+    Json(payload): Json<UpdateBoundaryRuleInput>,
+) -> AppResult<Json<Value>> {
+    let user_id = require_user_id(&state, &headers).await?;
+    assert_org_member(&state, &user_id, &query.org_id).await?;
+
+    let pool = state
+        .db_pool
+        .as_ref()
+        .ok_or_else(|| AppError::Dependency("Database not configured.".into()))?;
+
+    sqlx::query(
+        "UPDATE agent_boundary_rules SET is_blocked = $1, custom_response = $2, updated_at = now()
+         WHERE id = $3::uuid AND organization_id = $4::uuid",
+    )
+    .bind(payload.is_blocked)
+    .bind(&payload.custom_response)
+    .bind(&path.rule_id)
+    .bind(&query.org_id)
+    .execute(pool)
+    .await
+    .map_err(|e| {
+        tracing::error!(error = %e, "Failed to update boundary rule");
+        AppError::Dependency("Failed to update boundary rule.".to_string())
+    })?;
+
+    Ok(Json(serde_json::json!({
+        "ok": true,
+        "id": path.rule_id,
+        "is_blocked": payload.is_blocked,
+    })))
+}
+
+async fn get_security_audit(
+    State(state): State<AppState>,
+    Query(query): Query<AgentOrgQuery>,
+    headers: HeaderMap,
+) -> AppResult<Json<Value>> {
+    let user_id = require_user_id(&state, &headers).await?;
+    assert_org_member(&state, &user_id, &query.org_id).await?;
+
+    let pool = state
+        .db_pool
+        .as_ref()
+        .ok_or_else(|| AppError::Dependency("Database not configured.".into()))?;
+
+    // Aggregate counts from agent_traces and related tables for last 30 days
+    let total_interactions: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM agent_traces WHERE organization_id = $1::uuid AND created_at >= now() - interval '30 days'",
+    )
+    .bind(&query.org_id)
+    .fetch_one(pool)
+    .await
+    .unwrap_or(0);
+
+    let pii_intercepts: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM pii_intercept_log WHERE organization_id = $1::uuid AND detected_at >= now() - interval '30 days'",
+    )
+    .bind(&query.org_id)
+    .fetch_one(pool)
+    .await
+    .unwrap_or(0);
+
+    let approval_overrides: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM agent_approvals WHERE organization_id = $1::uuid AND status = 'rejected' AND created_at >= now() - interval '30 days'",
+    )
+    .bind(&query.org_id)
+    .fetch_one(pool)
+    .await
+    .unwrap_or(0);
+
+    Ok(Json(serde_json::json!({
+        "total_interactions": total_interactions,
+        "pii_intercepts": pii_intercepts,
+        "boundary_violations": 0,
+        "approval_overrides": approval_overrides,
+        "avg_response_time_ms": 0,
+        "timeline": []
     })))
 }

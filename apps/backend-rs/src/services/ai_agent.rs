@@ -32,6 +32,10 @@ pub enum AgentStreamEvent {
         name: String,
         preview: String,
         ok: bool,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        error_explanation: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        suggested_actions: Option<Vec<SuggestedAction>>,
     },
     #[serde(rename = "token")]
     Token { text: String },
@@ -41,9 +45,33 @@ pub enum AgentStreamEvent {
         tool_trace: Vec<Value>,
         model_used: Option<String>,
         fallback_used: bool,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        structured_content: Option<Value>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        explanation: Option<ExplanationPayload>,
     },
     #[serde(rename = "error")]
     Error { message: String },
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct SuggestedAction {
+    pub label: String,
+    pub action: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ExplanationPayload {
+    pub summary: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reasoning_steps: Option<Vec<ReasoningStep>>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ReasoningStep {
+    pub input: String,
+    pub rule: String,
+    pub outcome: String,
 }
 
 const MUTATION_ROLES: &[&str] = &["owner_admin", "operator", "accountant"];
@@ -145,6 +173,8 @@ pub fn list_supported_tables() -> Vec<String> {
         "demand_forecasts",
         "agent_playbooks",
         "agent_health_metrics",
+        "pii_intercept_log",
+        "agent_boundary_rules",
     ]
     .into_iter()
     .map(ToOwned::to_owned)
@@ -499,6 +529,8 @@ pub async fn run_ai_agent_chat_streaming(
                 tool_trace: Vec::new(),
                 model_used: None,
                 fallback_used: false,
+                structured_content: None,
+                explanation: None,
             })
             .await;
 
@@ -665,11 +697,23 @@ pub async fn run_ai_agent_chat_streaming(
                     .and_then(Value::as_bool)
                     .unwrap_or(false);
 
+                let error_explanation = if !ok {
+                    tool_result
+                        .as_object()
+                        .and_then(|obj| obj.get("error"))
+                        .and_then(Value::as_str)
+                        .map(|s| s.to_string())
+                } else {
+                    None
+                };
+
                 let _ = tx
                     .send(AgentStreamEvent::ToolResult {
                         name: tool_name.clone(),
                         preview: preview.clone(),
                         ok,
+                        error_explanation,
+                        suggested_actions: None,
                     })
                     .await;
 
@@ -708,6 +752,8 @@ pub async fn run_ai_agent_chat_streaming(
                         Some(model_used.clone())
                     },
                     fallback_used,
+                    structured_content: None,
+                    explanation: build_explanation_from_trace(&tool_trace),
                 })
                 .await;
             let result = build_agent_result(
@@ -783,6 +829,8 @@ pub async fn run_ai_agent_chat_streaming(
                 Some(model_used.clone())
             },
             fallback_used,
+            structured_content: None,
+            explanation: build_explanation_from_trace(&tool_trace),
         })
         .await;
 
@@ -1102,6 +1150,72 @@ fn build_agent_result(
     payload.insert("model_used".to_string(), Value::String(model_used));
     payload.insert("fallback_used".to_string(), Value::Bool(fallback_used));
     payload
+}
+
+/// Build an explanation payload from the tool trace.
+/// Produces a human-readable summary of what tools ran and their outcomes.
+fn build_explanation_from_trace(tool_trace: &[Value]) -> Option<ExplanationPayload> {
+    if tool_trace.is_empty() {
+        return None;
+    }
+    let steps: Vec<ReasoningStep> = tool_trace
+        .iter()
+        .filter_map(|t| {
+            let obj = t.as_object()?;
+            let tool = obj.get("tool").and_then(Value::as_str).unwrap_or("tool");
+            let ok = obj.get("ok").and_then(Value::as_bool).unwrap_or(false);
+            let preview = obj
+                .get("preview")
+                .and_then(Value::as_str)
+                .unwrap_or_default();
+            Some(ReasoningStep {
+                input: format!("Called {}", tool.replace('_', " ")),
+                rule: if ok {
+                    "Executed successfully".to_string()
+                } else {
+                    "Encountered an error".to_string()
+                },
+                outcome: if preview.is_empty() {
+                    (if ok { "ok" } else { "error" }).to_string()
+                } else {
+                    truncate_chars(preview, 200)
+                },
+            })
+        })
+        .collect();
+    let ok_count = tool_trace
+        .iter()
+        .filter(|t| {
+            t.as_object()
+                .and_then(|obj| obj.get("ok"))
+                .and_then(Value::as_bool)
+                .unwrap_or(false)
+        })
+        .count();
+    let summary = if tool_trace.len() == 1 {
+        let tool = tool_trace[0]
+            .as_object()
+            .and_then(|obj| obj.get("tool"))
+            .and_then(Value::as_str)
+            .unwrap_or("tool")
+            .replace('_', " ");
+        if ok_count == 1 {
+            format!("Completed {} successfully.", tool)
+        } else {
+            format!("Attempted {} but encountered an error.", tool)
+        }
+    } else {
+        format!(
+            "Executed {} tool{} ({} succeeded).",
+            tool_trace.len(),
+            if tool_trace.len() == 1 { "" } else { "s" },
+            ok_count
+        )
+    };
+    Some(ExplanationPayload {
+        summary,
+        reasoning_steps: if steps.is_empty() { None } else { Some(steps) },
+    })
 }
 
 fn disabled_stream_payload() -> Map<String, Value> {
@@ -6393,6 +6507,7 @@ mod tests {
                 tool_trace,
                 model_used,
                 fallback_used,
+                ..
             }) => {
                 assert_eq!(content, AI_AGENT_DISABLED_MESSAGE);
                 assert!(tool_trace.is_empty());

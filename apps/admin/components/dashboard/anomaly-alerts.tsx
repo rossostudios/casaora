@@ -1,6 +1,7 @@
 "use client";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -14,6 +15,12 @@ import type { Locale } from "@/lib/i18n";
 import { useActiveLocale } from "@/lib/i18n/client";
 import { cn } from "@/lib/utils";
 
+type SuggestedAction = {
+  label: string;
+  href?: string;
+  agent_action?: string;
+};
+
 type AnomalyAlert = {
   id: string;
   alert_type: string;
@@ -21,11 +28,13 @@ type AnomalyAlert = {
   title: string;
   description?: string;
   detected_at: string;
+  suggested_actions?: SuggestedAction[];
 };
 
 type AnomalyAlertsProps = {
   orgId: string;
   locale: Locale;
+  promoted?: boolean;
 };
 
 const SEVERITY_STYLES: Record<string, string> = {
@@ -44,6 +53,7 @@ const SEVERITY_DOT: Record<string, string> = {
 export function AnomalyAlerts({
   orgId,
   locale: localeProp,
+  promoted = false,
 }: AnomalyAlertsProps) {
   "use no memo";
   const activeLocale = useActiveLocale();
@@ -87,8 +97,15 @@ export function AnomalyAlerts({
 
   if (loading || alerts.length === 0) return null;
 
+  const hasCritical = alerts.some((a) => a.severity === "critical");
+
   return (
-    <Card className="overflow-hidden">
+    <Card
+      className={cn(
+        "overflow-hidden",
+        promoted && hasCritical && "ring-2 ring-red-500/30 animate-pulse"
+      )}
+    >
       <CardHeader className="space-y-3 border-border/70 border-b pb-4">
         <div className="space-y-1">
           <CardTitle className="text-base">
@@ -105,37 +122,70 @@ export function AnomalyAlerts({
         {alerts.map((alert) => (
           <div
             className={cn(
-              "flex items-start justify-between gap-3 rounded-xl border p-3",
+              "rounded-xl border p-3",
               SEVERITY_STYLES[alert.severity] ?? SEVERITY_STYLES.info
             )}
             key={alert.id}
           >
-            <div className="flex items-start gap-2.5">
-              <span
-                className={cn(
-                  "mt-1.5 inline-block h-2 w-2 shrink-0 rounded-full",
-                  SEVERITY_DOT[alert.severity] ?? SEVERITY_DOT.info
-                )}
-              />
-              <div>
-                <p className="font-medium text-sm">{alert.title}</p>
-                {alert.description ? (
-                  <p className="mt-0.5 text-[12px] opacity-80">
-                    {alert.description}
-                  </p>
-                ) : null}
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-start gap-2.5">
+                <span
+                  className={cn(
+                    "mt-1.5 inline-block h-2 w-2 shrink-0 rounded-full",
+                    SEVERITY_DOT[alert.severity] ?? SEVERITY_DOT.info
+                  )}
+                />
+                <div>
+                  <p className="font-medium text-sm">{alert.title}</p>
+                  {alert.description ? (
+                    <p className="mt-0.5 text-[12px] opacity-80">
+                      {alert.description}
+                    </p>
+                  ) : null}
+                </div>
               </div>
+              <Button
+                className="shrink-0"
+                onClick={() => {
+                  dismissAlert(alert.id).catch(() => undefined);
+                }}
+                size="sm"
+                variant="ghost"
+              >
+                {isEn ? "Dismiss" : "Descartar"}
+              </Button>
             </div>
-            <Button
-              className="shrink-0"
-              onClick={() => {
-                dismissAlert(alert.id).catch(() => undefined);
-              }}
-              size="sm"
-              variant="ghost"
-            >
-              {isEn ? "Dismiss" : "Descartar"}
-            </Button>
+            {alert.suggested_actions?.length ? (
+              <div className="mt-2 ml-4.5 flex flex-wrap gap-1.5">
+                {alert.suggested_actions.map((sa) =>
+                  sa.href ? (
+                    <Button
+                      asChild
+                      className="h-7 text-[11px]"
+                      key={sa.label}
+                      size="sm"
+                      variant="outline"
+                    >
+                      <Link href={sa.href}>{sa.label}</Link>
+                    </Button>
+                  ) : (
+                    <Button
+                      className="h-7 text-[11px]"
+                      key={sa.label}
+                      onClick={() => {
+                        if (sa.agent_action) {
+                          window.location.href = `/app/agents?q=${encodeURIComponent(sa.agent_action)}`;
+                        }
+                      }}
+                      size="sm"
+                      variant="outline"
+                    >
+                      {sa.label}
+                    </Button>
+                  )
+                )}
+              </div>
+            ) : null}
           </div>
         ))}
       </CardContent>

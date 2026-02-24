@@ -5,6 +5,7 @@ import {
   CheckmarkCircle02Icon,
   Loading03Icon,
 } from "@hugeicons/core-free-icons";
+import { useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Icon } from "@/components/ui/icon";
@@ -16,6 +17,8 @@ export type StreamToolEvent = {
   tool_call_id: string;
   ok?: boolean;
   preview?: string;
+  error_explanation?: string;
+  suggested_actions?: Array<{ label: string; action: string }>;
 };
 
 export type ToolTraceEntry = {
@@ -40,48 +43,76 @@ function formatToolName(name: string): string {
 export function ChatToolEventCard({
   event,
   isEn,
+  onSuggestedAction,
 }: {
   event: StreamToolEvent;
   isEn: boolean;
+  onSuggestedAction?: (action: string) => void;
 }) {
   const isResult = event.phase === "result";
   const isOk = event.ok !== false;
+  const hasError = isResult && !isOk;
 
   return (
-    <div className="glass-inner flex items-center gap-2.5 rounded-xl px-3 py-2 transition-all duration-200">
-      {isResult ? (
-        isOk ? (
-          <div className="flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500/10">
+    <div className="glass-inner rounded-xl px-3 py-2 transition-all duration-200">
+      <div className="flex items-center gap-2.5">
+        {isResult ? (
+          isOk ? (
+            <div className="flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500/10">
+              <Icon
+                className="h-2.5 w-2.5 text-emerald-500"
+                icon={CheckmarkCircle02Icon}
+              />
+            </div>
+          ) : (
+            <div className="flex h-4 w-4 items-center justify-center rounded-full bg-destructive/10">
+              <Icon className="h-2.5 w-2.5 text-destructive" icon={Cancel01Icon} />
+            </div>
+          )
+        ) : (
+          <div className="flex h-4 w-4 items-center justify-center rounded-full bg-[var(--sidebar-primary)]/10">
             <Icon
-              className="h-2.5 w-2.5 text-emerald-500"
-              icon={CheckmarkCircle02Icon}
+              className="h-2.5 w-2.5 animate-spin text-[var(--sidebar-primary)]"
+              icon={Loading03Icon}
             />
           </div>
-        ) : (
-          <div className="flex h-4 w-4 items-center justify-center rounded-full bg-destructive/10">
-            <Icon className="h-2.5 w-2.5 text-destructive" icon={Cancel01Icon} />
-          </div>
-        )
-      ) : (
-        <div className="flex h-4 w-4 items-center justify-center rounded-full bg-[var(--sidebar-primary)]/10">
-          <Icon
-            className="h-2.5 w-2.5 animate-spin text-[var(--sidebar-primary)]"
-            icon={Loading03Icon}
-          />
+        )}
+        <span className="font-medium text-[11.5px] text-foreground/80">
+          {formatToolName(event.tool_name)}
+        </span>
+        {isResult && event.preview ? (
+          <span className="truncate text-[11px] text-muted-foreground/60">
+            {event.preview}
+          </span>
+        ) : isResult ? null : (
+          <span className="text-[11px] text-muted-foreground/50">
+            {isEn ? "Running..." : "Ejecutando..."}
+          </span>
+        )}
+      </div>
+
+      {/* Error explanation + suggested actions */}
+      {hasError && event.error_explanation ? (
+        <div className="mt-1.5 ml-6.5 space-y-1.5">
+          <p className="text-[11px] text-destructive/80">
+            {event.error_explanation}
+          </p>
+          {event.suggested_actions?.length ? (
+            <div className="flex flex-wrap gap-1">
+              {event.suggested_actions.map((sa) => (
+                <button
+                  className="rounded-full border border-border/50 bg-muted/30 px-2.5 py-1 text-[10px] font-medium text-foreground/70 transition-colors hover:border-[var(--sidebar-primary)]/40 hover:bg-[var(--sidebar-primary)]/[0.06] hover:text-foreground"
+                  key={sa.action}
+                  onClick={() => onSuggestedAction?.(sa.action)}
+                  type="button"
+                >
+                  {sa.label}
+                </button>
+              ))}
+            </div>
+          ) : null}
         </div>
-      )}
-      <span className="font-medium text-[11.5px] text-foreground/80">
-        {formatToolName(event.tool_name)}
-      </span>
-      {isResult && event.preview ? (
-        <span className="truncate text-[11px] text-muted-foreground/60">
-          {event.preview}
-        </span>
-      ) : isResult ? null : (
-        <span className="text-[11px] text-muted-foreground/50">
-          {isEn ? "Running..." : "Ejecutando..."}
-        </span>
-      )}
+      ) : null}
     </div>
   );
 }
@@ -89,19 +120,37 @@ export function ChatToolEventCard({
 export function ChatToolEventStrip({
   events,
   isEn,
+  onSuggestedAction,
 }: {
   events: StreamToolEvent[];
   isEn: boolean;
+  onSuggestedAction?: (action: string) => void;
 }) {
+  const [showAll, setShowAll] = useState(false);
+
   if (events.length === 0) return null;
 
+  const shouldVirtualize = events.length > 5 && !showAll;
+  const hiddenCount = shouldVirtualize ? events.length - 3 : 0;
+  const visibleEvents = shouldVirtualize ? events.slice(-3) : events;
+
   return (
-    <div className="flex flex-col gap-1.5 py-1">
-      {events.map((event) => (
+    <div className="flex flex-col gap-1.5 py-1" style={{ contain: "layout" }}>
+      {shouldVirtualize ? (
+        <button
+          className="self-start rounded-lg px-2.5 py-1 text-[10.5px] font-medium text-muted-foreground/60 transition-colors hover:bg-muted/30 hover:text-muted-foreground"
+          onClick={() => setShowAll(true)}
+          type="button"
+        >
+          {hiddenCount} {isEn ? "more tools..." : "herramientas más..."}
+        </button>
+      ) : null}
+      {visibleEvents.map((event) => (
         <ChatToolEventCard
           event={event}
           isEn={isEn}
           key={`${event.tool_call_id}-${event.phase}-${event.preview ?? ""}`}
+          onSuggestedAction={onSuggestedAction}
         />
       ))}
     </div>

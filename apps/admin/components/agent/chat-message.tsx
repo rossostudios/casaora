@@ -14,6 +14,15 @@ import {
   ToolTraceBadges,
   type ToolTraceEntry,
 } from "@/components/agent/chat-tool-event";
+import {
+  ActionCard,
+  type StructuredContent,
+} from "@/components/agent/action-card";
+import { QuickReplyChips } from "@/components/agent/quick-reply-chips";
+import {
+  ExplainabilityPanel,
+  type ExplanationPayload,
+} from "@/components/agent/explainability-panel";
 import { getModelDisplayName } from "@/components/agent/model-display";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
@@ -28,6 +37,9 @@ export type DisplayMessage = {
   model_used?: string | null;
   tool_trace?: ToolTraceEntry[] | null;
   feedback_rating?: "positive" | "negative" | null;
+  structured_content?: StructuredContent | null;
+  explanation?: ExplanationPayload | null;
+  feedbackConfirmed?: boolean;
   source: "server" | "live";
 };
 
@@ -49,6 +61,8 @@ export function ChatMessage({
   onSpeak,
   onFeedback,
   onRegenerate,
+  onActionCard,
+  onQuickReply,
 }: {
   message: DisplayMessage;
   isEn: boolean;
@@ -63,6 +77,8 @@ export function ChatMessage({
     reason?: string
   ) => void;
   onRegenerate?: (messageId: string) => void;
+  onActionCard?: (messageId: string, actionKey: string) => void;
+  onQuickReply?: (suggestion: string) => void;
 }) {
   const [traceExpanded, setTraceExpanded] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -113,7 +129,33 @@ export function ChatMessage({
           <Response>{message.content}</Response>
         )}
 
-        {!isUser && message.tool_trace?.length ? (
+        {/* Structured content: action cards & quick replies */}
+        {!isUser && message.structured_content ? (
+          message.structured_content.type === "action_card" ? (
+            <ActionCard
+              content={message.structured_content}
+              disabled={isSending}
+              isEn={isEn}
+              onAction={(key) => onActionCard?.(message.id, key)}
+            />
+          ) : message.structured_content.type === "quick_replies" &&
+            message.structured_content.suggestions?.length ? (
+            <QuickReplyChips
+              disabled={isSending}
+              onSelect={(s) => onQuickReply?.(s)}
+              suggestions={message.structured_content.suggestions}
+            />
+          ) : null
+        ) : null}
+
+        {/* Explainability panel (3-tier) or fallback ToolTraceBadges */}
+        {!isUser && message.explanation?.summary ? (
+          <ExplainabilityPanel
+            explanation={message.explanation}
+            isEn={isEn}
+            toolTrace={message.tool_trace}
+          />
+        ) : !isUser && message.tool_trace?.length ? (
           <ToolTraceBadges
             isExpanded={traceExpanded}
             onToggle={() => setTraceExpanded((prev) => !prev)}
@@ -267,6 +309,18 @@ export function ChatMessage({
                 {reason}
               </button>
             ))}
+          </div>
+        ) : null}
+
+        {/* Feedback confirmation banner */}
+        {!isUser && message.feedbackConfirmed ? (
+          <div className="mt-2 flex items-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/5 px-3 py-2">
+            <span className="inline-block h-1.5 w-1.5 rounded-full bg-emerald-500" />
+            <span className="text-[11.5px] text-emerald-700 dark:text-emerald-400">
+              {isEn
+                ? "Correction noted — this will improve future responses."
+                : "Corrección registrada — esto mejorará las respuestas futuras."}
+            </span>
           </div>
         ) : null}
       </MessageContent>

@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import {
   isRentalMode,
   type RentalMode,
@@ -16,6 +17,8 @@ import { DashboardHeroMetrics } from "@/components/dashboard/dashboard-hero-metr
 import { DashboardModuleCards } from "@/components/dashboard/dashboard-module-cards";
 import { DashboardNeedsAttention } from "@/components/dashboard/dashboard-needs-attention";
 import { DashboardOperations } from "@/components/dashboard/dashboard-operations";
+import { DashboardQueryBar } from "@/components/dashboard/dashboard-query-bar";
+import { PredictiveOutlook } from "@/components/dashboard/predictive-outlook";
 import { roleQuickActions } from "@/components/dashboard/dashboard-quick-actions";
 import { DashboardRentalKpis } from "@/components/dashboard/dashboard-rental-kpis";
 import { DashboardTabs } from "@/components/dashboard/dashboard-tabs";
@@ -346,6 +349,8 @@ export default async function DashboardPage({
         }
       />
 
+      <DashboardQueryBar isEn={isEn} />
+
       {onboardingCompleted ? (
         <Alert variant="success">
           <AlertTitle>
@@ -435,12 +440,24 @@ export default async function DashboardPage({
             />
 
             {apiAvailable ? (
-              <AnomalyAlerts locale={locale} orgId={orgId} />
+              <Suspense fallback={null}>
+                <AnomalyAlerts locale={locale} orgId={orgId} promoted />
+              </Suspense>
             ) : null}
 
-            <DashboardNeedsAttention isEn={isEn} items={needsAttention} />
+            {apiAvailable ? (
+              <Suspense fallback={null}>
+                <PredictiveOutlook isEn={isEn} orgId={orgId} />
+              </Suspense>
+            ) : null}
 
-            <DashboardModuleCards isEn={isEn} locale={locale} />
+            <Suspense fallback={null}>
+              <DashboardNeedsAttention isEn={isEn} items={needsAttention} />
+            </Suspense>
+
+            <Suspense fallback={null}>
+              <DashboardModuleCards isEn={isEn} locale={locale} />
+            </Suspense>
           </>
         }
       />

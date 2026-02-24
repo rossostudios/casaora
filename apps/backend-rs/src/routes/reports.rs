@@ -59,6 +59,10 @@ pub fn router() -> axum::Router<AppState> {
             axum::routing::get(agent_performance),
         )
         .route("/reports/revenue-trend", axum::routing::get(revenue_trend))
+        .route(
+            "/reports/predictive-outlook",
+            axum::routing::get(predictive_outlook),
+        )
 }
 
 async fn owner_summary_report(
@@ -1379,4 +1383,140 @@ fn round2(value: f64) -> f64 {
 
 fn round4(value: f64) -> f64 {
     (value * 10000.0).round() / 10000.0
+}
+
+// ---------------------------------------------------------------------------
+// Predictive Outlook (S15.3)
+// ---------------------------------------------------------------------------
+
+async fn predictive_outlook(
+    State(state): State<AppState>,
+    Query(query): Query<ReportsPeriodQuery>,
+    headers: HeaderMap,
+) -> AppResult<Json<Value>> {
+    let user_id = require_user_id(&state, &headers).await?;
+    assert_org_member(&state, &user_id, &query.org_id).await?;
+
+    let pool = db_pool(&state)?;
+    let mut items: Vec<Value> = Vec::new();
+
+    // Upcoming check-ins in 48h
+    let checkins: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM reservations
+         WHERE organization_id = $1::uuid
+           AND check_in_date BETWEEN CURRENT_DATE AND CURRENT_DATE + 2
+           AND status IN ('confirmed', 'pending')",
+    )
+    .bind(&query.org_id)
+    .fetch_one(pool)
+    .await
+    .unwrap_or(0);
+
+    if checkins > 0 {
+        items.push(json!({
+            "id": "checkins-48h",
+            "category": "operations",
+            "title": format!("{} check-in{} expected in the next 48 hours", checkins, if checkins > 1 { "s" } else { "" }),
+            "confidence_pct": 95,
+            "cta_label": "View",
+            "cta_href": "/module/reservations"
+        }));
+    }
+
+    // Upcoming check-outs in 48h
+    let checkouts: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM reservations
+         WHERE organization_id = $1::uuid
+           AND check_out_date BETWEEN CURRENT_DATE AND CURRENT_DATE + 2
+           AND status = 'checked_in'",
+    )
+    .bind(&query.org_id)
+    .fetch_one(pool)
+    .await
+    .unwrap_or(0);
+
+    if checkouts > 0 {
+        items.push(json!({
+            "id": "checkouts-48h",
+            "category": "operations",
+            "title": format!("{} check-out{} in the next 48 hours", checkouts, if checkouts > 1 { "s" } else { "" }),
+            "confidence_pct": 95,
+            "cta_label": "View",
+            "cta_href": "/module/reservations"
+        }));
+    }
+
+    // Leases expiring in 7 days
+    let expiring_leases: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM leases
+         WHERE organization_id = $1::uuid
+           AND lease_status = 'active'
+           AND ends_on BETWEEN CURRENT_DATE AND CURRENT_DATE + 7",
+    )
+    .bind(&query.org_id)
+    .fetch_one(pool)
+    .await
+    .unwrap_or(0);
+
+    if expiring_leases > 0 {
+        items.push(json!({
+            "id": "expiring-leases-7d",
+            "category": "leases",
+            "title": format!("{} lease{} expiring within 7 days", expiring_leases, if expiring_leases > 1 { "s" } else { "" }),
+            "confidence_pct": 100,
+            "cta_label": "Review",
+            "cta_href": "/module/leases"
+        }));
+    }
+
+    // Demand forecast from ml_predictions
+    let forecast_row = sqlx::query(
+        "SELECT prediction_value, confidence
+         FROM ml_predictions
+         WHERE organization_id = $1::uuid
+           AND prediction_type = 'demand'
+           AND target_date BETWEEN CURRENT_DATE AND CURRENT_DATE + 2
+         ORDER BY created_at DESC LIMIT 1",
+    )
+    .bind(&query.org_id)
+    .fetch_optional(pool)
+    .await
+    .ok()
+    .flatten();
+
+    if let Some(row) = forecast_row {
+        let value: f64 = row.try_get("prediction_value").unwrap_or(0.0);
+        let confidence: f64 = row.try_get("confidence").unwrap_or(0.0);
+        items.push(json!({
+            "id": "demand-forecast",
+            "category": "demand",
+            "title": format!("Predicted occupancy demand: {:.0}%", value * 100.0),
+            "confidence_pct": (confidence * 100.0).round() as i64,
+        }));
+    }
+
+    // Overdue tasks
+    let overdue: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM tasks
+         WHERE organization_id = $1::uuid
+           AND status NOT IN ('done', 'cancelled')
+           AND due_date < CURRENT_DATE",
+    )
+    .bind(&query.org_id)
+    .fetch_one(pool)
+    .await
+    .unwrap_or(0);
+
+    if overdue > 0 {
+        items.push(json!({
+            "id": "overdue-tasks",
+            "category": "maintenance",
+            "title": format!("{} overdue task{} need attention", overdue, if overdue > 1 { "s" } else { "" }),
+            "confidence_pct": 100,
+            "cta_label": "View",
+            "cta_href": "/module/operations?tab=tasks"
+        }));
+    }
+
+    Ok(Json(json!({ "data": items })))
 }

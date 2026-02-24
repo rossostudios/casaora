@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 
 export function ChatEmptyState({
   quickPrompts,
+  contextualSuggestions,
   onSendPrompt,
   isEn,
   disabled,
@@ -14,6 +15,7 @@ export function ChatEmptyState({
   agentDescription,
 }: {
   quickPrompts: string[];
+  contextualSuggestions?: string[];
   onSendPrompt: (prompt: string) => void;
   isEn: boolean;
   disabled?: boolean;
@@ -48,6 +50,37 @@ export function ChatEmptyState({
           </p>
         </div>
       </div>
+
+      {/* Contextual suggestions (dynamic, portfolio-aware) */}
+      {contextualSuggestions && contextualSuggestions.length > 0 ? (
+        <div className="relative flex w-full max-w-xl flex-col items-center gap-2.5">
+          <p className="mb-1 flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-widest text-muted-foreground/60">
+            <Icon className="h-3 w-3 text-[var(--sidebar-primary)]/60" icon={SparklesIcon} />
+            {isEn ? "Suggested for you" : "Sugerido para ti"}
+          </p>
+          <div className="flex w-full flex-wrap justify-center gap-2">
+            {contextualSuggestions.slice(0, 3).map((prompt, i) => (
+              <button
+                className={cn(
+                  "glass-inner group relative cursor-pointer rounded-xl border border-[var(--sidebar-primary)]/10 px-4 py-3 text-left text-[13px] leading-snug text-foreground/80",
+                  "transition-all duration-200 ease-out",
+                  "hover:border-[var(--sidebar-primary)]/20 hover:bg-[var(--sidebar-primary)]/[0.06] hover:text-foreground hover:shadow-sm",
+                  "active:scale-[0.98]",
+                  "disabled:pointer-events-none disabled:opacity-40",
+                  "animate-[fadeInUp_0.4s_ease-out_both]"
+                )}
+                disabled={disabled}
+                key={prompt}
+                onClick={() => onSendPrompt(prompt)}
+                style={{ animationDelay: `${i * 80 + 100}ms` }}
+                type="button"
+              >
+                <span className="relative">{prompt}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null}
 
       {quickPrompts.length > 0 ? (
         <div className="relative flex w-full max-w-xl flex-col items-center gap-2.5">

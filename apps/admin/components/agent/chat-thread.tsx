@@ -34,6 +34,14 @@ import {
 } from "@/components/agent/chat-tool-event";
 import { useChatAttachments } from "@/components/agent/use-chat-attachments";
 import { useVoiceChat } from "@/components/agent/use-voice-chat";
+import { AutonomyIndicator } from "@/components/agent/autonomy-indicator";
+import {
+  deriveAutonomyLevel,
+  type AutonomyLevel,
+} from "@/lib/agents/autonomy-level";
+import type { StructuredContent } from "@/components/agent/action-card";
+import type { ExplanationPayload } from "@/components/agent/explainability-panel";
+import { useContextualSuggestions } from "@/components/agent/use-contextual-suggestions";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   Conversation,
@@ -56,6 +64,8 @@ type StreamMeta = {
   model_used?: string | null;
   fallback_used?: boolean;
   tool_trace?: AgentChatMessage["tool_trace"];
+  structured_content?: StructuredContent | null;
+  explanation?: ExplanationPayload | null;
 };
 
 function normalizeModels(payload: unknown): AgentModelOption[] {
@@ -146,6 +156,9 @@ export function ChatThread({
   const [selectedAgentSlug, setSelectedAgentSlug] = useState<string>(
     defaultAgentSlug || "guest-concierge"
   );
+  const [feedbackConfirmedIds, setFeedbackConfirmedIds] = useState<
+    Set<string>
+  >(new Set());
 
   const activeChatIdRef = useRef<string | undefined>(chatId);
   const pendingSendRef = useRef<{
@@ -182,6 +195,34 @@ export function ChatThread({
   const activeAgents = useMemo(
     () => (agentsQuery.data ?? []).filter((a) => a.is_active !== false),
     [agentsQuery.data]
+  );
+
+  // --- autonomy level -------------------------------------------------------
+  const approvalPoliciesQuery = useQuery({
+    queryKey: ["approval-policies", orgId],
+    queryFn: async () => {
+      const res = await fetch(
+        `/api/agent/approval-policies?org_id=${encodeURIComponent(orgId)}`,
+        { cache: "no-store", headers: { Accept: "application/json" } }
+      );
+      if (!res.ok) return [];
+      const payload = (await res.json()) as { data?: Array<{ tool_name: string; approval_mode: string; enabled: boolean }> };
+      return payload.data ?? [];
+    },
+    staleTime: 120_000,
+    enabled: !!orgId,
+    retry: false,
+  });
+
+  const autonomyLevel: AutonomyLevel = useMemo(
+    () => deriveAutonomyLevel(approvalPoliciesQuery.data ?? []),
+    [approvalPoliciesQuery.data]
+  );
+
+  // --- contextual suggestions -----------------------------------------------
+  const contextualSuggestionsQuery = useContextualSuggestions(
+    orgId,
+    !activeChatId && !!orgId
   );
 
   // Auto-select: prefer guest-concierge, fallback to first active
@@ -331,6 +372,24 @@ export function ChatThread({
         }
         return;
       }
+      if (typed.type === "data-casaora-structured") {
+        if (typed.data && typeof typed.data === "object") {
+          const d = typed.data as {
+            messageId?: unknown;
+            structured_content?: unknown;
+          };
+          const mid = typeof d.messageId === "string" ? d.messageId : "";
+          if (!mid || !d.structured_content) return;
+          setStreamMetaByMessageId((prev) => ({
+            ...prev,
+            [mid]: {
+              ...(prev[mid] ?? {}),
+              structured_content: d.structured_content as StructuredContent,
+            },
+          }));
+        }
+        return;
+      }
       if (
         typed.type === "data-casaora-meta" &&
         typed.data &&
@@ -341,18 +400,24 @@ export function ChatThread({
           model_used?: unknown;
           fallback_used?: unknown;
           tool_trace?: unknown;
+          explanation?: unknown;
         };
         const mid = typeof d.messageId === "string" ? d.messageId : "";
         if (!mid) return;
         setStreamMetaByMessageId((prev) => ({
           ...prev,
           [mid]: {
+            ...(prev[mid] ?? {}),
             model_used: typeof d.model_used === "string" ? d.model_used : null,
             fallback_used:
               typeof d.fallback_used === "boolean" ? d.fallback_used : false,
             tool_trace: Array.isArray(d.tool_trace)
               ? (d.tool_trace as AgentChatMessage["tool_trace"])
               : [],
+            explanation:
+              d.explanation && typeof d.explanation === "object"
+                ? (d.explanation as ExplanationPayload)
+                : null,
           },
         }));
       }
@@ -534,12 +599,15 @@ export function ChatThread({
       if (m.role !== "user" && m.role !== "assistant") continue;
       const content = extractUiMessageText(m);
       if (!content && m.role === "assistant") continue;
+      const meta = streamMetaByMessageId[m.id];
       next.push({
         id: m.id,
         role: m.role,
         content,
-        model_used: streamMetaByMessageId[m.id]?.model_used ?? null,
-        tool_trace: streamMetaByMessageId[m.id]?.tool_trace,
+        model_used: meta?.model_used ?? null,
+        tool_trace: meta?.tool_trace,
+        structured_content: meta?.structured_content ?? null,
+        explanation: meta?.explanation ?? null,
         source: "live",
       });
     }
@@ -731,6 +799,9 @@ export function ChatThread({
             delete next[messageId];
             return next;
           });
+        } else {
+          // Mark feedback as confirmed
+          setFeedbackConfirmedIds((prev) => new Set([...prev, messageId]));
         }
       } catch {
         setFeedbackOverrides((prev) => {
@@ -754,6 +825,7 @@ export function ChatThread({
     setLiveMessages([]);
     setStreamToolEvents([]);
     setFeedbackOverrides({});
+    setFeedbackConfirmedIds(new Set());
     setStreamStatus(null);
     setStreamMetaByMessageId({});
     attachmentHook.clearAttachments();
@@ -830,41 +902,48 @@ export function ChatThread({
       )}
     >
       {/* Header */}
-      <ChatHeader
-        agents={activeAgents}
-        busy={busy}
-        chatTitle={chat?.title}
-        deleteArmed={deleteArmed}
-        isArchived={chat?.is_archived}
-        isChatDetailRoute={isChatDetailRoute}
-        isEmbedded={isEmbedded}
-        isEn={isEn}
-        isSending={isSending}
-        loading={loading}
-        modelBusy={modelBusy}
-        modelOptions={modelOptions}
-        onAgentChange={handleAgentChange}
-        onArchiveToggle={() => {
-          const action = chat?.is_archived ? "restore" : "archive";
-          mutateChat(action).catch(() => undefined);
-          setDeleteArmed(false);
-        }}
-        onDeleteArm={() => setDeleteArmed(true)}
-        onDeleteCancel={() => setDeleteArmed(false)}
-        onDeleteConfirm={() => {
-          mutateChat("delete").catch(() => undefined);
-          setDeleteArmed(false);
-        }}
-        onHistoryClick={() => router.push("/app/chats")}
-        onModelChange={(model) =>
-          updatePreferredModel(model).catch(() => undefined)
-        }
-        onNewThread={() => resetToFreshThread()}
-        primaryModel={primaryModel}
-        selectedAgentName={selectedAgent?.name}
-        selectedAgentSlug={selectedAgentSlug}
-        selectedModel={selectedModel}
-      />
+      <div className="flex items-center gap-2">
+        <div className="flex-1">
+          <ChatHeader
+            agents={activeAgents}
+            busy={busy}
+            chatTitle={chat?.title}
+            deleteArmed={deleteArmed}
+            isArchived={chat?.is_archived}
+            isChatDetailRoute={isChatDetailRoute}
+            isEmbedded={isEmbedded}
+            isEn={isEn}
+            isSending={isSending}
+            loading={loading}
+            modelBusy={modelBusy}
+            modelOptions={modelOptions}
+            onAgentChange={handleAgentChange}
+            onArchiveToggle={() => {
+              const action = chat?.is_archived ? "restore" : "archive";
+              mutateChat(action).catch(() => undefined);
+              setDeleteArmed(false);
+            }}
+            onDeleteArm={() => setDeleteArmed(true)}
+            onDeleteCancel={() => setDeleteArmed(false)}
+            onDeleteConfirm={() => {
+              mutateChat("delete").catch(() => undefined);
+              setDeleteArmed(false);
+            }}
+            onHistoryClick={() => router.push("/app/chats")}
+            onModelChange={(model) =>
+              updatePreferredModel(model).catch(() => undefined)
+            }
+            onNewThread={() => resetToFreshThread()}
+            primaryModel={primaryModel}
+            selectedAgentName={selectedAgent?.name}
+            selectedAgentSlug={selectedAgentSlug}
+            selectedModel={selectedModel}
+          />
+        </div>
+        <div className="mr-3 shrink-0">
+          <AutonomyIndicator isEn={isEn} level={autonomyLevel} />
+        </div>
+      </div>
 
       {/* Message area — Conversation auto-scroll wrapper */}
       <Conversation
@@ -901,6 +980,9 @@ export function ChatThread({
             <ChatEmptyState
               agentDescription={selectedAgent?.description}
               agentName={selectedAgent?.name}
+              contextualSuggestions={
+                contextualSuggestionsQuery.data?.map((s) => s.text) ?? []
+              }
               disabled={isSending}
               isEn={isEn}
               onSendPrompt={(prompt) => {
@@ -912,8 +994,15 @@ export function ChatThread({
             displayMessages.map((msg) => {
               const feedbackMsg =
                 feedbackOverrides[msg.id] !== undefined
-                  ? { ...msg, feedback_rating: feedbackOverrides[msg.id] }
-                  : msg;
+                  ? {
+                      ...msg,
+                      feedback_rating: feedbackOverrides[msg.id],
+                      feedbackConfirmed: feedbackConfirmedIds.has(msg.id),
+                    }
+                  : {
+                      ...msg,
+                      feedbackConfirmed: feedbackConfirmedIds.has(msg.id),
+                    };
               return (
                 <ChatMessage
                   isEn={isEn}
@@ -943,6 +1032,9 @@ export function ChatThread({
                         }
                       : undefined
                   }
+                  onQuickReply={(suggestion) => {
+                    handleSend(suggestion).catch(() => undefined);
+                  }}
                   onRetry={(id) => {
                     handleRetryAssistant(id).catch(() => undefined);
                   }}
@@ -956,9 +1048,9 @@ export function ChatThread({
             })
           )}
 
-          {/* Streaming indicator */}
+          {/* Streaming indicator — min-height prevents CLS */}
           {isSending ? (
-            <Message className="items-start py-3" from="assistant">
+            <Message className="items-start py-3" from="assistant" style={{ minHeight: 56, contain: "layout" } as React.CSSProperties}>
               <div className="relative mt-0.5">
                 <div className="absolute -inset-1 rounded-xl bg-[var(--sidebar-primary)]/[0.1] blur-md" />
                 <div className="relative flex h-7 w-7 shrink-0 items-center justify-center rounded-[10px] bg-casaora-gradient text-white shadow-casaora">
