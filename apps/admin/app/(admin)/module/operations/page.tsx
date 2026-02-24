@@ -18,8 +18,12 @@ import { getActiveOrgId } from "@/lib/org";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { cn } from "@/lib/utils";
 
+import { DispatchDashboard } from "../maintenance/dispatch-dashboard";
 import { MaintenanceManager } from "../maintenance/maintenance-manager";
+import { SlaConfig } from "../maintenance/sla-config";
+import { VendorRoster } from "../maintenance/vendor-roster";
 import { TasksManager } from "../tasks/tasks-manager";
+import { RiskRadar } from "./risk-radar";
 
 type OperationsTab = "tasks" | "maintenance";
 
@@ -261,16 +265,50 @@ export default async function OperationsHubPage({ searchParams }: PageProps) {
   let requests: Record<string, unknown>[] = [];
   let properties: Record<string, unknown>[] = [];
   let members: Record<string, unknown>[] = [];
+  let workOrders: Record<string, unknown>[] = [];
+  let vendors: Record<string, unknown>[] = [];
+  let slaRules: Record<string, unknown>[] = [];
+  let mlPredictions: Record<string, unknown>[] = [];
+  let demandForecasts: Record<string, unknown>[] = [];
 
   try {
-    const [requestRows, propertyRows, memberRows] = await Promise.all([
+    const [
+      requestRows,
+      propertyRows,
+      memberRows,
+      woRows,
+      vendorRows,
+      slaRows,
+      predRows,
+      forecastRows,
+    ] = await Promise.all([
       fetchList("/maintenance-requests", orgId, 500),
       fetchList("/properties", orgId, 500),
       fetchList(`/organizations/${orgId}/members`, orgId, 300),
+      fetchList("/vendor-work-orders", orgId, 200).catch(() => []) as Promise<
+        Record<string, unknown>[]
+      >,
+      fetchList("/vendor-roster", orgId, 100).catch(() => []) as Promise<
+        Record<string, unknown>[]
+      >,
+      fetchList("/maintenance-sla-config", orgId, 50).catch(
+        () => []
+      ) as Promise<Record<string, unknown>[]>,
+      fetchList("/ml-predictions", orgId, 200).catch(() => []) as Promise<
+        Record<string, unknown>[]
+      >,
+      fetchList("/demand-forecasts", orgId, 200).catch(() => []) as Promise<
+        Record<string, unknown>[]
+      >,
     ]);
     requests = requestRows as Record<string, unknown>[];
     properties = propertyRows as Record<string, unknown>[];
     members = memberRows as Record<string, unknown>[];
+    workOrders = woRows as Record<string, unknown>[];
+    vendors = vendorRows as Record<string, unknown>[];
+    slaRules = slaRows as Record<string, unknown>[];
+    mlPredictions = predRows as Record<string, unknown>[];
+    demandForecasts = forecastRows as Record<string, unknown>[];
   } catch (err) {
     const message = errorMessage(err);
     if (isOrgMembershipError(message))
@@ -369,6 +407,96 @@ export default async function OperationsHubPage({ searchParams }: PageProps) {
             properties={properties}
             requests={requests}
           />
+        </CardContent>
+      </Card>
+
+      {/* Dispatch Dashboard */}
+      <Card>
+        <CardHeader>
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge variant="outline">{isEn ? "Sprint 4" : "Sprint 4"}</Badge>
+            <Badge className="text-[11px]" variant="secondary">
+              {isEn ? "Dispatch" : "Despacho"}
+            </Badge>
+          </div>
+          <CardTitle>
+            {isEn
+              ? "Vendor Dispatch Dashboard"
+              : "Panel de Despacho de Proveedores"}
+          </CardTitle>
+          <CardDescription>
+            {isEn
+              ? "Active work orders, SLA tracking, and vendor assignments."
+              : "Órdenes de trabajo activas, seguimiento SLA y asignaciones de proveedores."}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Suspense fallback={null}>
+            <DispatchDashboard
+              requests={requests}
+              vendors={vendors}
+              workOrders={workOrders}
+            />
+          </Suspense>
+        </CardContent>
+      </Card>
+
+      {/* Vendor Roster */}
+      <Card>
+        <CardHeader>
+          <CardTitle>
+            {isEn ? "Vendor Roster" : "Listado de Proveedores"}
+          </CardTitle>
+          <CardDescription>
+            {isEn
+              ? "Manage vendors, view performance metrics, and track capacity."
+              : "Gestiona proveedores, métricas de rendimiento y capacidad."}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <VendorRoster vendors={vendors} />
+        </CardContent>
+      </Card>
+
+      {/* SLA Configuration */}
+      <Card>
+        <CardHeader>
+          <CardTitle>
+            {isEn ? "SLA Configuration" : "Configuración SLA"}
+          </CardTitle>
+          <CardDescription>
+            {isEn
+              ? "Response and resolution deadlines per urgency level with auto-escalation."
+              : "Plazos de respuesta y resolución por nivel de urgencia con auto-escalación."}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <SlaConfig slaRules={slaRules} />
+        </CardContent>
+      </Card>
+
+      {/* Risk Radar & Predictive Intelligence */}
+      <Card>
+        <CardHeader className="space-y-1">
+          <div className="flex items-center gap-2">
+            <Badge variant="outline">ML</Badge>
+            <CardTitle className="text-lg">
+              {isEn ? "Predictive Intelligence" : "Inteligencia Predictiva"}
+            </CardTitle>
+          </div>
+          <CardDescription>
+            {isEn
+              ? "ML predictions, demand forecasts, and aggregated risk analysis across all categories."
+              : "Predicciones ML, pronósticos de demanda y análisis de riesgo agregado en todas las categorías."}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Suspense fallback={null}>
+            <RiskRadar
+              forecasts={demandForecasts}
+              predictions={mlPredictions}
+            />
+          </Suspense>
         </CardContent>
       </Card>
     </div>

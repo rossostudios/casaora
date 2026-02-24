@@ -138,7 +138,11 @@
     var(--color-mauve-950) 78%,
     var(--color-mauve-900)
   );
-  --foreground: color-mix(in srgb, var(--color-mauve-50) 86%, var(--color-mauve-100));
+  --foreground: color-mix(
+    in srgb,
+    var(--color-mauve-50) 86%,
+    var(--color-mauve-100)
+  );
   --card: color-mix(
     in srgb,
     var(--color-mauve-900) 34%,
@@ -153,31 +157,63 @@
   --popover-foreground: var(--foreground);
   --primary: var(--color-mauve-500);
   --primary-foreground: #ffffff;
-  --secondary: color-mix(in srgb, var(--color-mauve-900) 82%, var(--color-mauve-800));
+  --secondary: color-mix(
+    in srgb,
+    var(--color-mauve-900) 82%,
+    var(--color-mauve-800)
+  );
   --secondary-foreground: color-mix(
     in srgb,
     var(--color-mauve-50) 70%,
     var(--color-mauve-100)
   );
-  --muted: color-mix(in srgb, var(--color-mauve-900) 74%, var(--color-mauve-800));
+  --muted: color-mix(
+    in srgb,
+    var(--color-mauve-900) 74%,
+    var(--color-mauve-800)
+  );
   --muted-foreground: color-mix(
     in srgb,
     var(--color-mauve-300) 76%,
     var(--color-mauve-200)
   );
-  --accent: color-mix(in srgb, var(--color-mauve-700) 64%, var(--color-mauve-800));
+  --accent: color-mix(
+    in srgb,
+    var(--color-mauve-700) 64%,
+    var(--color-mauve-800)
+  );
   --accent-foreground: var(--color-mauve-100);
   --destructive: oklch(0.67 0.2 25);
   --destructive-foreground: oklch(0.985 0 0);
-  --border: color-mix(in srgb, var(--color-mauve-700) 64%, var(--color-mauve-800));
+  --border: color-mix(
+    in srgb,
+    var(--color-mauve-700) 64%,
+    var(--color-mauve-800)
+  );
   --warning: oklch(0.78 0.16 85);
   --warning-foreground: oklch(0.92 0.04 85);
-  --input: color-mix(in srgb, var(--color-mauve-700) 58%, var(--color-mauve-800));
+  --input: color-mix(
+    in srgb,
+    var(--color-mauve-700) 58%,
+    var(--color-mauve-800)
+  );
   --ring: var(--color-mauve-500);
   --focus-ring: color-mix(in srgb, var(--ring) 48%, transparent);
-  --surface-1: color-mix(in srgb, var(--color-mauve-950) 74%, var(--color-mauve-900));
-  --surface-2: color-mix(in srgb, var(--color-mauve-900) 78%, var(--color-mauve-800));
-  --surface-3: color-mix(in srgb, var(--color-mauve-800) 74%, var(--color-mauve-700));
+  --surface-1: color-mix(
+    in srgb,
+    var(--color-mauve-950) 74%,
+    var(--color-mauve-900)
+  );
+  --surface-2: color-mix(
+    in srgb,
+    var(--color-mauve-900) 78%,
+    var(--color-mauve-800)
+  );
+  --surface-3: color-mix(
+    in srgb,
+    var(--color-mauve-800) 74%,
+    var(--color-mauve-700)
+  );
   --overlay-scrim: color-mix(in srgb, var(--color-mauve-950) 72%, transparent);
   --overlay-scrim-strong: color-mix(
     in srgb,
@@ -193,13 +229,25 @@
   --chart-3: oklch(0.769 0.188 70.08);
   --chart-4: oklch(0.627 0.265 303.9);
   --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: color-mix(in srgb, var(--color-mauve-950) 68%, var(--color-mauve-900));
+  --sidebar: color-mix(
+    in srgb,
+    var(--color-mauve-950) 68%,
+    var(--color-mauve-900)
+  );
   --sidebar-foreground: var(--color-mauve-100);
   --sidebar-primary: var(--color-mauve-500);
   --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: color-mix(in srgb, var(--color-mauve-900) 68%, var(--color-mauve-800));
+  --sidebar-accent: color-mix(
+    in srgb,
+    var(--color-mauve-900) 68%,
+    var(--color-mauve-800)
+  );
   --sidebar-accent-foreground: var(--color-mauve-100);
-  --sidebar-border: color-mix(in srgb, var(--color-mauve-700) 62%, var(--color-mauve-800));
+  --sidebar-border: color-mix(
+    in srgb,
+    var(--color-mauve-700) 62%,
+    var(--color-mauve-800)
+  );
   --sidebar-ring: var(--color-mauve-500);
   --shell-surface: var(--background);
   --shell-surface-muted: var(--surface-3);

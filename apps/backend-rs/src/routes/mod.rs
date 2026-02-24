@@ -7,6 +7,7 @@ pub mod agent_chats;
 pub mod agent_inbox;
 pub mod agent_management;
 pub mod agent_playbooks;
+pub mod agent_tools;
 pub mod ai_agent;
 pub mod applications;
 pub mod approvals;
@@ -65,6 +66,7 @@ pub fn v1_router() -> Router<AppState> {
         .merge(agent_inbox::router())
         .merge(agent_management::router())
         .merge(agent_playbooks::router())
+        .merge(agent_tools::router())
         .merge(ai_agent::router())
         .merge(organizations::router())
         .merge(properties::router())

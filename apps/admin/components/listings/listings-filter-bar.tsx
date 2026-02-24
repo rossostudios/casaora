@@ -202,20 +202,22 @@ export function ListingsFilterBar({
         </div>
 
         <DropdownMenu>
-          <DropdownMenuTrigger>
-            <Button
-              className="h-10 gap-2 rounded-xl border-border/60 font-semibold text-muted-foreground hover:bg-muted"
-              size="sm"
-              variant="outline"
-            >
-              <Icon icon={FilterIcon} size={15} />
-              {isEn ? "Filters" : "Filtros"}
-              {activeCount > 0 ? (
-                <div className="flex h-4 w-4 items-center justify-center rounded-full bg-primary font-bold text-[10px] text-primary-foreground">
-                  {activeCount}
-                </div>
-              ) : null}
-            </Button>
+          <DropdownMenuTrigger
+            render={
+              <Button
+                className="h-10 gap-2 rounded-xl border-border/60 font-semibold text-muted-foreground hover:bg-muted"
+                size="sm"
+                variant="outline"
+              />
+            }
+          >
+            <Icon icon={FilterIcon} size={15} />
+            {isEn ? "Filters" : "Filtros"}
+            {activeCount > 0 ? (
+              <div className="flex h-4 w-4 items-center justify-center rounded-full bg-primary font-bold text-[10px] text-primary-foreground">
+                {activeCount}
+              </div>
+            ) : null}
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="min-w-[12rem] rounded-xl">
             <DropdownMenuLabel className="text-[10px] text-muted-foreground/60 uppercase tracking-widest">

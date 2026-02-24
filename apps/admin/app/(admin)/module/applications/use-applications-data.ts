@@ -140,6 +140,18 @@ export function useApplicationsData({
           asNumber(application.income_to_rent_ratio) > 0
             ? asNumber(application.income_to_rent_ratio)
             : null,
+        predictive_score:
+          asNumber(application.predictive_score) > 0
+            ? asNumber(application.predictive_score)
+            : null,
+        risk_factors: Array.isArray(application.risk_factors)
+          ? (application.risk_factors as {
+              factor: string;
+              severity: string;
+              detail: string;
+            }[])
+          : null,
+        ml_screened_at: asString(application.ml_screened_at).trim() || null,
       } satisfies ApplicationRow;
     });
   }, [applications, isEn]);

@@ -18,6 +18,10 @@ const ApplicationsManager = dynamic(() =>
   import("./applications-manager").then((m) => m.ApplicationsManager)
 );
 
+const LeasingPipeline = dynamic(() =>
+  import("./leasing-pipeline").then((m) => m.LeasingPipeline)
+);
+
 type PageProps = {
   searchParams: Promise<{ success?: string; error?: string }>;
 };
@@ -65,8 +69,9 @@ export default async function ApplicationsModulePage({
   let members: Record<string, unknown>[] = [];
   let messageTemplates: Record<string, unknown>[] = [];
   let submissionAlerts: Record<string, unknown>[] = [];
+  let leasingConversations: Record<string, unknown>[] = [];
   try {
-    const [applicationRows, memberRows, templateRows, alertRows] =
+    const [applicationRows, memberRows, templateRows, alertRows, convRows] =
       await Promise.all([
         fetchList("/applications", orgId, 250),
         fetchList(`/organizations/${orgId}/members`, orgId, 150),
@@ -76,12 +81,14 @@ export default async function ApplicationsModulePage({
           event_type: "application_submit_failed",
           status: "failed",
         }),
+        fetchList("/leasing-conversations", orgId, 200).catch(() => []),
       ]);
 
     applications = applicationRows as Record<string, unknown>[];
     members = memberRows as Record<string, unknown>[];
     messageTemplates = templateRows as Record<string, unknown>[];
     submissionAlerts = alertRows as Record<string, unknown>[];
+    leasingConversations = convRows as Record<string, unknown>[];
   } catch (err) {
     const message = errorMessage(err);
     if (isOrgMembershipError(message)) {
@@ -164,6 +171,29 @@ export default async function ApplicationsModulePage({
               applications={applications}
               members={members}
               messageTemplates={messageTemplates}
+            />
+          </Suspense>
+        </CardContent>
+      </Card>
+
+      {/* Leasing Pipeline Kanban */}
+      <Card>
+        <CardHeader>
+          <CardTitle>
+            {isEn ? "AI Leasing Pipeline" : "Pipeline de Leasing IA"}
+          </CardTitle>
+          <CardDescription>
+            {isEn
+              ? "Track AI-driven leasing conversations through the qualification funnel. Leads are auto-qualified, matched to units, and scheduled for tours."
+              : "Rastrea las conversaciones de leasing impulsadas por IA a través del embudo de calificación. Los prospectos se califican automáticamente, se emparejan con unidades y se programan para tours."}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Suspense fallback={null}>
+            <LeasingPipeline
+              initialConversations={leasingConversations as never[]}
+              locale={locale}
+              orgId={orgId}
             />
           </Suspense>
         </CardContent>

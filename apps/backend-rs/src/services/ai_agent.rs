@@ -78,6 +78,7 @@ pub fn list_supported_tables() -> Vec<String> {
     let mut tables = vec![
         "agent_approval_policies",
         "agent_approvals",
+        "agent_execution_plans",
         "agent_memory",
         "agent_schedules",
         "anomaly_alerts",
@@ -86,6 +87,7 @@ pub fn list_supported_tables() -> Vec<String> {
         "audit_logs",
         "calendar_blocks",
         "collection_records",
+        "escalation_thresholds",
         "escrow_events",
         "expenses",
         "guests",
@@ -96,9 +98,11 @@ pub fn list_supported_tables() -> Vec<String> {
         "lease_abstractions",
         "lease_charges",
         "leases",
+        "leasing_conversations",
         "integrations",
         "listings",
         "maintenance_requests",
+        "market_data_snapshots",
         "maintenance_sla_config",
         "message_logs",
         "message_templates",
@@ -107,12 +111,33 @@ pub fn list_supported_tables() -> Vec<String> {
         "owner_statements",
         "portfolio_snapshots",
         "pricing_recommendations",
+        "pricing_rule_sets",
         "pricing_templates",
         "properties",
+        "property_matching_scores",
         "reservations",
         "tasks",
+        "tour_schedules",
         "units",
         "vendor_roster",
+        "vendor_work_orders",
+        "condition_baselines",
+        "bank_transactions",
+        "reconciliation_runs",
+        "reconciliation_rules",
+        "voice_interactions",
+        "voice_agent_config",
+        "compliance_rules",
+        "deadline_alerts",
+        "portfolio_benchmarks",
+        "performance_digests",
+        "iot_devices",
+        "iot_events",
+        "access_codes",
+        "ml_predictions",
+        "demand_forecasts",
+        "agent_playbooks",
+        "agent_health_metrics",
     ]
     .into_iter()
     .map(ToOwned::to_owned)
@@ -891,7 +916,7 @@ fn extract_content_text(content: Option<&Value>) -> String {
     String::new()
 }
 
-fn tool_definitions(allowed_tools: Option<&[String]>) -> Vec<Value> {
+pub fn tool_definitions(allowed_tools: Option<&[String]>) -> Vec<Value> {
     let definitions = vec![
         json!({
             "type": "function",
@@ -1247,7 +1272,23 @@ fn tool_definitions(allowed_tools: Option<&[String]>) -> Vec<Value> {
                 }
             }
         }),
-        // --- Phase 1: Planning & Decomposition ---
+        // --- Phase 1: Escalation & Planning ---
+        json!({
+            "type": "function",
+            "function": {
+                "name": "check_escalation_thresholds",
+                "description": "Check if an action exceeds configured escalation thresholds (dollar amount, action count, risk score). Returns whether the action should proceed, be escalated, or blocked.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "threshold_type": {"type": "string", "enum": ["dollar_amount", "action_count", "risk_score"], "description": "Type of threshold to check."},
+                        "value": {"type": "number", "description": "The value to check against thresholds (e.g., dollar amount)."},
+                        "context": {"type": "string", "description": "Description of the action being checked."}
+                    },
+                    "required": ["threshold_type", "value"]
+                }
+            }
+        }),
         json!({
             "type": "function",
             "function": {
@@ -1391,6 +1432,88 @@ fn tool_definitions(allowed_tools: Option<&[String]>) -> Vec<Value> {
                 }
             }
         }),
+        // Sprint 2: Leasing Engine tools
+        json!({
+            "type": "function",
+            "function": {
+                "name": "match_applicant_to_units",
+                "description": "Match a rental applicant to available units by budget, bedrooms, amenities, and location. Returns ranked matches with scoring breakdown.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "application_id": {"type": "string", "description": "UUID of the application."},
+                        "max_budget": {"type": "number", "description": "Maximum monthly budget the applicant can afford."},
+                        "min_bedrooms": {"type": "integer", "description": "Minimum bedrooms required."},
+                        "preferred_amenities": {"type": "array", "items": {"type": "string"}, "description": "Preferred amenities (e.g. parking, pool, gym)."}
+                    },
+                    "required": ["application_id"]
+                }
+            }
+        }),
+        json!({
+            "type": "function",
+            "function": {
+                "name": "auto_qualify_lead",
+                "description": "Auto-qualify a rental lead based on income-to-rent ratio, document completeness, employment stability, and guarantor status. Returns qualification decision and score breakdown.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "application_id": {"type": "string", "description": "UUID of the application to qualify."}
+                    },
+                    "required": ["application_id"]
+                }
+            }
+        }),
+        json!({
+            "type": "function",
+            "function": {
+                "name": "send_tour_reminder",
+                "description": "Send a tour reminder via WhatsApp to a prospect 24 hours before their scheduled property viewing.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "tour_id": {"type": "string", "description": "UUID of the tour schedule entry."}
+                    },
+                    "required": ["tour_id"]
+                }
+            }
+        }),
+        // Sprint 3: Dynamic Pricing tools
+        json!({
+            "type": "function",
+            "function": {
+                "name": "fetch_market_data",
+                "description": "Store a market data snapshot with competitor rates, demand indices, and local market averages. Returns 14-day market summary.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "property_id": {"type": "string", "description": "Optional property UUID to scope the snapshot."},
+                        "source": {"type": "string", "enum": ["manual", "ical_import", "api_scrape", "competitor_feed"], "default": "manual"},
+                        "competitor_name": {"type": "string", "description": "Name of the competitor."},
+                        "competitor_rate": {"type": "number", "description": "Competitor nightly rate."},
+                        "local_avg_rate": {"type": "number", "description": "Local market average nightly rate."},
+                        "demand_index": {"type": "number", "description": "Demand index (0-1 scale)."},
+                        "event_indicator": {"type": "string", "description": "Special event name driving demand."}
+                    }
+                }
+            }
+        }),
+        json!({
+            "type": "function",
+            "function": {
+                "name": "simulate_rate_impact",
+                "description": "Simulate the revenue impact of a rate change for a specific unit. Projects occupancy shift, revenue delta, and RevPAR comparison using price elasticity model.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "unit_id": {"type": "string", "description": "UUID of the unit."},
+                        "proposed_rate": {"type": "number", "description": "Proposed nightly rate to simulate."},
+                        "period_days": {"type": "integer", "minimum": 7, "maximum": 180, "default": 30, "description": "Simulation period in days."}
+                    },
+                    "required": ["unit_id", "proposed_rate"]
+                }
+            }
+        }),
         json!({
             "type": "function",
             "function": {
@@ -1489,6 +1612,57 @@ fn tool_definitions(allowed_tools: Option<&[String]>) -> Vec<Value> {
                 }
             }
         }),
+        // --- Sprint 4: Self-Driving Maintenance (new tools) ---
+        json!({
+            "type": "function",
+            "function": {
+                "name": "dispatch_to_vendor",
+                "description": "Dispatch a maintenance request to a vendor by creating a work order and sending WhatsApp notification.",
+                "needsApproval": true,
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "request_id": {"type": "string", "description": "UUID of the maintenance request."},
+                        "vendor_id": {"type": "string", "description": "UUID of the vendor to dispatch to."},
+                        "description": {"type": "string", "description": "Optional work description override."},
+                        "priority": {"type": "string", "enum": ["critical", "high", "medium", "low"], "default": "medium"},
+                        "estimated_cost": {"type": "number", "description": "Estimated cost of the work."}
+                    },
+                    "required": ["request_id", "vendor_id"]
+                }
+            }
+        }),
+        json!({
+            "type": "function",
+            "function": {
+                "name": "verify_completion",
+                "description": "Verify completion of a vendor work order. Marks verified or rejected and updates vendor stats.",
+                "needsApproval": true,
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "work_order_id": {"type": "string", "description": "UUID of the work order to verify."},
+                        "verified": {"type": "boolean", "description": "Whether the work is satisfactorily completed.", "default": true},
+                        "rating": {"type": "integer", "description": "Rating 1-5 for vendor performance."},
+                        "notes": {"type": "string", "description": "Staff notes on the verification."}
+                    },
+                    "required": ["work_order_id"]
+                }
+            }
+        }),
+        json!({
+            "type": "function",
+            "function": {
+                "name": "get_vendor_performance",
+                "description": "Get vendor performance metrics: rating, completion rate, response time, active jobs.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "vendor_id": {"type": "string", "description": "Optional UUID of a specific vendor. Omit to get all active vendors."}
+                    }
+                }
+            }
+        }),
         json!({
             "type": "function",
             "function": {
@@ -1505,6 +1679,53 @@ fn tool_definitions(allowed_tools: Option<&[String]>) -> Vec<Value> {
                 }
             }
         }),
+        // --- Sprint 5: Vision AI additional tools ---
+        json!({
+            "type": "function",
+            "function": {
+                "name": "compare_inspections",
+                "description": "Compare a current inspection against a baseline (move-in) inspection to highlight degradation per room.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "current_report_id": {"type": "string", "description": "UUID of the current inspection report."},
+                        "baseline_report_id": {"type": "string", "description": "Optional UUID of the baseline report. Auto-finds move-in baseline if omitted."},
+                        "unit_id": {"type": "string", "description": "UUID of the unit (used to find latest inspection if current_report_id omitted)."}
+                    }
+                }
+            }
+        }),
+        json!({
+            "type": "function",
+            "function": {
+                "name": "create_defect_tickets",
+                "description": "Auto-create maintenance request tickets from defects found in an inspection report.",
+                "needsApproval": true,
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "report_id": {"type": "string", "description": "UUID of the inspection report."},
+                        "min_severity": {"type": "string", "enum": ["low", "medium", "high", "critical"], "default": "medium", "description": "Minimum defect severity to create tickets for."}
+                    },
+                    "required": ["report_id"]
+                }
+            }
+        }),
+        json!({
+            "type": "function",
+            "function": {
+                "name": "verify_cleaning",
+                "description": "Analyze post-cleaning photos to verify cleaning quality. Returns pass/fail with cleanliness score.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "unit_id": {"type": "string", "description": "UUID of the unit to verify."},
+                        "photo_urls": {"type": "array", "items": {"type": "string"}, "description": "URLs of post-cleaning photos."}
+                    },
+                    "required": ["unit_id", "photo_urls"]
+                }
+            }
+        }),
         // --- Phase 4: Financial & Compliance ---
         json!({
             "type": "function",
@@ -1516,6 +1737,53 @@ fn tool_definitions(allowed_tools: Option<&[String]>) -> Vec<Value> {
                     "properties": {
                         "period_month": {"type": "string", "description": "Month in YYYY-MM format (optional, defaults to current)."}
                     }
+                }
+            }
+        }),
+        // --- Sprint 6: Cognitive Financial Reconciliation ---
+        json!({
+            "type": "function",
+            "function": {
+                "name": "import_bank_transactions",
+                "description": "Import bank transactions from CSV data (as JSON array). Skips duplicates by external_id.",
+                "needsApproval": true,
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "transactions": {"type": "array", "description": "Array of transaction objects with date, description, amount, reference, currency."},
+                        "bank_name": {"type": "string", "description": "Name of the bank (e.g., Continental, Itau, BBVA)."}
+                    },
+                    "required": ["transactions"]
+                }
+            }
+        }),
+        json!({
+            "type": "function",
+            "function": {
+                "name": "auto_reconcile_batch",
+                "description": "Run multi-pass auto-reconciliation: exact reference, amount+date, fuzzy name matching. Returns match statistics.",
+                "needsApproval": true,
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "period_month": {"type": "string", "description": "Month in YYYY-MM format (optional)."}
+                    }
+                }
+            }
+        }),
+        json!({
+            "type": "function",
+            "function": {
+                "name": "handle_split_payment",
+                "description": "Match multiple bank transactions to a single collection record (split payment).",
+                "needsApproval": true,
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "collection_id": {"type": "string", "description": "UUID of the collection record."},
+                        "transaction_ids": {"type": "array", "items": {"type": "string"}, "description": "Array of bank transaction UUIDs."}
+                    },
+                    "required": ["collection_id", "transaction_ids"]
                 }
             }
         }),
@@ -1558,6 +1826,49 @@ fn tool_definitions(allowed_tools: Option<&[String]>) -> Vec<Value> {
                     "properties": {
                         "days_ahead": {"type": "integer", "minimum": 1, "maximum": 180, "default": 30}
                     }
+                }
+            }
+        }),
+        json!({
+            "type": "function",
+            "function": {
+                "name": "check_paraguayan_compliance",
+                "description": "Check a lease against Paraguayan law (Civil Code, IVA, RUC, guarantor, notice period, minimum term). Requires abstraction to exist.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "lease_id": {"type": "string", "description": "UUID of the lease to check against Paraguayan regulations."}
+                    },
+                    "required": ["lease_id"]
+                }
+            }
+        }),
+        json!({
+            "type": "function",
+            "function": {
+                "name": "track_lease_deadlines",
+                "description": "Create deadline alerts for all critical lease dates: expiry, renewal notice, insurance, inspections. Returns all alerts.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "lease_id": {"type": "string", "description": "UUID of the lease to track deadlines for."}
+                    },
+                    "required": ["lease_id"]
+                }
+            }
+        }),
+        json!({
+            "type": "function",
+            "function": {
+                "name": "auto_populate_lease_charges",
+                "description": "Auto-create lease charges (rent, deposit, IVA, common expenses) from abstracted lease terms.",
+                "needsApproval": true,
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "lease_id": {"type": "string", "description": "UUID of the lease to populate charges for."}
+                    },
+                    "required": ["lease_id"]
                 }
             }
         }),
@@ -1617,6 +1928,311 @@ fn tool_definitions(allowed_tools: Option<&[String]>) -> Vec<Value> {
                 }
             }
         }),
+        // --- Sprint 9: Portfolio Intelligence ---
+        json!({
+            "type": "function",
+            "function": {
+                "name": "get_portfolio_trends",
+                "description": "Get N-month KPI trends (revenue, occupancy, NOI, RevPAR) from portfolio snapshots. Shows month-over-month growth.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "months": {"type": "integer", "minimum": 1, "maximum": 24, "default": 12}
+                    }
+                }
+            }
+        }),
+        json!({
+            "type": "function",
+            "function": {
+                "name": "get_property_heatmap",
+                "description": "Rank properties by performance, identify outliers (above/below average), with revenue, occupancy, NOI per property.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "metric": {"type": "string", "enum": ["revenue", "occupancy", "noi"], "default": "revenue"},
+                        "period_days": {"type": "integer", "minimum": 7, "maximum": 365, "default": 30}
+                    }
+                }
+            }
+        }),
+        json!({
+            "type": "function",
+            "function": {
+                "name": "generate_performance_digest",
+                "description": "Generate a structured weekly or monthly performance digest with KPIs, period-over-period comparison, and maintenance stats.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "digest_type": {"type": "string", "enum": ["weekly", "monthly"], "default": "weekly"}
+                    }
+                }
+            }
+        }),
+        json!({
+            "type": "function",
+            "function": {
+                "name": "simulate_renovation_roi",
+                "description": "Project ROI for a renovation: payback period, cumulative gains over N years, accounting for vacancy during renovation.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "renovation_cost": {"type": "number", "description": "Total renovation cost."},
+                        "current_monthly_rent": {"type": "number", "description": "Current monthly rent before renovation."},
+                        "projected_monthly_rent": {"type": "number", "description": "Expected monthly rent after renovation."},
+                        "vacancy_months_during_renovation": {"type": "number", "description": "Months vacant during renovation.", "default": 1},
+                        "projection_years": {"type": "integer", "minimum": 1, "maximum": 20, "default": 5}
+                    },
+                    "required": ["renovation_cost", "current_monthly_rent", "projected_monthly_rent"]
+                }
+            }
+        }),
+        json!({
+            "type": "function",
+            "function": {
+                "name": "simulate_stress_test",
+                "description": "Stress test the portfolio: simulate a market downturn with occupancy drop, rate reduction, and expense increase over N months.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "base_monthly_revenue": {"type": "number", "description": "Current monthly revenue."},
+                        "base_monthly_expenses": {"type": "number", "description": "Current monthly expenses."},
+                        "occupancy_drop_pct": {"type": "number", "description": "Occupancy reduction in percentage.", "default": 20},
+                        "rate_drop_pct": {"type": "number", "description": "Rate reduction in percentage.", "default": 10},
+                        "expense_increase_pct": {"type": "number", "description": "Expense increase in percentage.", "default": 5},
+                        "duration_months": {"type": "integer", "minimum": 1, "maximum": 24, "default": 6}
+                    },
+                    "required": ["base_monthly_revenue", "base_monthly_expenses"]
+                }
+            }
+        }),
+        // --- Sprint 7: Voice Agent tools ---
+        json!({
+            "type": "function",
+            "function": {
+                "name": "voice_lookup_caller",
+                "description": "Look up a caller by phone number in guest and tenant records.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "phone": {"type": "string", "description": "Phone number (E.164 format preferred)."}
+                    },
+                    "required": ["phone"]
+                }
+            }
+        }),
+        json!({
+            "type": "function",
+            "function": {
+                "name": "voice_create_maintenance_request",
+                "description": "Create a maintenance request from a voice call interaction.",
+                "needsApproval": true,
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "title": {"type": "string", "description": "Short title for the request."},
+                        "description": {"type": "string", "description": "Detailed description of the issue."},
+                        "caller_phone": {"type": "string", "description": "Caller's phone number."},
+                        "unit_id": {"type": "string", "description": "UUID of the unit if known."},
+                        "urgency": {"type": "string", "enum": ["critical", "high", "medium", "low"], "default": "medium"}
+                    },
+                    "required": ["description"]
+                }
+            }
+        }),
+        json!({
+            "type": "function",
+            "function": {
+                "name": "voice_check_reservation",
+                "description": "Look up upcoming or active reservations for a caller by phone or guest name.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "phone": {"type": "string", "description": "Caller's phone number."},
+                        "guest_name": {"type": "string", "description": "Guest name to search."}
+                    }
+                }
+            }
+        }),
+        json!({
+            "type": "function",
+            "function": {
+                "name": "log_voice_interaction",
+                "description": "Log a completed voice interaction with summary and actions taken.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "caller_phone": {"type": "string", "description": "Caller's phone number."},
+                        "summary": {"type": "string", "description": "Summary of the interaction."},
+                        "duration_seconds": {"type": "integer", "description": "Call duration in seconds."},
+                        "language": {"type": "string", "enum": ["es", "en"], "default": "es"},
+                        "actions_taken": {"type": "array", "items": {"type": "string"}, "description": "Actions performed during the call."},
+                        "direction": {"type": "string", "enum": ["inbound", "outbound"], "default": "inbound"}
+                    }
+                }
+            }
+        }),
+        // --- Sprint 10: IoT & Smart Lock tools ---
+        json!({
+            "type": "function",
+            "function": {
+                "name": "generate_access_code",
+                "description": "Generate a time-limited access code for a smart lock on a unit. Supports temporary, permanent, one-time codes.",
+                "needsApproval": true,
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "unit_id": {"type": "string", "description": "UUID of the unit to generate code for."},
+                        "reservation_id": {"type": "string", "description": "Optional reservation UUID to link."},
+                        "lease_id": {"type": "string", "description": "Optional lease UUID to link."},
+                        "guest_name": {"type": "string"},
+                        "guest_phone": {"type": "string"},
+                        "valid_hours": {"type": "integer", "default": 72, "description": "Hours the code is valid."},
+                        "code_type": {"type": "string", "enum": ["temporary", "permanent", "one_time", "recurring"], "default": "temporary"}
+                    },
+                    "required": ["unit_id"]
+                }
+            }
+        }),
+        json!({
+            "type": "function",
+            "function": {
+                "name": "send_access_code",
+                "description": "Send an existing access code to the guest via WhatsApp, SMS, or email.",
+                "needsApproval": true,
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "code_id": {"type": "string", "description": "UUID of the access code to send."},
+                        "send_via": {"type": "string", "enum": ["whatsapp", "sms", "email"], "default": "whatsapp"}
+                    },
+                    "required": ["code_id"]
+                }
+            }
+        }),
+        json!({
+            "type": "function",
+            "function": {
+                "name": "revoke_access_code",
+                "description": "Revoke an access code by ID, or revoke all active codes for a unit.",
+                "needsApproval": true,
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "code_id": {"type": "string", "description": "UUID of the access code to revoke."},
+                        "unit_id": {"type": "string", "description": "UUID of the unit to revoke all codes for."}
+                    }
+                }
+            }
+        }),
+        json!({
+            "type": "function",
+            "function": {
+                "name": "process_sensor_event",
+                "description": "Process an IoT sensor event: store reading, check thresholds, auto-create maintenance tickets for critical alerts.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "device_id": {"type": "string", "description": "UUID of the IoT device."},
+                        "event_type": {"type": "string", "enum": ["reading", "alert", "status_change", "lock_action", "battery_low", "offline"]},
+                        "value": {"type": "number", "description": "Sensor reading value."},
+                        "unit_of_measure": {"type": "string", "description": "Unit of measure (%, °C, etc.)."},
+                        "description": {"type": "string"}
+                    },
+                    "required": ["device_id"]
+                }
+            }
+        }),
+        json!({
+            "type": "function",
+            "function": {
+                "name": "get_device_status",
+                "description": "Get IoT device status summary: online/offline counts, battery levels. Optionally filter by type or unit.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "device_type": {"type": "string", "description": "Filter by device type."},
+                        "unit_id": {"type": "string", "description": "Filter by unit UUID."}
+                    }
+                }
+            }
+        }),
+        // --- Sprint 12: Autonomous Operations ---
+        json!({
+            "type": "function",
+            "function": {
+                "name": "evaluate_agent_response",
+                "description": "Evaluate an agent's response quality with accuracy, helpfulness, and safety scores. Stores evaluation for health tracking.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "agent_slug": {"type": "string", "description": "The agent being evaluated."},
+                        "chat_id": {"type": "string", "description": "Optional chat session ID."},
+                        "accuracy_score": {"type": "number", "minimum": 0, "maximum": 1, "description": "How factually accurate was the response (0-1)."},
+                        "helpfulness_score": {"type": "number", "minimum": 0, "maximum": 1, "description": "How helpful was the response (0-1)."},
+                        "safety_score": {"type": "number", "minimum": 0, "maximum": 1, "description": "How safe was the response (0-1). Default 1.0."},
+                        "latency_ms": {"type": "integer", "description": "Response latency in milliseconds."},
+                        "cost_estimate": {"type": "number", "description": "Estimated cost in USD."},
+                        "model_used": {"type": "string", "description": "Model identifier used."}
+                    },
+                    "required": ["agent_slug", "accuracy_score", "helpfulness_score"]
+                }
+            }
+        }),
+        json!({
+            "type": "function",
+            "function": {
+                "name": "get_agent_health",
+                "description": "Get agent health metrics: success rates, average scores, latency, cost, and daily trends.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "days": {"type": "integer", "minimum": 1, "maximum": 90, "default": 30, "description": "Number of days to look back (default 30)."}
+                    }
+                }
+            }
+        }),
+        json!({
+            "type": "function",
+            "function": {
+                "name": "execute_playbook",
+                "description": "Execute an agent playbook: a sequence of steps (messages or tool calls) run by a designated agent.",
+                "needsApproval": true,
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "playbook_id": {"type": "string", "description": "UUID of the playbook to execute."}
+                    },
+                    "required": ["playbook_id"]
+                }
+            }
+        }),
+        // --- Sprint 11: Predictive Intelligence ---
+        json!({
+            "type": "function",
+            "function": {
+                "name": "get_risk_radar",
+                "description": "Get aggregated risk radar: predicted risks across all categories (tenant, demand, maintenance, churn, pricing, anomaly) with 30-day demand outlook.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {}
+                }
+            }
+        }),
+        json!({
+            "type": "function",
+            "function": {
+                "name": "forecast_demand",
+                "description": "Generate demand forecasts for the next N days using historical reservation patterns. Predicts occupancy, ADR, and demand level per date.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "days_ahead": {"type": "integer", "minimum": 7, "maximum": 180, "default": 90, "description": "Number of days to forecast (default 90)."},
+                        "unit_id": {"type": "string", "description": "Optional unit UUID to forecast a specific unit. Omit for org-wide forecast."}
+                    }
+                }
+            }
+        }),
     ];
 
     let Some(allowed_tools) = allowed_tools else {
@@ -1647,19 +2263,19 @@ fn tool_definitions(allowed_tools: Option<&[String]>) -> Vec<Value> {
         .collect()
 }
 
-struct ToolContext<'a> {
-    org_id: &'a str,
-    role: &'a str,
-    allow_mutations: bool,
-    confirm_write: bool,
-    allowed_tools: Option<&'a [String]>,
-    agent_slug: Option<&'a str>,
-    chat_id: Option<&'a str>,
-    requested_by_user_id: Option<&'a str>,
-    approved_execution: bool,
+pub struct ToolContext<'a> {
+    pub org_id: &'a str,
+    pub role: &'a str,
+    pub allow_mutations: bool,
+    pub confirm_write: bool,
+    pub allowed_tools: Option<&'a [String]>,
+    pub agent_slug: Option<&'a str>,
+    pub chat_id: Option<&'a str>,
+    pub requested_by_user_id: Option<&'a str>,
+    pub approved_execution: bool,
 }
 
-async fn execute_tool(
+pub async fn execute_tool(
     state: &AppState,
     tool_name: &str,
     args: &Map<String, Value>,
@@ -1746,6 +2362,9 @@ async fn execute_tool(
             tool_store_memory(state, context.org_id, context.agent_slug, args).await
         }
         // Phase 1: Planning & Decomposition
+        "check_escalation_thresholds" => {
+            tool_check_escalation_thresholds(state, context.org_id, context.agent_slug, args).await
+        }
         "create_execution_plan" => tool_create_execution_plan(args),
         "summarize_conversation" => tool_summarize_conversation(args),
         // Phase 2: Leasing & Revenue
@@ -1761,11 +2380,26 @@ async fn execute_tool(
         "send_application_update" => {
             crate::services::leasing_agent::tool_send_application_update(state, context.org_id, args).await
         }
+        "match_applicant_to_units" => {
+            crate::services::leasing_agent::tool_match_applicant_to_units(state, context.org_id, args).await
+        }
+        "auto_qualify_lead" => {
+            crate::services::leasing_agent::tool_auto_qualify_lead(state, context.org_id, args).await
+        }
+        "send_tour_reminder" => {
+            crate::services::leasing_agent::tool_send_tour_reminder(state, context.org_id, args).await
+        }
         "generate_pricing_recommendations" => {
             crate::services::dynamic_pricing::tool_generate_pricing_recommendations(state, context.org_id, args).await
         }
         "apply_pricing_recommendation" => {
             crate::services::dynamic_pricing::tool_apply_pricing_recommendation(state, context.org_id, args).await
+        }
+        "fetch_market_data" => {
+            crate::services::dynamic_pricing::tool_fetch_market_data(state, context.org_id, args).await
+        }
+        "simulate_rate_impact" => {
+            crate::services::dynamic_pricing::tool_simulate_rate_impact(state, context.org_id, args).await
         }
         "score_application" => {
             crate::services::tenant_screening::tool_score_application(state, context.org_id, args).await
@@ -1789,12 +2423,39 @@ async fn execute_tool(
         "select_vendor" => {
             crate::services::maintenance_dispatch::tool_select_vendor(state, context.org_id, args).await
         }
+        "dispatch_to_vendor" => {
+            crate::services::maintenance_dispatch::tool_dispatch_to_vendor(state, context.org_id, args).await
+        }
+        "verify_completion" => {
+            crate::services::maintenance_dispatch::tool_verify_completion(state, context.org_id, args).await
+        }
+        "get_vendor_performance" => {
+            crate::services::maintenance_dispatch::tool_get_vendor_performance(state, context.org_id, args).await
+        }
         "analyze_inspection_photos" => {
             crate::services::vision_ai::tool_analyze_inspection_photos(state, context.org_id, args).await
+        }
+        "compare_inspections" => {
+            crate::services::vision_ai::tool_compare_inspections(state, context.org_id, args).await
+        }
+        "create_defect_tickets" => {
+            crate::services::vision_ai::tool_create_defect_tickets(state, context.org_id, args).await
+        }
+        "verify_cleaning" => {
+            crate::services::vision_ai::tool_verify_cleaning(state, context.org_id, args).await
         }
         // Phase 4: Financial & Compliance
         "auto_reconcile_all" => {
             crate::services::reconciliation::tool_auto_reconcile_all(state, context.org_id, args).await
+        }
+        "import_bank_transactions" => {
+            crate::services::reconciliation::tool_import_bank_transactions(state, context.org_id, args).await
+        }
+        "auto_reconcile_batch" => {
+            crate::services::reconciliation::tool_auto_reconcile_batch(state, context.org_id, args).await
+        }
+        "handle_split_payment" => {
+            crate::services::reconciliation::tool_handle_split_payment(state, context.org_id, args).await
         }
         "abstract_lease_document" => {
             crate::services::lease_abstraction::tool_abstract_lease_document(state, context.org_id, args).await
@@ -1804,6 +2465,15 @@ async fn execute_tool(
         }
         "check_document_expiry" => {
             crate::services::lease_abstraction::tool_check_document_expiry(state, context.org_id, args).await
+        }
+        "check_paraguayan_compliance" => {
+            crate::services::lease_abstraction::tool_check_paraguayan_compliance(state, context.org_id, args).await
+        }
+        "track_lease_deadlines" => {
+            crate::services::lease_abstraction::tool_track_lease_deadlines(state, context.org_id, args).await
+        }
+        "auto_populate_lease_charges" => {
+            crate::services::lease_abstraction::tool_auto_populate_lease_charges(state, context.org_id, args).await
         }
         "get_regulatory_guidance" => {
             tool_search_knowledge(state, context.org_id, args).await
@@ -1817,6 +2487,67 @@ async fn execute_tool(
         }
         "simulate_investment_scenario" => {
             crate::services::scenario_simulation::tool_simulate_investment_scenario(args)
+        }
+        "get_portfolio_trends" => {
+            crate::services::portfolio::tool_get_portfolio_trends(state, context.org_id, args).await
+        }
+        "get_property_heatmap" => {
+            crate::services::portfolio::tool_get_property_heatmap(state, context.org_id, args).await
+        }
+        "generate_performance_digest" => {
+            crate::services::portfolio::tool_generate_performance_digest(state, context.org_id, args).await
+        }
+        "simulate_renovation_roi" => {
+            crate::services::scenario_simulation::tool_simulate_renovation_roi(args)
+        }
+        "simulate_stress_test" => {
+            crate::services::scenario_simulation::tool_simulate_stress_test(args)
+        }
+        // Sprint 7: Voice Agent
+        "voice_lookup_caller" => {
+            crate::services::voice_agent::tool_voice_lookup_caller(state, context.org_id, args).await
+        }
+        "voice_create_maintenance_request" => {
+            crate::services::voice_agent::tool_voice_create_maintenance_request(state, context.org_id, args).await
+        }
+        "voice_check_reservation" => {
+            crate::services::voice_agent::tool_voice_check_reservation(state, context.org_id, args).await
+        }
+        "log_voice_interaction" => {
+            crate::services::voice_agent::tool_log_voice_interaction(state, context.org_id, args).await
+        }
+        // Sprint 10: IoT
+        "generate_access_code" => {
+            crate::services::iot::tool_generate_access_code(state, context.org_id, args).await
+        }
+        "send_access_code" => {
+            crate::services::iot::tool_send_access_code(state, context.org_id, args).await
+        }
+        "revoke_access_code" => {
+            crate::services::iot::tool_revoke_access_code(state, context.org_id, args).await
+        }
+        "process_sensor_event" => {
+            crate::services::iot::tool_process_sensor_event(state, context.org_id, args).await
+        }
+        "get_device_status" => {
+            crate::services::iot::tool_get_device_status(state, context.org_id, args).await
+        }
+        // Sprint 11: Predictive Intelligence
+        "get_risk_radar" => {
+            crate::services::tenant_screening::tool_get_risk_radar(state, context.org_id, args).await
+        }
+        "forecast_demand" => {
+            crate::services::tenant_screening::tool_forecast_demand(state, context.org_id, args).await
+        }
+        // Sprint 12: Autonomous Operations
+        "evaluate_agent_response" => {
+            tool_evaluate_agent_response(state, context.org_id, args).await
+        }
+        "get_agent_health" => {
+            tool_get_agent_health(state, context.org_id, args).await
+        }
+        "execute_playbook" => {
+            tool_execute_playbook(state, context.org_id, context.role, context.allow_mutations, context.confirm_write, args).await
         }
         _ => Ok(json!({
             "ok": false,
@@ -2515,11 +3246,10 @@ async fn tool_classify_and_delegate(
     }
 
     if best_score == 0 || best_slug.is_empty() {
-        return Ok(json!({
-            "ok": false,
-            "error": "Could not classify intent. Please handle directly or specify an agent.",
-            "suggestion": "Try delegate_to_agent with an explicit agent_slug."
-        }));
+        // Fallback: try guest-concierge as the general-purpose agent
+        best_slug = "guest-concierge";
+        best_desc = "Fallback to general-purpose concierge";
+        best_score = 1;
     }
 
     // Delegate to the identified agent
@@ -2529,7 +3259,20 @@ async fn tool_classify_and_delegate(
 
     let result = tool_delegate_to_agent(
         state, org_id, role, allow_mutations, confirm_write, &delegate_args,
-    ).await?;
+    ).await;
+
+    // Fallback: if primary agent fails, try guest-concierge
+    let result = match result {
+        Ok(v) => v,
+        Err(e) if best_slug != "guest-concierge" => {
+            tracing::warn!(agent = best_slug, error = %e, "Delegation failed, falling back to guest-concierge");
+            let mut fallback_args = Map::new();
+            fallback_args.insert("agent_slug".to_string(), Value::String("guest-concierge".to_string()));
+            fallback_args.insert("message".to_string(), Value::String(user_message.to_string()));
+            tool_delegate_to_agent(state, org_id, role, allow_mutations, confirm_write, &fallback_args).await?
+        }
+        Err(e) => return Err(e),
+    };
 
     let delegation_ok = result
         .as_object()
@@ -2564,6 +3307,336 @@ async fn tool_classify_and_delegate(
     enriched.insert("classification_score".to_string(), json!(best_score));
 
     Ok(Value::Object(enriched))
+}
+
+/// Evaluate an agent's response quality (Sprint 12).
+async fn tool_evaluate_agent_response(
+    state: &AppState,
+    org_id: &str,
+    args: &Map<String, Value>,
+) -> AppResult<Value> {
+    let pool = db_pool(state)?;
+
+    let agent_slug = args.get("agent_slug").and_then(Value::as_str).unwrap_or_default();
+    let chat_id = args.get("chat_id").and_then(Value::as_str).unwrap_or_default();
+    let accuracy = args.get("accuracy_score").and_then(Value::as_f64).unwrap_or(0.0).clamp(0.0, 1.0);
+    let helpfulness = args.get("helpfulness_score").and_then(Value::as_f64).unwrap_or(0.0).clamp(0.0, 1.0);
+    let safety = args.get("safety_score").and_then(Value::as_f64).unwrap_or(1.0).clamp(0.0, 1.0);
+    let latency_ms = args.get("latency_ms").and_then(Value::as_i64).unwrap_or(0) as i32;
+    let cost = args.get("cost_estimate").and_then(Value::as_f64).unwrap_or(0.0);
+    let model_used = args.get("model_used").and_then(Value::as_str).unwrap_or("unknown");
+
+    if agent_slug.is_empty() {
+        return Ok(json!({ "ok": false, "error": "agent_slug is required." }));
+    }
+
+    // Determine overall outcome from scores
+    let outcome_type = if accuracy >= 0.7 && helpfulness >= 0.6 && safety >= 0.8 {
+        "success"
+    } else if safety < 0.5 {
+        "safety_concern"
+    } else {
+        "needs_improvement"
+    };
+
+    let rating = ((accuracy * 2.0 + helpfulness * 2.0 + safety * 1.0) / 5.0 * 5.0).round() as i16;
+    let rating = rating.clamp(1, 5);
+
+    sqlx::query(
+        "INSERT INTO agent_evaluations (organization_id, agent_slug, chat_id, outcome_type, rating, accuracy_score, helpfulness_score, safety_score, latency_ms, cost_estimate, model_used)
+         VALUES ($1::uuid, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)",
+    )
+    .bind(org_id)
+    .bind(agent_slug)
+    .bind(if chat_id.is_empty() { None } else { Some(chat_id) })
+    .bind(outcome_type)
+    .bind(rating)
+    .bind(accuracy)
+    .bind(helpfulness)
+    .bind(safety)
+    .bind(latency_ms)
+    .bind(cost)
+    .bind(model_used)
+    .execute(pool)
+    .await
+    .map_err(|e| {
+        tracing::error!(error = %e, "Failed to store agent evaluation");
+        AppError::Dependency("Failed to store evaluation.".to_string())
+    })?;
+
+    Ok(json!({
+        "ok": true,
+        "agent_slug": agent_slug,
+        "outcome": outcome_type,
+        "rating": rating,
+        "scores": { "accuracy": accuracy, "helpfulness": helpfulness, "safety": safety },
+    }))
+}
+
+/// Get agent health metrics for the dashboard (Sprint 12).
+async fn tool_get_agent_health(
+    state: &AppState,
+    org_id: &str,
+    args: &Map<String, Value>,
+) -> AppResult<Value> {
+    let pool = db_pool(state)?;
+    let days = args.get("days").and_then(Value::as_i64).unwrap_or(30).clamp(1, 90) as i32;
+
+    // Get per-agent health summary
+    let rows = sqlx::query(
+        "SELECT agent_slug,
+                COUNT(*)::int AS total_evals,
+                AVG(accuracy_score)::float8 AS avg_accuracy,
+                AVG(helpfulness_score)::float8 AS avg_helpfulness,
+                AVG(safety_score)::float8 AS avg_safety,
+                AVG(latency_ms)::int AS avg_latency,
+                SUM(cost_estimate)::float8 AS total_cost,
+                AVG(rating)::float8 AS avg_rating,
+                COUNT(*) FILTER (WHERE outcome_type = 'success')::int AS success_count,
+                COUNT(*) FILTER (WHERE outcome_type = 'safety_concern')::int AS safety_concerns
+         FROM agent_evaluations
+         WHERE organization_id = $1::uuid
+           AND created_at > now() - make_interval(days => $2)
+         GROUP BY agent_slug
+         ORDER BY total_evals DESC",
+    )
+    .bind(org_id)
+    .bind(days)
+    .fetch_all(pool)
+    .await
+    .map_err(|e| {
+        tracing::error!(error = %e, "Failed to fetch agent health");
+        AppError::Dependency("Failed to fetch agent health.".to_string())
+    })?;
+
+    let agents: Vec<Value> = rows
+        .iter()
+        .map(|r| {
+            let total = r.try_get::<i32, _>("total_evals").unwrap_or(0);
+            let success = r.try_get::<i32, _>("success_count").unwrap_or(0);
+            json!({
+                "agent_slug": r.try_get::<String, _>("agent_slug").unwrap_or_default(),
+                "total_evaluations": total,
+                "success_rate": if total > 0 { format!("{:.0}%", success as f64 / total as f64 * 100.0) } else { "N/A".to_string() },
+                "avg_accuracy": format!("{:.0}%", r.try_get::<f64, _>("avg_accuracy").unwrap_or(0.0) * 100.0),
+                "avg_helpfulness": format!("{:.0}%", r.try_get::<f64, _>("avg_helpfulness").unwrap_or(0.0) * 100.0),
+                "avg_safety": format!("{:.0}%", r.try_get::<f64, _>("avg_safety").unwrap_or(0.0) * 100.0),
+                "avg_latency_ms": r.try_get::<i32, _>("avg_latency").unwrap_or(0),
+                "total_cost": format!("{:.4}", r.try_get::<f64, _>("total_cost").unwrap_or(0.0)),
+                "avg_rating": format!("{:.1}", r.try_get::<f64, _>("avg_rating").unwrap_or(0.0)),
+                "safety_concerns": r.try_get::<i32, _>("safety_concerns").unwrap_or(0),
+            })
+        })
+        .collect();
+
+    // Get daily health metrics if available
+    let daily = sqlx::query(
+        "SELECT metric_date::text, agent_slug, total_chats, total_tool_calls, avg_latency_ms, error_rate, total_cost
+         FROM agent_health_metrics
+         WHERE organization_id = $1::uuid
+           AND metric_date > CURRENT_DATE - $2
+         ORDER BY metric_date DESC
+         LIMIT 60",
+    )
+    .bind(org_id)
+    .bind(days)
+    .fetch_all(pool)
+    .await
+    .unwrap_or_default();
+
+    let daily_metrics: Vec<Value> = daily
+        .iter()
+        .map(|r| {
+            json!({
+                "date": r.try_get::<String, _>("metric_date").unwrap_or_default(),
+                "agent": r.try_get::<String, _>("agent_slug").unwrap_or_default(),
+                "chats": r.try_get::<i32, _>("total_chats").unwrap_or(0),
+                "tool_calls": r.try_get::<i32, _>("total_tool_calls").unwrap_or(0),
+                "avg_latency": r.try_get::<i32, _>("avg_latency_ms").unwrap_or(0),
+                "error_rate": format!("{:.1}%", r.try_get::<f64, _>("error_rate").unwrap_or(0.0) * 100.0),
+                "cost": format!("{:.4}", r.try_get::<f64, _>("total_cost").unwrap_or(0.0)),
+            })
+        })
+        .collect();
+
+    Ok(json!({
+        "ok": true,
+        "period_days": days,
+        "agents": agents,
+        "daily_metrics": daily_metrics,
+    }))
+}
+
+/// Execute a playbook (Sprint 12).
+async fn tool_execute_playbook(
+    state: &AppState,
+    org_id: &str,
+    role: &str,
+    allow_mutations: bool,
+    confirm_write: bool,
+    args: &Map<String, Value>,
+) -> AppResult<Value> {
+    let pool = db_pool(state)?;
+
+    let playbook_id = args.get("playbook_id").and_then(Value::as_str).unwrap_or_default();
+    if playbook_id.is_empty() {
+        return Ok(json!({ "ok": false, "error": "playbook_id is required." }));
+    }
+
+    // Fetch playbook
+    let playbook = sqlx::query(
+        "SELECT id::text, name, agent_slug, steps, trigger_conditions, is_active
+         FROM agent_playbooks
+         WHERE id = $1::uuid AND organization_id = $2::uuid",
+    )
+    .bind(playbook_id)
+    .bind(org_id)
+    .fetch_optional(pool)
+    .await
+    .map_err(|e| {
+        tracing::error!(error = %e, "Failed to fetch playbook");
+        AppError::Dependency("Failed to fetch playbook.".to_string())
+    })?;
+
+    let Some(pb) = playbook else {
+        return Ok(json!({ "ok": false, "error": "Playbook not found." }));
+    };
+
+    let is_active = pb.try_get::<bool, _>("is_active").unwrap_or(false);
+    if !is_active {
+        return Ok(json!({ "ok": false, "error": "Playbook is inactive." }));
+    }
+
+    let name = pb.try_get::<String, _>("name").unwrap_or_default();
+    let agent_slug = pb.try_get::<String, _>("agent_slug").unwrap_or_else(|_| "guest-concierge".to_string());
+    let steps: Value = pb.try_get("steps").unwrap_or(json!([]));
+
+    let step_arr = steps.as_array().cloned().unwrap_or_default();
+    let mut results: Vec<Value> = Vec::new();
+    let start = std::time::Instant::now();
+
+    for (i, step) in step_arr.iter().enumerate() {
+        let step_type = step.get("type").and_then(Value::as_str).unwrap_or("message");
+        let step_content = step.get("content").and_then(Value::as_str).unwrap_or("");
+
+        match step_type {
+            "message" => {
+                // Delegate the step message to the playbook's agent
+                let mut del_args = Map::new();
+                del_args.insert("agent_slug".to_string(), Value::String(agent_slug.clone()));
+                del_args.insert("message".to_string(), Value::String(step_content.to_string()));
+                match tool_delegate_to_agent(state, org_id, role, allow_mutations, confirm_write, &del_args).await {
+                    Ok(result) => {
+                        results.push(json!({ "step": i + 1, "type": step_type, "ok": true, "result": result }));
+                    }
+                    Err(e) => {
+                        results.push(json!({ "step": i + 1, "type": step_type, "ok": false, "error": e.to_string() }));
+                    }
+                }
+            }
+            "tool" => {
+                // Tool steps are delegated as messages to the agent which has tool access
+                let tool_name_str = step.get("tool_name").and_then(Value::as_str).unwrap_or("unknown");
+                let tool_args_desc = step.get("args")
+                    .map(|a| a.to_string())
+                    .unwrap_or_else(|| "{}".to_string());
+                let tool_message = format!("Execute tool '{}' with args: {}", tool_name_str, tool_args_desc);
+                let mut del_args = Map::new();
+                del_args.insert("agent_slug".to_string(), Value::String(agent_slug.clone()));
+                del_args.insert("message".to_string(), Value::String(tool_message));
+                match tool_delegate_to_agent(state, org_id, role, allow_mutations, confirm_write, &del_args).await {
+                    Ok(result) => {
+                        results.push(json!({ "step": i + 1, "type": "tool", "tool": tool_name_str, "ok": true, "result": result }));
+                    }
+                    Err(e) => {
+                        results.push(json!({ "step": i + 1, "type": "tool", "tool": tool_name_str, "ok": false, "error": e.to_string() }));
+                    }
+                }
+            }
+            _ => {
+                results.push(json!({ "step": i + 1, "type": step_type, "ok": false, "error": "Unknown step type" }));
+            }
+        }
+    }
+
+    let duration_ms = start.elapsed().as_millis() as i64;
+
+    // Update playbook stats
+    sqlx::query(
+        "UPDATE agent_playbooks SET last_run_at = now(), run_count = run_count + 1,
+                avg_duration_ms = COALESCE((avg_duration_ms * (run_count - 1) + $3) / run_count, $3)::int,
+                updated_at = now()
+         WHERE id = $1::uuid AND organization_id = $2::uuid",
+    )
+    .bind(playbook_id)
+    .bind(org_id)
+    .bind(duration_ms as i32)
+    .execute(pool)
+    .await
+    .ok();
+
+    let success_count = results.iter().filter(|r| r.get("ok").and_then(Value::as_bool).unwrap_or(false)).count();
+
+    Ok(json!({
+        "ok": true,
+        "playbook": name,
+        "steps_total": step_arr.len(),
+        "steps_succeeded": success_count,
+        "duration_ms": duration_ms,
+        "results": results,
+    }))
+}
+
+/// Collect daily health metrics for all agents (called by scheduler).
+pub async fn collect_daily_agent_health(state: &AppState) {
+    let pool = match state.db_pool.as_ref() {
+        Some(p) => p,
+        None => return,
+    };
+
+    // Aggregate yesterday's evaluations into health metrics
+    let result = sqlx::query(
+        "INSERT INTO agent_health_metrics (organization_id, agent_slug, metric_date, total_chats, total_tool_calls, avg_latency_ms, p95_latency_ms, error_rate, avg_accuracy, avg_helpfulness, avg_safety, total_tokens, total_cost, escalation_count, approval_count)
+         SELECT
+           organization_id,
+           agent_slug,
+           (CURRENT_DATE - 1) AS metric_date,
+           COUNT(*)::int,
+           SUM(COALESCE(tokens_used, 0))::int,
+           AVG(latency_ms)::int,
+           PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY COALESCE(latency_ms, 0))::int,
+           (COUNT(*) FILTER (WHERE outcome_type NOT IN ('success'))::float / GREATEST(COUNT(*), 1)),
+           AVG(accuracy_score),
+           AVG(helpfulness_score),
+           AVG(safety_score),
+           SUM(COALESCE(tokens_used, 0))::int,
+           SUM(COALESCE(cost_estimate, 0)),
+           0, -- escalation_count placeholder
+           COUNT(*) FILTER (WHERE approval_required = true)::int
+         FROM agent_evaluations
+         WHERE created_at >= CURRENT_DATE - 1
+           AND created_at < CURRENT_DATE
+         GROUP BY organization_id, agent_slug
+         ON CONFLICT (organization_id, agent_slug, metric_date) DO UPDATE
+           SET total_chats = EXCLUDED.total_chats,
+               total_tool_calls = EXCLUDED.total_tool_calls,
+               avg_latency_ms = EXCLUDED.avg_latency_ms,
+               p95_latency_ms = EXCLUDED.p95_latency_ms,
+               error_rate = EXCLUDED.error_rate,
+               avg_accuracy = EXCLUDED.avg_accuracy,
+               avg_helpfulness = EXCLUDED.avg_helpfulness,
+               avg_safety = EXCLUDED.avg_safety,
+               total_tokens = EXCLUDED.total_tokens,
+               total_cost = EXCLUDED.total_cost,
+               approval_count = EXCLUDED.approval_count",
+    )
+    .execute(pool)
+    .await;
+
+    match result {
+        Ok(r) => tracing::info!(rows = r.rows_affected(), "Daily agent health metrics collected"),
+        Err(e) => tracing::warn!(error = %e, "Failed to collect agent health metrics"),
+    }
 }
 
 async fn tool_get_occupancy_forecast(
@@ -3926,6 +4999,25 @@ async fn tool_recall_memory(
         })
         .collect();
 
+    // Update access_count and last_accessed_at for recalled memories
+    if !memories.is_empty() {
+        let keys: Vec<String> = memories
+            .iter()
+            .filter_map(|m| m.get("key").and_then(Value::as_str).map(ToOwned::to_owned))
+            .collect();
+        if !keys.is_empty() {
+            let _ = sqlx::query(
+                "UPDATE agent_memory SET access_count = COALESCE(access_count, 0) + 1, last_accessed_at = now()
+                 WHERE organization_id = $1::uuid AND agent_slug = $2 AND memory_key = ANY($3)"
+            )
+            .bind(org_id)
+            .bind(slug)
+            .bind(&keys)
+            .execute(pool)
+            .await;
+        }
+    }
+
     Ok(json!({
         "ok": true,
         "memories": memories,
@@ -3971,17 +5063,26 @@ async fn tool_store_memory(
         .unwrap_or(90)
         .clamp(1, 365);
 
+    // Importance scoring: higher for financial patterns, guest preferences
+    let importance_score = match context_type {
+        "financial_pattern" => 0.9,
+        "guest_preference" => 0.8,
+        "property_insight" => 0.7,
+        _ => 0.5,
+    };
+
     let slug = agent_slug.unwrap_or("supervisor");
 
     // Upsert: update if same key+agent exists, insert otherwise
     let result = sqlx::query(
-        "INSERT INTO agent_memory (organization_id, agent_slug, memory_key, memory_value, context_type, entity_id, expires_at)
-         VALUES ($1::uuid, $2, $3, $4, $5, $6, now() + ($7::int || ' days')::interval)
+        "INSERT INTO agent_memory (organization_id, agent_slug, memory_key, memory_value, context_type, entity_id, expires_at, importance_score)
+         VALUES ($1::uuid, $2, $3, $4, $5, $6, now() + ($7::int || ' days')::interval, $8)
          ON CONFLICT (organization_id, agent_slug, memory_key)
          DO UPDATE SET memory_value = EXCLUDED.memory_value,
                        context_type = EXCLUDED.context_type,
                        entity_id = EXCLUDED.entity_id,
                        expires_at = EXCLUDED.expires_at,
+                       importance_score = EXCLUDED.importance_score,
                        updated_at = now()
          RETURNING id",
     )
@@ -3992,6 +5093,7 @@ async fn tool_store_memory(
     .bind(context_type)
     .bind(entity_id)
     .bind(expires_days as i32)
+    .bind(importance_score)
     .fetch_one(pool)
     .await
     .map_err(|e| supabase_error(state, &e))?;
@@ -4006,6 +5108,91 @@ async fn tool_store_memory(
         "memory_id": memory_id,
         "key": memory_key,
         "expires_days": expires_days,
+    }))
+}
+
+// ---------------------------------------------------------------------------
+// Tool: check_escalation_thresholds — check if action exceeds configured limits
+// ---------------------------------------------------------------------------
+
+async fn tool_check_escalation_thresholds(
+    state: &AppState,
+    org_id: &str,
+    agent_slug: Option<&str>,
+    args: &Map<String, Value>,
+) -> AppResult<Value> {
+    let pool = db_pool(state)?;
+
+    let threshold_type = args
+        .get("threshold_type")
+        .and_then(Value::as_str)
+        .unwrap_or("dollar_amount");
+    let value = args
+        .get("value")
+        .and_then(Value::as_f64)
+        .unwrap_or(0.0);
+    let context_desc = args
+        .get("context")
+        .and_then(Value::as_str)
+        .unwrap_or_default();
+
+    // Query applicable thresholds
+    let rows = sqlx::query(
+        "SELECT id, threshold_type, threshold_value, action, description, notify_channel, notify_target
+         FROM escalation_thresholds
+         WHERE organization_id = $1::uuid
+           AND is_active = true
+           AND threshold_type = $2
+           AND ($3::text IS NULL OR agent_slug IS NULL OR agent_slug = $3)
+         ORDER BY threshold_value ASC",
+    )
+    .bind(org_id)
+    .bind(threshold_type)
+    .bind(agent_slug)
+    .fetch_all(pool)
+    .await
+    .unwrap_or_default();
+
+    let mut triggered: Vec<Value> = Vec::new();
+    let mut max_action = "proceed";
+
+    for row in &rows {
+        let threshold_value = row.try_get::<f64, _>("threshold_value").unwrap_or(f64::MAX);
+        if value >= threshold_value {
+            let action = row
+                .try_get::<String, _>("action")
+                .unwrap_or_else(|_| "escalate".to_string());
+            let description = row
+                .try_get::<Option<String>, _>("description")
+                .unwrap_or(None)
+                .unwrap_or_default();
+
+            if action == "block" {
+                max_action = "block";
+            } else if action == "escalate" && max_action != "block" {
+                max_action = "escalate";
+            } else if action == "require_approval" && max_action == "proceed" {
+                max_action = "require_approval";
+            } else if action == "notify" && max_action == "proceed" {
+                max_action = "notify";
+            }
+
+            triggered.push(json!({
+                "threshold_value": threshold_value,
+                "action": action,
+                "description": description,
+            }));
+        }
+    }
+
+    Ok(json!({
+        "ok": true,
+        "threshold_type": threshold_type,
+        "checked_value": value,
+        "context": context_desc,
+        "result": max_action,
+        "triggered_thresholds": triggered,
+        "should_proceed": max_action == "proceed" || max_action == "notify",
     }))
 }
 
@@ -4225,7 +5412,7 @@ fn table_config(table: &str) -> AppResult<TableConfig> {
             can_create: false,
             can_update: false,
             can_delete: false,
-        }
+        },
         "knowledge_documents" | "knowledge_chunks" => TableConfig {
             org_column: "organization_id",
             can_create: false,

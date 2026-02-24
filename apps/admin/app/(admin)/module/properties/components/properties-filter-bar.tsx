@@ -73,21 +73,23 @@ export function PropertiesFilterBar({
 
       <div className="flex items-center gap-2">
         <DropdownMenu>
-          <DropdownMenuTrigger>
-            <Button
-              className="h-10 rounded-full border border-border/40 bg-background/50 text-muted-foreground shadow-sm transition-all hover:bg-background/80"
-              size="sm"
-              variant="outline"
-            >
-              <Icon icon={FilterIcon} size={15} />
-              {isEn ? "Filters" : "Filtros"}
-              {statusFilter !== "all" || healthFilter !== "all" ? (
-                <div className="flex h-4 w-4 items-center justify-center rounded-full bg-primary font-bold text-[10px] text-primary-foreground">
-                  {(statusFilter !== "all" ? 1 : 0) +
-                    (healthFilter !== "all" ? 1 : 0)}
-                </div>
-              ) : null}
-            </Button>
+          <DropdownMenuTrigger
+            render={
+              <Button
+                className="h-10 rounded-full border border-border/40 bg-background/50 text-muted-foreground shadow-sm transition-all hover:bg-background/80"
+                size="sm"
+                variant="outline"
+              />
+            }
+          >
+            <Icon icon={FilterIcon} size={15} />
+            {isEn ? "Filters" : "Filtros"}
+            {statusFilter !== "all" || healthFilter !== "all" ? (
+              <div className="flex h-4 w-4 items-center justify-center rounded-full bg-primary font-bold text-[10px] text-primary-foreground">
+                {(statusFilter !== "all" ? 1 : 0) +
+                  (healthFilter !== "all" ? 1 : 0)}
+              </div>
+            ) : null}
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="min-w-[12rem] rounded-xl">
             <DropdownMenuLabel className="text-[10px] text-muted-foreground/60 uppercase tracking-widest">

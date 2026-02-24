@@ -1,5 +1,5 @@
 use chrono::{Datelike, NaiveDate, Utc};
-use serde_json::Value;
+use serde_json::{json, Value};
 use sqlx::Row;
 
 use crate::{
@@ -104,7 +104,7 @@ pub async fn run_anomaly_scan(state: &AppState, org_id: &str) -> AppResult<Vec<V
         }
     }
 
-    // ── Check 2: Expense spike ──
+    // ── Check 2: Expense spike (learned baselines — 2 std dev from 6-month mean) ──
     if let Ok(expenses) = list_rows(
         pool,
         "expenses",
@@ -116,7 +116,10 @@ pub async fn run_anomaly_scan(state: &AppState, org_id: &str) -> AppResult<Vec<V
     )
     .await
     {
+        let six_months_ago = today - chrono::Duration::days(180);
         let mut category_amounts: std::collections::HashMap<String, Vec<f64>> =
+            std::collections::HashMap::new();
+        let mut category_recent: std::collections::HashMap<String, Vec<f64>> =
             std::collections::HashMap::new();
 
         for expense in &expenses {
@@ -127,34 +130,66 @@ pub async fn run_anomaly_scan(state: &AppState, org_id: &str) -> AppResult<Vec<V
                 category
             };
             let amount = number_from_value(expense.get("amount"));
-            category_amounts.entry(cat).or_default().push(amount);
+            let created = expense
+                .get("created_at")
+                .and_then(Value::as_str)
+                .and_then(|s| {
+                    chrono::DateTime::parse_from_rfc3339(
+                        s.trim().replace('Z', "+00:00").as_str(),
+                    )
+                    .ok()
+                });
+
+            let is_recent = created
+                .as_ref()
+                .is_some_and(|c| c.date_naive() >= six_months_ago);
+
+            if is_recent {
+                category_amounts.entry(cat.clone()).or_default().push(amount);
+            }
+
+            // Track last 30 days separately for spike detection
+            let is_last_30d = created
+                .as_ref()
+                .is_some_and(|c| (today - c.date_naive()).num_days() <= 30);
+            if is_last_30d {
+                category_recent.entry(cat).or_default().push(amount);
+            }
         }
 
         for (category, amounts) in &category_amounts {
-            if amounts.len() < 3 {
+            if amounts.len() < 5 {
                 continue;
             }
-            let avg = amounts.iter().sum::<f64>() / amounts.len() as f64;
-            if let Some(latest) = amounts.last() {
-                if avg > 0.0 && *latest > avg * 2.0 {
-                    if let Some(alert) = insert_alert_if_new(
-                        pool,
-                        org_id,
-                        AlertDraft {
-                            alert_type: "expense_spike",
-                            severity: "warning",
-                            title: &format!("Expense spike in '{}'", category),
-                            description: &format!(
-                                "A recent expense ({:.0}) is more than 2x the average ({:.0}) for category '{}'.",
-                                latest, avg, category
-                            ),
-                            related_table: Some("expenses"),
-                            related_id: None,
-                        },
-                    )
-                    .await
-                    {
-                        new_alerts.push(alert);
+            let mean = amounts.iter().sum::<f64>() / amounts.len() as f64;
+            let variance = amounts.iter().map(|a| (a - mean).powi(2)).sum::<f64>() / amounts.len() as f64;
+            let std_dev = variance.sqrt();
+            let threshold = mean + 2.0 * std_dev;
+
+            // Check if any recent expense exceeds 2 std dev above mean
+            if let Some(recent) = category_recent.get(category) {
+                for &latest in recent {
+                    if threshold > 0.0 && latest > threshold {
+                        if let Some(alert) = insert_alert_if_new(
+                            pool,
+                            org_id,
+                            AlertDraft {
+                                alert_type: "expense_spike",
+                                severity: if latest > mean + 3.0 * std_dev { "critical" } else { "warning" },
+                                title: &format!("Expense anomaly in '{}'", category),
+                                description: &format!(
+                                    "Expense ({:.0}) exceeds learned baseline (mean {:.0} + 2σ {:.0} = threshold {:.0}) for category '{}'.",
+                                    latest, mean, std_dev, threshold, category
+                                ),
+                                related_table: Some("expenses"),
+                                related_id: None,
+                            },
+                        )
+                        .await
+                        {
+                            new_alerts.push(alert);
+                        }
+                        break; // One alert per category
                     }
                 }
             }
@@ -271,6 +306,21 @@ pub async fn run_anomaly_scan(state: &AppState, org_id: &str) -> AppResult<Vec<V
                 new_alerts.push(alert);
             }
         }
+    }
+
+    // Store anomaly scan as ML prediction for tracking
+    if !new_alerts.is_empty() {
+        sqlx::query(
+            "INSERT INTO ml_predictions (organization_id, prediction_type, entity_type, entity_id, predicted_value, predicted_label, confidence, features, model_version)
+             VALUES ($1::uuid, 'anomaly', 'organization', $1::uuid, $2, $3, 0.6, $4, 'baseline_v1')",
+        )
+        .bind(org_id)
+        .bind(new_alerts.len() as f64)
+        .bind(if new_alerts.len() > 3 { "high_anomaly" } else { "low_anomaly" })
+        .bind(serde_json::json!({ "alerts_generated": new_alerts.len(), "scan_date": today.to_string() }))
+        .execute(pool)
+        .await
+        .ok();
     }
 
     Ok(new_alerts)

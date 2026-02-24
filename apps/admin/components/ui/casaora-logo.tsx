@@ -17,6 +17,7 @@ export function CasaoraLogo({
         "inline-flex select-none items-center font-black tracking-tighter",
         className
       )}
+      role="img"
       style={{ fontSize: `${fontSize}px`, lineHeight: 1 }}
     >
       casaora

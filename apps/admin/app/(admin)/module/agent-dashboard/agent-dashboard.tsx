@@ -4,7 +4,9 @@ import {
   AlertCircleIcon,
   CheckmarkCircle02Icon,
   Database02Icon,
+  Settings02Icon,
   SparklesIcon,
+  Wrench01Icon,
 } from "@hugeicons/core-free-icons";
 
 import { Badge } from "@/components/ui/badge";
@@ -19,6 +21,19 @@ type ApprovalActivity = {
   reasoning?: string | null;
 };
 
+type PlanStats = {
+  total?: number;
+  completed?: number;
+  failed?: number;
+};
+
+type MemoryHealth = {
+  total?: number;
+  high_importance?: number;
+  avg_access_count?: number;
+  stale_count?: number;
+};
+
 type Stats = {
   agents?: { total?: number; active?: number };
   approvals_24h?: {
@@ -29,6 +44,8 @@ type Stats = {
   };
   memory_count?: number;
   recent_activity?: ApprovalActivity[];
+  planning?: PlanStats;
+  memory_health?: MemoryHealth;
 };
 
 type Props = {
@@ -64,6 +81,8 @@ export function AgentDashboard({ initialStats, locale }: Props) {
   const approvals = stats.approvals_24h ?? {};
   const memoryCount = stats.memory_count ?? 0;
   const recentActivity = stats.recent_activity ?? [];
+  const planning = stats.planning ?? {};
+  const memoryHealth = stats.memory_health ?? {};
 
   const interventionRate =
     (approvals.total ?? 0) > 0
@@ -77,10 +96,23 @@ export function AgentDashboard({ initialStats, locale }: Props) {
         ? "No activity yet"
         : "Sin actividad aún";
 
+  const planningSuccess =
+    (planning.total ?? 0) > 0
+      ? ((planning.completed ?? 0) / (planning.total ?? 1)) * 100
+      : 0;
+
+  const memoryHealthScore =
+    (memoryHealth.total ?? 0) > 0
+      ? Math.round(
+          ((memoryHealth.high_importance ?? 0) / (memoryHealth.total ?? 1)) *
+            100
+        )
+      : 0;
+
   return (
     <div className="space-y-6">
       {/* KPI Cards */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
         <StatCard
           icon={SparklesIcon}
           label={isEn ? "Active Agents" : "Agentes Activos"}
@@ -104,6 +136,32 @@ export function AgentDashboard({ initialStats, locale }: Props) {
           icon={Database02Icon}
           label={isEn ? "Memories Stored" : "Memorias Almacenadas"}
           value={String(memoryCount)}
+        />
+        <StatCard
+          helper={
+            (planning.total ?? 0) > 0
+              ? `${planning.completed ?? 0}/${planning.total} ${isEn ? "completed" : "completado"} · ${planning.failed ?? 0} ${isEn ? "failed" : "fallido"}`
+              : isEn
+                ? "No plans yet"
+                : "Sin planes aún"
+          }
+          icon={Wrench01Icon}
+          label={isEn ? "Planning Success" : "Éxito de Planificación"}
+          value={
+            (planning.total ?? 0) > 0 ? `${planningSuccess.toFixed(0)}%` : "—"
+          }
+        />
+        <StatCard
+          helper={
+            (memoryHealth.total ?? 0) > 0
+              ? `${memoryHealth.stale_count ?? 0} ${isEn ? "stale" : "inactivas"} · avg ${memoryHealth.avg_access_count?.toFixed(1) ?? 0} ${isEn ? "accesses" : "accesos"}`
+              : isEn
+                ? "No memories yet"
+                : "Sin memorias aún"
+          }
+          icon={Settings02Icon}
+          label={isEn ? "Memory Health" : "Salud de Memoria"}
+          value={(memoryHealth.total ?? 0) > 0 ? `${memoryHealthScore}%` : "—"}
         />
       </div>
 

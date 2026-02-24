@@ -74,7 +74,7 @@ async fn portfolio_kpis(
     .bind(&query.org_id)
     .fetch_one(pool)
     .await
-    .map_err(|e| AppError::Database(format!("portfolio KPI query failed: {e}")))?;
+    .map_err(|e| AppError::Internal(format!("portfolio KPI query failed: {e}")))?;
 
     let total_units: i64 = row.try_get("total_units").unwrap_or(0);
     let occupied: i64 = row.try_get("occupied_units").unwrap_or(0);
@@ -136,7 +136,7 @@ async fn portfolio_comparison(
     .bind(&query.org_id)
     .fetch_all(pool)
     .await
-    .map_err(|e| AppError::Database(format!("portfolio comparison query failed: {e}")))?;
+    .map_err(|e| AppError::Internal(format!("portfolio comparison query failed: {e}")))?;
 
     let properties: Vec<Value> = rows
         .iter()
@@ -191,7 +191,7 @@ async fn portfolio_snapshots(
     .bind(limit)
     .fetch_all(pool)
     .await
-    .map_err(|e| AppError::Database(format!("portfolio snapshots query failed: {e}")))?;
+    .map_err(|e| AppError::Internal(format!("portfolio snapshots query failed: {e}")))?;
 
     let snapshots: Vec<Value> = rows
         .iter()

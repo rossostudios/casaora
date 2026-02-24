@@ -117,6 +117,19 @@ export function ApplicationsBoard({
                           tone={qualificationBandClass(row.qualification_band)}
                           value={row.qualification_band}
                         />
+                        {row.predictive_score != null && (
+                          <StatusBadge
+                            label={`ML ${row.predictive_score}`}
+                            tone={
+                              row.predictive_score >= 70
+                                ? "success"
+                                : row.predictive_score >= 50
+                                  ? "warning"
+                                  : "danger"
+                            }
+                            value={`ml-${row.predictive_score}`}
+                          />
+                        )}
                       </div>
                       <p className="text-muted-foreground text-xs">
                         {isEn ? "Owner" : "Responsable"}: {assignedLabel}

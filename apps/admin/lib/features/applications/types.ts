@@ -20,6 +20,9 @@ export type ApplicationRow = DataTableRow & {
   qualification_score: number;
   qualification_band: string;
   income_to_rent_ratio: number | null;
+  predictive_score: number | null;
+  risk_factors: { factor: string; severity: string; detail: string }[] | null;
+  ml_screened_at: string | null;
 };
 
 export type MessageTemplateOption = {

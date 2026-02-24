@@ -19,6 +19,7 @@ pub mod enrichment;
 pub mod expense_categorization;
 pub mod fx;
 pub mod ical;
+pub mod iot;
 pub mod lease_abstraction;
 pub mod lease_renewal;
 pub mod lease_schedule;

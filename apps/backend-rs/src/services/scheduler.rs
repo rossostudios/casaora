@@ -94,6 +94,14 @@ pub async fn run_background_scheduler(state: AppState) {
             });
         }
 
+        // 06:00 — Daily pricing recommendations per active org
+        {
+            let st = state.clone();
+            tokio::spawn(async move {
+                crate::services::dynamic_pricing::run_daily_pricing_recommendations(&st).await;
+            });
+        }
+
         // 06:00 — Anomaly scan per active org
         {
             let st = state.clone();
@@ -140,7 +148,23 @@ pub async fn run_background_scheduler(state: AppState) {
             });
         }
 
-        // 08:30 — Auto-generate owner statements (1st of month only)
+        // 08:15 — Daily bank transaction reconciliation
+        {
+            let st = state.clone();
+            tokio::spawn(async move {
+                crate::services::reconciliation::run_daily_reconciliation(&st).await;
+            });
+        }
+
+        // 08:30 — Daily lease deadline alert scan
+        {
+            let st = state.clone();
+            tokio::spawn(async move {
+                crate::services::lease_abstraction::run_daily_deadline_scan(&st).await;
+            });
+        }
+
+        // 08:45 — Auto-generate owner statements (1st of month only)
         if today.day() == 1 {
             let pool = pool.clone();
             let engine_mode = state.config.workflow_engine_mode;
@@ -199,6 +223,56 @@ pub async fn run_background_scheduler(state: AppState) {
                 run_maintenance_sla_scan(&pool).await;
             });
         }
+
+        // 11:00 — Weekly demand forecast (Sundays only)
+        if today.weekday() == chrono::Weekday::Sun {
+            let st = state.clone();
+            tokio::spawn(async move {
+                run_weekly_demand_forecast(&st).await;
+            });
+        }
+
+        // 11:30 — Daily agent health metrics collection
+        {
+            let st = state.clone();
+            tokio::spawn(async move {
+                crate::services::ai_agent::collect_daily_agent_health(&st).await;
+            });
+        }
+    }
+}
+
+/// Generate demand forecasts for all active organizations.
+async fn run_weekly_demand_forecast(state: &AppState) {
+    let pool = match state.db_pool.as_ref() {
+        Some(p) => p,
+        None => return,
+    };
+
+    let org_ids: Vec<(String,)> = sqlx::query_as(
+        "SELECT id::text FROM organizations WHERE is_active = true LIMIT 100",
+    )
+    .fetch_all(pool)
+    .await
+    .unwrap_or_default();
+
+    let mut generated = 0u32;
+    for (org_id,) in &org_ids {
+        let args = serde_json::Map::new();
+        match crate::services::tenant_screening::tool_forecast_demand(state, org_id, &args).await {
+            Ok(result) => {
+                if result.get("ok").and_then(serde_json::Value::as_bool).unwrap_or(false) {
+                    generated += 1;
+                }
+            }
+            Err(e) => {
+                tracing::warn!(org_id, error = %e, "Scheduler: demand forecast failed");
+            }
+        }
+    }
+
+    if generated > 0 {
+        tracing::info!(orgs = generated, "Scheduler: weekly demand forecasts completed");
     }
 }
 

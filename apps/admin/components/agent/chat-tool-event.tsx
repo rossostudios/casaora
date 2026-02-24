@@ -25,6 +25,14 @@ export type ToolTraceEntry = {
   args?: Record<string, unknown>;
 };
 
+export type PlanStep = {
+  index: number;
+  description: string;
+  status: "pending" | "in_progress" | "completed" | "failed";
+  tool_name?: string;
+  result_preview?: string;
+};
+
 function formatToolName(name: string): string {
   return name.replace(/_/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
 }
@@ -154,6 +162,105 @@ export function ToolTraceBadges({
           ))}
         </div>
       ) : null}
+    </div>
+  );
+}
+
+/** Display execution plan steps with expand/collapse and status indicators. */
+export function PlanStepsCard({
+  steps,
+  isExpanded,
+  onToggle,
+  isEn,
+}: {
+  steps: PlanStep[];
+  isExpanded: boolean;
+  onToggle: () => void;
+  isEn: boolean;
+}) {
+  if (steps.length === 0) return null;
+
+  const completed = steps.filter((s) => s.status === "completed").length;
+  const failed = steps.filter((s) => s.status === "failed").length;
+  const inProgress = steps.filter((s) => s.status === "in_progress").length;
+
+  return (
+    <div className="mt-2 rounded-lg border border-border/50 bg-muted/10">
+      <button
+        className="flex w-full items-center justify-between px-3 py-2"
+        onClick={onToggle}
+        type="button"
+      >
+        <span className="font-medium text-xs">
+          {isEn ? "Execution Plan" : "Plan de Ejecución"}{" "}
+          <span className="text-muted-foreground">
+            ({completed}/{steps.length} {isEn ? "steps" : "pasos"})
+          </span>
+        </span>
+        <div className="flex items-center gap-1.5">
+          {inProgress > 0 && (
+            <Badge className="text-[10px]" variant="secondary">
+              <Icon
+                className="mr-0.5 h-2.5 w-2.5 animate-spin"
+                icon={Loading03Icon}
+              />
+              {inProgress} {isEn ? "running" : "activos"}
+            </Badge>
+          )}
+          {failed > 0 && (
+            <Badge className="text-[10px] text-destructive" variant="outline">
+              {failed} {isEn ? "failed" : "fallidos"}
+            </Badge>
+          )}
+        </div>
+      </button>
+
+      {isExpanded && (
+        <div className="space-y-1 border-border/50 border-t px-3 py-2">
+          {steps.map((step) => (
+            <div
+              className="flex items-center gap-2 rounded-md px-2 py-1.5"
+              key={`plan-step-${step.index}`}
+            >
+              <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-muted font-medium text-[10px] tabular-nums">
+                {step.index + 1}
+              </span>
+              {step.status === "completed" ? (
+                <Icon
+                  className="h-3 w-3 shrink-0 text-emerald-500"
+                  icon={CheckmarkCircle02Icon}
+                />
+              ) : step.status === "failed" ? (
+                <Icon
+                  className="h-3 w-3 shrink-0 text-destructive"
+                  icon={Cancel01Icon}
+                />
+              ) : step.status === "in_progress" ? (
+                <Icon
+                  className="h-3 w-3 shrink-0 animate-spin text-[var(--sidebar-primary)]"
+                  icon={Loading03Icon}
+                />
+              ) : (
+                <span className="h-3 w-3 shrink-0 rounded-full border border-border/60" />
+              )}
+              <span
+                className={cn(
+                  "text-xs",
+                  step.status === "completed" && "text-muted-foreground",
+                  step.status === "failed" && "text-destructive"
+                )}
+              >
+                {step.description}
+              </span>
+              {step.tool_name && (
+                <Badge className="ml-auto text-[9px]" variant="outline">
+                  {step.tool_name.replace(/_/g, " ")}
+                </Badge>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

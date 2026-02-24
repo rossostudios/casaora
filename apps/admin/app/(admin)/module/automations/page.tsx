@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Suspense } from "react";
 import { OrgAccessChanged } from "@/components/shell/org-access-changed";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -22,6 +23,7 @@ import { cn } from "@/lib/utils";
 
 import { SequencesManager } from "../sequences/sequences-manager";
 import { WorkflowRulesManager } from "../workflow-rules/workflow-rules-manager";
+import { PlaybookBuilder } from "./playbook-builder";
 
 type AutomationsTab = "rules" | "sequences";
 
@@ -168,13 +170,17 @@ export default async function AutomationsHubPage({ searchParams }: PageProps) {
 
   let sequences: Record<string, unknown>[] = [];
   let templates: Record<string, unknown>[] = [];
+  let playbooks: Record<string, unknown>[] = [];
 
   try {
-    [sequences, templates] = await Promise.all([
+    [sequences, templates, playbooks] = await Promise.all([
       fetchList("/communication-sequences", orgId, 200) as Promise<
         Record<string, unknown>[]
       >,
       fetchList("/message-templates", orgId, 200) as Promise<
+        Record<string, unknown>[]
+      >,
+      fetchList("/agent-playbooks", orgId, 100).catch(() => []) as Promise<
         Record<string, unknown>[]
       >,
     ]);
@@ -200,62 +206,87 @@ export default async function AutomationsHubPage({ searchParams }: PageProps) {
   }
 
   return (
-    <Card>
-      <CardHeader className="space-y-3">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="space-y-2">
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge variant="outline">
-                {isEn ? "Workspace" : "Workspace"}
-              </Badge>
-              <Badge variant="secondary">
-                {isEn ? "Automations" : "Automatizaciones"}
-              </Badge>
+    <div className="space-y-6">
+      <Card>
+        <CardHeader className="space-y-3">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="space-y-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge variant="outline">
+                  {isEn ? "Workspace" : "Workspace"}
+                </Badge>
+                <Badge variant="secondary">
+                  {isEn ? "Automations" : "Automatizaciones"}
+                </Badge>
+              </div>
+              <CardTitle>{isEn ? "Automations" : "Automatizaciones"}</CardTitle>
+              <CardDescription>
+                {isEn
+                  ? "Manage event-driven automation rules and communication sequences."
+                  : "Gestiona reglas automatizadas por eventos y secuencias de comunicación."}
+              </CardDescription>
             </div>
-            <CardTitle>{isEn ? "Automations" : "Automatizaciones"}</CardTitle>
-            <CardDescription>
-              {isEn
-                ? "Manage event-driven automation rules and communication sequences."
-                : "Gestiona reglas automatizadas por eventos y secuencias de comunicación."}
-            </CardDescription>
-          </div>
 
-          <div className="flex items-center gap-2">
-            <Link
-              className={cn(buttonVariants({ size: "sm", variant: "outline" }))}
-              href="/module/automations?tab=rules"
-            >
-              {isEn ? "Rules" : "Reglas"}
-            </Link>
-            <Link
-              className={cn(
-                buttonVariants({ size: "sm", variant: "secondary" })
-              )}
-              href="/module/automations?tab=sequences"
-            >
-              {isEn ? "Sequences" : "Secuencias"}
-            </Link>
+            <div className="flex items-center gap-2">
+              <Link
+                className={cn(
+                  buttonVariants({ size: "sm", variant: "outline" })
+                )}
+                href="/module/automations?tab=rules"
+              >
+                {isEn ? "Rules" : "Reglas"}
+              </Link>
+              <Link
+                className={cn(
+                  buttonVariants({ size: "sm", variant: "secondary" })
+                )}
+                href="/module/automations?tab=sequences"
+              >
+                {isEn ? "Sequences" : "Secuencias"}
+              </Link>
+            </div>
           </div>
-        </div>
-      </CardHeader>
-      <CardContent>
-        {successLabel ? (
-          <Alert className="mb-4">
-            <AlertDescription>{successLabel}</AlertDescription>
-          </Alert>
-        ) : null}
-        {errorLabel ? (
-          <Alert className="mb-4" variant="destructive">
-            <AlertDescription>{errorLabel}</AlertDescription>
-          </Alert>
-        ) : null}
-        <SequencesManager
-          locale={locale}
-          orgId={orgId}
-          sequences={sequences}
-          templates={templates}
-        />
-      </CardContent>
-    </Card>
+        </CardHeader>
+        <CardContent>
+          {successLabel ? (
+            <Alert className="mb-4">
+              <AlertDescription>{successLabel}</AlertDescription>
+            </Alert>
+          ) : null}
+          {errorLabel ? (
+            <Alert className="mb-4" variant="destructive">
+              <AlertDescription>{errorLabel}</AlertDescription>
+            </Alert>
+          ) : null}
+          <SequencesManager
+            locale={locale}
+            orgId={orgId}
+            sequences={sequences}
+            templates={templates}
+          />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="space-y-1">
+          <div className="flex items-center gap-2">
+            <Badge variant="outline">AI</Badge>
+            <CardTitle className="text-lg">
+              {isEn ? "Agent Playbooks" : "Playbooks de Agentes"}
+            </CardTitle>
+          </div>
+          <CardDescription>
+            {isEn
+              ? "Multi-step agent workflows with trigger conditions, step sequences, and execution tracking."
+              : "Flujos de trabajo multi-paso con condiciones de disparo, secuencias de pasos y seguimiento de ejecución."}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Suspense fallback={null}>
+            <PlaybookBuilder playbooks={playbooks} />
+          </Suspense>
+        </CardContent>
+      </Card>
+    </div>
   );
 }

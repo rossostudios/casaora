@@ -15,6 +15,7 @@ import { getActiveOrgId } from "@/lib/org";
 
 import { PricingManager } from "./pricing-manager";
 import { PricingRecommendations } from "./pricing-recommendations";
+import { PricingRules } from "./pricing-rules";
 
 type PageProps = {
   searchParams: Promise<{ success?: string; error?: string }>;
@@ -59,13 +60,16 @@ export default async function PricingModulePage({ searchParams }: PageProps) {
 
   let templates: Record<string, unknown>[] = [];
   let recommendations: unknown[] = [];
+  let pricingRules: unknown[] = [];
   try {
-    const [t, r] = await Promise.all([
+    const [t, r, rules] = await Promise.all([
       fetchList("/pricing/templates", orgId, 500),
       fetchList("/pricing/recommendations", orgId, 50, { status: "pending" }),
+      fetchList("/pricing-rule-sets", orgId, 50).catch(() => []),
     ]);
     templates = t as Record<string, unknown>[];
     recommendations = r;
+    pricingRules = rules;
   } catch (err) {
     const message = errorMessage(err);
     if (isOrgMembershipError(message)) {
@@ -142,14 +146,36 @@ export default async function PricingModulePage({ searchParams }: PageProps) {
           </CardTitle>
           <CardDescription>
             {isEn
-              ? "The pricing agent analyzes occupancy, seasonality, and market data to suggest rate adjustments."
-              : "El agente de precios analiza ocupación, estacionalidad y datos de mercado para sugerir ajustes de tarifas."}
+              ? "The pricing agent analyzes occupancy, seasonality, competitor data, and market trends to suggest rate adjustments with confidence scores."
+              : "El agente de precios analiza ocupación, estacionalidad, datos de competidores y tendencias de mercado para sugerir ajustes de tarifas con puntuaciones de confianza."}
           </CardDescription>
         </CardHeader>
         <CardContent>
           <Suspense fallback={null}>
             <PricingRecommendations
               initialRecommendations={recommendations}
+              locale={locale}
+              orgId={orgId}
+            />
+          </Suspense>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>
+            {isEn ? "Pricing Rule Sets" : "Conjuntos de Reglas de Precios"}
+          </CardTitle>
+          <CardDescription>
+            {isEn
+              ? "Configure min/max rates, weekend premiums, seasonal adjustments, last-minute discounts, and length-of-stay tiers that feed into AI pricing recommendations."
+              : "Configura tarifas mín/máx, premiums de fin de semana, ajustes estacionales, descuentos de última hora y niveles de estadía que alimentan las recomendaciones de precios IA."}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Suspense fallback={null}>
+            <PricingRules
+              initialRules={pricingRules as never[]}
               locale={locale}
               orgId={orgId}
             />

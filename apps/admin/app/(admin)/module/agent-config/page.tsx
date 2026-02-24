@@ -1,11 +1,19 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { fetchJson, getApiBaseUrl } from "@/lib/api";
+import { Suspense } from "react";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { fetchJson, fetchList, getApiBaseUrl } from "@/lib/api";
 import { errorMessage, isOrgMembershipError } from "@/lib/errors";
 import { getActiveLocale } from "@/lib/i18n/server";
 import { getActiveOrgId } from "@/lib/org";
 
 import { AgentConfigManager } from "./agent-config-manager";
 import type { AgentRow } from "./agent-config-types";
+import { EscalationThresholds } from "./escalation-thresholds";
 
 type PageProps = {
   searchParams: Promise<Record<string, string>>;
@@ -36,11 +44,14 @@ export default async function AgentConfigPage(_props: PageProps) {
   }
 
   let agents: AgentRow[] = [];
+  let escalationThresholds: unknown[] = [];
   try {
-    const res = await fetchJson<{ data?: AgentRow[] }>("/ai-agents", {
-      org_id: orgId,
-    });
-    agents = res.data ?? [];
+    const [agentsRes, thresholdsRes] = await Promise.all([
+      fetchJson<{ data?: AgentRow[] }>("/ai-agents", { org_id: orgId }),
+      fetchList("/escalation-thresholds", orgId, 100).catch(() => []),
+    ]);
+    agents = agentsRes.data ?? [];
+    escalationThresholds = thresholdsRes as unknown[];
   } catch (err) {
     const message = errorMessage(err);
     if (isOrgMembershipError(message)) {
@@ -92,6 +103,28 @@ export default async function AgentConfigPage(_props: PageProps) {
         locale={locale}
         orgId={orgId}
       />
+
+      <Card>
+        <CardHeader>
+          <CardTitle>
+            {isEn ? "Escalation Thresholds" : "Umbrales de Escalamiento"}
+          </CardTitle>
+          <CardDescription>
+            {isEn
+              ? "Configure when agents must escalate to humans — by dollar amount, action count, or risk score."
+              : "Configure cuándo los agentes deben escalar a humanos — por monto, cantidad de acciones o puntuación de riesgo."}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Suspense fallback={null}>
+            <EscalationThresholds
+              initialThresholds={escalationThresholds as never[]}
+              locale={locale}
+              orgId={orgId}
+            />
+          </Suspense>
+        </CardContent>
+      </Card>
     </div>
   );
 }

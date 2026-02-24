@@ -7,12 +7,12 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { formatCurrency } from "@/lib/format";
 import type {
   PortfolioKpis,
   PortfolioPropertyComparison,
   PortfolioSnapshot,
 } from "@/lib/api";
+import { formatCurrency } from "@/lib/format";
 
 type Props = {
   kpis: PortfolioKpis | null;
@@ -35,24 +35,28 @@ export function PortfolioDashboard({
       {kpis && (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <KpiCard
+            subtitle={`${kpis.occupied_units} ${isEn ? "occupied" : "ocupadas"}`}
             title={isEn ? "Total Units" : "Unidades Totales"}
             value={String(kpis.total_units)}
-            subtitle={`${kpis.occupied_units} ${isEn ? "occupied" : "ocupadas"}`}
           />
           <KpiCard
+            subtitle={`${kpis.occupied_units} / ${kpis.total_units}`}
             title={isEn ? "Occupancy" : "Ocupación"}
             value={`${(kpis.occupancy * 100).toFixed(1)}%`}
-            subtitle={`${kpis.occupied_units} / ${kpis.total_units}`}
           />
           <KpiCard
+            subtitle={`${isEn ? "Revenue" : "Ingresos"}: ${formatCurrency(kpis.monthly_revenue, "USD", "en-US")}`}
             title={isEn ? "Monthly NOI" : "NOI Mensual"}
             value={formatCurrency(kpis.noi, "USD", "en-US")}
-            subtitle={`${isEn ? "Revenue" : "Ingresos"}: ${formatCurrency(kpis.monthly_revenue, "USD", "en-US")}`}
           />
           <KpiCard
+            subtitle={
+              isEn
+                ? "Revenue per available room"
+                : "Ingreso por unidad disponible"
+            }
             title="RevPAR"
             value={formatCurrency(kpis.revpar, "USD", "en-US")}
-            subtitle={isEn ? "Revenue per available room" : "Ingreso por unidad disponible"}
           />
         </div>
       )}
@@ -65,9 +69,7 @@ export function PortfolioDashboard({
               {isEn ? "Property Comparison" : "Comparación de Propiedades"}
             </CardTitle>
             <CardDescription>
-              {isEn
-                ? "Performance by property"
-                : "Rendimiento por propiedad"}
+              {isEn ? "Performance by property" : "Rendimiento por propiedad"}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -75,26 +77,23 @@ export function PortfolioDashboard({
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b text-left text-muted-foreground">
-                    <th className="pb-2 pr-4 font-medium">
+                    <th className="pr-4 pb-2 font-medium">
                       {isEn ? "Property" : "Propiedad"}
                     </th>
-                    <th className="pb-2 pr-4 font-medium text-right">
+                    <th className="pr-4 pb-2 text-right font-medium">
                       {isEn ? "Units" : "Unidades"}
                     </th>
-                    <th className="pb-2 pr-4 font-medium text-right">
+                    <th className="pr-4 pb-2 text-right font-medium">
                       {isEn ? "Occupancy" : "Ocupación"}
                     </th>
-                    <th className="pb-2 font-medium text-right">
+                    <th className="pb-2 text-right font-medium">
                       {isEn ? "Revenue" : "Ingresos"}
                     </th>
                   </tr>
                 </thead>
                 <tbody>
                   {properties.map((p) => (
-                    <tr
-                      key={p.property_id}
-                      className="border-b last:border-0"
-                    >
+                    <tr className="border-b last:border-0" key={p.property_id}>
                       <td className="py-2 pr-4">{p.property_name}</td>
                       <td className="py-2 pr-4 text-right">
                         {p.occupied_units}/{p.total_units}
@@ -132,22 +131,22 @@ export function PortfolioDashboard({
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b text-left text-muted-foreground">
-                    <th className="pb-2 pr-4 font-medium">
+                    <th className="pr-4 pb-2 font-medium">
                       {isEn ? "Date" : "Fecha"}
                     </th>
-                    <th className="pb-2 pr-4 font-medium text-right">
+                    <th className="pr-4 pb-2 text-right font-medium">
                       {isEn ? "Occupancy" : "Ocupación"}
                     </th>
-                    <th className="pb-2 pr-4 font-medium text-right">
+                    <th className="pr-4 pb-2 text-right font-medium">
                       {isEn ? "Revenue" : "Ingresos"}
                     </th>
-                    <th className="pb-2 pr-4 font-medium text-right">NOI</th>
-                    <th className="pb-2 font-medium text-right">RevPAR</th>
+                    <th className="pr-4 pb-2 text-right font-medium">NOI</th>
+                    <th className="pb-2 text-right font-medium">RevPAR</th>
                   </tr>
                 </thead>
                 <tbody>
                   {snapshots.slice(0, 14).map((s) => (
-                    <tr key={s.date} className="border-b last:border-0">
+                    <tr className="border-b last:border-0" key={s.date}>
                       <td className="py-2 pr-4 tabular-nums">{s.date}</td>
                       <td className="py-2 pr-4 text-right tabular-nums">
                         {(s.occupancy * 100).toFixed(1)}%
@@ -201,8 +200,8 @@ function KpiCard({
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <div className="text-2xl font-semibold tabular-nums">{value}</div>
-        <p className="mt-1 text-xs text-muted-foreground">{subtitle}</p>
+        <div className="font-semibold text-2xl tabular-nums">{value}</div>
+        <p className="mt-1 text-muted-foreground text-xs">{subtitle}</p>
       </CardContent>
     </Card>
   );

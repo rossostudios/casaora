@@ -64,10 +64,10 @@ export default async function PortfolioPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">
+        <h1 className="font-semibold text-2xl tracking-tight">
           {isEn ? "Portfolio" : "Portafolio"}
         </h1>
-        <p className="text-sm text-muted-foreground">
+        <p className="text-muted-foreground text-sm">
           {isEn
             ? "Cross-property performance and analytics"
             : "Rendimiento y análisis entre propiedades"}
@@ -76,9 +76,9 @@ export default async function PortfolioPage() {
 
       <PortfolioDashboard
         kpis={kpis}
+        locale={locale}
         properties={properties}
         snapshots={snapshots}
-        locale={locale}
       />
     </div>
   );

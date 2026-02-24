@@ -203,6 +203,292 @@ pub async fn tool_get_property_comparison(
     }))
 }
 
+// ───────────────────────────────────────────────────────────────────────
+// Sprint 9: Portfolio Intelligence — enhanced tools
+// ───────────────────────────────────────────────────────────────────────
+
+/// Get 12-month KPI trends per property.
+pub async fn tool_get_portfolio_trends(
+    state: &AppState,
+    org_id: &str,
+    args: &Map<String, Value>,
+) -> AppResult<Value> {
+    let pool = db_pool(state)?;
+
+    let months = args.get("months").and_then(Value::as_i64).unwrap_or(12).clamp(1, 24) as i32;
+
+    let snapshots = sqlx::query(
+        "SELECT snapshot_date::text, total_units, occupied_units,
+                revenue::float8, expenses::float8, noi::float8,
+                occupancy, revpar::float8
+         FROM portfolio_snapshots
+         WHERE organization_id = $1::uuid
+           AND snapshot_date >= current_date - ($2::int || ' months')::interval
+         ORDER BY snapshot_date ASC",
+    )
+    .bind(org_id)
+    .bind(months)
+    .fetch_all(pool)
+    .await
+    .unwrap_or_default();
+
+    let trend_points: Vec<Value> = snapshots.iter().map(|r| {
+        json!({
+            "date": r.try_get::<String, _>("snapshot_date").unwrap_or_default(),
+            "total_units": r.try_get::<i32, _>("total_units").unwrap_or(0),
+            "occupied_units": r.try_get::<i32, _>("occupied_units").unwrap_or(0),
+            "revenue": r.try_get::<f64, _>("revenue").unwrap_or(0.0),
+            "expenses": r.try_get::<f64, _>("expenses").unwrap_or(0.0),
+            "noi": r.try_get::<f64, _>("noi").unwrap_or(0.0),
+            "occupancy": r.try_get::<f64, _>("occupancy").unwrap_or(0.0),
+            "revpar": r.try_get::<f64, _>("revpar").unwrap_or(0.0),
+        })
+    }).collect();
+
+    // Calculate month-over-month growth
+    let mom_growth = if trend_points.len() >= 2 {
+        let last = &trend_points[trend_points.len() - 1];
+        let prev = &trend_points[trend_points.len() - 2];
+        let rev_last = last.get("revenue").and_then(Value::as_f64).unwrap_or(0.0);
+        let rev_prev = prev.get("revenue").and_then(Value::as_f64).unwrap_or(1.0).max(1.0);
+        ((rev_last - rev_prev) / rev_prev * 100.0 * 100.0).round() / 100.0
+    } else {
+        0.0
+    };
+
+    Ok(json!({
+        "ok": true,
+        "months": months,
+        "data_points": trend_points.len(),
+        "month_over_month_revenue_growth_pct": mom_growth,
+        "trends": trend_points,
+    }))
+}
+
+/// Rank properties by performance and identify outliers.
+pub async fn tool_get_property_heatmap(
+    state: &AppState,
+    org_id: &str,
+    args: &Map<String, Value>,
+) -> AppResult<Value> {
+    let pool = db_pool(state)?;
+
+    let metric = args.get("metric").and_then(Value::as_str).unwrap_or("revenue");
+    let period_days = args.get("period_days").and_then(Value::as_i64).unwrap_or(30).clamp(7, 365) as i32;
+
+    let rows = sqlx::query(
+        "SELECT
+            p.id::text AS property_id,
+            p.name AS property_name,
+            p.city,
+            COUNT(DISTINCT u.id)::int AS unit_count,
+            COALESCE(SUM(r.total_amount), 0)::float8 AS revenue,
+            COUNT(r.id)::int AS reservations,
+            COALESCE(SUM(r.check_out_date - r.check_in_date), 0)::int AS room_nights,
+            COALESCE((SELECT SUM(amount)::float8 FROM expenses e
+                      WHERE e.property_id = p.id
+                        AND e.expense_date >= current_date - ($2::int || ' days')::interval
+                        AND e.approval_status != 'rejected'), 0) AS expenses
+         FROM properties p
+         LEFT JOIN units u ON u.property_id = p.id
+         LEFT JOIN reservations r ON r.unit_id = u.id
+           AND r.status IN ('confirmed', 'checked_in', 'checked_out')
+           AND r.check_in_date >= current_date - ($2::int || ' days')::interval
+         WHERE p.organization_id = $1::uuid
+         GROUP BY p.id, p.name, p.city
+         ORDER BY revenue DESC",
+    )
+    .bind(org_id)
+    .bind(period_days)
+    .fetch_all(pool)
+    .await
+    .unwrap_or_default();
+
+    let mut properties: Vec<Value> = Vec::new();
+    let mut revenues: Vec<f64> = Vec::new();
+
+    for r in &rows {
+        let units = r.try_get::<i32, _>("unit_count").unwrap_or(0).max(1);
+        let revenue = r.try_get::<f64, _>("revenue").unwrap_or(0.0);
+        let expenses = r.try_get::<f64, _>("expenses").unwrap_or(0.0);
+        let room_nights = r.try_get::<i32, _>("room_nights").unwrap_or(0);
+        let available_nights = units * period_days;
+        let occupancy = if available_nights > 0 {
+            room_nights as f64 / available_nights as f64 * 100.0
+        } else { 0.0 };
+        let noi = revenue - expenses;
+        let rev_per_unit = if units > 0 { revenue / units as f64 } else { 0.0 };
+
+        revenues.push(revenue);
+
+        properties.push(json!({
+            "property_id": r.try_get::<String, _>("property_id").unwrap_or_default(),
+            "property_name": r.try_get::<String, _>("property_name").unwrap_or_default(),
+            "city": r.try_get::<Option<String>, _>("city").ok().flatten(),
+            "unit_count": units,
+            "revenue": (revenue * 100.0).round() / 100.0,
+            "expenses": (expenses * 100.0).round() / 100.0,
+            "noi": (noi * 100.0).round() / 100.0,
+            "occupancy_pct": (occupancy * 100.0).round() / 100.0,
+            "rev_per_unit": (rev_per_unit * 100.0).round() / 100.0,
+            "room_nights": room_nights,
+        }));
+    }
+
+    // Identify outliers (> 1.5x or < 0.5x average)
+    let avg_rev = if revenues.is_empty() { 0.0 } else { revenues.iter().sum::<f64>() / revenues.len() as f64 };
+    let outliers: Vec<Value> = properties.iter()
+        .filter(|p| {
+            let rev = p.get("revenue").and_then(Value::as_f64).unwrap_or(0.0);
+            avg_rev > 0.0 && (rev > avg_rev * 1.5 || rev < avg_rev * 0.5)
+        })
+        .map(|p| {
+            let rev = p.get("revenue").and_then(Value::as_f64).unwrap_or(0.0);
+            let direction = if rev > avg_rev { "above_average" } else { "below_average" };
+            json!({
+                "property_name": p.get("property_name"),
+                "revenue": rev,
+                "direction": direction,
+                "deviation_pct": ((rev - avg_rev) / avg_rev * 100.0 * 100.0).round() / 100.0,
+            })
+        })
+        .collect();
+
+    Ok(json!({
+        "ok": true,
+        "metric": metric,
+        "period_days": period_days,
+        "average_revenue": (avg_rev * 100.0).round() / 100.0,
+        "properties": properties,
+        "outliers": outliers,
+        "property_count": properties.len(),
+    }))
+}
+
+/// Generate a structured performance digest for the given period.
+pub async fn tool_generate_performance_digest(
+    state: &AppState,
+    org_id: &str,
+    args: &Map<String, Value>,
+) -> AppResult<Value> {
+    let pool = db_pool(state)?;
+
+    let digest_type = args.get("digest_type").and_then(Value::as_str).unwrap_or("weekly");
+    let period_days = if digest_type == "monthly" { 30 } else { 7 };
+
+    // Get current period KPIs
+    let current = sqlx::query(
+        "SELECT
+            COALESCE(SUM(r.total_amount), 0)::float8 AS revenue,
+            COUNT(r.id)::int AS reservations,
+            COALESCE(SUM(r.check_out_date - r.check_in_date), 0)::int AS room_nights
+         FROM reservations r
+         WHERE r.organization_id = $1::uuid
+           AND r.status IN ('confirmed', 'checked_in', 'checked_out')
+           AND r.check_in_date >= current_date - ($2::int || ' days')::interval",
+    )
+    .bind(org_id)
+    .bind(period_days)
+    .fetch_one(pool)
+    .await
+    .ok();
+
+    let revenue = current.as_ref().and_then(|r| r.try_get::<f64, _>("revenue").ok()).unwrap_or(0.0);
+    let reservations = current.as_ref().and_then(|r| r.try_get::<i32, _>("reservations").ok()).unwrap_or(0);
+    let room_nights = current.as_ref().and_then(|r| r.try_get::<i32, _>("room_nights").ok()).unwrap_or(0);
+
+    let expenses: f64 = sqlx::query_scalar(
+        "SELECT COALESCE(SUM(amount), 0)::float8 FROM expenses
+         WHERE organization_id = $1::uuid
+           AND expense_date >= current_date - ($2::int || ' days')::interval
+           AND approval_status != 'rejected'",
+    )
+    .bind(org_id)
+    .bind(period_days)
+    .fetch_one(pool)
+    .await
+    .unwrap_or(0.0);
+
+    // Get previous period for comparison
+    let prev = sqlx::query(
+        "SELECT COALESCE(SUM(r.total_amount), 0)::float8 AS revenue
+         FROM reservations r
+         WHERE r.organization_id = $1::uuid
+           AND r.status IN ('confirmed', 'checked_in', 'checked_out')
+           AND r.check_in_date >= current_date - ($2::int || ' days')::interval
+           AND r.check_in_date < current_date - ($3::int || ' days')::interval",
+    )
+    .bind(org_id)
+    .bind(period_days * 2)
+    .bind(period_days)
+    .fetch_one(pool)
+    .await
+    .ok();
+
+    let prev_revenue = prev.as_ref().and_then(|r| r.try_get::<f64, _>("revenue").ok()).unwrap_or(0.0);
+    let revenue_change = if prev_revenue > 0.0 {
+        ((revenue - prev_revenue) / prev_revenue * 100.0 * 100.0).round() / 100.0
+    } else { 0.0 };
+
+    // Maintenance stats
+    let maint_open: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*)::bigint FROM maintenance_requests
+         WHERE organization_id = $1::uuid AND status IN ('open', 'in_progress')",
+    )
+    .bind(org_id)
+    .fetch_one(pool)
+    .await
+    .unwrap_or(0);
+
+    let noi = revenue - expenses;
+    let today = chrono::Utc::now().date_naive();
+    let period_start = today - chrono::Duration::days(period_days as i64);
+
+    // Store digest
+    let digest_id = sqlx::query(
+        "INSERT INTO performance_digests
+            (organization_id, digest_type, period_start, period_end, kpis, highlights, concerns)
+         VALUES ($1::uuid, $2, $3::date, $4::date, $5::jsonb, '[]'::jsonb, '[]'::jsonb)
+         RETURNING id::text",
+    )
+    .bind(org_id)
+    .bind(digest_type)
+    .bind(period_start.to_string())
+    .bind(today.to_string())
+    .bind(&json!({
+        "revenue": revenue,
+        "expenses": expenses,
+        "noi": noi,
+        "reservations": reservations,
+        "room_nights": room_nights,
+        "revenue_change_pct": revenue_change,
+        "maintenance_open": maint_open,
+    }))
+    .fetch_optional(pool)
+    .await
+    .ok()
+    .flatten()
+    .and_then(|r| r.try_get::<String, _>("id").ok())
+    .unwrap_or_default();
+
+    Ok(json!({
+        "ok": true,
+        "digest_id": digest_id,
+        "digest_type": digest_type,
+        "period_start": period_start.to_string(),
+        "period_end": today.to_string(),
+        "kpis": {
+            "revenue": (revenue * 100.0).round() / 100.0,
+            "expenses": (expenses * 100.0).round() / 100.0,
+            "noi": (noi * 100.0).round() / 100.0,
+            "reservations": reservations,
+            "room_nights": room_nights,
+            "revenue_change_pct": revenue_change,
+            "maintenance_open": maint_open,
+        },
+    }))
+}
+
 /// Capture a nightly portfolio snapshot for historical tracking.
 pub async fn capture_portfolio_snapshot(pool: &sqlx::PgPool, org_id: &str) {
     let total_units: i64 = sqlx::query_scalar(

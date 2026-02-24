@@ -1,10 +1,19 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { fetchJson, getApiBaseUrl } from "@/lib/api";
+import { Suspense } from "react";
+import { Badge } from "@/components/ui/badge";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { fetchJson, fetchList, getApiBaseUrl } from "@/lib/api";
 import { errorMessage, isOrgMembershipError } from "@/lib/errors";
 import { getActiveLocale } from "@/lib/i18n/server";
 import { getActiveOrgId } from "@/lib/org";
 
 import { AgentDashboard } from "./agent-dashboard";
+import { AgentHealth } from "./agent-health";
 
 type PageProps = {
   searchParams: Promise<Record<string, string>>;
@@ -35,11 +44,20 @@ export default async function AgentDashboardPage(_props: PageProps) {
   }
 
   let stats: Record<string, unknown> = {};
+  let evaluations: Record<string, unknown>[] = [];
+  let healthMetrics: Record<string, unknown>[] = [];
   try {
-    stats = await fetchJson<Record<string, unknown>>(
-      "/ai-agents/dashboard/stats",
-      { org_id: orgId }
-    );
+    [stats, evaluations, healthMetrics] = await Promise.all([
+      fetchJson<Record<string, unknown>>("/ai-agents/dashboard/stats", {
+        org_id: orgId,
+      }),
+      fetchList("/agent-evaluations", orgId, 200).catch(() => []) as Promise<
+        Record<string, unknown>[]
+      >,
+      fetchList("/agent-health-metrics", orgId, 60).catch(() => []) as Promise<
+        Record<string, unknown>[]
+      >,
+    ]);
   } catch (err) {
     const message = errorMessage(err);
     if (isOrgMembershipError(message)) {
@@ -87,6 +105,32 @@ export default async function AgentDashboardPage(_props: PageProps) {
       </header>
 
       <AgentDashboard initialStats={stats} locale={locale} orgId={orgId} />
+
+      <Card>
+        <CardHeader className="space-y-1">
+          <div className="flex items-center gap-2">
+            <Badge variant="outline">S12</Badge>
+            <CardTitle className="text-lg">
+              {isEn
+                ? "Agent Health & Cost Tracking"
+                : "Salud de Agentes y Seguimiento de Costos"}
+            </CardTitle>
+          </div>
+          <CardDescription>
+            {isEn
+              ? "Quality evaluations, accuracy scores, latency metrics, and cost tracking per agent."
+              : "Evaluaciones de calidad, puntuaciones de precisión, métricas de latencia y seguimiento de costos por agente."}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Suspense fallback={null}>
+            <AgentHealth
+              evaluations={evaluations}
+              healthMetrics={healthMetrics}
+            />
+          </Suspense>
+        </CardContent>
+      </Card>
     </div>
   );
 }

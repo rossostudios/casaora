@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { OrgAccessChanged } from "@/components/shell/org-access-changed";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import {
   Card,
@@ -19,6 +20,12 @@ import { cn } from "@/lib/utils";
 
 const LeasesManager = dynamic(() =>
   import("./leases-manager").then((m) => m.LeasesManager)
+);
+const LeaseAbstraction = dynamic(() =>
+  import("./abstraction").then((m) => m.LeaseAbstraction)
+);
+const ComplianceDashboard = dynamic(() =>
+  import("./compliance-dashboard").then((m) => m.ComplianceDashboard)
 );
 
 type PageProps = {
@@ -65,16 +72,32 @@ export default async function LeasesModulePage({ searchParams }: PageProps) {
   let leases: Record<string, unknown>[] = [];
   let properties: Record<string, unknown>[] = [];
   let units: Record<string, unknown>[] = [];
+  let abstractions: Record<string, unknown>[] = [];
+  let deadlineAlerts: Record<string, unknown>[] = [];
+  let complianceRules: Record<string, unknown>[] = [];
 
   try {
-    const [leaseRows, propertyRows, unitRows] = await Promise.all([
-      fetchList("/leases", orgId, 300),
-      fetchList("/properties", orgId, 300),
-      fetchList("/units", orgId, 300),
-    ]);
+    const [leaseRows, propertyRows, unitRows, absRows, dlRows, ruleRows] =
+      await Promise.all([
+        fetchList("/leases", orgId, 300),
+        fetchList("/properties", orgId, 300),
+        fetchList("/units", orgId, 300),
+        fetchList("/lease-abstractions", orgId, 100).catch(
+          () => [] as Record<string, unknown>[]
+        ),
+        fetchList("/deadline-alerts", orgId, 200).catch(
+          () => [] as Record<string, unknown>[]
+        ),
+        fetchList("/compliance-rules", orgId, 50).catch(
+          () => [] as Record<string, unknown>[]
+        ),
+      ]);
     leases = leaseRows as Record<string, unknown>[];
     properties = propertyRows as Record<string, unknown>[];
     units = unitRows as Record<string, unknown>[];
+    abstractions = absRows as Record<string, unknown>[];
+    deadlineAlerts = dlRows as Record<string, unknown>[];
+    complianceRules = ruleRows as Record<string, unknown>[];
   } catch (err) {
     const message = errorMessage(err);
     if (isOrgMembershipError(message)) {
@@ -156,6 +179,53 @@ export default async function LeasesModulePage({ searchParams }: PageProps) {
               orgId={orgId}
               properties={properties}
               units={units}
+            />
+          </Suspense>
+        </CardContent>
+      </Card>
+
+      {/* Lease Abstraction */}
+      <Card>
+        <CardHeader className="space-y-1">
+          <div className="flex items-center gap-2">
+            <Badge variant="outline">AI</Badge>
+            <CardTitle className="text-lg">
+              {isEn ? "Lease Abstraction" : "Abstracción de Contratos"}
+            </CardTitle>
+          </div>
+          <CardDescription>
+            {isEn
+              ? "AI-extracted terms, clauses, and compliance flags from lease documents."
+              : "Términos, cláusulas y banderas de cumplimiento extraídos por IA de documentos de contratos."}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Suspense fallback={null}>
+            <LeaseAbstraction abstractions={abstractions} />
+          </Suspense>
+        </CardContent>
+      </Card>
+
+      {/* Compliance Dashboard */}
+      <Card>
+        <CardHeader className="space-y-1">
+          <div className="flex items-center gap-2">
+            <Badge variant="outline">Compliance</Badge>
+            <CardTitle className="text-lg">
+              {isEn ? "Deadlines & Compliance" : "Vencimientos y Cumplimiento"}
+            </CardTitle>
+          </div>
+          <CardDescription>
+            {isEn
+              ? "Track lease deadlines, regulatory compliance, and Paraguayan law requirements."
+              : "Seguimiento de vencimientos, cumplimiento regulatorio y requisitos de ley paraguaya."}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Suspense fallback={null}>
+            <ComplianceDashboard
+              deadlines={deadlineAlerts}
+              rules={complianceRules}
             />
           </Suspense>
         </CardContent>
