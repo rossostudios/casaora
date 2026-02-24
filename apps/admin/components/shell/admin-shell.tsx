@@ -268,7 +268,7 @@ function AdminShellV2({
     <TabProvider locale={locale}>
       <div className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden">
         <TabBar />
-        <main className="flex min-h-0 min-w-0 flex-1 flex-col">
+        <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
           <ScrollArea className="flex-1">
             <Topbar
               isNavOpen={isNavOpen}

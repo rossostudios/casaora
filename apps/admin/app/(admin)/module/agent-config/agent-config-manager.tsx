@@ -155,13 +155,18 @@ export function AgentConfigManager({ orgId, initialAgents, locale }: Props) {
         setPrompt(detail.system_prompt ?? "");
         setEnabledTools(new Set(detail.allowed_tools ?? []));
         setIsActive(detail.is_active);
-      } catch {
-        toast.error("Failed to load agent details");
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "Unknown error";
+        toast.error(
+          isEn
+            ? `Failed to load agent: ${msg}`
+            : `Error al cargar agente: ${msg}`
+        );
       } finally {
         setLoading(false);
       }
     },
-    [orgId]
+    [orgId, isEn]
   );
 
   const handleSave = useCallback(async () => {

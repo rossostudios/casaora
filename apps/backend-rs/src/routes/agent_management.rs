@@ -20,12 +20,12 @@ pub fn router() -> axum::Router<AppState> {
     axum::Router::new()
         .route("/ai-agents", axum::routing::get(list_agents))
         .route(
-            "/ai-agents/{agent_slug}",
-            axum::routing::get(get_agent).patch(update_agent),
-        )
-        .route(
             "/ai-agents/dashboard/stats",
             axum::routing::get(dashboard_stats),
+        )
+        .route(
+            "/ai-agents/{agent_slug}",
+            axum::routing::get(get_agent).patch(update_agent),
         )
 }
 

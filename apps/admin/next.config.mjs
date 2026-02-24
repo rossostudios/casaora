@@ -26,7 +26,12 @@ const nextConfig = {
   },
   reactCompiler: true,
   experimental: {
-    optimizePackageImports: ["@hugeicons/core-free-icons"],
+    optimizePackageImports: [
+      "@hugeicons/core-free-icons",
+      "recharts",
+      "date-fns",
+      "lucide-react",
+    ],
   },
   async headers() {
     return [

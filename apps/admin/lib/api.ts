@@ -209,7 +209,6 @@ async function doFetch(
   try {
     const token = includeAuth ? await getAccessToken() : null;
     return await fetch(url, {
-      cache: "no-store",
       ...init,
       signal,
       headers: {
