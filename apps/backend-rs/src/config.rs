@@ -98,6 +98,7 @@ pub struct AppConfig {
     pub scheduler_enabled: bool,
     pub ical_sync_interval_minutes: u64,
     pub workflow_poll_interval_seconds: u64,
+    pub message_poll_interval_seconds: u64,
 }
 
 impl AppConfig {
@@ -184,6 +185,7 @@ impl AppConfig {
             scheduler_enabled: env_parse_bool_or("SCHEDULER_ENABLED", false),
             ical_sync_interval_minutes: env_parse_or("ICAL_SYNC_INTERVAL_MINUTES", 30),
             workflow_poll_interval_seconds: env_parse_or("WORKFLOW_POLL_INTERVAL_SECONDS", 300),
+            message_poll_interval_seconds: env_parse_or("MESSAGE_POLL_INTERVAL_SECONDS", 30),
         }
     }
 

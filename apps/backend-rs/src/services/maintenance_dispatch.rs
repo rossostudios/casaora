@@ -610,7 +610,17 @@ pub async fn tool_auto_assign_maintenance(
     .await
     .unwrap_or_default();
 
-    // Score each vendor: specialty 40% + rating 30% + availability 20% + proximity 10%
+    // S18: Configurable vendor scoring weights from guardrail config
+    let weights_json = crate::services::ai_agent::get_guardrail_value_json(
+        pool, org_id, "vendor_scoring_weights",
+        json!({"specialty": 0.40, "rating": 0.30, "availability": 0.20, "proximity": 0.10}),
+    ).await;
+    let w_specialty = weights_json.get("specialty").and_then(Value::as_f64).unwrap_or(0.40);
+    let w_rating = weights_json.get("rating").and_then(Value::as_f64).unwrap_or(0.30);
+    let w_availability = weights_json.get("availability").and_then(Value::as_f64).unwrap_or(0.20);
+    let w_proximity = weights_json.get("proximity").and_then(Value::as_f64).unwrap_or(0.10);
+
+    // Score each vendor with configurable weights
     let mut scored: Vec<(String, String, f64)> = vendors
         .iter()
         .map(|v| {
@@ -664,10 +674,10 @@ pub async fn tool_auto_assign_maintenance(
                 0.2
             };
 
-            let total = specialty_score * 0.40
-                + rating_score * 0.30
-                + availability_score * 0.20
-                + proximity_score * 0.10;
+            let total = specialty_score * w_specialty
+                + rating_score * w_rating
+                + availability_score * w_availability
+                + proximity_score * w_proximity;
 
             (vid, vname, total)
         })

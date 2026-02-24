@@ -27,6 +27,10 @@ pub fn router() -> axum::Router<AppState> {
             axum::routing::get(get_job).patch(update_job),
         )
         .route(
+            "/vendor/jobs/{task_id}/accept",
+            axum::routing::post(accept_job),
+        )
+        .route(
             "/vendor/jobs/{task_id}/complete",
             axum::routing::post(complete_job),
         )
@@ -412,6 +416,54 @@ async fn update_job(
     .await;
 
     Ok(Json(json!({ "ok": true, "task_id": path.task_id })))
+}
+
+/// S21: Accept a vendor job — transitions status from 'pending' to 'in_progress'.
+async fn accept_job(
+    State(state): State<AppState>,
+    Path(path): Path<TaskIdPath>,
+    headers: HeaderMap,
+) -> AppResult<Json<Value>> {
+    let (pool, org_id, vendor_name) = require_vendor(&state, &headers).await?;
+
+    let task = get_row(pool, "tasks", &path.task_id, "id")
+        .await
+        .map_err(|_| AppError::NotFound("Job not found.".to_string()))?;
+
+    if val_str(&task, "organization_id") != org_id {
+        return Err(AppError::Forbidden("Access denied.".to_string()));
+    }
+
+    let mut patch = Map::new();
+    patch.insert(
+        "status".to_string(),
+        Value::String("in_progress".to_string()),
+    );
+    patch.insert(
+        "accepted_at".to_string(),
+        Value::String(Utc::now().to_rfc3339()),
+    );
+
+    update_row(pool, "tasks", &path.task_id, &patch, "id").await?;
+
+    crate::services::audit::write_audit_log(
+        Some(pool),
+        Some(&org_id),
+        None,
+        "task_accepted_by_vendor",
+        "tasks",
+        Some(&path.task_id),
+        None,
+        Some(json!({ "vendor_name": vendor_name })),
+    )
+    .await;
+
+    Ok(Json(json!({
+        "ok": true,
+        "task_id": path.task_id,
+        "status": "in_progress",
+        "accepted_by": vendor_name,
+    })))
 }
 
 /// Mark a job as complete.

@@ -50,6 +50,14 @@ pub fn router() -> axum::Router<AppState> {
             "/knowledge-documents/seed",
             axum::routing::post(seed_knowledge_documents),
         )
+        .route(
+            "/knowledge-documents/upload",
+            axum::routing::post(upload_knowledge_document),
+        )
+        .route(
+            "/knowledge-documents/search-test",
+            axum::routing::post(search_test_knowledge),
+        )
 }
 
 #[derive(Debug, serde::Deserialize)]
@@ -842,5 +850,317 @@ async fn seed_knowledge_documents(
         "seeded": seeded,
         "skipped": skipped,
         "total_available": SEED_DOCS.len(),
+    })))
+}
+
+// ---------------------------------------------------------------------------
+// S19: File upload for knowledge documents (PDF, DOCX, TXT, MD)
+// ---------------------------------------------------------------------------
+
+use axum::extract::Multipart;
+
+async fn upload_knowledge_document(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    mut multipart: Multipart,
+) -> AppResult<impl IntoResponse> {
+    let user_id = require_user_id(&state, &headers).await?;
+    let pool = db_pool(&state)?;
+
+    let mut org_id: Option<String> = None;
+    let mut title: Option<String> = None;
+    let mut file_content: Option<String> = None;
+    let mut file_name: Option<String> = None;
+
+    while let Ok(Some(field)) = multipart.next_field().await {
+        let field_name = field.name().unwrap_or("").to_string();
+        match field_name.as_str() {
+            "organization_id" | "org_id" => {
+                org_id = field.text().await.ok().filter(|s| !s.trim().is_empty());
+            }
+            "title" => {
+                title = field.text().await.ok().filter(|s| !s.trim().is_empty());
+            }
+            "file" => {
+                file_name = field.file_name().map(ToOwned::to_owned);
+                let bytes = field.bytes().await.map_err(|e| {
+                    AppError::Validation(format!("Failed to read file: {e}"))
+                })?;
+                let fname = file_name.as_deref().unwrap_or("file.txt").to_lowercase();
+                // Extract text based on file type
+                if fname.ends_with(".txt") || fname.ends_with(".md") {
+                    file_content = Some(String::from_utf8_lossy(&bytes).to_string());
+                } else if fname.ends_with(".pdf") {
+                    // Simple PDF text extraction — look for text between stream markers
+                    file_content = Some(extract_pdf_text(&bytes));
+                } else if fname.ends_with(".docx") {
+                    file_content = Some(extract_docx_text(&bytes));
+                } else {
+                    // Fallback: try as UTF-8 text
+                    file_content = Some(String::from_utf8_lossy(&bytes).to_string());
+                }
+            }
+            _ => {}
+        }
+    }
+
+    let org_id = org_id.ok_or_else(|| {
+        AppError::Validation("organization_id is required".to_string())
+    })?;
+    assert_org_role(&state, &user_id, &org_id, DOC_EDIT_ROLES).await?;
+
+    let content = file_content.filter(|c| !c.trim().is_empty()).ok_or_else(|| {
+        AppError::Validation("No content could be extracted from the file. Supported formats: PDF, DOCX, TXT, MD.".to_string())
+    })?;
+
+    let doc_title = title
+        .or(file_name.clone())
+        .unwrap_or_else(|| "Uploaded Document".to_string());
+
+    // Create knowledge document
+    let row = sqlx::query(
+        "INSERT INTO knowledge_documents (organization_id, title, source_url, created_by_user_id)
+         VALUES ($1::uuid, $2, 'upload', $3::uuid)
+         RETURNING id::text AS id",
+    )
+    .bind(&org_id)
+    .bind(&doc_title)
+    .bind(&user_id)
+    .fetch_one(pool)
+    .await
+    .map_err(|e| AppError::Dependency(e.to_string()))?;
+
+    let kd_id: String = row.try_get("id").unwrap_or_default();
+
+    let chunk_count = embeddings::process_and_embed_document(
+        pool,
+        &state.http_client,
+        &state.config,
+        &org_id,
+        &kd_id,
+        &content,
+        &doc_title,
+    )
+    .await
+    .map_err(|e| AppError::ServiceUnavailable(e))?;
+
+    write_audit_log(
+        state.db_pool.as_ref(),
+        Some(&org_id),
+        Some(&user_id),
+        "upload_knowledge",
+        "knowledge_documents",
+        Some(&kd_id),
+        None,
+        Some(json!({
+            "file_name": file_name,
+            "chunks_created": chunk_count,
+        })),
+    )
+    .await;
+
+    Ok((
+        axum::http::StatusCode::CREATED,
+        Json(json!({
+            "ok": true,
+            "knowledge_document_id": kd_id,
+            "title": doc_title,
+            "chunks_created": chunk_count,
+        })),
+    ))
+}
+
+/// Basic PDF text extraction — extracts raw text content from PDF streams.
+fn extract_pdf_text(bytes: &[u8]) -> String {
+    // Simple extraction: look for text between BT...ET markers or parenthesized strings
+    let raw = String::from_utf8_lossy(bytes);
+    let mut text = String::new();
+
+    for line in raw.lines() {
+        let trimmed = line.trim();
+        // Extract text from Tj operators: (text) Tj
+        if trimmed.ends_with("Tj") || trimmed.ends_with("TJ") {
+            if let Some(start) = trimmed.find('(') {
+                if let Some(end) = trimmed.rfind(')') {
+                    if start < end {
+                        text.push_str(&trimmed[start + 1..end]);
+                        text.push(' ');
+                    }
+                }
+            }
+        }
+    }
+
+    if text.trim().is_empty() {
+        // Fallback: extract all parenthesized strings
+        let bytes_str = &raw;
+        let mut in_paren = false;
+        let mut buf = String::new();
+        for ch in bytes_str.chars() {
+            if ch == '(' {
+                in_paren = true;
+                continue;
+            }
+            if ch == ')' {
+                in_paren = false;
+                if !buf.trim().is_empty() {
+                    text.push_str(buf.trim());
+                    text.push(' ');
+                }
+                buf.clear();
+                continue;
+            }
+            if in_paren {
+                buf.push(ch);
+            }
+        }
+    }
+
+    text.trim().to_string()
+}
+
+/// Basic DOCX text extraction — parse the XML content.
+fn extract_docx_text(bytes: &[u8]) -> String {
+    // DOCX is a ZIP file; extract word/document.xml and strip XML tags
+    use std::io::{Cursor, Read};
+
+    let cursor = Cursor::new(bytes);
+    let mut archive = match zip::ZipArchive::new(cursor) {
+        Ok(a) => a,
+        Err(_) => return String::from_utf8_lossy(bytes).to_string(),
+    };
+
+    let mut xml_content = String::new();
+    if let Ok(mut file) = archive.by_name("word/document.xml") {
+        file.read_to_string(&mut xml_content).ok();
+    }
+
+    if xml_content.is_empty() {
+        return String::new();
+    }
+
+    // Strip XML tags, keeping text content
+    let mut text = String::new();
+    let mut in_tag = false;
+    for ch in xml_content.chars() {
+        match ch {
+            '<' => in_tag = true,
+            '>' => {
+                in_tag = false;
+                // Add space after closing paragraph/line tags
+                if text.ends_with(|c: char| c.is_alphanumeric()) {
+                    text.push(' ');
+                }
+            }
+            _ if !in_tag => text.push(ch),
+            _ => {}
+        }
+    }
+
+    text.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+// ---------------------------------------------------------------------------
+// S19: RAG search test endpoint
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, serde::Deserialize)]
+struct SearchTestInput {
+    org_id: String,
+    query: String,
+    #[serde(default = "default_search_limit")]
+    limit: i64,
+}
+fn default_search_limit() -> i64 {
+    10
+}
+
+async fn search_test_knowledge(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(payload): Json<SearchTestInput>,
+) -> AppResult<Json<Value>> {
+    let user_id = require_user_id(&state, &headers).await?;
+    assert_org_member(&state, &user_id, &payload.org_id).await?;
+    let pool = db_pool(&state)?;
+
+    // Embed the query
+    let embedding = embeddings::embed_text(&state.http_client, &state.config, &payload.query)
+        .await
+        .map_err(|e| AppError::ServiceUnavailable(e))?;
+
+    let embedding_str = format!(
+        "[{}]",
+        embedding.iter().map(|v| v.to_string()).collect::<Vec<_>>().join(",")
+    );
+
+    let limit = payload.limit.min(50).max(1);
+
+    // Hybrid search: vector similarity + FTS with RRF fusion
+    let rows = sqlx::query(
+        "WITH vector_results AS (
+            SELECT kc.id, kc.content, kc.document_id,
+                   1.0 - (kc.embedding <=> $3::vector) AS vector_score,
+                   ROW_NUMBER() OVER (ORDER BY kc.embedding <=> $3::vector) AS vector_rank
+            FROM knowledge_chunks kc
+            WHERE kc.organization_id = $1::uuid AND kc.embedding IS NOT NULL
+            ORDER BY kc.embedding <=> $3::vector
+            LIMIT $4
+        ),
+        fts_results AS (
+            SELECT kc.id, kc.content, kc.document_id,
+                   ts_rank(kc.fts_vector, plainto_tsquery('english', $2)) AS fts_score,
+                   ROW_NUMBER() OVER (ORDER BY ts_rank(kc.fts_vector, plainto_tsquery('english', $2)) DESC) AS fts_rank
+            FROM knowledge_chunks kc
+            WHERE kc.organization_id = $1::uuid AND kc.fts_vector @@ plainto_tsquery('english', $2)
+            ORDER BY fts_score DESC
+            LIMIT $4
+        ),
+        combined AS (
+            SELECT
+                COALESCE(v.id, f.id) AS id,
+                COALESCE(v.content, f.content) AS content,
+                COALESCE(v.document_id, f.document_id) AS document_id,
+                COALESCE(v.vector_score, 0) AS vector_score,
+                COALESCE(f.fts_score, 0) AS fts_score,
+                (1.0 / (60.0 + COALESCE(v.vector_rank, 999))) + (1.0 / (60.0 + COALESCE(f.fts_rank, 999))) AS rrf_score
+            FROM vector_results v
+            FULL OUTER JOIN fts_results f ON v.id = f.id
+        )
+        SELECT c.id::text, c.content, c.document_id::text, c.vector_score::float8, c.fts_score::float8, c.rrf_score::float8,
+               kd.title AS doc_title
+        FROM combined c
+        LEFT JOIN knowledge_documents kd ON kd.id = c.document_id
+        ORDER BY c.rrf_score DESC
+        LIMIT $4",
+    )
+    .bind(&payload.org_id)
+    .bind(&payload.query)
+    .bind(&embedding_str)
+    .bind(limit)
+    .fetch_all(pool)
+    .await
+    .map_err(|e| AppError::Dependency(format!("Search failed: {e}")))?;
+
+    let results: Vec<Value> = rows
+        .iter()
+        .map(|row| {
+            json!({
+                "chunk_id": row.try_get::<String, _>("id").unwrap_or_default(),
+                "content": row.try_get::<String, _>("content").unwrap_or_default(),
+                "document_id": row.try_get::<String, _>("document_id").unwrap_or_default(),
+                "doc_title": row.try_get::<Option<String>, _>("doc_title").ok().flatten().unwrap_or_default(),
+                "vector_score": row.try_get::<f64, _>("vector_score").unwrap_or(0.0),
+                "fts_score": row.try_get::<f64, _>("fts_score").unwrap_or(0.0),
+                "rrf_score": row.try_get::<f64, _>("rrf_score").unwrap_or(0.0),
+            })
+        })
+        .collect();
+
+    Ok(Json(json!({
+        "ok": true,
+        "query": payload.query,
+        "results": results,
+        "total": results.len(),
     })))
 }

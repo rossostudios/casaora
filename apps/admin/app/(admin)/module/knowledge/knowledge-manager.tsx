@@ -1,7 +1,7 @@
 "use client";
 
-import { Cancel01Icon } from "@hugeicons/core-free-icons";
-import { useCallback, useState } from "react";
+import { Cancel01Icon, Search01Icon, Upload01Icon } from "@hugeicons/core-free-icons";
+import { useCallback, useMemo, useRef, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -9,7 +9,10 @@ import { Icon } from "@/components/ui/icon";
 import { Input } from "@/components/ui/input";
 import { Sheet } from "@/components/ui/sheet";
 import { Textarea } from "@/components/ui/textarea";
-import { authedFetch } from "@/lib/api-client";
+import { authedFetch, getClientAccessToken } from "@/lib/api-client";
+
+const API_BASE =
+  process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000/v1";
 
 type KnowledgeDocument = {
   id: string;
@@ -27,11 +30,28 @@ type KnowledgeChunk = {
   has_embedding: boolean;
 };
 
+type SearchResult = {
+  chunk_id: string;
+  content: string;
+  vector_score: number | null;
+  fts_score: number | null;
+  rrf_score: number | null;
+  document_title: string;
+};
+
 type Props = {
   orgId: string;
   initialDocuments: unknown[];
   locale: string;
 };
+
+const ACCEPTED_FILE_TYPES = ".pdf,.docx,.txt,.md";
+const ACCEPTED_MIME_TYPES = [
+  "application/pdf",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "text/plain",
+  "text/markdown",
+];
 
 export function KnowledgeManager({ orgId, initialDocuments, locale }: Props) {
   const isEn = locale === "en-US";
@@ -51,6 +71,30 @@ export function KnowledgeManager({ orgId, initialDocuments, locale }: Props) {
   const [loadingChunks, setLoadingChunks] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [isSeeding, setIsSeeding] = useState(false);
+
+  // File upload state
+  const [isDragging, setIsDragging] = useState(false);
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploadTitle, setUploadTitle] = useState("");
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<string>("");
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Search test state
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+
+  // Stats computed from documents
+  const stats = useMemo(() => {
+    const totalDocs = documents.length;
+    const totalChunks = documents.reduce(
+      (sum, d) => sum + (d.chunk_count ?? 0),
+      0
+    );
+    const embeddedDocs = documents.filter((d) => d.has_embeddings).length;
+    return { totalDocs, totalChunks, embeddedDocs };
+  }, [documents]);
 
   const refreshDocuments = useCallback(async () => {
     try {
@@ -143,6 +187,107 @@ export function KnowledgeManager({ orgId, initialDocuments, locale }: Props) {
     [orgId]
   );
 
+  // --- File upload handlers ---
+
+  const handleFileDrop = useCallback(
+    (e: React.DragEvent<HTMLDivElement>) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setIsDragging(false);
+      const file = e.dataTransfer.files[0];
+      if (file && ACCEPTED_MIME_TYPES.includes(file.type)) {
+        setUploadFile(file);
+        if (!uploadTitle) setUploadTitle(file.name.replace(/\.[^.]+$/, ""));
+      }
+    },
+    [uploadTitle]
+  );
+
+  const handleFileSelect = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (file) {
+        setUploadFile(file);
+        if (!uploadTitle) setUploadTitle(file.name.replace(/\.[^.]+$/, ""));
+      }
+    },
+    [uploadTitle]
+  );
+
+  const handleFileUpload = useCallback(async () => {
+    if (!uploadFile) return;
+    setIsUploading(true);
+    setUploadProgress(isEn ? "Uploading file..." : "Subiendo archivo...");
+
+    try {
+      const token = await getClientAccessToken();
+      const formData = new FormData();
+      formData.append("organization_id", orgId);
+      formData.append("file", uploadFile);
+      if (uploadTitle.trim()) {
+        formData.append("title", uploadTitle.trim());
+      }
+
+      setUploadProgress(
+        isEn
+          ? "Processing and embedding content..."
+          : "Procesando e indexando contenido..."
+      );
+
+      const res = await fetch(`${API_BASE}/knowledge-documents/upload`, {
+        method: "POST",
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: formData,
+      });
+
+      if (!res.ok) {
+        const text = await res.text().catch(() => "");
+        throw new Error(`Upload failed (${res.status}): ${text}`);
+      }
+
+      setUploadFile(null);
+      setUploadTitle("");
+      setUploadProgress("");
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      await refreshDocuments();
+    } catch (err) {
+      console.error("Failed to upload file:", err);
+      setUploadProgress(
+        isEn ? "Upload failed. Please try again." : "Error al subir. Intente de nuevo."
+      );
+    } finally {
+      setIsUploading(false);
+    }
+  }, [uploadFile, uploadTitle, orgId, isEn, refreshDocuments]);
+
+  // --- Search test handler ---
+
+  const handleSearchTest = useCallback(async () => {
+    if (!searchQuery.trim()) return;
+    setIsSearching(true);
+    setSearchResults([]);
+    try {
+      const res = await authedFetch<{ data: SearchResult[] }>(
+        "/knowledge-documents/search-test",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            org_id: orgId,
+            query: searchQuery.trim(),
+            limit: 10,
+          }),
+        }
+      );
+      setSearchResults(res.data ?? []);
+    } catch (err) {
+      console.error("Search test failed:", err);
+    } finally {
+      setIsSearching(false);
+    }
+  }, [orgId, searchQuery]);
+
   const formatDate = (dateStr?: string) => {
     if (!dateStr) return "";
     return new Date(dateStr).toLocaleDateString(locale, {
@@ -152,8 +297,43 @@ export function KnowledgeManager({ orgId, initialDocuments, locale }: Props) {
     });
   };
 
+  const formatScore = (score: number | null) => {
+    if (score === null || score === undefined) return "-";
+    return score.toFixed(4);
+  };
+
   return (
     <div className="space-y-6">
+      {/* Stats row */}
+      {documents.length > 0 && (
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-1.5 rounded-md border border-border/50 px-3 py-1.5">
+            <span className="text-muted-foreground text-xs">
+              {isEn ? "Documents" : "Documentos"}
+            </span>
+            <span className="font-medium text-sm tabular-nums">
+              {stats.totalDocs}
+            </span>
+          </div>
+          <div className="flex items-center gap-1.5 rounded-md border border-border/50 px-3 py-1.5">
+            <span className="text-muted-foreground text-xs">
+              {isEn ? "Chunks" : "Fragmentos"}
+            </span>
+            <span className="font-medium text-sm tabular-nums">
+              {stats.totalChunks}
+            </span>
+          </div>
+          <div className="flex items-center gap-1.5 rounded-md border border-border/50 px-3 py-1.5">
+            <span className="text-muted-foreground text-xs">
+              {isEn ? "Embedded" : "Indexados"}
+            </span>
+            <span className="font-medium text-sm tabular-nums">
+              {stats.embeddedDocs}/{stats.totalDocs}
+            </span>
+          </div>
+        </div>
+      )}
+
       {/* Header row — Documents label + count + Add button */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
@@ -231,6 +411,134 @@ export function KnowledgeManager({ orgId, initialDocuments, locale }: Props) {
           </div>
         </div>
       )}
+
+      {/* File upload dropzone */}
+      <div className="space-y-3">
+        <h4 className="font-medium text-sm">
+          {isEn ? "File Upload" : "Subir Archivo"}
+        </h4>
+        <div
+          className={`relative flex flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed px-4 py-8 transition-colors ${
+            isDragging
+              ? "border-primary bg-primary/5"
+              : "border-border/50 hover:border-border"
+          }`}
+          onDragEnter={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            setIsDragging(true);
+          }}
+          onDragLeave={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            setIsDragging(false);
+          }}
+          onDragOver={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+          }}
+          onDrop={handleFileDrop}
+        >
+          <Icon
+            className="text-muted-foreground"
+            icon={Upload01Icon}
+            size={24}
+          />
+          <p className="text-center text-muted-foreground text-sm">
+            {isDragging
+              ? isEn
+                ? "Drop file here"
+                : "Suelte el archivo aqui"
+              : isEn
+                ? "Drag & drop a file here, or click to browse"
+                : "Arrastre un archivo aqui, o haga clic para buscar"}
+          </p>
+          <p className="text-center text-muted-foreground/60 text-xs">
+            PDF, DOCX, TXT, MD
+          </p>
+          <input
+            accept={ACCEPTED_FILE_TYPES}
+            className="absolute inset-0 cursor-pointer opacity-0"
+            onChange={handleFileSelect}
+            ref={fileInputRef}
+            type="file"
+          />
+        </div>
+
+        {uploadFile && (
+          <div className="flex items-center gap-3 rounded-lg border border-border/50 p-3">
+            <div className="min-w-0 flex-1 space-y-2">
+              <div className="flex items-center gap-2">
+                <Badge className="shrink-0 text-[10px]" variant="secondary">
+                  {uploadFile.name.split(".").pop()?.toUpperCase()}
+                </Badge>
+                <span className="truncate text-sm">{uploadFile.name}</span>
+                <span className="shrink-0 text-muted-foreground text-xs tabular-nums">
+                  {(uploadFile.size / 1024).toFixed(1)} KB
+                </span>
+              </div>
+              <Input
+                className="h-8 text-sm"
+                onChange={(e) => setUploadTitle(e.target.value)}
+                placeholder={
+                  isEn
+                    ? "Document title (optional)"
+                    : "Titulo del documento (opcional)"
+                }
+                value={uploadTitle}
+              />
+            </div>
+            <div className="flex shrink-0 items-center gap-1">
+              <Button
+                disabled={isUploading}
+                onClick={handleFileUpload}
+                size="sm"
+              >
+                {isUploading
+                  ? isEn
+                    ? "Uploading..."
+                    : "Subiendo..."
+                  : isEn
+                    ? "Upload"
+                    : "Subir"}
+              </Button>
+              <Button
+                className="h-8 w-8"
+                disabled={isUploading}
+                onClick={() => {
+                  setUploadFile(null);
+                  setUploadTitle("");
+                  setUploadProgress("");
+                  if (fileInputRef.current) fileInputRef.current.value = "";
+                }}
+                size="sm"
+                variant="ghost"
+              >
+                <Icon icon={Cancel01Icon} size={14} />
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {uploadProgress && (
+          <div className="flex items-center gap-2">
+            {isUploading && (
+              <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+                <div className="h-full animate-pulse rounded-full bg-primary/60" style={{ width: "60%" }} />
+              </div>
+            )}
+            <p
+              className={`shrink-0 text-xs ${
+                isUploading
+                  ? "animate-pulse text-muted-foreground"
+                  : "text-destructive"
+              }`}
+            >
+              {uploadProgress}
+            </p>
+          </div>
+        )}
+      </div>
 
       {/* Document list */}
       {documents.length === 0 && (
@@ -362,6 +670,108 @@ export function KnowledgeManager({ orgId, initialDocuments, locale }: Props) {
           ))}
         </div>
       )}
+
+      {/* Test Search panel */}
+      <div className="space-y-3">
+        <h4 className="font-medium text-sm">
+          {isEn ? "Test Search" : "Busqueda de Prueba"}
+        </h4>
+        <div className="flex items-center gap-2">
+          <div className="relative flex-1">
+            <Icon
+              className="absolute top-1/2 left-3 -translate-y-1/2 text-muted-foreground"
+              icon={Search01Icon}
+              size={14}
+            />
+            <Input
+              className="h-9 pl-9 text-sm"
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") handleSearchTest();
+              }}
+              placeholder={
+                isEn
+                  ? "Enter a query to test hybrid search..."
+                  : "Ingrese una consulta para probar busqueda hibrida..."
+              }
+              value={searchQuery}
+            />
+          </div>
+          <Button
+            disabled={isSearching || !searchQuery.trim()}
+            onClick={handleSearchTest}
+            size="sm"
+          >
+            {isSearching
+              ? isEn
+                ? "Searching..."
+                : "Buscando..."
+              : isEn
+                ? "Search"
+                : "Buscar"}
+          </Button>
+        </div>
+
+        {isSearching && (
+          <p className="animate-pulse text-muted-foreground text-xs">
+            {isEn
+              ? "Running hybrid vector + full-text search..."
+              : "Ejecutando busqueda hibrida vector + texto completo..."}
+          </p>
+        )}
+
+        {!isSearching && searchResults.length > 0 && (
+          <div className="space-y-2">
+            <p className="text-muted-foreground text-xs">
+              {searchResults.length} {isEn ? "results" : "resultados"}
+            </p>
+            <div className="divide-y divide-border/40 overflow-hidden rounded-lg border border-border/50">
+              {searchResults.map((result, idx) => (
+                <div className="space-y-2 px-4 py-3" key={result.chunk_id}>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge
+                      className="shrink-0 text-[10px] tabular-nums"
+                      variant="secondary"
+                    >
+                      #{idx + 1}
+                    </Badge>
+                    <span className="truncate font-medium text-xs">
+                      {result.document_title}
+                    </span>
+                    <div className="flex items-center gap-1.5">
+                      <Badge className="text-[10px] tabular-nums" variant="outline">
+                        vec: {formatScore(result.vector_score)}
+                      </Badge>
+                      <Badge className="text-[10px] tabular-nums" variant="outline">
+                        fts: {formatScore(result.fts_score)}
+                      </Badge>
+                      <Badge
+                        className="status-tone-success text-[10px] tabular-nums"
+                        variant="outline"
+                      >
+                        rrf: {formatScore(result.rrf_score)}
+                      </Badge>
+                    </div>
+                  </div>
+                  <p className="line-clamp-4 whitespace-pre-wrap text-sm leading-relaxed">
+                    {result.content}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {!isSearching &&
+          searchResults.length === 0 &&
+          searchQuery.trim() !== "" && (
+            <p className="text-muted-foreground text-xs">
+              {isEn
+                ? "No results. Try a different query or add more documents."
+                : "Sin resultados. Intente otra consulta o agregue mas documentos."}
+            </p>
+          )}
+      </div>
 
       {/* Chunks sheet */}
       <Sheet

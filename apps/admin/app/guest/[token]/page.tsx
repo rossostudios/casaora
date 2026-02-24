@@ -1,10 +1,12 @@
-import { redirect } from "next/navigation";
+import type { Metadata } from "next";
 
-export default async function GuestTokenPage({
-  params,
-}: {
-  params: Promise<{ token: string }>;
-}) {
-  const { token } = await params;
-  redirect(`/guest/${token}/itinerary`);
+import { GuestDashboard } from "./guest-dashboard";
+
+export const metadata: Metadata = {
+  title: "Guest Portal | Casaora",
+  robots: { index: false, follow: false },
+};
+
+export default function GuestTokenPage() {
+  return <GuestDashboard />;
 }

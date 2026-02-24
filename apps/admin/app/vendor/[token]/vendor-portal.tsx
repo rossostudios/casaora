@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 
@@ -31,6 +31,8 @@ type Props = {
   organizationId: string;
 };
 
+type StatusFilter = "all" | "pending" | "in_progress" | "done";
+
 const API_BASE =
   process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000/v1";
 
@@ -54,12 +56,96 @@ async function vendorFetch<T>(
   return res.json() as Promise<T>;
 }
 
+/* -------------------------------------------------------------------------- */
+/*  Stats card                                                                */
+/* -------------------------------------------------------------------------- */
+function StatCard({
+  label,
+  value,
+  accent,
+}: {
+  label: string;
+  value: string;
+  accent?: string;
+}) {
+  return (
+    <div className="rounded-xl border bg-card p-4 text-center">
+      <p className={`font-bold text-2xl ${accent ?? ""}`}>{value}</p>
+      <p className="mt-1 text-muted-foreground text-xs">{label}</p>
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Filter pill                                                               */
+/* -------------------------------------------------------------------------- */
+function FilterPill({
+  label,
+  active,
+  count,
+  onClick,
+}: {
+  label: string;
+  active: boolean;
+  count: number;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
+        active
+          ? "border-primary bg-primary text-primary-foreground"
+          : "border-border bg-card text-muted-foreground hover:bg-muted"
+      }`}
+    >
+      {label}
+      <span
+        className={`inline-flex h-4 min-w-[16px] items-center justify-center rounded-full px-1 text-[10px] font-semibold ${
+          active ? "bg-primary-foreground/20 text-primary-foreground" : "bg-muted text-muted-foreground"
+        }`}
+      >
+        {count}
+      </span>
+    </button>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Priority helpers                                                          */
+/* -------------------------------------------------------------------------- */
+function priorityVariant(p: string) {
+  if (p === "urgent" || p === "critical") return "destructive" as const;
+  if (p === "high") return "default" as const;
+  return "secondary" as const;
+}
+
+function statusLabel(s: string) {
+  if (s === "in_progress") return "In Progress";
+  if (s === "done") return "Completed";
+  if (s === "pending") return "Pending";
+  return s;
+}
+
+function statusDot(s: string) {
+  if (s === "done") return "bg-emerald-500";
+  if (s === "in_progress") return "bg-amber-500";
+  return "bg-gray-400";
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Main component                                                            */
+/* -------------------------------------------------------------------------- */
 export function VendorPortal({ token, vendorName }: Props) {
   const [jobs, setJobs] = useState<Job[]>([]);
-  const [selected, setSelected] = useState<JobDetail | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [expandedDetail, setExpandedDetail] = useState<JobDetail | null>(null);
   const [loading, setLoading] = useState(true);
-  const [completing, setCompleting] = useState(false);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [filter, setFilter] = useState<StatusFilter>("all");
 
+  // ---- Load jobs ----
   const loadJobs = useCallback(async () => {
     try {
       const res = await vendorFetch<{ data?: Job[] }>("/vendor/jobs", token);
@@ -75,194 +161,397 @@ export function VendorPortal({ token, vendorName }: Props) {
     loadJobs();
   }, [loadJobs]);
 
-  const selectJob = useCallback(
+  // ---- Stats ----
+  const stats = useMemo(() => {
+    const total = jobs.length;
+    const active = jobs.filter(
+      (j) => j.status === "pending" || j.status === "in_progress"
+    ).length;
+    const done = jobs.filter((j) => j.status === "done").length;
+    const completionRate = total > 0 ? ((done / total) * 100).toFixed(0) : "0";
+    return { active, done, total, completionRate };
+  }, [jobs]);
+
+  // ---- Filtered jobs ----
+  const filteredJobs = useMemo(() => {
+    if (filter === "all") return jobs;
+    return jobs.filter((j) => j.status === filter);
+  }, [jobs, filter]);
+
+  // ---- Filter counts ----
+  const filterCounts = useMemo(
+    () => ({
+      all: jobs.length,
+      pending: jobs.filter((j) => j.status === "pending").length,
+      in_progress: jobs.filter((j) => j.status === "in_progress").length,
+      done: jobs.filter((j) => j.status === "done").length,
+    }),
+    [jobs]
+  );
+
+  // ---- Toggle expansion & load detail ----
+  const toggleExpand = useCallback(
     async (id: string) => {
+      if (expandedId === id) {
+        setExpandedId(null);
+        setExpandedDetail(null);
+        return;
+      }
+      setExpandedId(id);
+      setExpandedDetail(null);
       try {
         const detail = await vendorFetch<JobDetail>(
           `/vendor/jobs/${id}`,
           token
         );
-        setSelected(detail);
+        setExpandedDetail(detail);
       } catch (err) {
         console.error("Failed to load job detail:", err);
       }
     },
-    [token]
+    [token, expandedId]
   );
 
-  const handleComplete = useCallback(async () => {
-    if (!selected) return;
-    setCompleting(true);
-    try {
-      await vendorFetch(`/vendor/jobs/${selected.id}/complete`, token, {
-        method: "POST",
-      });
-      setSelected((prev) => (prev ? { ...prev, status: "done" } : null));
-      setJobs((prev) =>
-        prev.map((j) => (j.id === selected.id ? { ...j, status: "done" } : j))
-      );
-    } catch (err) {
-      console.error("Failed to complete job:", err);
-    } finally {
-      setCompleting(false);
-    }
-  }, [selected, token]);
+  // ---- Accept job ----
+  const handleAccept = useCallback(
+    async (jobId: string) => {
+      setActionLoading(jobId);
+      try {
+        await vendorFetch(`/vendor/jobs/${jobId}/accept`, token, {
+          method: "POST",
+        });
+        setJobs((prev) =>
+          prev.map((j) =>
+            j.id === jobId ? { ...j, status: "in_progress" } : j
+          )
+        );
+        if (expandedDetail?.id === jobId) {
+          setExpandedDetail((prev) =>
+            prev ? { ...prev, status: "in_progress" } : null
+          );
+        }
+      } catch (err) {
+        console.error("Failed to accept job:", err);
+      } finally {
+        setActionLoading(null);
+      }
+    },
+    [token, expandedDetail]
+  );
 
-  const priorityColor = (p: string) => {
-    if (p === "urgent" || p === "critical") return "destructive" as const;
-    if (p === "high") return "default" as const;
-    return "secondary" as const;
-  };
-
-  const statusColor = (s: string) => {
-    if (s === "done") return "text-green-600";
-    if (s === "in_progress") return "text-amber-600";
-    return "text-muted-foreground";
-  };
+  // ---- Complete job ----
+  const handleComplete = useCallback(
+    async (jobId: string) => {
+      setActionLoading(jobId);
+      try {
+        await vendorFetch(`/vendor/jobs/${jobId}/complete`, token, {
+          method: "POST",
+        });
+        setJobs((prev) =>
+          prev.map((j) => (j.id === jobId ? { ...j, status: "done" } : j))
+        );
+        if (expandedDetail?.id === jobId) {
+          setExpandedDetail((prev) =>
+            prev ? { ...prev, status: "done" } : null
+          );
+        }
+      } catch (err) {
+        console.error("Failed to complete job:", err);
+      } finally {
+        setActionLoading(null);
+      }
+    },
+    [token, expandedDetail]
+  );
 
   return (
     <div className="mx-auto max-w-2xl space-y-6 p-4">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="font-bold text-xl">Vendor Portal</h1>
-          <p className="text-muted-foreground text-sm">Welcome, {vendorName}</p>
-        </div>
+      {/* ── Header ── */}
+      <div>
+        <h1 className="font-bold text-xl">Vendor Portal</h1>
+        <p className="text-muted-foreground text-sm">Welcome, {vendorName}</p>
       </div>
 
-      {/* Job list */}
-      {loading && (
-        <p className="py-8 text-center text-muted-foreground text-sm">
-          Loading jobs...
-        </p>
+      {/* ── Stats header ── */}
+      {!loading && (
+        <div className="grid grid-cols-3 gap-3">
+          <StatCard label="Active Jobs" value={String(stats.active)} />
+          <StatCard
+            label="Completion Rate"
+            value={`${stats.completionRate}%`}
+            accent="text-emerald-600"
+          />
+          <StatCard
+            label="Total Completed"
+            value={String(stats.done)}
+            accent="text-blue-600"
+          />
+        </div>
       )}
 
-      {!(loading || selected) && (
-        <div className="space-y-3">
+      {/* ── Loading ── */}
+      {loading && (
+        <div className="py-12 text-center">
+          <div className="mx-auto h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+          <p className="mt-3 text-muted-foreground text-sm">Loading jobs...</p>
+        </div>
+      )}
+
+      {/* ── Job list ── */}
+      {!loading && (
+        <div className="space-y-4">
+          {/* Status filters */}
+          <div className="flex flex-wrap gap-2">
+            <FilterPill
+              label="All"
+              active={filter === "all"}
+              count={filterCounts.all}
+              onClick={() => setFilter("all")}
+            />
+            <FilterPill
+              label="Pending"
+              active={filter === "pending"}
+              count={filterCounts.pending}
+              onClick={() => setFilter("pending")}
+            />
+            <FilterPill
+              label="In Progress"
+              active={filter === "in_progress"}
+              count={filterCounts.in_progress}
+              onClick={() => setFilter("in_progress")}
+            />
+            <FilterPill
+              label="Completed"
+              active={filter === "done"}
+              count={filterCounts.done}
+              onClick={() => setFilter("done")}
+            />
+          </div>
+
+          {/* Job count */}
           <h2 className="font-medium text-muted-foreground text-sm uppercase tracking-wide">
-            Assigned Jobs ({jobs.length})
+            {filter === "all" ? "All" : statusLabel(filter)} Jobs (
+            {filteredJobs.length})
           </h2>
-          {jobs.length === 0 && (
-            <div className="rounded-xl border p-6 text-center">
+
+          {/* Empty state */}
+          {filteredJobs.length === 0 && (
+            <div className="rounded-xl border p-8 text-center">
               <p className="text-muted-foreground text-sm">
-                No jobs assigned at this time.
+                {filter === "all"
+                  ? "No jobs assigned at this time."
+                  : `No ${statusLabel(filter).toLowerCase()} jobs.`}
               </p>
             </div>
           )}
-          {jobs.map((job) => (
-            <button
-              className="w-full space-y-2 rounded-xl border p-4 text-left transition-colors hover:bg-muted/50"
-              key={job.id}
-              onClick={() => selectJob(job.id)}
-              type="button"
-            >
-              <div className="flex items-start justify-between gap-2">
-                <span className="font-semibold text-sm">{job.title}</span>
-                <Badge
-                  className="shrink-0 text-[10px]"
-                  variant={priorityColor(job.priority)}
+
+          {/* Job cards */}
+          {filteredJobs.map((job) => {
+            const isExpanded = expandedId === job.id;
+            const detail = isExpanded ? expandedDetail : null;
+            const isActioning = actionLoading === job.id;
+
+            return (
+              <div
+                key={job.id}
+                className={`rounded-xl border transition-all ${
+                  isExpanded ? "border-primary/40 shadow-sm" : ""
+                }`}
+              >
+                {/* Job header (click to expand) */}
+                <button
+                  className="w-full p-4 text-left transition-colors hover:bg-muted/30"
+                  onClick={() => toggleExpand(job.id)}
+                  type="button"
                 >
-                  {job.priority}
-                </Badge>
-              </div>
-              <div className="flex items-center gap-2 text-muted-foreground text-xs">
-                <span className={statusColor(job.status)}>{job.status}</span>
-                {job.property_name && <span>· {job.property_name}</span>}
-                {job.unit_name && <span>· {job.unit_name}</span>}
-              </div>
-              {job.due_at && (
-                <p className="text-muted-foreground text-xs">
-                  Due: {new Date(job.due_at).toLocaleDateString()}
-                </p>
-              )}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {/* Job detail */}
-      {selected && (
-        <div className="space-y-4">
-          <button
-            className="text-muted-foreground text-sm transition-colors hover:text-foreground"
-            onClick={() => setSelected(null)}
-            type="button"
-          >
-            ← Back to jobs
-          </button>
-
-          <div className="space-y-4 rounded-xl border p-5">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <h2 className="font-bold text-lg">{selected.title}</h2>
-                <div className="mt-1 flex items-center gap-2">
-                  <span
-                    className={`font-medium text-sm ${statusColor(selected.status)}`}
-                  >
-                    {selected.status}
-                  </span>
-                  <Badge
-                    className="text-[10px]"
-                    variant={priorityColor(selected.priority)}
-                  >
-                    {selected.priority}
-                  </Badge>
-                </div>
-              </div>
-              {selected.status !== "done" && (
-                <Button
-                  disabled={completing}
-                  onClick={handleComplete}
-                  size="sm"
-                >
-                  {completing ? "Completing..." : "Mark Complete"}
-                </Button>
-              )}
-            </div>
-
-            {selected.description && (
-              <p className="text-muted-foreground text-sm leading-relaxed">
-                {selected.description}
-              </p>
-            )}
-
-            {selected.due_at && (
-              <p className="text-muted-foreground text-xs">
-                Due: {new Date(selected.due_at).toLocaleDateString()}
-              </p>
-            )}
-
-            {/* Checklist */}
-            {selected.items && selected.items.length > 0 && (
-              <div className="space-y-2">
-                <h3 className="font-medium text-sm">Checklist</h3>
-                {selected.items
-                  .sort((a, b) => a.sort_order - b.sort_order)
-                  .map((item) => (
-                    <div
-                      className="flex items-center gap-2 rounded-lg border px-3 py-2"
-                      key={item.id}
-                    >
-                      <input
-                        checked={item.is_completed}
-                        className="rounded"
-                        readOnly
-                        type="checkbox"
-                      />
-                      <span
-                        className={`text-sm ${
-                          item.is_completed
-                            ? "text-muted-foreground line-through"
-                            : ""
-                        }`}
-                      >
-                        {item.label}
-                      </span>
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <span className="font-semibold text-sm">{job.title}</span>
+                      <div className="mt-1.5 flex flex-wrap items-center gap-2 text-xs">
+                        <span className="inline-flex items-center gap-1">
+                          <span
+                            className={`inline-block h-2 w-2 rounded-full ${statusDot(job.status)}`}
+                          />
+                          <span className="text-muted-foreground">
+                            {statusLabel(job.status)}
+                          </span>
+                        </span>
+                        {job.property_name && (
+                          <span className="text-muted-foreground">
+                            {job.property_name}
+                          </span>
+                        )}
+                        {job.unit_name && (
+                          <span className="text-muted-foreground">
+                            {job.unit_name}
+                          </span>
+                        )}
+                      </div>
                     </div>
-                  ))}
+                    <div className="flex shrink-0 items-center gap-2">
+                      <Badge
+                        className="text-[10px]"
+                        variant={priorityVariant(job.priority)}
+                      >
+                        {job.priority}
+                      </Badge>
+                      <svg
+                        className={`h-4 w-4 text-muted-foreground transition-transform ${
+                          isExpanded ? "rotate-180" : ""
+                        }`}
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M19 9l-7 7-7-7"
+                        />
+                      </svg>
+                    </div>
+                  </div>
+                </button>
+
+                {/* Expanded detail */}
+                {isExpanded && (
+                  <div className="border-t px-4 pb-4 pt-3">
+                    {!detail ? (
+                      <p className="animate-pulse py-4 text-center text-muted-foreground text-sm">
+                        Loading details...
+                      </p>
+                    ) : (
+                      <div className="space-y-4">
+                        {/* Description */}
+                        {detail.description && (
+                          <div>
+                            <p className="mb-1 font-medium text-muted-foreground text-[10px] uppercase tracking-wide">
+                              Description
+                            </p>
+                            <p className="text-sm leading-relaxed">
+                              {detail.description}
+                            </p>
+                          </div>
+                        )}
+
+                        {/* Meta row */}
+                        <div className="flex flex-wrap gap-4 text-sm">
+                          <div>
+                            <p className="font-medium text-muted-foreground text-[10px] uppercase tracking-wide">
+                              Priority
+                            </p>
+                            <Badge
+                              className="mt-1 text-[10px]"
+                              variant={priorityVariant(detail.priority)}
+                            >
+                              {detail.priority}
+                            </Badge>
+                          </div>
+                          {detail.due_at && (
+                            <div>
+                              <p className="font-medium text-muted-foreground text-[10px] uppercase tracking-wide">
+                                Due Date
+                              </p>
+                              <p className="mt-1 text-sm">
+                                {new Date(detail.due_at).toLocaleDateString()}
+                              </p>
+                            </div>
+                          )}
+                          {detail.created_at && (
+                            <div>
+                              <p className="font-medium text-muted-foreground text-[10px] uppercase tracking-wide">
+                                Created
+                              </p>
+                              <p className="mt-1 text-sm">
+                                {new Date(
+                                  detail.created_at
+                                ).toLocaleDateString()}
+                              </p>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Checklist */}
+                        {detail.items && detail.items.length > 0 && (
+                          <div className="space-y-2">
+                            <p className="font-medium text-muted-foreground text-[10px] uppercase tracking-wide">
+                              Checklist ({detail.items.filter((i) => i.is_completed).length}/
+                              {detail.items.length})
+                            </p>
+                            {detail.items
+                              .sort((a, b) => a.sort_order - b.sort_order)
+                              .map((item) => (
+                                <div
+                                  className="flex items-center gap-2 rounded-lg border px-3 py-2"
+                                  key={item.id}
+                                >
+                                  <input
+                                    checked={item.is_completed}
+                                    className="rounded"
+                                    readOnly
+                                    type="checkbox"
+                                  />
+                                  <span
+                                    className={`text-sm ${
+                                      item.is_completed
+                                        ? "text-muted-foreground line-through"
+                                        : ""
+                                    }`}
+                                  >
+                                    {item.label}
+                                  </span>
+                                </div>
+                              ))}
+                          </div>
+                        )}
+
+                        {/* Action buttons */}
+                        <div className="flex items-center gap-2 pt-1">
+                          {detail.status === "pending" && (
+                            <Button
+                              disabled={isActioning}
+                              onClick={() => handleAccept(detail.id)}
+                              size="sm"
+                            >
+                              {isActioning ? "Accepting..." : "Accept Job"}
+                            </Button>
+                          )}
+                          {detail.status === "in_progress" && (
+                            <Button
+                              disabled={isActioning}
+                              onClick={() => handleComplete(detail.id)}
+                              size="sm"
+                            >
+                              {isActioning ? "Completing..." : "Mark Complete"}
+                            </Button>
+                          )}
+                          {detail.status === "done" && (
+                            <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400">
+                              <svg
+                                className="h-3.5 w-3.5"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  strokeWidth={2}
+                                  d="M5 13l4 4L19 7"
+                                />
+                              </svg>
+                              Completed
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
-            )}
-          </div>
+            );
+          })}
         </div>
       )}
     </div>

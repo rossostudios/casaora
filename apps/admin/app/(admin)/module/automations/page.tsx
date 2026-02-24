@@ -24,8 +24,9 @@ import { cn } from "@/lib/utils";
 import { SequencesManager } from "../sequences/sequences-manager";
 import { WorkflowRulesManager } from "../workflow-rules/workflow-rules-manager";
 import { PlaybookBuilder } from "./playbook-builder";
+import { VisualBuilder } from "./visual-builder";
 
-type AutomationsTab = "rules" | "sequences";
+type AutomationsTab = "rules" | "sequences" | "visual-builder";
 
 type PageProps = {
   searchParams: Promise<{ tab?: string; success?: string; error?: string }>;
@@ -40,7 +41,9 @@ function safeDecode(value: string): string {
 }
 
 function normalizeTab(value: string | undefined): AutomationsTab {
-  return value === "sequences" ? "sequences" : "rules";
+  if (value === "sequences") return "sequences";
+  if (value === "visual-builder") return "visual-builder";
+  return "rules";
 }
 
 export default async function AutomationsHubPage({ searchParams }: PageProps) {
@@ -67,6 +70,93 @@ export default async function AutomationsHubPage({ searchParams }: PageProps) {
               : "Selecciona una organización para gestionar automatizaciones."}
           </CardDescription>
         </CardHeader>
+      </Card>
+    );
+  }
+
+  if (tab === "visual-builder") {
+    let rulesForBuilder: Record<string, unknown>[] = [];
+    try {
+      rulesForBuilder = (await fetchList(
+        "/workflow-rules",
+        orgId,
+        500
+      )) as Record<string, unknown>[];
+    } catch (err) {
+      if (isOrgMembershipError(errorMessage(err)))
+        return <OrgAccessChanged orgId={orgId} />;
+      // Non-fatal: visual builder can work with empty rules
+      rulesForBuilder = [];
+    }
+
+    return (
+      <Card>
+        <CardHeader className="space-y-3">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="space-y-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge variant="outline">
+                  {isEn ? "Workspace" : "Workspace"}
+                </Badge>
+                <Badge variant="secondary">
+                  {isEn ? "Automations" : "Automatizaciones"}
+                </Badge>
+              </div>
+              <CardTitle>{isEn ? "Automations" : "Automatizaciones"}</CardTitle>
+              <CardDescription>
+                {isEn
+                  ? "Visual drag-and-drop workflow builder for automation rules."
+                  : "Constructor visual de flujos de trabajo para reglas de automatizacion."}
+              </CardDescription>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Link
+                className={cn(
+                  buttonVariants({ size: "sm", variant: "outline" })
+                )}
+                href="/module/automations?tab=rules"
+              >
+                {isEn ? "Rules" : "Reglas"}
+              </Link>
+              <Link
+                className={cn(
+                  buttonVariants({ size: "sm", variant: "outline" })
+                )}
+                href="/module/automations?tab=sequences"
+              >
+                {isEn ? "Sequences" : "Secuencias"}
+              </Link>
+              <Link
+                className={cn(
+                  buttonVariants({ size: "sm", variant: "secondary" })
+                )}
+                href="/module/automations?tab=visual-builder"
+              >
+                {isEn ? "Visual Builder" : "Constructor Visual"}
+              </Link>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {successLabel ? (
+            <Alert className="mb-4">
+              <AlertDescription>{successLabel}</AlertDescription>
+            </Alert>
+          ) : null}
+          {errorLabel ? (
+            <Alert className="mb-4" variant="destructive">
+              <AlertDescription>{errorLabel}</AlertDescription>
+            </Alert>
+          ) : null}
+          <Suspense fallback={null}>
+            <VisualBuilder
+              initialRules={rulesForBuilder}
+              locale={locale}
+              orgId={orgId}
+            />
+          </Suspense>
+        </CardContent>
       </Card>
     );
   }
@@ -142,6 +232,14 @@ export default async function AutomationsHubPage({ searchParams }: PageProps) {
                 href="/module/automations?tab=sequences"
               >
                 {isEn ? "Sequences" : "Secuencias"}
+              </Link>
+              <Link
+                className={cn(
+                  buttonVariants({ size: "sm", variant: "outline" })
+                )}
+                href="/module/automations?tab=visual-builder"
+              >
+                {isEn ? "Visual Builder" : "Constructor Visual"}
               </Link>
             </div>
           </div>
@@ -243,6 +341,14 @@ export default async function AutomationsHubPage({ searchParams }: PageProps) {
                 href="/module/automations?tab=sequences"
               >
                 {isEn ? "Sequences" : "Secuencias"}
+              </Link>
+              <Link
+                className={cn(
+                  buttonVariants({ size: "sm", variant: "outline" })
+                )}
+                href="/module/automations?tab=visual-builder"
+              >
+                {isEn ? "Visual Builder" : "Constructor Visual"}
               </Link>
             </div>
           </div>

@@ -1,7 +1,7 @@
 use reqwest::Client;
 use serde::Deserialize;
 use serde_json::{json, Value};
-use sqlx::PgPool;
+use sqlx::{PgPool, Row};
 
 const AIRBNB_API_BASE: &str = "https://api.airbnb.com/v3";
 const AIRBNB_AUTH_URL: &str = "https://www.airbnb.com/oauth2/auth";
@@ -390,6 +390,102 @@ pub async fn sync_airbnb_integration(
         "skipped": skipped,
         "total_fetched": reservations.len(),
     }))
+}
+
+/// S23: Push current pricing rates to all Airbnb-connected units.
+pub async fn sync_all_outbound_rates(state: &crate::state::AppState) {
+    let pool = match state.db_pool.as_ref() {
+        Some(p) => p,
+        None => return,
+    };
+
+    // Find integrations with Airbnb access tokens
+    let rows: Vec<(String, String, String, String, String)> = sqlx::query_as(
+        "SELECT i.id::text, i.organization_id::text, i.unit_id::text,
+                (i.metadata->>'airbnb_access_token')::text AS token,
+                (i.metadata->>'airbnb_listing_id')::text AS listing_id
+         FROM integrations i
+         WHERE i.provider = 'airbnb'
+           AND i.is_active = true
+           AND i.metadata->>'airbnb_access_token' IS NOT NULL
+           AND i.metadata->>'airbnb_listing_id' IS NOT NULL
+         LIMIT 200",
+    )
+    .fetch_all(pool)
+    .await
+    .unwrap_or_default();
+
+    let mut synced = 0u32;
+    for (_integration_id, org_id, unit_id, token, listing_id) in &rows {
+        if token.is_empty() || listing_id.is_empty() {
+            continue;
+        }
+
+        // Get current pricing for the unit (next 90 days)
+        let prices: Vec<(String, f64)> = sqlx::query_as(
+            "SELECT to_char(d::date, 'YYYY-MM-DD'), COALESCE(pt.base_price, 0)::float8
+             FROM generate_series(CURRENT_DATE, CURRENT_DATE + 89, '1 day') AS d
+             LEFT JOIN pricing_templates pt ON pt.unit_id = $1::uuid AND pt.is_active = true
+             WHERE COALESCE(pt.base_price, 0) > 0
+             LIMIT 90",
+        )
+        .bind(unit_id)
+        .fetch_all(pool)
+        .await
+        .unwrap_or_default();
+
+        if prices.is_empty() {
+            continue;
+        }
+
+        // Get blocked dates (existing reservations)
+        let blocked_dates: Vec<(String,)> = sqlx::query_as(
+            "SELECT DISTINCT to_char(d::date, 'YYYY-MM-DD')
+             FROM reservations r,
+                  generate_series(r.check_in_date, r.check_out_date - 1, '1 day') AS d
+             WHERE r.unit_id = $1::uuid
+               AND r.organization_id = $2::uuid
+               AND r.status IN ('confirmed', 'checked_in')
+               AND r.check_in_date >= CURRENT_DATE
+               AND r.check_in_date < CURRENT_DATE + 90",
+        )
+        .bind(unit_id)
+        .bind(org_id)
+        .fetch_all(pool)
+        .await
+        .unwrap_or_default();
+
+        let blocked_set: std::collections::HashSet<String> =
+            blocked_dates.into_iter().map(|(d,)| d).collect();
+
+        // Push pricing
+        if let Err(e) = push_pricing(&state.http_client, token, listing_id, &prices).await {
+            tracing::warn!(listing_id, error = %e, "Outbound OTA pricing push failed");
+            continue;
+        }
+
+        // Push availability (block reserved dates)
+        let availability: Vec<(String, bool)> = (0..90)
+            .filter_map(|offset| {
+                let date = (chrono::Utc::now().date_naive() + chrono::Duration::days(offset))
+                    .format("%Y-%m-%d")
+                    .to_string();
+                let available = !blocked_set.contains(&date);
+                Some((date, available))
+            })
+            .collect();
+
+        if let Err(e) = push_availability(&state.http_client, token, listing_id, &availability).await {
+            tracing::warn!(listing_id, error = %e, "Outbound OTA availability push failed");
+            continue;
+        }
+
+        synced += 1;
+    }
+
+    if synced > 0 {
+        tracing::info!(synced, "Scheduler: outbound OTA rate/availability sync completed");
+    }
 }
 
 /// Get the stored Airbnb access token for an integration.

@@ -97,7 +97,7 @@ function getBrowserSupabaseClient(): BrowserSupabaseClient {
   return browserSupabaseClient;
 }
 
-async function getClientAccessToken(): Promise<string | null> {
+export async function getClientAccessToken(): Promise<string | null> {
   const now = Date.now();
   if (cachedClientToken && now < cachedClientToken.expiresAt) {
     return cachedClientToken.token;

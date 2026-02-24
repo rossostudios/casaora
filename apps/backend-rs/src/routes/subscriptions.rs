@@ -35,6 +35,14 @@ pub fn router() -> axum::Router<AppState> {
             "/billing/usage",
             axum::routing::get(get_usage_summary),
         )
+        .route(
+            "/billing/usage-history",
+            axum::routing::get(get_usage_history),
+        )
+        .route(
+            "/billing/plan-comparison",
+            axum::routing::get(get_plan_comparison),
+        )
 }
 
 #[derive(Debug, serde::Deserialize)]
@@ -387,6 +395,73 @@ async fn get_usage_summary(
 
     let summary = crate::services::metering::get_usage_summary(pool, &query.org_id).await;
     Ok(Json(summary))
+}
+
+/// S20: Usage history over the last N months.
+async fn get_usage_history(
+    State(state): State<AppState>,
+    Query(query): Query<UsageHistoryQuery>,
+    headers: HeaderMap,
+) -> AppResult<Json<Value>> {
+    let user_id = require_user_id(&state, &headers).await?;
+    assert_org_member(&state, &user_id, &query.org_id).await?;
+    let pool = db_pool(&state)?;
+
+    let months = query.months.unwrap_or(6).min(24).max(1);
+    let history = crate::services::metering::get_usage_over_time(pool, &query.org_id, months).await;
+    Ok(Json(history))
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct UsageHistoryQuery {
+    org_id: String,
+    months: Option<i32>,
+}
+
+/// S20: Plan comparison — current plan limits vs available upgrades.
+async fn get_plan_comparison(
+    State(state): State<AppState>,
+    Query(query): Query<BillingOrgQuery>,
+    headers: HeaderMap,
+) -> AppResult<Json<Value>> {
+    let user_id = require_user_id(&state, &headers).await?;
+    assert_org_member(&state, &user_id, &query.org_id).await?;
+    let pool = db_pool(&state)?;
+
+    // Get current subscription
+    let mut org_filter = Map::new();
+    org_filter.insert(
+        "organization_id".to_string(),
+        Value::String(query.org_id.clone()),
+    );
+    let subs = list_rows(pool, "org_subscriptions", Some(&org_filter), 1, 0, "created_at", false)
+        .await
+        .unwrap_or_default();
+
+    let current_plan = if let Some(sub) = subs.into_iter().next() {
+        let plan_id = val_str(&sub, "plan_id");
+        if !plan_id.is_empty() {
+            get_row(pool, "subscription_plans", &plan_id, "id").await.ok()
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
+    // Get all available plans
+    let plans = list_rows(pool, "subscription_plans", None, 20, 0, "price_usd", true)
+        .await
+        .unwrap_or_default();
+
+    // Get current usage
+    let usage = crate::services::metering::get_usage_summary(pool, &query.org_id).await;
+
+    Ok(Json(json!({
+        "current_plan": current_plan,
+        "available_plans": plans,
+        "current_usage": usage,
+    })))
 }
 
 fn db_pool(state: &AppState) -> AppResult<&sqlx::PgPool> {

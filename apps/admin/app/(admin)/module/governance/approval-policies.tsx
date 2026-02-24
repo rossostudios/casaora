@@ -1,0 +1,419 @@
+"use client";
+
+import { useState, useCallback } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
+import { cn } from "@/lib/utils";
+import { authedFetch } from "@/lib/api-client";
+
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+
+type ApprovalMode = "required" | "auto" | "disabled";
+
+type ApprovalPolicy = {
+  id: string;
+  tool_name: string;
+  mode: ApprovalMode;
+  updated_at?: string;
+};
+
+type RateLimitConfig = {
+  id: string;
+  agent_slug: string;
+  max_requests_per_minute: number;
+  max_requests_per_hour: number;
+};
+
+type ApprovalPoliciesProps = {
+  orgId: string;
+  isEn: boolean;
+};
+
+// ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
+
+const MUTATION_TOOLS = [
+  "create_row",
+  "update_row",
+  "delete_row",
+  "send_message",
+  "create_maintenance_task",
+  "auto_assign_maintenance",
+  "escalate_maintenance",
+  "dispatch_to_vendor",
+  "verify_completion",
+  "request_vendor_quote",
+  "select_vendor",
+  "apply_pricing_recommendation",
+  "score_application",
+  "classify_and_delegate",
+  "auto_populate_lease_charges",
+  "create_defect_tickets",
+  "import_bank_transactions",
+  "auto_reconcile_batch",
+  "handle_split_payment",
+  "voice_create_maintenance_request",
+  "generate_access_code",
+  "send_access_code",
+  "revoke_access_code",
+  "process_sensor_event",
+  "execute_playbook",
+] as const;
+
+const MODE_STYLES: Record<ApprovalMode, string> = {
+  required:
+    "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400",
+  auto: "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
+  disabled:
+    "border-red-500/30 bg-red-500/10 text-red-700 dark:text-red-400",
+};
+
+const MODE_LABELS: Record<ApprovalMode, { en: string; es: string }> = {
+  required: { en: "Approval Required", es: "Aprobacion Requerida" },
+  auto: { en: "Auto-Approve", es: "Auto-Aprobar" },
+  disabled: { en: "Disabled", es: "Deshabilitado" },
+};
+
+const MODE_CYCLE: ApprovalMode[] = ["required", "auto", "disabled"];
+
+// ---------------------------------------------------------------------------
+// Component
+// ---------------------------------------------------------------------------
+
+export function ApprovalPolicies({ orgId, isEn }: ApprovalPoliciesProps) {
+  const queryClient = useQueryClient();
+  const [togglingIds, setTogglingIds] = useState<Set<string>>(new Set());
+  const [savingRateLimit, setSavingRateLimit] = useState(false);
+  const [rateLimitDraft, setRateLimitDraft] = useState<{
+    max_requests_per_minute: string;
+    max_requests_per_hour: string;
+  } | null>(null);
+
+  // -- Fetch approval policies -----------------------------------------------
+
+  const { data: policies = [], isPending: loadingPolicies } = useQuery<
+    ApprovalPolicy[]
+  >({
+    queryKey: ["approval-policies", orgId],
+    queryFn: async () => {
+      try {
+        const payload = await authedFetch<{ data?: ApprovalPolicy[] }>(
+          `/agent/approval-policies?org_id=${encodeURIComponent(orgId)}`
+        );
+        return payload.data ?? [];
+      } catch {
+        return [];
+      }
+    },
+    staleTime: 60_000,
+  });
+
+  // -- Fetch rate limit config ------------------------------------------------
+
+  const { data: rateLimit, isPending: loadingRateLimit } =
+    useQuery<RateLimitConfig | null>({
+      queryKey: ["rate-limit-config", orgId],
+      queryFn: async () => {
+        try {
+          const payload = await authedFetch<{ data?: RateLimitConfig }>(
+            `/agent/rate-limit-config?org_id=${encodeURIComponent(orgId)}`
+          );
+          return payload.data ?? null;
+        } catch {
+          return null;
+        }
+      },
+      staleTime: 60_000,
+    });
+
+  // -- Build lookup map for policies -----------------------------------------
+
+  const policyMap = new Map(policies.map((p) => [p.tool_name, p]));
+
+  // -- Toggle policy mode ----------------------------------------------------
+
+  const cyclePolicyMode = useCallback(
+    async (toolName: string) => {
+      const existing = policyMap.get(toolName);
+      const currentMode: ApprovalMode = existing?.mode ?? "required";
+      const currentIdx = MODE_CYCLE.indexOf(currentMode);
+      const nextMode = MODE_CYCLE[(currentIdx + 1) % MODE_CYCLE.length];
+
+      const key = existing?.id ?? toolName;
+      setTogglingIds((prev) => new Set([...prev, key]));
+
+      try {
+        await authedFetch(
+          `/agent/approval-policies?org_id=${encodeURIComponent(orgId)}`,
+          {
+            method: "PUT",
+            body: JSON.stringify({ tool_name: toolName, mode: nextMode }),
+          }
+        );
+
+        queryClient.setQueryData(
+          ["approval-policies", orgId],
+          (prev: ApprovalPolicy[] | undefined) => {
+            if (!prev) return prev;
+            const idx = prev.findIndex((p) => p.tool_name === toolName);
+            if (idx >= 0) {
+              const updated = [...prev];
+              updated[idx] = { ...updated[idx], mode: nextMode };
+              return updated;
+            }
+            return [
+              ...prev,
+              {
+                id: toolName,
+                tool_name: toolName,
+                mode: nextMode,
+                updated_at: new Date().toISOString(),
+              },
+            ];
+          }
+        );
+      } finally {
+        setTogglingIds((prev) => {
+          const next = new Set(prev);
+          next.delete(key);
+          return next;
+        });
+      }
+    },
+    [orgId, policyMap, queryClient]
+  );
+
+  // -- Save rate limit -------------------------------------------------------
+
+  const saveRateLimit = useCallback(async () => {
+    if (!rateLimitDraft) return;
+    setSavingRateLimit(true);
+    try {
+      await authedFetch(
+        `/agent/rate-limit-config?org_id=${encodeURIComponent(orgId)}`,
+        {
+          method: "PUT",
+          body: JSON.stringify({
+            max_requests_per_minute: Number(
+              rateLimitDraft.max_requests_per_minute
+            ),
+            max_requests_per_hour: Number(
+              rateLimitDraft.max_requests_per_hour
+            ),
+          }),
+        }
+      );
+
+      queryClient.setQueryData(
+        ["rate-limit-config", orgId],
+        (prev: RateLimitConfig | null | undefined) => ({
+          ...(prev ?? { id: "default", agent_slug: "*" }),
+          max_requests_per_minute: Number(
+            rateLimitDraft.max_requests_per_minute
+          ),
+          max_requests_per_hour: Number(rateLimitDraft.max_requests_per_hour),
+        })
+      );
+      setRateLimitDraft(null);
+    } finally {
+      setSavingRateLimit(false);
+    }
+  }, [orgId, rateLimitDraft, queryClient]);
+
+  // -- Render ----------------------------------------------------------------
+
+  return (
+    <div className="space-y-4">
+      {/* Approval Policy Table */}
+      <Card>
+        <CardHeader className="space-y-1 border-b border-border/70 pb-4">
+          <CardTitle className="text-base">
+            {isEn ? "Tool Approval Policies" : "Politicas de Aprobacion de Herramientas"}
+          </CardTitle>
+          <CardDescription>
+            {isEn
+              ? "Control which mutation tools require human approval before execution"
+              : "Controla cuales herramientas de mutacion requieren aprobacion humana antes de ejecutarse"}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="pt-4">
+          {loadingPolicies ? (
+            <div className="space-y-2">
+              {[1, 2, 3, 4, 5].map((k) => (
+                <Skeleton className="h-12 w-full rounded-xl" key={k} />
+              ))}
+            </div>
+          ) : (
+            <div className="space-y-1.5">
+              {MUTATION_TOOLS.map((toolName) => {
+                const policy = policyMap.get(toolName);
+                const mode: ApprovalMode = policy?.mode ?? "required";
+                const toggling = togglingIds.has(
+                  policy?.id ?? toolName
+                );
+
+                return (
+                  <div
+                    className="flex items-center justify-between gap-3 rounded-xl border border-border/30 bg-muted/10 px-4 py-2.5"
+                    key={toolName}
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="font-mono text-[12.5px] text-foreground/90">
+                        {toolName}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Badge
+                        className={cn(
+                          "text-[10px] whitespace-nowrap",
+                          MODE_STYLES[mode]
+                        )}
+                        variant="outline"
+                      >
+                        {isEn
+                          ? MODE_LABELS[mode].en
+                          : MODE_LABELS[mode].es}
+                      </Badge>
+                      <Button
+                        className="shrink-0"
+                        disabled={toggling}
+                        onClick={() => {
+                          cyclePolicyMode(toolName).catch(() => undefined);
+                        }}
+                        size="sm"
+                        variant="outline"
+                      >
+                        {toggling
+                          ? "..."
+                          : isEn
+                            ? "Cycle"
+                            : "Cambiar"}
+                      </Button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Rate Limit Config */}
+      <Card>
+        <CardHeader className="space-y-1 border-b border-border/70 pb-4">
+          <CardTitle className="text-base">
+            {isEn ? "Rate Limits" : "Limites de Frecuencia"}
+          </CardTitle>
+          <CardDescription>
+            {isEn
+              ? "Configure maximum request rates per agent to prevent runaway automation"
+              : "Configura las tasas maximas de solicitudes por agente para prevenir automatizacion descontrolada"}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="pt-4">
+          {loadingRateLimit ? (
+            <Skeleton className="h-20 w-full rounded-xl" />
+          ) : (
+            <div className="rounded-xl border border-border/30 bg-muted/10 px-4 py-4">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <label className="mb-1.5 block text-[11px] font-medium uppercase tracking-wider text-muted-foreground/60">
+                    {isEn
+                      ? "Max requests / minute"
+                      : "Max solicitudes / minuto"}
+                  </label>
+                  <Input
+                    className="h-9 font-mono text-sm"
+                    min={1}
+                    onChange={(e) =>
+                      setRateLimitDraft((prev) => ({
+                        max_requests_per_minute: e.target.value,
+                        max_requests_per_hour:
+                          prev?.max_requests_per_hour ??
+                          String(
+                            rateLimit?.max_requests_per_hour ?? 600
+                          ),
+                      }))
+                    }
+                    placeholder="60"
+                    type="number"
+                    value={
+                      rateLimitDraft?.max_requests_per_minute ??
+                      String(rateLimit?.max_requests_per_minute ?? 60)
+                    }
+                  />
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-[11px] font-medium uppercase tracking-wider text-muted-foreground/60">
+                    {isEn
+                      ? "Max requests / hour"
+                      : "Max solicitudes / hora"}
+                  </label>
+                  <Input
+                    className="h-9 font-mono text-sm"
+                    min={1}
+                    onChange={(e) =>
+                      setRateLimitDraft((prev) => ({
+                        max_requests_per_minute:
+                          prev?.max_requests_per_minute ??
+                          String(
+                            rateLimit?.max_requests_per_minute ?? 60
+                          ),
+                        max_requests_per_hour: e.target.value,
+                      }))
+                    }
+                    placeholder="600"
+                    type="number"
+                    value={
+                      rateLimitDraft?.max_requests_per_hour ??
+                      String(rateLimit?.max_requests_per_hour ?? 600)
+                    }
+                  />
+                </div>
+              </div>
+              {rateLimitDraft ? (
+                <div className="mt-3 flex items-center gap-2">
+                  <Button
+                    disabled={savingRateLimit}
+                    onClick={() => {
+                      saveRateLimit().catch(() => undefined);
+                    }}
+                    size="sm"
+                    variant="outline"
+                  >
+                    {savingRateLimit
+                      ? "..."
+                      : isEn
+                        ? "Save"
+                        : "Guardar"}
+                  </Button>
+                  <Button
+                    disabled={savingRateLimit}
+                    onClick={() => setRateLimitDraft(null)}
+                    size="sm"
+                    variant="ghost"
+                  >
+                    {isEn ? "Cancel" : "Cancelar"}
+                  </Button>
+                </div>
+              ) : null}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}

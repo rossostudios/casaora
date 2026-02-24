@@ -1,10 +1,6 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 
-import { PublicFooter } from "@/components/marketplace/public-footer";
-import { PublicHeader } from "@/components/marketplace/public-header";
-import { getActiveLocale } from "@/lib/i18n/server";
-
 export const metadata: Metadata = {
   manifest: "/manifest.json",
   other: {
@@ -14,20 +10,6 @@ export const metadata: Metadata = {
   },
 };
 
-export default async function GuestLayout({
-  children,
-}: {
-  children: ReactNode;
-}) {
-  const locale = await getActiveLocale();
-
-  return (
-    <div className="flex min-h-dvh flex-col bg-background">
-      <PublicHeader locale={locale} />
-      <main className="mx-auto w-full max-w-2xl flex-1 px-4 py-8">
-        {children}
-      </main>
-      <PublicFooter locale={locale} />
-    </div>
-  );
+export default function GuestLayout({ children }: { children: ReactNode }) {
+  return <>{children}</>;
 }

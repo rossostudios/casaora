@@ -73,6 +73,18 @@ pub async fn check_plan_limit(
             "messages this month",
             "mensajes este mes",
         ),
+        PlanResource::Integration => (
+            "max_integrations",
+            "integrations",
+            "integrations",
+            "integraciones",
+        ),
+        PlanResource::WorkflowRule => (
+            "max_workflow_rules",
+            "workflow_rules",
+            "workflow rules",
+            "reglas de automatización",
+        ),
     };
 
     let max = plan
@@ -140,6 +152,8 @@ pub enum PlanResource {
     User,
     AgentCall,
     MessageSent,
+    Integration,
+    WorkflowRule,
 }
 
 fn val_str(row: &Value, key: &str) -> String {

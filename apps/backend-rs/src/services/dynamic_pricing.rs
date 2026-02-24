@@ -596,8 +596,17 @@ pub async fn tool_simulate_rate_impact(
 
     let hist_occupancy = (hist_nights as f64 / 90.0).clamp(0.0, 1.0);
 
-    // Price elasticity model: -0.8 elasticity (10% price increase → 8% occupancy decrease)
-    let elasticity = -0.8;
+    // S18/S23: Price elasticity — check ML model first, then guardrail config, then default
+    let elasticity = {
+        // Try ML model
+        let ml_e = crate::services::ml_pipeline::get_active_elasticity(pool, org_id).await;
+        if let Some(e) = ml_e {
+            e
+        } else {
+            // Fallback to guardrail config with -0.8 default
+            crate::services::ai_agent::get_guardrail_value_f64(pool, org_id, "price_elasticity", -0.8).await
+        }
+    };
     let rate_change_pct = if current_rate > 0.0 {
         (proposed_rate - current_rate) / current_rate
     } else {

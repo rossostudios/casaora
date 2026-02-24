@@ -30,6 +30,7 @@ pub mod maintenance_dispatch;
 pub mod mercado_pago;
 pub mod messaging;
 pub mod metering;
+pub mod ml_pipeline;
 pub mod notification_center;
 pub mod payments;
 pub mod plan_limits;

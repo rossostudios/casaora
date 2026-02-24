@@ -1,5 +1,4 @@
-use std::collections::{BTreeSet, HashMap};
-use std::sync::Mutex;
+use std::collections::BTreeSet;
 
 use serde::Serialize;
 use serde_json::{json, Map, Value};
@@ -11,10 +10,8 @@ use crate::{
     state::AppState,
 };
 
-/// In-memory rate limiter: tracks (agent_slug, hour) → call count.
-/// Resets each hour. Max 100 tool calls per agent per hour.
-static TOOL_RATE_LIMITER: std::sync::LazyLock<Mutex<HashMap<(String, u64), u32>>> =
-    std::sync::LazyLock::new(|| Mutex::new(HashMap::new()));
+// S17: In-memory rate limiter removed — replaced by DB-backed `agent_rate_limits` table.
+// See `check_rate_limit()` for the PostgreSQL atomic increment approach.
 
 /// SSE event types sent during streaming agent execution.
 #[derive(Debug, Clone, Serialize)]
@@ -75,9 +72,123 @@ pub struct ReasoningStep {
 }
 
 const MUTATION_ROLES: &[&str] = &["owner_admin", "operator", "accountant"];
-const MUTATION_TOOLS: &[&str] = &["create_row", "update_row", "delete_row"];
+const MUTATION_TOOLS: &[&str] = &[
+    "create_row", "update_row", "delete_row",
+    "send_message", "create_maintenance_task",
+    "auto_assign_maintenance", "escalate_maintenance",
+    "dispatch_to_vendor", "verify_completion",
+    "request_vendor_quote", "select_vendor",
+    "apply_pricing_recommendation", "score_application",
+    "classify_and_delegate", "auto_populate_lease_charges",
+    "create_defect_tickets",
+    "import_bank_transactions", "auto_reconcile_batch",
+    "handle_split_payment",
+    "voice_create_maintenance_request",
+    "generate_access_code", "send_access_code",
+    "revoke_access_code", "process_sensor_event",
+    "execute_playbook",
+];
 const AI_AGENT_DISABLED_MESSAGE: &str =
     "AI agent is disabled. Set AI_AGENT_ENABLED=true and OPENAI_API_KEY in backend environment.";
+
+/// S17: Check DB-backed rate limit. Returns Ok(()) if allowed, Err(Value) with error JSON if exceeded.
+async fn check_rate_limit(
+    pool: &sqlx::PgPool,
+    org_id: &str,
+    agent_slug: &str,
+) -> Result<(), Value> {
+    let hour_bucket = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs() as i64
+        / 3600;
+
+    // Configurable limit per org/agent (fall back to org-wide '*' then default 100)
+    let max_calls: i64 = sqlx::query_scalar(
+        "SELECT max_calls_per_hour::bigint FROM agent_rate_limit_config
+         WHERE organization_id = $1::uuid AND agent_slug IN ($2, '*')
+         ORDER BY CASE WHEN agent_slug = $2 THEN 0 ELSE 1 END
+         LIMIT 1",
+    )
+    .bind(org_id)
+    .bind(agent_slug)
+    .fetch_optional(pool)
+    .await
+    .ok()
+    .flatten()
+    .unwrap_or(100);
+
+    // Atomic upsert + return current count
+    let current: i64 = sqlx::query_scalar(
+        "INSERT INTO agent_rate_limits (organization_id, agent_slug, hour_bucket, call_count)
+         VALUES ($1::uuid, $2, $3, 1)
+         ON CONFLICT (organization_id, agent_slug, hour_bucket)
+         DO UPDATE SET call_count = agent_rate_limits.call_count + 1
+         RETURNING call_count::bigint",
+    )
+    .bind(org_id)
+    .bind(agent_slug)
+    .bind(hour_bucket)
+    .fetch_one(pool)
+    .await
+    .unwrap_or(1);
+
+    if current > max_calls {
+        return Err(json!({
+            "ok": false,
+            "error": format!("Rate limit exceeded for agent '{}' — max {} tool calls/hour.", agent_slug, max_calls),
+            "guardrail": "rate_limit",
+        }));
+    }
+    Ok(())
+}
+
+/// S18: Fetch a guardrail config value from DB with typed fallback.
+pub async fn get_guardrail_value_f64(
+    pool: &sqlx::PgPool,
+    org_id: &str,
+    key: &str,
+    default: f64,
+) -> f64 {
+    let result: Option<Value> = sqlx::query_scalar(
+        "SELECT value_json FROM agent_guardrail_config
+         WHERE organization_id = $1::uuid AND guardrail_key = $2
+         LIMIT 1",
+    )
+    .bind(org_id)
+    .bind(key)
+    .fetch_optional(pool)
+    .await
+    .ok()
+    .flatten();
+
+    match result {
+        Some(Value::Number(n)) => n.as_f64().unwrap_or(default),
+        Some(Value::String(s)) => s.parse().unwrap_or(default),
+        _ => default,
+    }
+}
+
+/// S18: Fetch a guardrail config value as JSON with fallback.
+pub async fn get_guardrail_value_json(
+    pool: &sqlx::PgPool,
+    org_id: &str,
+    key: &str,
+    default: Value,
+) -> Value {
+    sqlx::query_scalar(
+        "SELECT value_json FROM agent_guardrail_config
+         WHERE organization_id = $1::uuid AND guardrail_key = $2
+         LIMIT 1",
+    )
+    .bind(org_id)
+    .bind(key)
+    .fetch_optional(pool)
+    .await
+    .ok()
+    .flatten()
+    .unwrap_or(default)
+}
 
 #[derive(Debug, Clone, Copy)]
 struct TableConfig {
@@ -175,6 +286,12 @@ pub fn list_supported_tables() -> Vec<String> {
         "agent_health_metrics",
         "pii_intercept_log",
         "agent_boundary_rules",
+        "agent_rate_limit_config",
+        "agent_rate_limits",
+        "agent_guardrail_config",
+        "ml_models",
+        "ml_features",
+        "ml_outcomes",
     ]
     .into_iter()
     .map(ToOwned::to_owned)
@@ -1402,14 +1519,15 @@ pub fn tool_definitions(allowed_tools: Option<&[String]>) -> Vec<Value> {
             "type": "function",
             "function": {
                 "name": "delegate_to_agent",
-                "description": "Delegate a question to another AI agent by slug. Use when the user's request falls outside your specialization.",
+                "description": "Delegate a question to one or more AI agents. Use agent_slug for single delegation or agent_slugs (array) for parallel multi-agent delegation.",
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "agent_slug": {"type": "string", "description": "Slug of the target agent (e.g. 'price-optimizer', 'maintenance-triage')."},
-                        "message": {"type": "string", "description": "The question or task to send to the target agent."}
+                        "agent_slug": {"type": "string", "description": "Slug of a single target agent (e.g. 'price-optimizer', 'maintenance-triage')."},
+                        "agent_slugs": {"type": "array", "items": {"type": "string"}, "description": "Array of agent slugs for parallel delegation. Use when query spans multiple domains."},
+                        "message": {"type": "string", "description": "The question or task to send to the target agent(s)."}
                     },
-                    "required": ["agent_slug", "message"]
+                    "required": ["message"]
                 }
             }
         }),
@@ -2745,25 +2863,11 @@ pub async fn execute_tool(
         }
     }
 
-    // Rate limiting: max 100 tool calls per agent per hour
+    // S17: DB-backed rate limiting — survives restarts, works across instances
     if let Some(agent_slug) = context.agent_slug {
-        let hour = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_secs()
-            / 3600;
-        if let Ok(mut limiter) = TOOL_RATE_LIMITER.lock() {
-            // Clean stale entries from previous hours (keep map small)
-            limiter.retain(|(_slug, h), _| *h >= hour);
-            let key = (agent_slug.to_string(), hour);
-            let count = limiter.entry(key).or_insert(0);
-            *count += 1;
-            if *count > 100 {
-                return Ok(json!({
-                    "ok": false,
-                    "error": format!("Rate limit exceeded for agent '{}' — max 100 tool calls/hour.", agent_slug),
-                    "guardrail": "rate_limit",
-                }));
+        if let Ok(pool) = db_pool(state) {
+            if let Err(err_val) = check_rate_limit(pool, context.org_id, agent_slug).await {
+                return Ok(err_val);
             }
         }
     }
@@ -3535,15 +3639,6 @@ async fn tool_delegate_to_agent(
     confirm_write: bool,
     args: &Map<String, Value>,
 ) -> AppResult<Value> {
-    let agent_slug = args
-        .get("agent_slug")
-        .and_then(Value::as_str)
-        .map(str::trim)
-        .unwrap_or_default();
-    if agent_slug.is_empty() {
-        return Ok(json!({ "ok": false, "error": "agent_slug is required." }));
-    }
-
     let message = args
         .get("message")
         .and_then(Value::as_str)
@@ -3553,7 +3648,72 @@ async fn tool_delegate_to_agent(
         return Ok(json!({ "ok": false, "error": "message is required." }));
     }
 
-    // Look up target agent
+    // S18: Support parallel multi-agent delegation via agent_slugs array
+    let slugs: Vec<String> = if let Some(arr) = args.get("agent_slugs").and_then(Value::as_array) {
+        arr.iter()
+            .filter_map(|v| v.as_str().map(|s| s.trim().to_string()))
+            .filter(|s| !s.is_empty())
+            .collect()
+    } else if let Some(single) = args.get("agent_slug").and_then(Value::as_str).map(str::trim) {
+        if single.is_empty() {
+            return Ok(json!({ "ok": false, "error": "agent_slug or agent_slugs is required." }));
+        }
+        vec![single.to_string()]
+    } else {
+        return Ok(json!({ "ok": false, "error": "agent_slug or agent_slugs is required." }));
+    };
+
+    if slugs.len() == 1 {
+        // Single delegation — existing sequential path
+        return delegate_to_single_agent(state, org_id, role, allow_mutations, confirm_write, &slugs[0], message).await;
+    }
+
+    // Parallel delegation: spawn each sub-agent concurrently
+    let mut handles = Vec::with_capacity(slugs.len());
+    for slug in &slugs {
+        let state = state.clone();
+        let org_id = org_id.to_string();
+        let role = role.to_string();
+        let slug = slug.clone();
+        let message = message.to_string();
+        handles.push(tokio::spawn(async move {
+            delegate_to_single_agent(&state, &org_id, &role, allow_mutations, confirm_write, &slug, &message).await
+        }));
+    }
+
+    let mut results = Vec::with_capacity(handles.len());
+    for (i, handle) in handles.into_iter().enumerate() {
+        match handle.await {
+            Ok(Ok(val)) => results.push(val),
+            Ok(Err(e)) => results.push(json!({
+                "ok": false,
+                "delegated_to": slugs[i],
+                "error": e.detail_message(),
+            })),
+            Err(e) => results.push(json!({
+                "ok": false,
+                "delegated_to": slugs[i],
+                "error": format!("Task panicked: {e}"),
+            })),
+        }
+    }
+
+    Ok(json!({
+        "ok": true,
+        "parallel": true,
+        "results": results,
+    }))
+}
+
+async fn delegate_to_single_agent(
+    state: &AppState,
+    org_id: &str,
+    role: &str,
+    allow_mutations: bool,
+    confirm_write: bool,
+    agent_slug: &str,
+    message: &str,
+) -> AppResult<Value> {
     let pool = db_pool(state)?;
     let agent_row = sqlx::query_as::<_, (String, String, Option<String>, Option<Value>)>(
         "SELECT slug, name, system_prompt, allowed_tools FROM ai_agents WHERE slug = $1 AND is_active = true LIMIT 1"

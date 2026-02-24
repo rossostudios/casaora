@@ -59,3 +59,35 @@ pub async fn get_usage_summary(pool: &PgPool, org_id: &str) -> Value {
         "usage": usage,
     })
 }
+
+/// S20: Get usage history over the last N months, broken down by event_type.
+pub async fn get_usage_over_time(pool: &PgPool, org_id: &str, months: i32) -> Value {
+    let rows: Vec<(String, String, i64)> = sqlx::query_as(
+        "SELECT billing_period, event_type, COALESCE(SUM(quantity), 0)::bigint AS total
+         FROM usage_events
+         WHERE organization_id = $1::uuid
+           AND billing_period >= to_char(now() - ($2::int || ' months')::interval, 'YYYY-MM')
+         GROUP BY billing_period, event_type
+         ORDER BY billing_period, event_type",
+    )
+    .bind(org_id)
+    .bind(months)
+    .fetch_all(pool)
+    .await
+    .unwrap_or_default();
+
+    let mut periods: Map<String, Value> = Map::new();
+    for (period, event_type, total) in &rows {
+        let period_map = periods
+            .entry(period.clone())
+            .or_insert_with(|| json!({}));
+        if let Some(obj) = period_map.as_object_mut() {
+            obj.insert(event_type.clone(), json!(total));
+        }
+    }
+
+    json!({
+        "months": months,
+        "periods": periods,
+    })
+}

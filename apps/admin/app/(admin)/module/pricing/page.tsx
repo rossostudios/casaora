@@ -13,6 +13,7 @@ import { errorMessage, isOrgMembershipError } from "@/lib/errors";
 import { getActiveLocale } from "@/lib/i18n/server";
 import { getActiveOrgId } from "@/lib/org";
 
+import { MlModels } from "./ml-models";
 import { PricingManager } from "./pricing-manager";
 import { PricingRecommendations } from "./pricing-recommendations";
 import { PricingRules } from "./pricing-rules";
@@ -179,6 +180,23 @@ export default async function PricingModulePage({ searchParams }: PageProps) {
               locale={locale}
               orgId={orgId}
             />
+          </Suspense>
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader>
+          <CardTitle>
+            {isEn ? "ML Price Elasticity Model" : "Modelo ML de Elasticidad de Precio"}
+          </CardTitle>
+          <CardDescription>
+            {isEn
+              ? "Machine-learned price elasticity replaces the hardcoded -0.8 default. Trained weekly from your reservation history."
+              : "Elasticidad de precio aprendida por ML reemplaza el valor predeterminado de -0.8. Entrenado semanalmente de su historial de reservas."}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Suspense fallback={null}>
+            <MlModels locale={locale} orgId={orgId} />
           </Suspense>
         </CardContent>
       </Card>

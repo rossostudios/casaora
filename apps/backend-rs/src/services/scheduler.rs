@@ -23,9 +23,13 @@ pub async fn run_background_scheduler(state: AppState) {
     let workflow_interval =
         Duration::from_secs(state.config.workflow_poll_interval_seconds.max(30));
     let ical_interval = Duration::from_secs(state.config.ical_sync_interval_minutes.max(5) * 60);
+    let message_interval =
+        Duration::from_secs(state.config.message_poll_interval_seconds.max(30));
 
     let mut last_workflow_run = tokio::time::Instant::now();
     let mut last_ical_run = tokio::time::Instant::now();
+    let mut last_message_run = tokio::time::Instant::now();
+    let mut last_rate_limit_cleanup = tokio::time::Instant::now();
     let mut last_daily_run: Option<u32> = None;
 
     loop {
@@ -67,6 +71,50 @@ pub async fn run_background_scheduler(state: AppState) {
                     .unwrap_or(0);
                 if synced > 0 {
                     tracing::info!(synced, "Scheduler: iCal sync completed");
+                }
+            });
+        }
+
+        // --- S19: Message processing poll (every N seconds) ---
+        if now_instant.duration_since(last_message_run) >= message_interval {
+            last_message_run = now_instant;
+            let pool = pool.clone();
+            let client = state.http_client.clone();
+            let config = state.config.clone();
+            tokio::spawn(async move {
+                let (sent, failed) =
+                    crate::services::messaging::process_queued_messages(&pool, &client, &config)
+                        .await;
+                if sent > 0 || failed > 0 {
+                    tracing::info!(sent, failed, "Scheduler: processed queued messages");
+                }
+            });
+        }
+
+        // --- S17: Hourly rate limit table cleanup ---
+        if now_instant.duration_since(last_rate_limit_cleanup) >= Duration::from_secs(3600) {
+            last_rate_limit_cleanup = now_instant;
+            let pool = pool.clone();
+            tokio::spawn(async move {
+                let current_hour = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_secs() as i64
+                    / 3600;
+                let cutoff = current_hour - 24;
+                let result = sqlx::query(
+                    "DELETE FROM agent_rate_limits WHERE hour_bucket < $1",
+                )
+                .bind(cutoff)
+                .execute(&pool)
+                .await;
+                if let Ok(r) = result {
+                    if r.rows_affected() > 0 {
+                        tracing::info!(
+                            deleted = r.rows_affected(),
+                            "Scheduler: cleaned up old rate limit entries"
+                        );
+                    }
                 }
             });
         }
@@ -224,11 +272,25 @@ pub async fn run_background_scheduler(state: AppState) {
             });
         }
 
+        // 06:30 — S23: Daily outbound OTA rate/availability sync
+        {
+            let st = state.clone();
+            tokio::spawn(async move {
+                crate::services::airbnb::sync_all_outbound_rates(&st).await;
+            });
+        }
+
         // 11:00 — Weekly demand forecast (Sundays only)
         if today.weekday() == chrono::Weekday::Sun {
             let st = state.clone();
             tokio::spawn(async move {
                 run_weekly_demand_forecast(&st).await;
+            });
+
+            // S23: Weekly ML feature computation (Sundays)
+            let st2 = state.clone();
+            tokio::spawn(async move {
+                crate::services::ml_pipeline::compute_all_features(&st2).await;
             });
         }
 

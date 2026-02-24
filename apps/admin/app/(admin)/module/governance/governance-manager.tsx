@@ -5,6 +5,8 @@ import { PiiAuditLog } from "./pii-audit-log";
 import { MemoryGovernance } from "./memory-governance";
 import { FailSafeBoundaries } from "./fail-safe-boundaries";
 import { SecurityAudit } from "./security-audit";
+import { ApprovalPolicies } from "./approval-policies";
+import { GuardrailConfig } from "./guardrail-config";
 import { cn } from "@/lib/utils";
 import type { Locale } from "@/lib/i18n";
 
@@ -18,6 +20,8 @@ const TABS = [
   { key: "memory", labelEn: "Memory Governance", labelEs: "Gobernanza de Memoria" },
   { key: "boundaries", labelEn: "Fail-Safe Boundaries", labelEs: "Limites de Seguridad" },
   { key: "security", labelEn: "Security Audit", labelEs: "Auditoría de Seguridad" },
+  { key: "approval", labelEn: "Approval Policies", labelEs: "Políticas de Aprobación" },
+  { key: "guardrails", labelEn: "Guardrail Config", labelEs: "Configuración de Guardarraíles" },
 ] as const;
 
 type TabKey = (typeof TABS)[number]["key"];
@@ -68,8 +72,12 @@ export default function GovernanceManager({
           <MemoryGovernance isEn={isEn} orgId={orgId} />
         ) : activeTab === "boundaries" ? (
           <FailSafeBoundaries isEn={isEn} orgId={orgId} />
-        ) : (
+        ) : activeTab === "security" ? (
           <SecurityAudit isEn={isEn} orgId={orgId} />
+        ) : activeTab === "approval" ? (
+          <ApprovalPolicies isEn={isEn} orgId={orgId} />
+        ) : (
+          <GuardrailConfig isEn={isEn} orgId={orgId} />
         )}
       </div>
     </div>
