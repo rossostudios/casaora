@@ -42,6 +42,10 @@ const EXPIRING_LEASES_INBOX_SQL: &str = "SELECT
 struct AgentInboxQuery {
     org_id: String,
     limit: Option<i64>,
+    #[serde(default)]
+    kind: Option<String>,
+    #[serde(default)]
+    priority: Option<String>,
 }
 
 pub fn router() -> axum::Router<AppState> {
@@ -65,6 +69,30 @@ async fn get_agent_inbox(
     load_overdue_tasks(pool, &query.org_id, &mut items).await?;
     load_expiring_leases(pool, &query.org_id, &mut items).await?;
     load_stalled_applications(pool, &query.org_id, &mut items).await?;
+
+    // Filter by kind if specified (comma-separated)
+    if let Some(ref kind_filter) = query.kind {
+        let allowed: Vec<&str> = kind_filter.split(',').map(str::trim).collect();
+        if !allowed.is_empty() {
+            items.retain(|item| {
+                let item_kind = value_str(item, "kind").to_ascii_lowercase();
+                allowed.iter().any(|k| k.eq_ignore_ascii_case(&item_kind))
+            });
+        }
+    }
+
+    // Filter by priority if specified (comma-separated)
+    if let Some(ref priority_filter) = query.priority {
+        let allowed: Vec<&str> = priority_filter.split(',').map(str::trim).collect();
+        if !allowed.is_empty() {
+            items.retain(|item| {
+                let item_priority = value_str(item, "priority").to_ascii_lowercase();
+                allowed
+                    .iter()
+                    .any(|p| p.eq_ignore_ascii_case(&item_priority))
+            });
+        }
+    }
 
     items.sort_by(|left, right| {
         let left_priority = priority_rank(left, "priority");

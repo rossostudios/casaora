@@ -77,18 +77,18 @@ export function ChatHeader({
   return (
     <div
       className={cn(
-        "sticky top-0 z-10 flex shrink-0 items-center justify-between border-border/40 border-b bg-background/80 px-4 py-2.5 backdrop-blur-sm",
+        "glass-chrome sticky top-0 z-10 flex shrink-0 items-center justify-between px-4 py-2.5 sm:px-5",
         isEmbedded && "bg-card/95"
       )}
     >
       <div className="flex w-full items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-2.5">
           {loading ? (
-            <Skeleton className="h-6 w-36" />
+            <Skeleton className="h-6 w-36 rounded-lg" />
           ) : (
             <>
-              <div className="flex items-center gap-2">
-                <div className="flex h-6 w-6 items-center justify-center rounded-md bg-gradient-to-br from-[var(--sidebar-primary)] to-[var(--sidebar-primary)]/70 text-white">
+              <div className="flex items-center gap-2.5">
+                <div className="flex h-6 w-6 items-center justify-center rounded-[8px] bg-casaora-gradient text-white shadow-casaora">
                   <Icon className="h-3 w-3" icon={SparklesIcon} />
                 </div>
 
@@ -98,17 +98,17 @@ export function ChatHeader({
                 onAgentChange ? (
                   <PopoverRoot>
                     <PopoverTrigger
-                      className="flex items-center gap-1"
+                      className="flex items-center gap-1.5 rounded-lg px-1 py-0.5 transition-colors hover:bg-muted/40"
                       disabled={isSending}
                     >
-                      <h2 className="truncate font-semibold text-sm hover:text-foreground/80">
+                      <h2 className="truncate font-semibold text-[13.5px] tracking-tight">
                         {chatTitle ||
                           selectedAgentName ||
                           (isEn ? "New Chat" : "Nuevo Chat")}
                       </h2>
                       <svg
                         aria-label="Expand chevron"
-                        className="h-3 w-3 text-muted-foreground"
+                        className="h-3 w-3 text-muted-foreground/50 transition-transform"
                         fill="none"
                         role="img"
                         stroke="currentColor"
@@ -123,25 +123,25 @@ export function ChatHeader({
                       </svg>
                     </PopoverTrigger>
                     <PopoverContent align="start" className="w-64 p-1.5">
-                      <div className="px-2 py-1.5 font-medium text-[11px] text-muted-foreground uppercase tracking-wider">
+                      <div className="px-2 py-1.5 font-medium text-[10px] text-muted-foreground/60 uppercase tracking-widest">
                         {isEn ? "Agent" : "Agente"}
                       </div>
                       {activeAgents.map((agent) => (
                         <button
                           className={cn(
-                            "flex w-full flex-col gap-0.5 rounded-lg px-2.5 py-2 text-left transition-colors hover:bg-muted/60",
+                            "flex w-full flex-col gap-0.5 rounded-xl px-2.5 py-2 text-left transition-all duration-150 hover:bg-muted/50",
                             agent.slug === selectedAgentSlug &&
-                              "bg-[var(--sidebar-primary)]/8 text-[var(--sidebar-primary)]"
+                              "bg-[var(--sidebar-primary)]/[0.06] text-[var(--sidebar-primary)]"
                           )}
                           key={agent.slug}
                           onClick={() => onAgentChange(agent.slug)}
                           type="button"
                         >
-                          <span className="truncate font-medium text-sm">
+                          <span className="truncate font-medium text-[13px]">
                             {agent.name}
                           </span>
                           {agent.description ? (
-                            <span className="truncate text-muted-foreground text-xs">
+                            <span className="truncate text-muted-foreground text-[11px]">
                               {agent.description}
                             </span>
                           ) : null}
@@ -150,7 +150,7 @@ export function ChatHeader({
                     </PopoverContent>
                   </PopoverRoot>
                 ) : (
-                  <h2 className="truncate font-semibold text-sm">
+                  <h2 className="truncate font-semibold text-[13.5px] tracking-tight">
                     {chatTitle ||
                       selectedAgentName ||
                       (isEn ? "New Chat" : "Nuevo Chat")}
@@ -165,7 +165,7 @@ export function ChatHeader({
                     disabled={isSending || modelBusy}
                   >
                     <Badge
-                      className="cursor-pointer font-mono font-normal text-[10px] transition-colors hover:bg-muted"
+                      className="cursor-pointer border-border/30 bg-transparent font-mono font-normal text-[10px] text-muted-foreground/70 transition-all hover:border-border/60 hover:bg-muted/30 hover:text-muted-foreground"
                       variant="outline"
                     >
                       {getModelDisplayName(selectedModel || primaryModel) ||
@@ -173,21 +173,21 @@ export function ChatHeader({
                     </Badge>
                   </PopoverTrigger>
                   <PopoverContent align="start" className="w-52 p-1.5">
-                    <div className="px-2 py-1.5 font-medium text-[11px] text-muted-foreground uppercase tracking-wider">
+                    <div className="px-2 py-1.5 font-medium text-[10px] text-muted-foreground/60 uppercase tracking-widest">
                       {isEn ? "Model" : "Modelo"}
                     </div>
                     {modelOptions.map((model) => (
                       <button
                         className={cn(
-                          "flex w-full items-center justify-between rounded-lg px-2.5 py-2 text-left text-sm transition-colors hover:bg-muted/60",
+                          "flex w-full items-center justify-between rounded-xl px-2.5 py-2 text-left text-sm transition-all duration-150 hover:bg-muted/50",
                           model.model === (selectedModel || primaryModel) &&
-                            "bg-[var(--sidebar-primary)]/8 text-[var(--sidebar-primary)]"
+                            "bg-[var(--sidebar-primary)]/[0.06] text-[var(--sidebar-primary)]"
                         )}
                         key={model.model}
                         onClick={() => onModelChange(model.model)}
                         type="button"
                       >
-                        <span className="truncate font-mono text-xs">
+                        <span className="truncate font-mono text-[11px]">
                           {getModelDisplayName(model.model)}
                         </span>
                         {model.is_primary ? (
@@ -200,8 +200,8 @@ export function ChatHeader({
                         ) : null}
                       </button>
                     ))}
-                    <div className="mt-1 border-border/40 border-t px-2.5 py-2">
-                      <span className="text-[10px] text-muted-foreground">
+                    <div className="mt-1 border-border/30 border-t px-2.5 py-2">
+                      <span className="text-[10px] text-muted-foreground/50">
                         {isEn
                           ? "More models coming soon"
                           : "Más modelos próximamente"}
@@ -214,29 +214,29 @@ export function ChatHeader({
           )}
         </div>
 
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1">
           {isChatDetailRoute ? null : (
             <>
               <Button
-                className="h-7 w-7"
+                className="h-7 w-7 rounded-lg text-muted-foreground/60 hover:bg-muted/40 hover:text-foreground"
                 disabled={isSending}
                 onClick={onNewThread}
                 size="icon"
                 variant="ghost"
               >
-                <Icon className="h-4 w-4" icon={PlusSignIcon} />
+                <Icon className="h-3.5 w-3.5" icon={PlusSignIcon} />
                 <span className="sr-only">
                   {isEn ? "New thread" : "Nuevo hilo"}
                 </span>
               </Button>
 
               <Button
-                className="h-7 w-7"
+                className="h-7 w-7 rounded-lg text-muted-foreground/60 hover:bg-muted/40 hover:text-foreground"
                 onClick={onHistoryClick}
                 size="icon"
                 variant="ghost"
               >
-                <Icon className="h-4 w-4" icon={Clock02Icon} />
+                <Icon className="h-3.5 w-3.5" icon={Clock02Icon} />
                 <span className="sr-only">
                   {isEn ? "History" : "Historial"}
                 </span>
@@ -247,7 +247,7 @@ export function ChatHeader({
           {isChatDetailRoute ? (
             <>
               <Button
-                className="h-7 gap-1.5 px-2.5 text-[11px]"
+                className="h-7 gap-1.5 rounded-lg border-border/30 px-2.5 text-[11px]"
                 disabled={loading || busy}
                 onClick={onArchiveToggle}
                 size="sm"
@@ -264,7 +264,7 @@ export function ChatHeader({
               </Button>
               {deleteArmed ? (
                 <Button
-                  className="h-7 px-2.5 text-[11px]"
+                  className="h-7 rounded-lg border-border/30 px-2.5 text-[11px]"
                   disabled={loading || busy}
                   onClick={onDeleteCancel}
                   size="sm"
@@ -274,7 +274,7 @@ export function ChatHeader({
                 </Button>
               ) : null}
               <Button
-                className="h-7 gap-1.5 px-2.5 text-[11px]"
+                className="h-7 gap-1.5 rounded-lg px-2.5 text-[11px]"
                 disabled={loading || busy}
                 onClick={deleteArmed ? onDeleteConfirm : onDeleteArm}
                 size="sm"

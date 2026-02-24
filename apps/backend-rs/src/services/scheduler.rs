@@ -239,6 +239,103 @@ pub async fn run_background_scheduler(state: AppState) {
                 crate::services::ai_agent::collect_daily_agent_health(&st).await;
             });
         }
+
+        // 12:00 — Expired memory cleanup
+        {
+            let pool = pool.clone();
+            tokio::spawn(async move {
+                run_memory_cleanup(&pool).await;
+            });
+        }
+
+        // 12:30 — Execute due agent schedules (cron-based playbooks)
+        {
+            let st = state.clone();
+            tokio::spawn(async move {
+                run_cron_agent_playbooks(&st).await;
+            });
+        }
+    }
+}
+
+/// Delete expired agent memories.
+async fn run_memory_cleanup(pool: &sqlx::PgPool) {
+    let result = sqlx::query(
+        "DELETE FROM agent_memory WHERE expires_at IS NOT NULL AND expires_at < now()",
+    )
+    .execute(pool)
+    .await;
+
+    match result {
+        Ok(r) => {
+            if r.rows_affected() > 0 {
+                tracing::info!(
+                    deleted = r.rows_affected(),
+                    "Scheduler: expired agent memories cleaned up"
+                );
+            }
+        }
+        Err(e) => tracing::warn!(error = %e, "Scheduler: memory cleanup failed"),
+    }
+}
+
+/// Execute agent playbooks that have cron-based trigger_type and matching schedule.
+async fn run_cron_agent_playbooks(state: &AppState) {
+    let pool = match state.db_pool.as_ref() {
+        Some(p) => p,
+        None => return,
+    };
+
+    // Fetch playbooks with trigger_type='schedule' that haven't run today
+    let rows = sqlx::query_as::<_, (String, String, String, serde_json::Value)>(
+        "SELECT id::text, organization_id::text, name, steps
+         FROM agent_playbooks
+         WHERE trigger_type = 'schedule'
+           AND is_active = true
+           AND (last_run_at IS NULL OR last_run_at::date < CURRENT_DATE)
+         LIMIT 20",
+    )
+    .fetch_all(pool)
+    .await
+    .unwrap_or_default();
+
+    let mut ran = 0u32;
+    for (playbook_id, org_id, name, _steps) in &rows {
+        // Execute via supervisor agent
+        let params = crate::services::ai_agent::RunAiAgentChatParams {
+            org_id,
+            role: "operator",
+            message: &format!("Execute playbook: {name}"),
+            conversation: &[],
+            allow_mutations: true,
+            confirm_write: true,
+            agent_name: "Operations Copilot",
+            agent_prompt: None,
+            allowed_tools: None,
+            agent_slug: Some("supervisor"),
+            chat_id: None,
+            requested_by_user_id: None,
+            preferred_model: None,
+        };
+
+        match crate::services::ai_agent::run_ai_agent_chat(state, params).await {
+            Ok(_) => ran += 1,
+            Err(e) => {
+                tracing::warn!(playbook = %name, error = %e, "Cron playbook failed");
+            }
+        }
+
+        // Update last_run_at
+        let _ = sqlx::query(
+            "UPDATE agent_playbooks SET last_run_at = now() WHERE id = $1::uuid",
+        )
+        .bind(playbook_id)
+        .execute(pool)
+        .await;
+    }
+
+    if ran > 0 {
+        tracing::info!(ran, "Scheduler: cron agent playbooks completed");
     }
 }
 

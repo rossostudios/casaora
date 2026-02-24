@@ -48,31 +48,37 @@ export function ChatToolEventCard({
   const isOk = event.ok !== false;
 
   return (
-    <div className="flex items-center gap-2.5 rounded-lg border border-border/50 bg-muted/20 px-3 py-2">
+    <div className="glass-inner flex items-center gap-2.5 rounded-xl px-3 py-2 transition-all duration-200">
       {isResult ? (
         isOk ? (
-          <Icon
-            className="h-3.5 w-3.5 text-emerald-500"
-            icon={CheckmarkCircle02Icon}
-          />
+          <div className="flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500/10">
+            <Icon
+              className="h-2.5 w-2.5 text-emerald-500"
+              icon={CheckmarkCircle02Icon}
+            />
+          </div>
         ) : (
-          <Icon className="h-3.5 w-3.5 text-destructive" icon={Cancel01Icon} />
+          <div className="flex h-4 w-4 items-center justify-center rounded-full bg-destructive/10">
+            <Icon className="h-2.5 w-2.5 text-destructive" icon={Cancel01Icon} />
+          </div>
         )
       ) : (
-        <Icon
-          className="h-3.5 w-3.5 animate-spin text-[var(--sidebar-primary)]"
-          icon={Loading03Icon}
-        />
+        <div className="flex h-4 w-4 items-center justify-center rounded-full bg-[var(--sidebar-primary)]/10">
+          <Icon
+            className="h-2.5 w-2.5 animate-spin text-[var(--sidebar-primary)]"
+            icon={Loading03Icon}
+          />
+        </div>
       )}
-      <span className="font-medium text-xs">
+      <span className="font-medium text-[11.5px] text-foreground/80">
         {formatToolName(event.tool_name)}
       </span>
       {isResult && event.preview ? (
-        <span className="truncate text-muted-foreground text-xs">
+        <span className="truncate text-[11px] text-muted-foreground/60">
           {event.preview}
         </span>
       ) : isResult ? null : (
-        <span className="text-muted-foreground text-xs">
+        <span className="text-[11px] text-muted-foreground/50">
           {isEn ? "Running..." : "Ejecutando..."}
         </span>
       )}
@@ -114,7 +120,7 @@ export function ToolTraceBadges({
   if (trace.length === 0) return null;
 
   return (
-    <div className="mt-2">
+    <div className="mt-3">
       <button
         className="flex flex-wrap items-center gap-1.5"
         onClick={onToggle}
@@ -123,8 +129,8 @@ export function ToolTraceBadges({
         {trace.map((tool) => (
           <Badge
             className={cn(
-              "cursor-pointer gap-1 font-normal text-[10px] transition-colors",
-              "hover:bg-muted"
+              "cursor-pointer gap-1.5 border-border/30 bg-transparent font-normal text-[10px] transition-all duration-150",
+              "hover:border-border/60 hover:bg-muted/30"
             )}
             key={`trace-${tool.tool ?? "tool"}-${tool.preview ?? ""}-${tool.ok !== false ? "ok" : "error"}`}
             variant="outline"
@@ -140,22 +146,22 @@ export function ToolTraceBadges({
                 icon={Cancel01Icon}
               />
             )}
-            {tool.tool ?? "tool"}
+            <span className="text-muted-foreground/70">{tool.tool ?? "tool"}</span>
           </Badge>
         ))}
       </button>
 
       {isExpanded ? (
-        <div className="mt-2 space-y-1 rounded-lg border border-border/50 bg-muted/20 p-2">
+        <div className="glass-inner mt-2 space-y-1 rounded-xl p-2">
           {trace.map((tool) => (
             <div
-              className="flex items-center justify-between gap-2 rounded-md bg-background/80 px-2.5 py-1.5"
+              className="flex items-center justify-between gap-2 rounded-lg bg-background/60 px-2.5 py-1.5"
               key={`trace-detail-${tool.tool ?? "tool"}-${tool.preview ?? ""}-${tool.ok !== false ? "ok" : "error"}`}
             >
-              <span className="font-mono text-[11px]">
+              <span className="font-mono text-[10.5px] text-foreground/70">
                 {tool.tool ?? "tool"}
               </span>
-              <span className="text-[11px] text-muted-foreground">
+              <span className="text-[10.5px] text-muted-foreground/50">
                 {tool.preview || (tool.ok !== false ? "ok" : "error")}
               </span>
             </div>

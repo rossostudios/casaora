@@ -2,8 +2,8 @@
 
 import { SparklesIcon } from "@hugeicons/core-free-icons";
 
-import { Suggestion, Suggestions } from "@/components/ai-elements/suggestion";
 import { Icon } from "@/components/ui/icon";
+import { cn } from "@/lib/utils";
 
 export function ChatEmptyState({
   quickPrompts,
@@ -22,36 +22,60 @@ export function ChatEmptyState({
 }) {
   return (
     <div className="flex min-h-[50vh] flex-col items-center justify-center px-4">
-      <div className="mb-8 flex flex-col items-center gap-4">
-        <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-[var(--sidebar-primary)] to-[var(--sidebar-primary)]/70 text-white shadow-lg">
-          <Icon className="h-8 w-8" icon={SparklesIcon} strokeWidth={1.5} />
+      {/* Ambient glow */}
+      <div className="pointer-events-none absolute inset-0 overflow-hidden">
+        <div className="absolute top-1/4 left-1/2 h-[320px] w-[320px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[var(--sidebar-primary)]/[0.06] blur-[100px]" />
+      </div>
+
+      <div className="relative mb-10 flex flex-col items-center gap-5">
+        {/* Avatar mark */}
+        <div className="relative">
+          <div className="absolute -inset-3 rounded-3xl bg-[var(--sidebar-primary)]/[0.08] blur-xl" />
+          <div className="relative flex h-14 w-14 items-center justify-center rounded-2xl bg-casaora-gradient text-white shadow-casaora">
+            <Icon className="h-6 w-6" icon={SparklesIcon} strokeWidth={1.5} />
+          </div>
         </div>
 
-        <div className="space-y-2 text-center">
-          <h2 className="font-semibold text-2xl tracking-tight">
-            {agentName || (isEn ? "Agent" : "Agente")}
+        <div className="space-y-2.5 text-center">
+          <h2 className="font-serif text-[1.75rem] leading-tight tracking-tight text-foreground">
+            {agentName || (isEn ? "Concierge" : "Concierge")}
           </h2>
-          <p className="mx-auto max-w-md text-muted-foreground text-sm leading-relaxed">
+          <p className="mx-auto max-w-sm text-[13.5px] leading-relaxed text-muted-foreground">
             {agentDescription ||
               (isEn
-                ? "Ask me anything about your property operations."
-                : "Preguntame lo que necesites sobre tus operaciones.")}
+                ? "Your AI-powered property operations assistant. Ask me anything."
+                : "Tu asistente de operaciones impulsado por IA. Preguntame lo que necesites.")}
           </p>
         </div>
       </div>
 
       {quickPrompts.length > 0 ? (
-        <Suggestions className="max-w-lg flex-wrap justify-center gap-2">
-          {quickPrompts.slice(0, 3).map((prompt) => (
-            <Suggestion
-              className="h-auto whitespace-normal rounded-xl px-4 py-2.5 text-left text-sm"
-              disabled={disabled}
-              key={prompt}
-              onClick={(p) => onSendPrompt(p)}
-              suggestion={prompt}
-            />
-          ))}
-        </Suggestions>
+        <div className="relative flex w-full max-w-xl flex-col items-center gap-2.5">
+          <p className="mb-1 text-[11px] font-medium uppercase tracking-widest text-muted-foreground/60">
+            {isEn ? "Try asking" : "Prueba preguntar"}
+          </p>
+          <div className="flex w-full flex-wrap justify-center gap-2">
+            {quickPrompts.slice(0, 3).map((prompt, i) => (
+              <button
+                className={cn(
+                  "glass-inner group relative cursor-pointer rounded-xl px-4 py-3 text-left text-[13px] leading-snug text-foreground/80",
+                  "transition-all duration-200 ease-out",
+                  "hover:bg-[var(--sidebar-primary)]/[0.06] hover:text-foreground hover:shadow-sm",
+                  "active:scale-[0.98]",
+                  "disabled:pointer-events-none disabled:opacity-40",
+                  "animate-[fadeInUp_0.4s_ease-out_both]"
+                )}
+                disabled={disabled}
+                key={prompt}
+                onClick={() => onSendPrompt(prompt)}
+                style={{ animationDelay: `${i * 80 + 100}ms` }}
+                type="button"
+              >
+                <span className="relative">{prompt}</span>
+              </button>
+            ))}
+          </div>
+        </div>
       ) : null}
     </div>
   );

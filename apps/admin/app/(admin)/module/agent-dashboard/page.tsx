@@ -14,6 +14,7 @@ import { getActiveOrgId } from "@/lib/org";
 
 import { AgentDashboard } from "./agent-dashboard";
 import { AgentHealth } from "./agent-health";
+import { AgentTraces } from "./agent-traces";
 
 type PageProps = {
   searchParams: Promise<Record<string, string>>;
@@ -105,6 +106,29 @@ export default async function AgentDashboardPage(_props: PageProps) {
       </header>
 
       <AgentDashboard initialStats={stats} locale={locale} orgId={orgId} />
+
+      <Card>
+        <CardHeader className="space-y-1">
+          <div className="flex items-center gap-2">
+            <Badge variant="outline">Traces</Badge>
+            <CardTitle className="text-lg">
+              {isEn
+                ? "Agent Traces & Token Usage"
+                : "Trazas de Agentes y Uso de Tokens"}
+            </CardTitle>
+          </div>
+          <CardDescription>
+            {isEn
+              ? "Real-time LLM call traces with token counts, latency, cost estimates, and tool call timelines."
+              : "Trazas de llamadas LLM en tiempo real con conteo de tokens, latencia, estimación de costos y cronología de herramientas."}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Suspense fallback={null}>
+            <AgentTraces orgId={orgId} />
+          </Suspense>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader className="space-y-1">

@@ -46,6 +46,14 @@ struct UpdateApprovalPolicyInput {
     enabled: Option<bool>,
 }
 
+#[derive(Debug, Clone, Deserialize)]
+struct BatchReviewInput {
+    ids: Vec<String>,
+    action: String, // "approve" or "reject"
+    #[serde(default)]
+    note: Option<String>,
+}
+
 pub fn router() -> axum::Router<AppState> {
     axum::Router::new()
         .route("/agent/approvals", axum::routing::get(list_approvals))
@@ -58,6 +66,10 @@ pub fn router() -> axum::Router<AppState> {
             axum::routing::post(reject_approval),
         )
         .route(
+            "/agent/approvals/batch",
+            axum::routing::post(batch_review_approvals),
+        )
+        .route(
             "/agent/approval-policies",
             axum::routing::get(list_approval_policies),
         )
@@ -67,9 +79,20 @@ pub fn router() -> axum::Router<AppState> {
         )
 }
 
+#[derive(Debug, Clone, Deserialize)]
+struct ListApprovalsQuery {
+    org_id: String,
+    #[serde(default)]
+    kind: Option<String>,
+    #[serde(default)]
+    priority: Option<String>,
+    #[serde(default)]
+    status: Option<String>,
+}
+
 async fn list_approvals(
     State(state): State<AppState>,
-    Query(query): Query<ApprovalOrgQuery>,
+    Query(query): Query<ListApprovalsQuery>,
     headers: HeaderMap,
 ) -> AppResult<Json<Value>> {
     let user_id = require_user_id(&state, &headers).await?;
@@ -77,15 +100,23 @@ async fn list_approvals(
     assert_approver_role(&membership)?;
 
     let pool = db_pool(&state)?;
+    let status_filter = query.status.as_deref().unwrap_or("pending");
+    let kind_filter = query.kind.as_deref().unwrap_or("");
+    let priority_filter = query.priority.as_deref().unwrap_or("");
     let rows = sqlx::query(
         "SELECT row_to_json(t) AS row
          FROM agent_approvals t
          WHERE organization_id = $1::uuid
-           AND status = 'pending'
+           AND status = $2
+           AND ($3 = '' OR kind = $3)
+           AND ($4 = '' OR priority = $4)
          ORDER BY created_at DESC
          LIMIT 100",
     )
     .bind(&query.org_id)
+    .bind(status_filter)
+    .bind(kind_filter)
+    .bind(priority_filter)
     .fetch_all(pool)
     .await
     .map_err(|error| {
@@ -102,6 +133,130 @@ async fn list_approvals(
         "organization_id": query.org_id,
         "data": data,
         "count": data.len(),
+    })))
+}
+
+async fn batch_review_approvals(
+    State(state): State<AppState>,
+    Query(query): Query<ApprovalOrgQuery>,
+    headers: HeaderMap,
+    Json(payload): Json<BatchReviewInput>,
+) -> AppResult<Json<Value>> {
+    let user_id = require_user_id(&state, &headers).await?;
+    let membership = assert_org_member(&state, &user_id, &query.org_id).await?;
+    assert_approver_role(&membership)?;
+
+    if payload.ids.is_empty() {
+        return Err(AppError::BadRequest("ids must not be empty.".to_string()));
+    }
+    if !matches!(payload.action.as_str(), "approve" | "reject") {
+        return Err(AppError::BadRequest(
+            "action must be 'approve' or 'reject'.".to_string(),
+        ));
+    }
+
+    let pool = db_pool(&state)?;
+    let mut results = Vec::new();
+
+    for id in &payload.ids {
+        if payload.action == "approve" {
+            // Approve and execute
+            let row = sqlx::query(
+                "UPDATE agent_approvals
+                 SET status = 'approved', reviewed_by = $1::uuid, review_note = $2, reviewed_at = now(),
+                     execution_key = COALESCE(execution_key, gen_random_uuid()::text)
+                 WHERE id = $3::uuid AND organization_id = $4::uuid AND status = 'pending'
+                 RETURNING row_to_json(agent_approvals.*) AS row",
+            )
+            .bind(&user_id)
+            .bind(payload.note.as_deref())
+            .bind(id)
+            .bind(&query.org_id)
+            .fetch_optional(pool)
+            .await
+            .ok()
+            .flatten();
+
+            let Some(row) = row else {
+                results.push(json!({ "id": id, "ok": false, "error": "Not found or already reviewed." }));
+                continue;
+            };
+
+            let approval = row
+                .try_get::<Option<Value>, _>("row")
+                .ok()
+                .flatten()
+                .unwrap_or_default();
+            let tool_name = approval
+                .as_object()
+                .and_then(|o| o.get("tool_name"))
+                .and_then(Value::as_str)
+                .unwrap_or_default()
+                .to_string();
+            let tool_args = approval
+                .as_object()
+                .and_then(|o| o.get("tool_args"))
+                .and_then(Value::as_object)
+                .cloned()
+                .unwrap_or_default();
+
+            let exec = crate::services::ai_agent::execute_approved_tool(
+                &state,
+                &query.org_id,
+                &tool_name,
+                &tool_args,
+            )
+            .await
+            .unwrap_or_else(|e| json!({ "ok": false, "error": e.detail_message() }));
+
+            let exec_ok = exec
+                .as_object()
+                .and_then(|o| o.get("ok"))
+                .and_then(Value::as_bool)
+                .unwrap_or(false);
+            let final_status = if exec_ok { "executed" } else { "execution_failed" };
+
+            let _ = sqlx::query(
+                "UPDATE agent_approvals SET status = $1, execution_result = $2, executed_at = now()
+                 WHERE id = $3::uuid AND organization_id = $4::uuid",
+            )
+            .bind(final_status)
+            .bind(&exec)
+            .bind(id)
+            .bind(&query.org_id)
+            .execute(pool)
+            .await;
+
+            results.push(json!({ "id": id, "ok": true, "status": final_status }));
+        } else {
+            // Reject
+            let updated = sqlx::query(
+                "UPDATE agent_approvals
+                 SET status = 'rejected', reviewed_by = $1::uuid, review_note = $2, reviewed_at = now()
+                 WHERE id = $3::uuid AND organization_id = $4::uuid AND status = 'pending'
+                 RETURNING id",
+            )
+            .bind(&user_id)
+            .bind(payload.note.as_deref())
+            .bind(id)
+            .bind(&query.org_id)
+            .fetch_optional(pool)
+            .await
+            .ok()
+            .flatten();
+
+            if updated.is_some() {
+                results.push(json!({ "id": id, "ok": true, "status": "rejected" }));
+            } else {
+                results.push(json!({ "id": id, "ok": false, "error": "Not found or already reviewed." }));
+            }
+        }
+    }
+
+    Ok(Json(json!({
+        "ok": true,
+        "results": results,
+        "count": results.len(),
     })))
 }
 

@@ -10,6 +10,8 @@ use serde::Deserialize;
 use serde_json::{Map, Value};
 use tokio_stream::wrappers::ReceiverStream;
 
+use sqlx::Row;
+
 use crate::{
     auth::require_user_id,
     error::AppResult,
@@ -97,6 +99,11 @@ pub fn router() -> axum::Router<AppState> {
         .route(
             "/agent/chats/{chat_id}/restore",
             axum::routing::post(restore_agent_chat),
+        )
+        .route("/agent/traces", axum::routing::get(get_agent_traces))
+        .route(
+            "/agent/evaluations/summary",
+            axum::routing::get(get_evaluations_summary),
         )
 }
 
@@ -521,4 +528,157 @@ fn value_str(row: &Value, key: &str) -> Option<String> {
         .map(str::trim)
         .filter(|value| !value.is_empty())
         .map(ToOwned::to_owned)
+}
+
+// ---------------------------------------------------------------------------
+// Agent Traces & Evaluation Summary routes
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, Deserialize)]
+struct AgentTracesQuery {
+    org_id: String,
+    #[serde(default)]
+    chat_id: Option<String>,
+    #[serde(default)]
+    agent_slug: Option<String>,
+    #[serde(default = "default_limit_30")]
+    limit: i64,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct EvalSummaryQuery {
+    org_id: String,
+    #[serde(default = "default_period_7d")]
+    period: String,
+}
+
+fn default_period_7d() -> String {
+    "7d".to_string()
+}
+
+async fn get_agent_traces(
+    State(state): State<AppState>,
+    Query(query): Query<AgentTracesQuery>,
+    headers: HeaderMap,
+) -> AppResult<Json<Value>> {
+    let user_id = require_user_id(&state, &headers).await?;
+    assert_org_member(&state, &user_id, &query.org_id).await?;
+
+    let pool = state
+        .db_pool
+        .as_ref()
+        .ok_or_else(|| crate::error::AppError::Dependency("Database not configured.".into()))?;
+
+    let limit = query.limit.clamp(1, 200);
+
+    let rows = if let Some(ref chat_id) = query.chat_id {
+        sqlx::query(
+            "SELECT row_to_json(t) AS row FROM agent_traces t
+             WHERE organization_id = $1::uuid AND chat_id = $2::uuid
+             ORDER BY created_at DESC LIMIT $3",
+        )
+        .bind(&query.org_id)
+        .bind(chat_id)
+        .bind(limit)
+        .fetch_all(pool)
+        .await
+    } else if let Some(ref slug) = query.agent_slug {
+        sqlx::query(
+            "SELECT row_to_json(t) AS row FROM agent_traces t
+             WHERE organization_id = $1::uuid AND agent_slug = $2
+             ORDER BY created_at DESC LIMIT $3",
+        )
+        .bind(&query.org_id)
+        .bind(slug)
+        .bind(limit)
+        .fetch_all(pool)
+        .await
+    } else {
+        sqlx::query(
+            "SELECT row_to_json(t) AS row FROM agent_traces t
+             WHERE organization_id = $1::uuid
+             ORDER BY created_at DESC LIMIT $2",
+        )
+        .bind(&query.org_id)
+        .bind(limit)
+        .fetch_all(pool)
+        .await
+    }
+    .map_err(|e| {
+        tracing::error!(error = %e, "Failed to load agent traces");
+        crate::error::AppError::Dependency("Failed to load agent traces.".into())
+    })?;
+
+    let data: Vec<Value> = rows
+        .into_iter()
+        .filter_map(|row| row.try_get::<Option<Value>, _>("row").ok().flatten())
+        .collect();
+
+    Ok(Json(serde_json::json!({
+        "organization_id": query.org_id,
+        "data": data,
+        "count": data.len(),
+    })))
+}
+
+async fn get_evaluations_summary(
+    State(state): State<AppState>,
+    Query(query): Query<EvalSummaryQuery>,
+    headers: HeaderMap,
+) -> AppResult<Json<Value>> {
+    let user_id = require_user_id(&state, &headers).await?;
+    assert_org_member(&state, &user_id, &query.org_id).await?;
+
+    let pool = state
+        .db_pool
+        .as_ref()
+        .ok_or_else(|| crate::error::AppError::Dependency("Database not configured.".into()))?;
+
+    let interval_days = match query.period.as_str() {
+        "1d" => 1,
+        "30d" => 30,
+        _ => 7,
+    };
+
+    let rows = sqlx::query(
+        "SELECT
+            agent_slug,
+            COUNT(*)::int AS total,
+            COUNT(*) FILTER (WHERE outcome = 'approved')::int AS approved,
+            COUNT(*) FILTER (WHERE outcome = 'rejected')::int AS rejected,
+            AVG(accuracy_score)::float8 AS avg_accuracy,
+            AVG(helpfulness_score)::float8 AS avg_helpfulness,
+            AVG(safety_score)::float8 AS avg_safety,
+            SUM(COALESCE(tokens_used, 0))::bigint AS total_tokens
+         FROM agent_evaluations
+         WHERE organization_id = $1::uuid
+           AND created_at >= now() - ($2::int || ' days')::interval
+         GROUP BY agent_slug
+         ORDER BY total DESC",
+    )
+    .bind(&query.org_id)
+    .bind(interval_days)
+    .fetch_all(pool)
+    .await
+    .unwrap_or_default();
+
+    let mut agents = Vec::new();
+    for row in &rows {
+        agents.push(serde_json::json!({
+            "agent_slug": row.try_get::<String, _>("agent_slug").unwrap_or_default(),
+            "total": row.try_get::<i32, _>("total").unwrap_or(0),
+            "approved": row.try_get::<i32, _>("approved").unwrap_or(0),
+            "rejected": row.try_get::<i32, _>("rejected").unwrap_or(0),
+            "avg_accuracy": row.try_get::<Option<f64>, _>("avg_accuracy").ok().flatten(),
+            "avg_helpfulness": row.try_get::<Option<f64>, _>("avg_helpfulness").ok().flatten(),
+            "avg_safety": row.try_get::<Option<f64>, _>("avg_safety").ok().flatten(),
+            "total_tokens": row.try_get::<i64, _>("total_tokens").unwrap_or(0),
+        }));
+    }
+
+    Ok(Json(serde_json::json!({
+        "organization_id": query.org_id,
+        "period": query.period,
+        "agents": agents,
+    })))
 }

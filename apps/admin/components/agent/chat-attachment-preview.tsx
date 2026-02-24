@@ -23,7 +23,7 @@ export function ChatAttachmentPreview({
     <div className="flex gap-2 overflow-x-auto px-1 pb-1">
       {attachments.map((att) => (
         <div
-          className="relative flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-border/60 bg-muted/30"
+          className="glass-inner relative flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-xl"
           key={att.id}
         >
           {att.previewUrl ? (

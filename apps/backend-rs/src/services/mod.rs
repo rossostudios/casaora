@@ -22,6 +22,7 @@ pub mod ical;
 pub mod iot;
 pub mod lease_abstraction;
 pub mod lease_renewal;
+pub mod llm_client;
 pub mod lease_schedule;
 pub mod leasing_agent;
 pub mod maintenance_dispatch;

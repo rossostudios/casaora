@@ -775,7 +775,7 @@ export function ChatThread({
       className={cn(
         "relative flex h-full flex-col",
         isEmbedded
-          ? "min-h-[38rem] overflow-hidden rounded-3xl border border-border/60 bg-card shadow-[0_24px_60px_-40px_hsl(var(--foreground)/0.65)]"
+          ? "min-h-[38rem] overflow-hidden rounded-3xl border border-border/40 bg-card shadow-[var(--shadow-floating)]"
           : "min-h-[calc(100vh-4rem)] bg-background"
       )}
     >
@@ -886,17 +886,20 @@ export function ChatThread({
 
           {/* Streaming indicator */}
           {isSending ? (
-            <Message className="items-start py-2" from="assistant">
-              <div className="mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-[var(--sidebar-primary)] to-[var(--sidebar-primary)]/70 text-white">
-                <Icon
-                  className="h-3.5 w-3.5 animate-spin"
-                  icon={Loading03Icon}
-                />
+            <Message className="items-start py-3" from="assistant">
+              <div className="relative mt-0.5">
+                <div className="absolute -inset-1 rounded-xl bg-[var(--sidebar-primary)]/[0.1] blur-md" />
+                <div className="relative flex h-7 w-7 shrink-0 items-center justify-center rounded-[10px] bg-casaora-gradient text-white shadow-casaora">
+                  <Icon
+                    className="h-3.5 w-3.5 animate-spin"
+                    icon={Loading03Icon}
+                  />
+                </div>
               </div>
               <MessageContent variant="flat">
-                <div className="min-w-0 flex-1 space-y-2 py-1">
+                <div className="min-w-0 flex-1 space-y-2 py-0.5">
                   {streamStatus ? (
-                    <p className="text-[12px] text-muted-foreground">
+                    <p className="text-[12px] text-muted-foreground/70">
                       {streamStatus}
                     </p>
                   ) : null}
@@ -906,9 +909,13 @@ export function ChatThread({
                   ) : null}
 
                   {streamToolEvents.length === 0 && !streamStatus ? (
-                    <p className="flex items-center gap-2 text-muted-foreground text-sm">
-                      <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-[var(--sidebar-primary)]" />
-                      {isEn ? "Thinking..." : "Pensando..."}
+                    <p className="flex items-center gap-2.5 text-[13px] text-muted-foreground/60">
+                      <span className="flex gap-1">
+                        <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-[var(--sidebar-primary)]/60" style={{ animationDelay: "0ms" }} />
+                        <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-[var(--sidebar-primary)]/60" style={{ animationDelay: "150ms" }} />
+                        <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-[var(--sidebar-primary)]/60" style={{ animationDelay: "300ms" }} />
+                      </span>
+                      {isEn ? "Thinking" : "Pensando"}
                     </p>
                   ) : null}
                 </div>

@@ -677,9 +677,77 @@ pub async fn run_daily_pricing_recommendations(state: &AppState) {
         }
     }
 
+    // Auto-approve pricing changes with < 10% delta (skip approval queue)
+    let mut auto_applied = 0u32;
+    for (org_id,) in &org_ids {
+        match auto_approve_small_pricing_changes(pool, org_id).await {
+            Ok(count) => auto_applied += count,
+            Err(e) => {
+                tracing::warn!(org_id, error = %e, "Daily pricing: auto-approve failed");
+            }
+        }
+    }
+
     tracing::info!(
         total_recommendations = total,
+        auto_applied,
         org_count = org_ids.len(),
         "Daily pricing recommendations completed"
     );
+}
+
+/// Auto-approve pricing recommendations where the change delta is less than 10%.
+async fn auto_approve_small_pricing_changes(
+    pool: &sqlx::PgPool,
+    org_id: &str,
+) -> AppResult<u32> {
+    let rows = sqlx::query_as::<_, (String, String, f64, f64)>(
+        "SELECT pr.id::text, pr.pricing_template_id::text,
+                pr.recommended_price::float8, pt.base_price::float8
+         FROM pricing_recommendations pr
+         JOIN pricing_templates pt ON pt.id = pr.pricing_template_id
+         WHERE pr.organization_id = $1::uuid
+           AND pr.status = 'pending'
+           AND pt.base_price > 0
+         LIMIT 100",
+    )
+    .bind(org_id)
+    .fetch_all(pool)
+    .await
+    .map_err(|e| {
+        tracing::error!(error = %e, "Failed to fetch pending recommendations");
+        AppError::Dependency("Failed to fetch pending recommendations.".to_string())
+    })?;
+
+    let mut count = 0u32;
+    for (rec_id, template_id, recommended, current) in &rows {
+        let delta_pct = ((recommended - current) / current).abs();
+        if delta_pct >= 0.10 {
+            continue; // Needs human review
+        }
+
+        // Apply the small change directly
+        let _ = sqlx::query(
+            "UPDATE pricing_templates SET base_price = $3, updated_at = now()
+             WHERE id = $1::uuid AND organization_id = $2::uuid",
+        )
+        .bind(template_id)
+        .bind(org_id)
+        .bind(recommended)
+        .execute(pool)
+        .await;
+
+        let _ = sqlx::query(
+            "UPDATE pricing_recommendations
+             SET status = 'applied', auto_applied = true, applied_at = now()
+             WHERE id = $1::uuid",
+        )
+        .bind(rec_id)
+        .execute(pool)
+        .await;
+
+        count += 1;
+    }
+
+    Ok(count)
 }

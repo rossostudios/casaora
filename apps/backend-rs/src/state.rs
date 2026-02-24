@@ -9,7 +9,12 @@ use serde_json::Value;
 use sqlx::PgPool;
 use tokio::sync::{Mutex, RwLock};
 
-use crate::{config::AppConfig, db::create_pool, error::AppResult};
+use crate::{
+    config::AppConfig,
+    db::create_pool,
+    error::AppResult,
+    services::llm_client::LlmClient,
+};
 
 /// Cached JWKS key set fetched from Supabase's /.well-known/jwks.json endpoint.
 #[derive(Clone)]
@@ -67,6 +72,7 @@ pub struct AppState {
     pub config: Arc<AppConfig>,
     pub db_pool: Option<PgPool>,
     pub http_client: Client,
+    pub llm_client: LlmClient,
     pub jwks_cache: Option<JwksCache>,
     pub org_membership_cache: OrgMembershipCache,
     pub public_listings_cache: PublicListingsCache,
@@ -101,10 +107,14 @@ impl AppState {
             config.report_response_cache_max_entries,
         );
 
+        let config = Arc::new(config);
+        let llm_client = LlmClient::new(http_client.clone(), Arc::clone(&config));
+
         Ok(Self {
-            config: Arc::new(config),
+            config,
             db_pool,
             http_client,
+            llm_client,
             jwks_cache,
             org_membership_cache,
             public_listings_cache,

@@ -20,6 +20,8 @@ type Approval = {
   agent_slug: string;
   tool_name: string;
   tool_args: Record<string, unknown>;
+  reason?: string | null;
+  estimated_impact?: Record<string, unknown> | null;
   status: string;
   created_at: string;
 };
@@ -29,12 +31,17 @@ type ApprovalQueueProps = {
   locale: Locale;
 };
 
+const KIND_FILTERS = ["all", "approval", "anomaly"] as const;
+const PRIORITY_FILTERS = ["all", "critical", "high", "medium"] as const;
+
 export function ApprovalQueue({ orgId, locale }: ApprovalQueueProps) {
   "use no memo";
   const isEn = locale === "en-US";
   const queryClient = useQueryClient();
   const [reviewNotes, setReviewNotes] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState<Record<string, boolean>>({});
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [batchBusy, setBatchBusy] = useState(false);
 
   const { data: approvals = [], isPending: loading } = useQuery({
     queryKey: ["agent-approvals", orgId],
@@ -70,10 +77,62 @@ export function ApprovalQueue({ orgId, locale }: ApprovalQueueProps) {
         (prev: Approval[] | undefined) =>
           prev ? prev.filter((a) => a.id !== id) : []
       );
+      setSelected((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
       setBusy((prev) => ({ ...prev, [id]: false }));
     } catch {
-      // silently fail
       setBusy((prev) => ({ ...prev, [id]: false }));
+    }
+  };
+
+  const handleBatchReview = async (action: "approve" | "reject") => {
+    if (selected.size === 0) return;
+    setBatchBusy(true);
+    try {
+      await fetch(
+        `/api/agent/approvals/batch?org_id=${encodeURIComponent(orgId)}`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "application/json",
+          },
+          body: JSON.stringify({
+            ids: Array.from(selected),
+            action,
+          }),
+        }
+      );
+      queryClient.setQueryData(
+        ["agent-approvals", orgId],
+        (prev: Approval[] | undefined) =>
+          prev ? prev.filter((a) => !selected.has(a.id)) : []
+      );
+      setSelected(new Set());
+    } catch {
+      // silently fail
+    } finally {
+      setBatchBusy(false);
+    }
+  };
+
+  const toggleSelect = (id: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selected.size === approvals.length) {
+      setSelected(new Set());
+    } else {
+      setSelected(new Set(approvals.map((a) => a.id)));
     }
   };
 
@@ -108,14 +167,68 @@ export function ApprovalQueue({ orgId, locale }: ApprovalQueueProps) {
             ? "AI agent actions awaiting human review"
             : "Acciones de agentes IA esperando revisión humana"}
         </CardDescription>
+
+        {/* Batch actions */}
+        {approvals.length > 1 && (
+          <div className="flex flex-wrap items-center gap-2 pt-1">
+            <Button onClick={toggleSelectAll} size="sm" variant="outline">
+              {selected.size === approvals.length
+                ? isEn
+                  ? "Deselect all"
+                  : "Deseleccionar todo"
+                : isEn
+                  ? "Select all"
+                  : "Seleccionar todo"}
+            </Button>
+            {selected.size > 0 && (
+              <>
+                <Button
+                  disabled={batchBusy}
+                  onClick={() => {
+                    handleBatchReview("approve").catch(() => undefined);
+                  }}
+                  size="sm"
+                >
+                  {isEn
+                    ? `Approve ${selected.size} selected`
+                    : `Aprobar ${selected.size} seleccionados`}
+                </Button>
+                <Button
+                  disabled={batchBusy}
+                  onClick={() => {
+                    handleBatchReview("reject").catch(() => undefined);
+                  }}
+                  size="sm"
+                  variant="outline"
+                >
+                  {isEn
+                    ? `Reject ${selected.size} selected`
+                    : `Rechazar ${selected.size} seleccionados`}
+                </Button>
+              </>
+            )}
+          </div>
+        )}
       </CardHeader>
       <CardContent className="space-y-3">
         {approvals.map((approval) => (
           <div
-            className="space-y-2 rounded-xl border border-border/60 bg-card p-3"
+            className={`space-y-2 rounded-xl border bg-card p-3 transition-colors ${
+              selected.has(approval.id)
+                ? "border-primary/40 bg-primary/5"
+                : "border-border/60"
+            }`}
             key={approval.id}
           >
             <div className="flex flex-wrap items-center gap-2">
+              {approvals.length > 1 && (
+                <input
+                  checked={selected.has(approval.id)}
+                  className="h-3.5 w-3.5 rounded border-border"
+                  onChange={() => toggleSelect(approval.id)}
+                  type="checkbox"
+                />
+              )}
               <Badge className="font-mono text-[11px]" variant="outline">
                 {approval.agent_slug}
               </Badge>
@@ -126,6 +239,13 @@ export function ApprovalQueue({ orgId, locale }: ApprovalQueueProps) {
                 {new Date(approval.created_at).toLocaleString(locale)}
               </span>
             </div>
+
+            {/* Reason text from LLM */}
+            {approval.reason && (
+              <p className="text-muted-foreground text-xs leading-relaxed">
+                {approval.reason}
+              </p>
+            )}
 
             <pre className="overflow-x-auto rounded-lg bg-muted/30 p-2 text-[11px]">
               {JSON.stringify(approval.tool_args, null, 2)}
