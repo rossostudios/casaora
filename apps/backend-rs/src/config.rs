@@ -125,10 +125,7 @@ impl AppConfig {
             openai_api_key: env_opt("OPENAI_API_KEY"),
             openai_api_base_url: env_or("OPENAI_API_BASE_URL", "https://api.openai.com/v1"),
             openai_primary_model: env_or("OPENAI_PRIMARY_MODEL", "gpt-5.2"),
-            openai_fallback_models: parse_csv(&env_or(
-                "OPENAI_FALLBACK_MODELS",
-                "gpt-5.1-mini,gpt-4.1-mini",
-            )),
+            openai_fallback_models: parse_csv(&env_or("OPENAI_FALLBACK_MODELS", "")),
             openai_model: env_opt("OPENAI_MODEL"),
             ai_agent_max_tool_steps: env_parse_or("AI_AGENT_MAX_TOOL_STEPS", 6),
             ai_agent_timeout_seconds: env_parse_or("AI_AGENT_TIMEOUT_SECONDS", 45),

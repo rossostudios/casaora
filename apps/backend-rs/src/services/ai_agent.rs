@@ -42,7 +42,8 @@ pub enum AgentStreamEvent {
 
 const MUTATION_ROLES: &[&str] = &["owner_admin", "operator", "accountant"];
 const MUTATION_TOOLS: &[&str] = &["create_row", "update_row", "delete_row"];
-const AI_AGENT_DISABLED_MESSAGE: &str = "AI agent is disabled in this environment.";
+const AI_AGENT_DISABLED_MESSAGE: &str =
+    "AI agent is disabled. Set AI_AGENT_ENABLED=true and OPENAI_API_KEY in backend environment.";
 
 #[derive(Debug, Clone, Copy)]
 struct TableConfig {
