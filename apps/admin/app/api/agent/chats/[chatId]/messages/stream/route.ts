@@ -1,5 +1,5 @@
 import { createOpenAI } from "@ai-sdk/openai";
-import { streamText } from "ai";
+import { stepCountIs, streamText } from "ai";
 import { NextResponse } from "next/server";
 import {
   buildSystemPrompt,
@@ -163,15 +163,26 @@ async function handleSdkOrchestration(
     apiKey: process.env.OPENAI_API_KEY,
   });
 
-  // Use AI SDK 6 streamText
+  // Use AI SDK 6 streamText with maxSteps for multi-step tool use
   const result = streamText({
     model: openai(preferredModel),
     system: systemPrompt,
     messages: [...history, { role: "user", content: message }],
     tools: tools as Parameters<typeof streamText>[0]["tools"],
-    onFinish: async ({ text, toolCalls }) => {
+    stopWhen: stepCountIs(agentConfig.maxSteps),
+    onFinish: async ({ text, steps }) => {
       // Persist the user message + assistant response to the Rust backend
       try {
+        // Build complete tool trace from all steps
+        const allToolCalls = (steps ?? []).flatMap(
+          (step) =>
+            step.toolCalls?.map((tc) => ({
+              tool: tc.toolName,
+              args: "args" in tc ? tc.args : {},
+              ok: true,
+            })) ?? []
+        );
+
         // Save user message
         await fetch(
           `${API_BASE_URL}/agent/chats/${encodeURIComponent(chatId)}/messages?org_id=${encodeURIComponent(orgId)}`,
@@ -188,12 +199,7 @@ async function handleSdkOrchestration(
               // Special flag to only persist, not re-run the agent
               persist_only: true,
               assistant_content: text,
-              tool_trace:
-                toolCalls?.map((tc) => ({
-                  tool: tc.toolName,
-                  args: "args" in tc ? tc.args : {},
-                  ok: true,
-                })) ?? [],
+              tool_trace: allToolCalls,
               model_used: preferredModel,
             }),
           }
@@ -204,7 +210,7 @@ async function handleSdkOrchestration(
     },
   });
 
-  return result.toTextStreamResponse();
+  return result.toUIMessageStreamResponse();
 }
 
 // ---------------------------------------------------------------------------
