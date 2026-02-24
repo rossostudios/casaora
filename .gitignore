@@ -44,3 +44,9 @@ __pycache__
 .windsurf/
 .zencoder/
 skills/
+
+# Playwright
+apps/admin/e2e/.auth/
+apps/admin/playwright-report/
+apps/admin/test-results/
+apps/admin/blob-report/
