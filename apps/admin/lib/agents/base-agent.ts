@@ -57,6 +57,9 @@ function sanitizeSchema(
   }
 
   // Recurse into properties
+  if (out.type === "object" && !out.properties) {
+    out.properties = {};
+  }
   if (out.properties && typeof out.properties === "object") {
     const props = out.properties as Record<string, unknown>;
     const cleaned: Record<string, unknown> = {};
