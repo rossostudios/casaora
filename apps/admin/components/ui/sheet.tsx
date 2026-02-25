@@ -151,7 +151,12 @@ export function Sheet({
         };
 
   return (
-    <div className="fixed inset-0 z-50">
+    <div
+      className={cn(
+        "fixed inset-0 z-50",
+        open ? "pointer-events-auto" : "pointer-events-none"
+      )}
+    >
       <div
         aria-hidden="true"
         className={cn(
