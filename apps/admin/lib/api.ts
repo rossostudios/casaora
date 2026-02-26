@@ -184,24 +184,30 @@ async function doFetch(
   init?: NextRequestInit,
   options?: { includeAuth?: boolean }
 ): Promise<Response> {
-  const controller = new AbortController();
-  const timeoutHandle = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
   const includeAuth = options?.includeAuth !== false;
-  const signal =
-    init?.signal && typeof AbortSignal.any === "function"
-      ? AbortSignal.any([init.signal, controller.signal])
-      : (init?.signal ?? controller.signal);
   try {
+    // Clerk token minting can be slow on cold starts; only enforce the API timeout
+    // against the actual backend fetch request, not local token acquisition.
     const token = includeAuth ? await getAccessToken() : null;
-    return await fetch(url, {
-      ...init,
-      signal,
-      headers: {
-        Accept: "application/json",
-        ...(init?.headers ?? {}),
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
-    });
+    const controller = new AbortController();
+    const timeoutHandle = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
+    const signal =
+      init?.signal && typeof AbortSignal.any === "function"
+        ? AbortSignal.any([init.signal, controller.signal])
+        : (init?.signal ?? controller.signal);
+    try {
+      return await fetch(url, {
+        ...init,
+        signal,
+        headers: {
+          Accept: "application/json",
+          ...(init?.headers ?? {}),
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+      });
+    } finally {
+      clearTimeout(timeoutHandle);
+    }
   } catch (err) {
     if (err instanceof Error && err.name === "AbortError") {
       throw new Error(
@@ -212,8 +218,6 @@ async function doFetch(
     throw new Error(
       `API fetch failed for ${path}. Is the backend running at ${API_BASE_URL}? (${message})`
     );
-  } finally {
-    clearTimeout(timeoutHandle);
   }
 }
 
