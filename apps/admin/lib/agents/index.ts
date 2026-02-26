@@ -1,16 +1,11 @@
 // biome-ignore lint/performance/noBarrelFile: agent registry barrel is intentional
-export { buildSystemPrompt, buildToolsFromDefinitions } from "./base-agent";
 export { financeAgent } from "./finance-agent";
 export { guestConcierge } from "./guest-concierge";
 export { leasingAgent } from "./leasing-agent";
 export { maintenanceTriage } from "./maintenance-triage";
 export { supervisor } from "./supervisor";
-export { executeToolOnBackend, fetchToolDefinitions } from "./tool-client";
 export type {
   AgentConfig,
-  ExecuteToolRequest,
-  ExecuteToolResponse,
-  ToolDefinition,
 } from "./types";
 
 import { financeAgent } from "./finance-agent";

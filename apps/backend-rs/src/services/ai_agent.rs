@@ -1391,16 +1391,22 @@ async fn call_openai_chat_completion_tracked(
     tools: Option<&[Value]>,
     preferred_model: Option<&str>,
 ) -> AppResult<crate::services::llm_client::ChatResponse> {
-    state
-        .llm_client
-        .chat_completion(crate::services::llm_client::ChatRequest {
-            messages,
-            tools,
-            preferred_model,
-            temperature: None,
-            timeout_seconds: None,
-        })
-        .await
+    let request = crate::services::llm_client::ChatRequest {
+        messages,
+        tools,
+        preferred_model,
+        temperature: None,
+        timeout_seconds: None,
+    };
+
+    if state.config.ai_agent_use_responses_api {
+        state
+            .llm_client
+            .chat_completion_via_responses(request)
+            .await
+    } else {
+        state.llm_client.chat_completion(request).await
+    }
 }
 
 fn extract_content_text(content: Option<&Value>) -> String {
