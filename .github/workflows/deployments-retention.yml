@@ -62,7 +62,7 @@ jobs:
             total=$((total+1))
 
             id="$(printf '%s' "$line" | jq -r '.id')"
-            env_name="$(printf '%s' "$line" | jq -r '.environment // \"\"')"
+            env_name="$(printf '%s' "$line" | jq -r '.environment // ""')"
             env_lc="$(printf '%s' "$env_name" | tr '[:upper:]' '[:lower:]')"
 
             keep_this=0
