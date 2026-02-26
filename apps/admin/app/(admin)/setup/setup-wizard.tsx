@@ -18,7 +18,7 @@ import {
   wizardCreateProperty,
   wizardCreateUnit,
   wizardSeedDemoData,
-} from "./actions";
+} from "./setup-api-client";
 import { SetupAdvancedSection } from "./setup-advanced-section";
 import {
   asString,
@@ -234,7 +234,7 @@ export function SetupWizard({
         body: JSON.stringify({ org_id: result.data.id }),
       });
     } catch {
-      /* Cookie was already set server-side in the action */
+      /* Best effort: local org cookie sync route failed */
     }
 
     setOrgId(result.data.id);
