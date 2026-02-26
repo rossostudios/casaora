@@ -44,7 +44,9 @@ export function useNewBookingToast({
         source: "direct_booking",
       });
       const payload = await authedFetch<{ data?: unknown[] }>(
-        `/reservations?${params.toString()}`
+        `/reservations?${params.toString()}`,
+        undefined,
+        { suppressErrorEvent: true }
       );
       const rows = payload.data ?? [];
       return rows.filter(
