@@ -121,7 +121,7 @@ pub async fn reconcile_payment(
     // Update the collection record
     let mut cr_patch = Map::new();
     cr_patch.insert("status".to_string(), Value::String(new_status.to_string()));
-    cr_patch.insert("amount_paid".to_string(), json!(total_paid).into());
+    cr_patch.insert("amount_paid".to_string(), json!(total_paid));
     cr_patch.insert(
         "payment_method".to_string(),
         Value::String(payment_method.to_string()),
@@ -511,7 +511,6 @@ pub async fn tool_auto_reconcile_batch(
 
     let mut matched_count = 0u32;
     let partial_count = 0u32;
-    let exception_count;
     let mut total_matched_amount = 0.0f64;
     let mut matched_txn_ids = std::collections::HashSet::new();
 
@@ -718,7 +717,7 @@ pub async fn tool_auto_reconcile_batch(
 
     // Mark remaining unmatched as exceptions
     let unmatched_count = txns.len() as u32 - matched_count;
-    exception_count = unmatched_count;
+    let exception_count = unmatched_count;
 
     // Update reconciliation run stats
     let total = txns.len() as i32;

@@ -321,7 +321,7 @@ async fn dashboard_analytics(
     let user_id = require_user_id(&state, &headers).await?;
     assert_org_member(&state, &user_id, &query.org_id).await?;
     let pool = db_pool(&state)?;
-    let period = query.period.max(1).min(90);
+    let period = query.period.clamp(1, 90);
     let interval_str = format!("{} days", period);
 
     // Query 1 — Per-agent stats from agent_traces

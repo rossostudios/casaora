@@ -172,7 +172,7 @@ pub async fn tool_analyze_inspection_photos(
     .bind(org_id)
     .bind(unit_id)
     .bind(inspection_type)
-    .bind(&Value::Array(photo_urls.clone()))
+    .bind(Value::Array(photo_urls.clone()))
     .bind(&analysis)
     .bind(overall_score)
     .bind(&all_defects)
@@ -362,11 +362,7 @@ pub async fn tool_compare_inspections(
             }
         }
 
-        (
-            bs,
-            br,
-            Value::Array(room_comparisons.into_iter().map(|v| v).collect()),
-        )
+        (bs, br, Value::Array(room_comparisons))
     } else {
         (None, json!([]), json!("No baseline found for comparison."))
     };
@@ -720,8 +716,8 @@ pub async fn tool_verify_cleaning(
     )
     .bind(org_id)
     .bind(unit_id)
-    .bind(&Value::Array(photo_urls.clone()))
-    .bind(&json!({"cleaning_verification": analysis}))
+    .bind(Value::Array(photo_urls.clone()))
+    .bind(json!({"cleaning_verification": analysis}))
     .bind(cleanliness_score as i16)
     .execute(pool)
     .await

@@ -4,6 +4,7 @@ use serde_json::{json, Value};
 const MP_API_BASE: &str = "https://api.mercadopago.com";
 
 /// Create a Mercado Pago Checkout Pro preference (PYG payment).
+#[allow(clippy::too_many_arguments)]
 pub async fn create_mp_checkout(
     http_client: &Client,
     access_token: &str,

@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use chrono::{Datelike, NaiveDateTime, Timelike, Utc};
 
 /// Simple cron expression parser supporting: minute hour day_of_month month day_of_week
@@ -17,7 +19,7 @@ impl CronSchedule {
     /// Example: "0 */2 * * *" = every 2 hours
     /// Example: "0 9 * * 1-5" = weekdays at 09:00
     pub fn parse(expr: &str) -> Result<Self, String> {
-        let parts: Vec<&str> = expr.trim().split_whitespace().collect();
+        let parts: Vec<&str> = expr.split_whitespace().collect();
         if parts.len() != 5 {
             return Err(format!(
                 "Invalid cron expression: expected 5 fields, got {}",

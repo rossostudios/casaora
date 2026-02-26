@@ -39,7 +39,7 @@ pub async fn check_informconf(
 
     let response = state
         .http_client
-        .post(&format!("{api_url}/v1/consulta"))
+        .post(format!("{api_url}/v1/consulta"))
         .header("Authorization", format!("Bearer {api_key}"))
         .json(&json!({
             "documento": document_number,

@@ -115,7 +115,7 @@ pub async fn fetch_belvo_transactions(
 
     let response = state
         .http_client
-        .post(&format!("{belvo_url}/api/transactions/"))
+        .post(format!("{belvo_url}/api/transactions/"))
         .basic_auth(secret_id, Some(secret_password))
         .json(&json!({
             "link": link_id,

@@ -224,6 +224,7 @@ pub async fn get_active_elasticity(pool: &sqlx::PgPool, org_id: &str) -> Option<
 }
 
 /// S23: Record a prediction outcome for the feedback loop.
+#[allow(dead_code)]
 pub async fn record_outcome(
     pool: &sqlx::PgPool,
     org_id: &str,

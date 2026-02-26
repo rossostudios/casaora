@@ -466,12 +466,12 @@ pub async fn sync_all_outbound_rates(state: &crate::state::AppState) {
 
         // Push availability (block reserved dates)
         let availability: Vec<(String, bool)> = (0..90)
-            .filter_map(|offset| {
+            .map(|offset| {
                 let date = (chrono::Utc::now().date_naive() + chrono::Duration::days(offset))
                     .format("%Y-%m-%d")
                     .to_string();
                 let available = !blocked_set.contains(&date);
-                Some((date, available))
+                (date, available)
             })
             .collect();
 

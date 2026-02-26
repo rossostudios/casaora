@@ -503,7 +503,7 @@ pub async fn tool_check_lease_compliance(
         )
         .bind(lease_id)
         .bind(org_id)
-        .bind(&json!(flags))
+        .bind(json!(flags))
         .execute(pool)
         .await;
     }
@@ -745,7 +745,7 @@ pub async fn tool_check_paraguayan_compliance(
         "UPDATE lease_abstractions SET compliance_flags = $2::jsonb WHERE id = $1::uuid",
     )
     .bind(&abs_id)
-    .bind(&json!(violations))
+    .bind(json!(violations))
     .execute(pool)
     .await;
 

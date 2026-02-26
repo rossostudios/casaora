@@ -503,7 +503,7 @@ pub async fn tool_generate_performance_digest(
     .bind(digest_type)
     .bind(period_start.to_string())
     .bind(today.to_string())
-    .bind(&json!({
+    .bind(json!({
         "revenue": revenue,
         "expenses": expenses,
         "noi": noi,
