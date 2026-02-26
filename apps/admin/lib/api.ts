@@ -1,5 +1,3 @@
-import { getServerAccessToken } from "@/lib/auth/server-access-token";
-
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000/v1";
 const DEFAULT_API_TIMEOUT_MS = 15_000;
@@ -154,33 +152,29 @@ function buildUrl(path: string, query?: Record<string, QueryValue>): string {
   return url.toString();
 }
 
-let pendingTokenRequest: Promise<string | null> | null = null;
-let cachedAccessToken: { token: string | null; expiresAt: number } | null =
-  null;
+type ServerTokenHelper = {
+  getServerAccessToken: () => Promise<string | null>;
+};
 
-function getAccessToken(): Promise<string | null> {
-  const now = Date.now();
-  if (cachedAccessToken && now < cachedAccessToken.expiresAt) {
-    return Promise.resolve(cachedAccessToken.token);
+let pendingServerTokenHelper: Promise<ServerTokenHelper> | null = null;
+
+async function loadServerTokenHelper() {
+  if (pendingServerTokenHelper) return pendingServerTokenHelper;
+  const promise = import("@/lib/auth/server-access-token");
+  pendingServerTokenHelper = promise;
+  promise.catch(() => {
+    pendingServerTokenHelper = null;
+  });
+  return promise;
+}
+
+async function getAccessToken(): Promise<string | null> {
+  try {
+    const { getServerAccessToken } = await loadServerTokenHelper();
+    return await getServerAccessToken();
+  } catch {
+    return null;
   }
-
-  // Dedup concurrent token requests so only one auth session lookup runs at a
-  // time; others await its result.
-  if (pendingTokenRequest) return pendingTokenRequest;
-  pendingTokenRequest = (async () => {
-    try {
-      const token = await getServerAccessToken();
-      const expiresAt = now + SERVER_TOKEN_SKEW_MS;
-      cachedAccessToken = { token, expiresAt };
-      return token;
-    } catch {
-      cachedAccessToken = null;
-      return null;
-    } finally {
-      pendingTokenRequest = null;
-    }
-  })();
-  return pendingTokenRequest;
 }
 
 const TRANSIENT_STATUS_CODES = new Set([502, 503, 504]);
@@ -188,32 +182,36 @@ const RETRY_DELAY_MS = 1000;
 const RETRY_JITTER_MS = 400;
 const PUBLIC_CACHE_REVALIDATE_SECONDS = 120;
 const FX_CACHE_REVALIDATE_SECONDS = 900;
-const SERVER_TOKEN_SKEW_MS = 30_000;
-
 async function doFetch(
   path: string,
   url: string,
   init?: NextRequestInit,
   options?: { includeAuth?: boolean }
 ): Promise<Response> {
-  const controller = new AbortController();
-  const timeoutHandle = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
   const includeAuth = options?.includeAuth !== false;
-  const signal =
-    init?.signal && typeof AbortSignal.any === "function"
-      ? AbortSignal.any([init.signal, controller.signal])
-      : (init?.signal ?? controller.signal);
   try {
+    // Clerk token minting can be slow on cold starts; only enforce the API timeout
+    // against the actual backend fetch request, not local token acquisition.
     const token = includeAuth ? await getAccessToken() : null;
-    return await fetch(url, {
-      ...init,
-      signal,
-      headers: {
-        Accept: "application/json",
-        ...(init?.headers ?? {}),
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
-    });
+    const controller = new AbortController();
+    const timeoutHandle = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
+    const signal =
+      init?.signal && typeof AbortSignal.any === "function"
+        ? AbortSignal.any([init.signal, controller.signal])
+        : (init?.signal ?? controller.signal);
+    try {
+      return await fetch(url, {
+        ...init,
+        signal,
+        headers: {
+          Accept: "application/json",
+          ...(init?.headers ?? {}),
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+      });
+    } finally {
+      clearTimeout(timeoutHandle);
+    }
   } catch (err) {
     if (err instanceof Error && err.name === "AbortError") {
       throw new Error(
@@ -224,8 +222,6 @@ async function doFetch(
     throw new Error(
       `API fetch failed for ${path}. Is the backend running at ${API_BASE_URL}? (${message})`
     );
-  } finally {
-    clearTimeout(timeoutHandle);
   }
 }
 
