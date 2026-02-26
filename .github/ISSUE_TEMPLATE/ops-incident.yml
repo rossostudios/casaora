@@ -1,0 +1,65 @@
+name: Ops Incident
+description: Production incident, outage, or degradation affecting AWS/Cloudflare/Clerk/RDS operations
+title: "[Ops Incident] "
+labels:
+  - type:ops
+  - status:triage
+body:
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Severity
+      description: Business impact level
+      options:
+        - P0 - Critical outage
+        - P1 - Major degradation
+        - P2 - Partial degradation
+        - P3 - Minor issue
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Primary area
+      options:
+        - AWS ECS / ALB
+        - AWS RDS
+        - Cloudflare
+        - Clerk Auth
+        - GitHub Actions / Deployments
+        - Application (web/admin/backend)
+    validations:
+      required: true
+  - type: textarea
+    id: summary
+    attributes:
+      label: Incident summary
+      description: What is happening and who is affected?
+      placeholder: Briefly describe the outage/degradation and impact.
+    validations:
+      required: true
+  - type: textarea
+    id: timeline
+    attributes:
+      label: Timeline (UTC)
+      description: Key timestamps and events
+      placeholder: |
+        12:00 UTC - Alert triggered
+        12:05 UTC - Began investigation
+        12:10 UTC - Mitigation applied
+  - type: textarea
+    id: signals
+    attributes:
+      label: Observed signals
+      description: Logs, error messages, endpoints, screenshots, metrics
+      placeholder: Include exact URLs, response codes, Cloudflare Ray IDs, ECS task/service names, etc.
+  - type: textarea
+    id: mitigation
+    attributes:
+      label: Mitigation / rollback
+      description: What was done to mitigate or restore service?
+  - type: textarea
+    id: followups
+    attributes:
+      label: Follow-up actions
+      description: Hardening, automation, tests, documentation, guardrails

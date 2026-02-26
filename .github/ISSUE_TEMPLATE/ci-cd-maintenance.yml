@@ -1,0 +1,37 @@
+name: CI/CD Maintenance
+description: Workflow failures, flaky checks, deployment automation, or GitHub repo automation improvements
+title: "[CI/CD] "
+labels:
+  - type:ci
+  - status:triage
+body:
+  - type: dropdown
+    id: category
+    attributes:
+      label: Category
+      options:
+        - Failing check on main
+        - Flaky test / flaky workflow
+        - Deployment automation improvement
+        - GitHub branch/deployments governance
+        - Security scanning / audit workflow
+    validations:
+      required: true
+  - type: textarea
+    id: symptom
+    attributes:
+      label: Symptom
+      description: What is failing or what needs improvement?
+      placeholder: Include workflow name, job name, run URL/ID, and the failing step.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What should happen instead?
+  - type: textarea
+    id: remediation
+    attributes:
+      label: Proposed remediation
+      description: What changes should be made to stabilize or improve the pipeline?

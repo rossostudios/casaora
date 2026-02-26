@@ -1,0 +1,57 @@
+name: Infrastructure Change Request
+description: Planned AWS/Cloudflare/Terraform infrastructure change
+title: "[Infra] "
+labels:
+  - type:infra
+  - status:triage
+body:
+  - type: dropdown
+    id: change_type
+    attributes:
+      label: Change type
+      options:
+        - Terraform codification / drift reconciliation
+        - AWS resource change
+        - Cloudflare edge / DNS / WAF change
+        - CI/CD / deployment pipeline change
+        - Cost optimization
+        - Access / IAM change
+    validations:
+      required: true
+  - type: textarea
+    id: objective
+    attributes:
+      label: Objective
+      description: What are we trying to achieve?
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope
+      description: Which services/resources are affected?
+      placeholder: ECS service names, ALB listeners, Cloudflare rulesets, Terraform modules, etc.
+    validations:
+      required: true
+  - type: textarea
+    id: plan
+    attributes:
+      label: Implementation plan
+      description: Step-by-step rollout plan and validation
+      placeholder: Include smoke tests and rollback plan.
+    validations:
+      required: true
+  - type: textarea
+    id: risks
+    attributes:
+      label: Risks and rollback
+      description: Known risks, blast radius, and rollback strategy
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Pre-flight checks
+      options:
+        - label: Terraform plan reviewed (if applicable)
+        - label: Cost impact considered
+        - label: Smoke test plan defined
+        - label: Rollback plan defined

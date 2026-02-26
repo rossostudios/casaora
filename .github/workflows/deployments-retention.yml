@@ -1,0 +1,114 @@
+name: GitHub Deployments Retention
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 6 * * *" # Daily 06:17 UTC
+
+permissions:
+  contents: read
+  deployments: write
+
+jobs:
+  prune-deployments:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Prune historical deployment records
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          KEEP_PRODUCTION: "1"
+          KEEP_STAGING: "1"
+          KEEP_OTHER: "0"
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          tmp="$(mktemp)"
+          gh api --paginate "repos/${REPO}/deployments?per_page=100" > "$tmp"
+
+          python3 - <<'PY' "$tmp" > "$tmp.ndjson"
+          import json, sys
+
+          text = open(sys.argv[1], "r", encoding="utf-8").read()
+          dec = json.JSONDecoder()
+          i = 0
+          rows = []
+          while i < len(text):
+              while i < len(text) and text[i].isspace():
+                  i += 1
+              if i >= len(text):
+                  break
+              obj, j = dec.raw_decode(text, i)
+              if not isinstance(obj, list):
+                  raise SystemExit("Unexpected GitHub deployments pagination payload")
+              rows.extend(obj)
+              i = j
+          # Newest first (GitHub API is usually newest first, but make it explicit)
+          rows.sort(key=lambda d: d.get("created_at", ""), reverse=True)
+          for row in rows:
+              print(json.dumps(row))
+          PY
+
+          kept_prod=0
+          kept_staging=0
+          kept_other=0
+          deleted=0
+          failed=0
+          total=0
+
+          while IFS= read -r line; do
+            [ -n "$line" ] || continue
+            total=$((total+1))
+
+            id="$(printf '%s' "$line" | jq -r '.id')"
+            env_name="$(printf '%s' "$line" | jq -r '.environment // \"\"')"
+            env_lc="$(printf '%s' "$env_name" | tr '[:upper:]' '[:lower:]')"
+
+            keep_this=0
+            if [[ "$env_lc" == *production* ]]; then
+              if [ "$kept_prod" -lt "${KEEP_PRODUCTION}" ]; then
+                kept_prod=$((kept_prod+1))
+                keep_this=1
+              fi
+            elif [[ "$env_lc" == *staging* ]]; then
+              if [ "$kept_staging" -lt "${KEEP_STAGING}" ]; then
+                kept_staging=$((kept_staging+1))
+                keep_this=1
+              fi
+            else
+              if [ "$kept_other" -lt "${KEEP_OTHER}" ]; then
+                kept_other=$((kept_other+1))
+                keep_this=1
+              fi
+            fi
+
+            if [ "$keep_this" -eq 1 ]; then
+              echo "KEEP  $id  [$env_name]"
+              continue
+            fi
+
+            # GitHub may refuse deleting active deployments. Mark inactive first, then delete.
+            gh api -X POST "repos/${REPO}/deployments/${id}/statuses" --input - >/dev/null 2>&1 <<'JSON' || true
+            {"state":"inactive","auto_inactive":false,"description":"Pruned by deployments retention workflow"}
+            JSON
+
+            if gh api -X DELETE "repos/${REPO}/deployments/${id}" >/dev/null 2>&1; then
+              echo "DELETE $id  [$env_name]"
+              deleted=$((deleted+1))
+            else
+              echo "FAILED $id  [$env_name]" >&2
+              failed=$((failed+1))
+            fi
+          done < "$tmp.ndjson"
+
+          {
+            echo "## Deployments Retention Summary"
+            echo ""
+            echo "- Total scanned: ${total}"
+            echo "- Kept production: ${kept_prod}"
+            echo "- Kept staging: ${kept_staging}"
+            echo "- Kept other: ${kept_other}"
+            echo "- Deleted: ${deleted}"
+            echo "- Failed deletes: ${failed}"
+          } >> "$GITHUB_STEP_SUMMARY"
