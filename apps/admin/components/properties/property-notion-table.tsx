@@ -31,7 +31,7 @@ import {
   type VisibilityState,
 } from "@tanstack/react-table";
 import { useRouter } from "next/navigation";
-import { useCallback, useMemo, useOptimistic, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useOptimistic, useRef, useState, useTransition } from "react";
 import { toast } from "sonner";
 
 import { updatePropertyInlineAction } from "@/app/(admin)/module/properties/actions";
@@ -188,7 +188,7 @@ export function PropertyNotionTable({
   const isXxl = useMediaQuery("(min-width: 1440px)");
   const is2xl = useMediaQuery("(min-width: 1536px)");
 
-  const columnVisibility = useMemo<VisibilityState>(() => {
+  const responsiveDefaults = useMemo<VisibilityState>(() => {
     if (isSidebarOpen) {
       return {
         code: false,
@@ -210,6 +210,17 @@ export function PropertyNotionTable({
       revenueMtdPyg: is2xl,
     };
   }, [isSidebarOpen, isMd, isLg, isXl, isXxl, is2xl]);
+
+  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>(responsiveDefaults);
+
+  // Reset to responsive defaults when breakpoints or sidebar change
+  const prevDefaultsRef = useRef(responsiveDefaults);
+  useEffect(() => {
+    if (prevDefaultsRef.current !== responsiveDefaults) {
+      prevDefaultsRef.current = responsiveDefaults;
+      setColumnVisibility(responsiveDefaults);
+    }
+  }, [responsiveDefaults]);
 
   const columns = useMemo<ColumnDef<PropertyPortfolioRow>[]>(
     () => [
@@ -546,6 +557,7 @@ export function PropertyNotionTable({
     columns,
     columnResizeMode: "onChange",
     state: { columnVisibility, sorting, columnFilters },
+    onColumnVisibilityChange: setColumnVisibility,
     onSortingChange: setSorting,
     onColumnFiltersChange: setColumnFilters,
     getCoreRowModel: getCoreRowModel(),
@@ -657,33 +669,34 @@ export function PropertyNotionTable({
 
         <TableFooter>
           <TableRow className="hover:bg-transparent">
-            <TableCell grid style={{ width: 40 }} />
-            <TableCell
-              className="font-medium text-xs uppercase tracking-wider"
-              grid
-            >
-              {optimisticRows.length} {isEn ? "Properties" : "Propiedades"}
-            </TableCell>
-            <TableCell grid />
-            <TableCell grid />
-            <TableCell className="tabular-nums" grid>
-              {summary.totalUnits}
-            </TableCell>
-            <TableCell className="tabular-nums" grid>
-              {summary.averageOccupancy}%
-            </TableCell>
-            <TableCell grid />
-            <TableCell grid />
-            <TableCell className="tabular-nums" grid>
-              {formatCurrency(summary.totalRevenueMtdPyg, "PYG", formatLocale)}
-            </TableCell>
-            <TableCell className="tabular-nums" grid>
-              {summary.totalOpenTasks}
-            </TableCell>
-            <TableCell className="tabular-nums" grid>
-              {summary.totalOverdueCollections}
-            </TableCell>
-            <TableCell className={STICKY_ACTIONS} grid />
+            {table.getVisibleLeafColumns().map((col) => {
+              const footerContent: Record<string, React.ReactNode> = {
+                name: (
+                  <span className="font-medium text-xs uppercase tracking-wider">
+                    {optimisticRows.length} {isEn ? "Properties" : "Propiedades"}
+                  </span>
+                ),
+                unitCount: summary.totalUnits,
+                occupancyRate: `${summary.averageOccupancy}%`,
+                revenueMtdPyg: formatCurrency(summary.totalRevenueMtdPyg, "PYG", formatLocale),
+                openTaskCount: summary.totalOpenTasks,
+                overdueCollectionCount: summary.totalOverdueCollections,
+              };
+              const content = footerContent[col.id];
+              return (
+                <TableCell
+                  className={cn(
+                    col.id === "actions" && STICKY_ACTIONS,
+                    content && col.id !== "name" && "tabular-nums"
+                  )}
+                  grid
+                  key={col.id}
+                  style={{ width: col.getSize() }}
+                >
+                  {content ?? null}
+                </TableCell>
+              );
+            })}
           </TableRow>
         </TableFooter>
       </Table>

@@ -70,13 +70,6 @@ export function PropertiesManager({
   const [userSidebarPref, setUserSidebarPref] = useState<boolean>(false);
   const isSidebarOpen = userSidebarPref;
 
-  const prevMediumRef = useRef(isMedium);
-  useEffect(() => {
-    if (prevMediumRef.current !== isMedium) {
-      prevMediumRef.current = isMedium;
-    }
-  }, [isMedium]);
-
   const previousSidebarRef = useRef(isSidebarOpen);
 
   const handleViewModeChange = useCallback(
