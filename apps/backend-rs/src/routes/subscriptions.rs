@@ -404,7 +404,7 @@ async fn get_usage_history(
     assert_org_member(&state, &user_id, &query.org_id).await?;
     let pool = db_pool(&state)?;
 
-    let months = query.months.unwrap_or(6).min(24).max(1);
+    let months = query.months.unwrap_or(6).clamp(1, 24);
     let history = crate::services::metering::get_usage_over_time(pool, &query.org_id, months).await;
     Ok(Json(history))
 }

@@ -17,6 +17,7 @@ use crate::{
     tenancy::assert_org_member,
 };
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, Deserialize)]
 struct AgentOrgQuery {
     org_id: String,

@@ -10,6 +10,7 @@ pub fn router() -> axum::Router<AppState> {
         .route("/voice/status", axum::routing::post(handle_call_status))
 }
 
+#[allow(dead_code)]
 #[derive(Deserialize)]
 struct IncomingCallPayload {
     #[serde(rename = "From")]

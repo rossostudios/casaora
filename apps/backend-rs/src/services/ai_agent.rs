@@ -985,6 +985,7 @@ pub async fn run_ai_agent_chat_streaming(
 }
 
 /// Write an agent_traces row to record LLM usage, latency, and tool calls.
+#[allow(clippy::too_many_arguments)]
 async fn write_agent_trace(
     state: &AppState,
     org_id: &str,
@@ -6289,22 +6290,19 @@ async fn tool_store_memory(
     let shared = args.get("shared").and_then(Value::as_bool).unwrap_or(false);
 
     // Memory tier determines TTL and classification
-    let memory_tier = args
-        .get("memory_tier")
-        .and_then(Value::as_str)
-        .unwrap_or_else(|| {
-            // Auto-infer tier from context_type
-            match context_type {
-                "guest_preference" | "property_insight" => "entity",
-                "financial_pattern" => "semantic",
-                _ => "general",
-            }
-        });
+    let memory_tier = args.get("memory_tier").and_then(Value::as_str).unwrap_or({
+        // Auto-infer tier from context_type
+        match context_type {
+            "guest_preference" | "property_insight" => "entity",
+            "financial_pattern" => "semantic",
+            _ => "general",
+        }
+    });
 
     let expires_days = args
         .get("expires_days")
         .and_then(Value::as_i64)
-        .unwrap_or_else(|| {
+        .unwrap_or({
             // Default TTL by memory tier
             match memory_tier {
                 "episodic" => 30,

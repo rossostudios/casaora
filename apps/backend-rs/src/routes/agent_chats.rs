@@ -930,6 +930,7 @@ async fn get_contextual_prompts(
 // Approval Policies (S14.2)
 // ---------------------------------------------------------------------------
 
+#[allow(dead_code)]
 async fn get_approval_policies(
     State(state): State<AppState>,
     Query(query): Query<AgentOrgQuery>,

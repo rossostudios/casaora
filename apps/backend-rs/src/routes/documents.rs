@@ -315,7 +315,7 @@ async fn process_document(
         title,
     )
     .await
-    .map_err(|e| AppError::ServiceUnavailable(e))?;
+    .map_err(AppError::ServiceUnavailable)?;
 
     write_audit_log(
         state.db_pool.as_ref(),
@@ -939,7 +939,7 @@ async fn upload_knowledge_document(
         &doc_title,
     )
     .await
-    .map_err(|e| AppError::ServiceUnavailable(e))?;
+    .map_err(AppError::ServiceUnavailable)?;
 
     write_audit_log(
         state.db_pool.as_ref(),
@@ -1084,7 +1084,7 @@ async fn search_test_knowledge(
     // Embed the query
     let embedding = embeddings::embed_text(&state.http_client, &state.config, &payload.query)
         .await
-        .map_err(|e| AppError::ServiceUnavailable(e))?;
+        .map_err(AppError::ServiceUnavailable)?;
 
     let embedding_str = format!(
         "[{}]",
@@ -1095,7 +1095,7 @@ async fn search_test_knowledge(
             .join(",")
     );
 
-    let limit = payload.limit.min(50).max(1);
+    let limit = payload.limit.clamp(1, 50);
 
     // Hybrid search: vector similarity + FTS with RRF fusion
     let rows = sqlx::query(

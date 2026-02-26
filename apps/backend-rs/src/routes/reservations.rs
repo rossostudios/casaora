@@ -24,6 +24,7 @@ use chrono::{Datelike, NaiveDate, NaiveTime, TimeZone, Timelike, Utc};
 use chrono_tz::Tz;
 use serde_json::{json, Map, Value};
 
+#[allow(dead_code)]
 const ACTIVE_BOOKING_STATUSES: &[&str] = &["pending", "confirmed", "checked_in"];
 const DEFAULT_ORG_TIMEZONE: &str = "America/Asuncion";
 const AUTO_TURNOVER_TASK_TYPES: &[&str] = &["check_in", "check_out", "cleaning", "inspection"];

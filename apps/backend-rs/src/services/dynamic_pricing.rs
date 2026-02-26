@@ -21,7 +21,7 @@ fn db_pool(state: &AppState) -> AppResult<&sqlx::PgPool> {
 fn seasonal_coefficient(month: u32) -> f64 {
     match month {
         12 | 1 | 2 => 1.15, // High season: summer / pool
-        6 | 7 | 8 => 1.10,  // Moderate high: Chaco / winter tourism
+        6..=8 => 1.10,      // Moderate high: Chaco / winter tourism
         3 | 11 => 1.05,     // Shoulder
         _ => 0.95,          // Low season
     }

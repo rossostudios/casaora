@@ -684,7 +684,7 @@ async fn airbnb_callback(
     let token_response =
         crate::services::airbnb::exchange_code(&state.http_client, &config, &payload.code)
             .await
-            .map_err(|e| AppError::Dependency(e))?;
+            .map_err(AppError::Dependency)?;
 
     // Store tokens in integration metadata
     sqlx::query(
