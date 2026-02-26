@@ -1,26 +1,8 @@
-import { createOpenAI } from "@ai-sdk/openai";
-import { stepCountIs, streamText } from "ai";
 import { NextResponse } from "next/server";
-import {
-  buildSystemPrompt,
-  buildToolsFromDefinitions,
-  fetchToolDefinitions,
-  getAgentConfig,
-} from "@/lib/agents";
 import { getServerAccessToken } from "@/lib/auth/server-access-token";
 
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000/v1";
-
-/**
- * When OPENAI_API_KEY is set in the Next.js env, we orchestrate the LLM
- * conversation here using AI SDK 6 streamText, with tool execution delegated
- * to the Rust backend via POST /v1/agent/execute-tool.
- *
- * When OPENAI_API_KEY is NOT set, we fall back to proxying the Rust backend
- * SSE stream (legacy path, for backward compatibility).
- */
-const USE_SDK_ORCHESTRATION = Boolean(process.env.OPENAI_API_KEY);
 
 type RouteParams = {
   params: Promise<{ chatId: string }>;
@@ -80,148 +62,7 @@ function extractUserMessage(payload: StreamMessagePayload): string {
 }
 
 // ---------------------------------------------------------------------------
-// AI SDK 6 Orchestration Path
-// ---------------------------------------------------------------------------
-
-async function handleSdkOrchestration(
-  chatId: string,
-  orgId: string,
-  message: string,
-  token: string
-): Promise<Response> {
-  // Fetch chat details from Rust backend to get agent_slug and conversation history
-  const [chatRes, messagesRes] = await Promise.all([
-    fetch(
-      `${API_BASE_URL}/agent/chats/${encodeURIComponent(chatId)}?org_id=${encodeURIComponent(orgId)}`,
-      {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          Accept: "application/json",
-        },
-        cache: "no-store",
-      }
-    ),
-    fetch(
-      `${API_BASE_URL}/agent/chats/${encodeURIComponent(chatId)}/messages?org_id=${encodeURIComponent(orgId)}&limit=24`,
-      {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          Accept: "application/json",
-        },
-        cache: "no-store",
-      }
-    ),
-  ]);
-
-  const chatData = chatRes.ok
-    ? ((await chatRes.json()) as Record<string, unknown>)
-    : {};
-  const messagesData = messagesRes.ok
-    ? ((await messagesRes.json()) as {
-        data?: Array<{ role?: string; content?: string }>;
-      })
-    : {};
-
-  const agentSlug =
-    typeof chatData.agent_slug === "string"
-      ? chatData.agent_slug
-      : "guest-concierge";
-  const preferredModel =
-    typeof chatData.preferred_model === "string" &&
-    chatData.preferred_model.trim()
-      ? chatData.preferred_model
-      : (process.env.OPENAI_PRIMARY_MODEL ?? "gpt-4.1");
-  const role = "operator"; // Default, actual role comes from backend auth
-
-  const agentConfig = getAgentConfig(agentSlug);
-
-  // Fetch tool definitions from Rust backend
-  const toolDefs = await fetchToolDefinitions(token, orgId, agentSlug);
-
-  // Build AI SDK 6 tools
-  const tools = buildToolsFromDefinitions(
-    toolDefs,
-    agentConfig,
-    token,
-    orgId,
-    chatId
-  );
-
-  // Build conversation history
-  const history = (messagesData.data ?? [])
-    .filter((msg) => msg.role === "user" || msg.role === "assistant")
-    .map((msg) => ({
-      role: msg.role as "user" | "assistant",
-      content: (msg.content ?? "").slice(0, 4000),
-    }));
-
-  // Build system prompt
-  const systemPrompt = buildSystemPrompt(agentConfig, orgId, role);
-
-  // Create OpenAI provider
-  const openai = createOpenAI({
-    apiKey: process.env.OPENAI_API_KEY,
-  });
-
-  // Use AI SDK 6 streamText with maxSteps for multi-step tool use
-  const result = streamText({
-    model: openai(preferredModel),
-    system: systemPrompt,
-    messages: [...history, { role: "user", content: message }],
-    tools: tools as Parameters<typeof streamText>[0]["tools"],
-    stopWhen: stepCountIs(agentConfig.maxSteps),
-    onFinish: async ({ text, steps }) => {
-      // Persist the user message + assistant response to the Rust backend.
-      // NOTE: The backend may not support persist_only, in which case it
-      // tries to re-run the agent and fails.  We log the error so it can
-      // be debugged but don't break the stream.
-      try {
-        // Build complete tool trace from all steps
-        const allToolCalls = (steps ?? []).flatMap(
-          (step) =>
-            step.toolCalls?.map((tc) => ({
-              tool: tc.toolName,
-              args: "args" in tc ? tc.args : {},
-              ok: true,
-            })) ?? []
-        );
-
-        const persistRes = await fetch(
-          `${API_BASE_URL}/agent/chats/${encodeURIComponent(chatId)}/messages?org_id=${encodeURIComponent(orgId)}`,
-          {
-            method: "POST",
-            headers: {
-              Authorization: `Bearer ${token}`,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              message,
-              allow_mutations: true,
-              confirm_write: true,
-              persist_only: true,
-              assistant_content: text,
-              tool_trace: allToolCalls,
-              model_used: preferredModel,
-            }),
-          }
-        );
-        if (!persistRes.ok) {
-          const body = await persistRes.text().catch(() => "");
-          console.warn(
-            `[SDK onFinish] Persistence returned ${persistRes.status}: ${body}`
-          );
-        }
-      } catch (err) {
-        console.warn("[SDK onFinish] Persistence error:", err);
-      }
-    },
-  });
-
-  return result.toUIMessageStreamResponse();
-}
-
-// ---------------------------------------------------------------------------
-// Legacy Rust Proxy Path
+// Rust Agent Runtime Proxy Path
 // ---------------------------------------------------------------------------
 
 type BackendEvent = {
@@ -270,7 +111,7 @@ function emitDone(controller: StreamController, encoder: TextEncoder) {
   controller.enqueue(encoder.encode("data: [DONE]\n\n"));
 }
 
-function handleLegacyProxy(
+function handleBackendAgentProxy(
   chatId: string,
   orgId: string,
   message: string,
@@ -587,18 +428,6 @@ export async function POST(request: Request, { params }: RouteParams) {
     );
   }
 
-  // Route to AI SDK 6 orchestration or legacy Rust proxy
-  if (USE_SDK_ORCHESTRATION) {
-    try {
-      return await handleSdkOrchestration(chatId, orgId, message, token);
-    } catch (err) {
-      // Fallback to legacy proxy on SDK orchestration failure
-      console.error("[SDK Orchestration Error]", err);
-      const writeFlags = resolveWriteFlags(payload);
-      return handleLegacyProxy(chatId, orgId, message, token, writeFlags);
-    }
-  }
-
   const writeFlags = resolveWriteFlags(payload);
-  return handleLegacyProxy(chatId, orgId, message, token, writeFlags);
+  return handleBackendAgentProxy(chatId, orgId, message, token, writeFlags);
 }
