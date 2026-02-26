@@ -1,133 +1,330 @@
 # Casaora
 
-Supabase-first platform for short-term rental operations in Paraguay, with:
-- `Axum + SQLx` Rust backend (`apps/backend-rs`)
-- `Next.js` admin frontend (`apps/admin`)
-- `Next.js` public marketing/portal app (`apps/web`)
-- `Expo + React Native` mobile app scaffold (`apps/mobile`)
-- PostgreSQL schema and RLS policies (`db/schema.sql`)
-- PRD and API contract (`docs/PRD.md`, `api/openapi.yaml`)
+Enterprise-grade property operations platform for short-term rentals and hospitality workflows, running on AWS with Cloudflare edge security.
 
-## Project Structure
+## Production Status
 
-- `apps/backend-rs`: Rust/Axum API server with all `/v1` routers
-- `apps/admin`: Next.js admin console wired to API modules
-- `apps/web`: Next.js public-facing web app
-- `apps/mobile`: Expo Router mobile app (iOS/Android)
-- `packages/shared-api`: shared API helpers + OpenAPI type exports
-- `db/schema.sql`: Multi-tenant Postgres schema compatible with Supabase and Neon
-- `api/openapi.yaml`: Endpoint contract
-- `docs/PRD.md`: Product requirements
-- `docs/vercel-deploy.md`: Production/Vercel deployment checklist
-- `docs/codex-workflow.md`: Codex + MCP execution workflow
+- `api.casaora.co` -> AWS ECS Fargate (Rust / Axum) behind ALB
+- `app.casaora.co` -> AWS ECS Fargate (Next.js admin)
+- `casaora.co` and `www.casaora.co` -> AWS ECS Fargate (Next.js web)
+- PostgreSQL -> AWS RDS (Multi-AZ)
+- Auth -> Clerk (custom domains enabled)
+- Edge / DNS / TLS / proxy -> Cloudflare
+- Infrastructure codification -> Terraform (remote state in S3 + DynamoDB locking)
 
-## 1) Supabase Setup
+## Architecture
 
-1. Create a Supabase project.
-2. Apply the schema:
-   - Option A (manual): Open SQL Editor and run `db/schema.sql`.
-   - Option B (script): Run `python3 scripts/supabase/execute_sql.py --project-ref <ref> --sql-file db/schema.sql`
-     - Requires a Supabase Personal Access Token (PAT) via `SUPABASE_ACCESS_TOKEN`.
-3. Copy your project credentials:
-   - `SUPABASE_URL`
-   - `SUPABASE_SERVICE_ROLE_KEY`
+```mermaid
+graph TD
+    User[Users] --> CF[Cloudflare DNS + Proxy + WAF]
+    CF --> ALB[AWS Application Load Balancer]
 
-## 2) Backend Setup (Rust/Axum)
+    ALB --> Web[ECS Fargate: apps/web]
+    ALB --> Admin[ECS Fargate: apps/admin]
+    ALB --> API[ECS Fargate: apps/backend-rs]
 
-```bash
-cd /Users/christopher/Desktop/puerta-abierta/apps/backend-rs
-cp .env.example .env
+    Admin --> Clerk[Clerk Auth]
+    Web --> Clerk
+    API --> Clerk
+
+    API --> RDS[(AWS RDS PostgreSQL Multi-AZ)]
+    API --> S3[(AWS S3 Media / Uploads)]
+    API --> OpenAI[OpenAI API]
+
+    EventBridge[EventBridge Schedules] --> Jobs[ECS RunTask Job Runner]
+    Jobs --> API
+    Jobs --> RDS
 ```
 
-Update `.env` with your Supabase values and optional defaults:
-- `SUPABASE_URL`
-- `SUPABASE_SERVICE_ROLE_KEY`
-- `DEFAULT_ORG_ID`
-- `DEFAULT_USER_ID`
+## Repository Layout
 
-Build and run:
+- `apps/backend-rs` - Rust / Axum backend API (`/v1/*`)
+- `apps/admin` - Next.js 16 admin application
+- `apps/web` - Next.js public web / marketing application
+- `db/schema.sql` - canonical schema snapshot
+- `db/migrations/` - SQL migrations
+- `infra/aws/` - ECS task definitions, AWS deployment docs
+- `infra/terraform/aws/` - Terraform codification (remote state capable)
+- `scripts/aws/` - AWS bootstrap / deploy / migration / ops scripts
+- `docs/` - product + workflow documentation
+- `packages/` - shared packages and MCP server
+
+## Domains and Routing
+
+### Public Domains
+
+- `https://casaora.co` - web app (AWS ECS)
+- `https://www.casaora.co` - web app (AWS ECS)
+- `https://app.casaora.co` - admin app (AWS ECS)
+- `https://api.casaora.co` - backend API (AWS ECS / ALB)
+
+### Clerk Custom Domains
+
+- `https://clerk.casaora.co` - Clerk frontend API domain
+- `https://accounts.casaora.co` - Clerk account portal domain
+
+## Core Runtime Stack
+
+### Backend (`apps/backend-rs`)
+
+- Rust + Axum
+- SQLx / PostgreSQL
+- ECS Fargate deployment
+- Readiness and liveness endpoints:
+  - `/v1/live`
+  - `/v1/ready`
+  - `/v1/health` (compatibility endpoint)
+
+### Frontend (`apps/admin`, `apps/web`)
+
+- Next.js 16
+- Clerk authentication
+- ECS Fargate deployment (containerized)
+- Cloudflare proxied edge delivery
+
+### Data / Auth / Infra
+
+- AWS RDS PostgreSQL (Multi-AZ)
+- AWS ECS Fargate
+- AWS ALB
+- AWS EventBridge + ECS RunTask (scheduled jobs)
+- Cloudflare (DNS, proxy, TLS, custom WAF/rate limiting)
+- Clerk (auth + session tokens + custom domains)
+
+## Security and Edge Baseline
+
+Cloudflare baseline hardening is enabled in production:
+
+- SSL mode: `Full (strict)`
+- Always Use HTTPS: enabled
+- Minimum TLS version: `1.2`
+- Proxy enabled for production web/admin/api hosts
+- Custom WAF rule blocking common exploit scan paths (WordPress/phpMyAdmin/.env probes)
+- API rate limiting on `api.casaora.co` for `/v1/*` (health and webhook exclusions)
+
+Notes:
+- Cloudflare plan-level entitlements may limit available managed rulesets and rate-limit actions.
+- Current baseline uses plan-compatible custom rules.
+
+## Authentication Model (Clerk)
+
+- Browser apps (`apps/admin`, `apps/web`) use Clerk session tokens.
+- Backend validates Clerk JWTs via JWKS and issuer configuration.
+- Internal application users are linked via `app_users.clerk_user_id`.
+- Supabase auth is no longer used for `web`, `admin`, or backend runtime.
+
+## Database
+
+### Production
+
+- AWS RDS PostgreSQL (Multi-AZ)
+- Backend uses `DATABASE_URL` as the canonical connection string
+
+### Local / Compatibility
+
+- `DATABASE_URL` (preferred)
+- `SUPABASE_DB_URL` remains a legacy alias in backend config parsing for local compatibility only
+
+### Migrations
+
+- Apply SQL migrations from `db/migrations/*.sql`
+- Schema snapshot is maintained in `db/schema.sql`
+
+## Local Development
+
+### Prerequisites
+
+- Node.js + npm
+- Rust toolchain (`cargo`)
+- PostgreSQL (local or remote)
+- AWS CLI (for AWS scripts)
+
+## Backend (Rust / Axum)
 
 ```bash
+cd /Users/christopher/Desktop/casaora/apps/backend-rs
 cargo run
 ```
 
-The backend listens on port `8000` by default. Health check: `GET http://localhost:8000/v1/health`.
+Required environment (minimum):
 
-## 3) Frontend Setup (Next.js Admin)
+- `DATABASE_URL`
+- `CLERK_ISSUER_URL`
+- `CLERK_JWKS_URL`
+
+Optional local defaults:
+
+- `DEFAULT_ORG_ID`
+- `DEFAULT_USER_ID`
+
+Health checks:
+
+- `http://localhost:8000/v1/live`
+- `http://localhost:8000/v1/ready`
+
+## Admin App (`apps/admin`)
 
 ```bash
-cd /Users/christopher/Desktop/puerta-abierta/apps/admin
-cp .env.example .env.local
-```
-
-Set:
-- `NEXT_PUBLIC_API_BASE_URL=http://localhost:8000/v1` (points to the Rust backend)
-- `NEXT_PUBLIC_DEFAULT_ORG_ID=<org_uuid>`
-
-Install and run:
-
-```bash
+cd /Users/christopher/Desktop/casaora/apps/admin
 npm install
 npm run dev
 ```
 
-Admin app:
-- `http://localhost:3000`
+Common local environment:
 
-## 4) Mobile Setup (Expo)
+- `NEXT_PUBLIC_API_BASE_URL=http://localhost:8000/v1`
+- `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=...`
+- `NEXT_PUBLIC_CLERK_DOMAIN=clerk.casaora.co` (optional in local dev)
+- `NEXT_PUBLIC_CLERK_JS_URL=...` (optional in local dev)
+
+## Web App (`apps/web`)
 
 ```bash
-cd /Users/christopher/Desktop/puerta-abierta/apps/mobile
-cp .env.example .env.local
+cd /Users/christopher/Desktop/casaora/apps/web
 npm install
-npm run ios
-# or npm run android
+npm run dev
 ```
 
-Set:
-- `EXPO_PUBLIC_API_BASE_URL=http://localhost:8000/v1`
-- `EXPO_PUBLIC_DEFAULT_ORG_ID=<org_uuid>` (optional; otherwise first `/me` membership org is used)
-- `EXPO_PUBLIC_SUPABASE_URL=<your_supabase_url>`
-- `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY=<your_publishable_key>`
-  - fallback supported: `EXPO_PUBLIC_SUPABASE_ANON_KEY=<legacy_anon_key>`
+Common local environment:
 
-Mobile app uses:
-- `@casaora/shared-api/client` for fetch helpers
-- `@casaora/shared-api/types` for shared API contracts
+- `NEXT_PUBLIC_API_BASE_URL=http://localhost:8000/v1`
+- `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=...`
 
-## Current Module Coverage
+## Build / Test / Quality Gates
 
-- Organizations + members
-- Properties + units
-- Integrations (channels, listings)
-- Guests
-- Reservations + status transitions
-- Calendar blocks + availability
-- Tasks
-- Expenses
-- Owner statements
-- Messaging templates + send logs
-- Owner summary report
-
-## Notes
-
-- This scaffold is intentionally implementation-first and schema-aligned.
-- Business logic is starter-level; production rollout should add:
-  - stronger auth enforcement
-  - audit hooks on all writes
-  - idempotency keys for external sync
-  - background jobs for iCal and messaging dispatch
-
-## Codex Quality Gate
-
-Run this before merge/deploy:
+### Repository quality gate
 
 ```bash
 ./scripts/quality-gate.sh
 ```
 
-Fast mode (skip admin build):
+Fast mode:
 
 ```bash
 ./scripts/quality-gate.sh fast
 ```
+
+### Backend focused checks
+
+```bash
+cd /Users/christopher/Desktop/casaora/apps/backend-rs
+cargo test --all-targets --all-features
+cargo fmt --all -- --check
+```
+
+### Frontend type checks
+
+```bash
+npm --prefix /Users/christopher/Desktop/casaora/apps/admin run typecheck
+npm --prefix /Users/christopher/Desktop/casaora/apps/web run typecheck
+```
+
+## Deployment Model (AWS)
+
+### CI/CD
+
+- GitHub Actions builds container images and deploys to ECS
+- AWS OIDC role is used for GitHub -> AWS auth
+- ECR stores backend/admin/web images
+
+Workflow files:
+
+- `.github/workflows/aws-ecs-deploy.yml`
+- `.github/workflows/backend-quality.yml`
+- `.github/workflows/api-smoke.yml`
+
+### ECS Services (production)
+
+- `casaora-backend`
+- `casaora-admin`
+- `casaora-web`
+
+### Scheduled Jobs (Railway replacement)
+
+AWS EventBridge schedules trigger ECS RunTask jobs (job runner task family):
+
+- notification processing
+- notification retention
+- workflow queue processing
+
+## Infrastructure as Code (Terraform)
+
+Terraform is the canonical AWS infrastructure representation for the current production baseline.
+
+Location:
+
+- `infra/terraform/aws`
+
+Remote state:
+
+- S3 backend (state)
+- DynamoDB table (locking)
+
+Useful commands:
+
+```bash
+cd /Users/christopher/Desktop/casaora/infra/terraform/aws
+terraform init
+terraform plan
+```
+
+Bootstrap helpers:
+
+- `infra/terraform/aws/bootstrap-remote-backend.sh`
+- `infra/terraform/aws/import-existing.sh`
+
+## Operational Runbooks
+
+### AWS bootstrap / deploy scripts
+
+See `scripts/aws/` for:
+
+- network/bootstrap setup
+- ECS foundation setup
+- IAM role bootstrap
+- ALB host routing bootstrap
+- production deploy scripts (backend/admin/web)
+- RDS migration and validation helpers
+- scheduler bootstrap and test runners
+
+### Smoke tests
+
+Manual smoke:
+
+- `https://api.casaora.co/v1/live`
+- `https://api.casaora.co/v1/ready`
+- `https://app.casaora.co/login`
+- `https://casaora.co`
+- `https://www.casaora.co`
+
+Scripted smoke:
+
+```bash
+./scripts/api-smoke.sh
+```
+
+## Current Migration Notes
+
+- Mobile app (`apps/mobile`) has been intentionally removed from this branch and is planned for a future rebuild.
+- The platform has been migrated off Railway and Vercel for backend/web/admin runtime.
+- Supabase runtime dependency has been removed for backend/web/admin; any remaining Supabase references are legacy compatibility text or historical docs/scripts.
+
+## Documentation Standards
+
+When updating architecture or deployment behavior, keep these in sync in the same PR when possible:
+
+- `README.md`
+- `infra/aws/*`
+- `infra/terraform/aws/*`
+- `db/migrations/*` + `db/schema.sql`
+- relevant backend/frontend config and deployment scripts
+
+## Contributing / Branching
+
+- Prefer short-lived feature branches off `main`
+- Use descriptive commits and keep schema/backend/frontend changes synchronized
+- Validate with quality gates before merging to `main`
+
+## License / Internal Use
+
+This repository contains internal business logic and operational infrastructure for Casaora. Treat credentials, deployment outputs, and production configuration as confidential.

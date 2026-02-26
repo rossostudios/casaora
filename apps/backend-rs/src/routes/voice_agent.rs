@@ -1,16 +1,8 @@
-use axum::{
-    extract::State,
-    http::{HeaderMap, StatusCode},
-    response::IntoResponse,
-    Json,
-};
+use axum::{extract::State, http::StatusCode, response::IntoResponse, Json};
 use serde::Deserialize;
-use serde_json::{json, Value};
+use serde_json::Value;
 
-use crate::{
-    error::{AppError, AppResult},
-    state::AppState,
-};
+use crate::state::AppState;
 
 pub fn router() -> axum::Router<AppState> {
     axum::Router::new()
@@ -57,11 +49,7 @@ async fn handle_incoming_call(
 </Response>"#,
                 xml_escape(&response)
             );
-            return (
-                StatusCode::OK,
-                [("Content-Type", "text/xml")],
-                twiml,
-            );
+            return (StatusCode::OK, [("Content-Type", "text/xml")], twiml);
         }
     }
 
@@ -75,11 +63,7 @@ async fn handle_incoming_call(
 </Response>"#
         .to_string();
 
-    (
-        StatusCode::OK,
-        [("Content-Type", "text/xml")],
-        twiml,
-    )
+    (StatusCode::OK, [("Content-Type", "text/xml")], twiml)
 }
 
 /// POST /voice/status — Twilio call status callback.
