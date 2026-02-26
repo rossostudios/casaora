@@ -22,16 +22,16 @@ export const PRIMARY_TABS: Array<{
   label: { "es-PY": string; "en-US": string };
 }> = [
   {
-    key: "home",
-    href: "/app",
-    icon: Home01Icon,
-    label: { "es-PY": "Inicio", "en-US": "Home" },
-  },
-  {
     key: "chat",
     href: "/app/agents",
     icon: Message01Icon,
-    label: { "es-PY": "Agente", "en-US": "Agent" },
+    label: { "es-PY": "Agentes", "en-US": "Agents" },
+  },
+  {
+    key: "home",
+    href: "/app/portfolio",
+    icon: ChartIcon,
+    label: { "es-PY": "Portafolio", "en-US": "Portfolio" },
   },
   {
     key: "inbox",

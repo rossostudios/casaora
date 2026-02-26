@@ -41,7 +41,9 @@ export default async function AgentsPage({ searchParams }: PageProps) {
   }
 
   const initialAgentSlug =
-    typeof params.agent === "string" ? params.agent : undefined;
+    typeof params.agent === "string" && params.agent.trim()
+      ? params.agent.trim()
+      : "supervisor";
 
   return (
     <ChatThread
