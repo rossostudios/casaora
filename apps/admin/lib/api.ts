@@ -164,34 +164,13 @@ async function loadServerTokenHelper() {
   return pendingServerTokenHelper;
 }
 
-let pendingTokenRequest: Promise<string | null> | null = null;
-let cachedAccessToken: { token: string | null; expiresAt: number } | null =
-  null;
-
-function getAccessToken(): Promise<string | null> {
-  const now = Date.now();
-  if (cachedAccessToken && now < cachedAccessToken.expiresAt) {
-    return Promise.resolve(cachedAccessToken.token);
+async function getAccessToken(): Promise<string | null> {
+  try {
+    const { getServerAccessToken } = await loadServerTokenHelper();
+    return await getServerAccessToken();
+  } catch {
+    return null;
   }
-
-  // Dedup concurrent token requests so only one auth session lookup runs at a
-  // time; others await its result.
-  if (pendingTokenRequest) return pendingTokenRequest;
-  pendingTokenRequest = (async () => {
-    try {
-      const { getServerAccessToken } = await loadServerTokenHelper();
-      const token = await getServerAccessToken();
-      const expiresAt = now + SERVER_TOKEN_SKEW_MS;
-      cachedAccessToken = { token, expiresAt };
-      return token;
-    } catch {
-      cachedAccessToken = null;
-      return null;
-    } finally {
-      pendingTokenRequest = null;
-    }
-  })();
-  return pendingTokenRequest;
 }
 
 const TRANSIENT_STATUS_CODES = new Set([502, 503, 504]);
@@ -199,8 +178,6 @@ const RETRY_DELAY_MS = 1000;
 const RETRY_JITTER_MS = 400;
 const PUBLIC_CACHE_REVALIDATE_SECONDS = 120;
 const FX_CACHE_REVALIDATE_SECONDS = 900;
-const SERVER_TOKEN_SKEW_MS = 30_000;
-
 async function doFetch(
   path: string,
   url: string,
