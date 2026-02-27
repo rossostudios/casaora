@@ -26,6 +26,7 @@ SECRET_INTERNAL_API_KEY_NAME="${SECRET_INTERNAL_API_KEY_NAME:-${SECRET_PREFIX}/I
 DOCKER_BIN="${DOCKER_BIN:-docker}"
 DOCKER_BUILDX="${DOCKER_BUILDX:-false}"
 DOCKER_PLATFORM="${DOCKER_PLATFORM:-linux/arm64}"
+SKIP_IMAGE_BUILD="${SKIP_IMAGE_BUILD:-false}"
 default_git_sha="$(git rev-parse --short HEAD 2>/dev/null || echo manual)"
 IMAGE_TAG="${IMAGE_TAG:-${default_git_sha}-$(date +%Y%m%d%H%M%S)}"
 DOCKER_CONFIG_ISOLATED="${DOCKER_CONFIG_ISOLATED:-true}"
@@ -97,26 +98,30 @@ database_url_secret_ref="$(resolve_existing_secret_ref "DATABASE_URL" "${SECRET_
 openai_secret_ref="$(resolve_existing_secret_ref "OPENAI_API_KEY" "${SECRET_OPENAI_NAME}")"
 internal_api_key_secret_ref="$(resolve_existing_secret_ref "INTERNAL_API_KEY" "${SECRET_INTERNAL_API_KEY_NAME}")"
 
-echo "==> Logging into ECR"
-aws_cmd ecr get-login-password | "${DOCKER_BIN}" login --username AWS --password-stdin "${account_id}.dkr.ecr.${REGION}.amazonaws.com" >/dev/null
-
-if [[ "${DOCKER_BUILDX}" == "true" ]]; then
-  echo "==> Building and pushing backend image via buildx (${DOCKER_PLATFORM}) -> ${image_uri}"
-  "${DOCKER_BIN}" buildx build \
-    --platform "${DOCKER_PLATFORM}" \
-    -f apps/backend-rs/Dockerfile \
-    -t "${image_uri}" \
-    --push \
-    apps/backend-rs
+if [[ "${SKIP_IMAGE_BUILD}" == "true" ]]; then
+  echo "==> Skipping backend image build and push; reusing ${image_uri}"
 else
-  echo "==> Building backend image (ARM64 for Fargate) -> ${image_uri}"
-  "${DOCKER_BIN}" build \
-    -f apps/backend-rs/Dockerfile \
-    -t "${image_uri}" \
-    apps/backend-rs
+  echo "==> Logging into ECR"
+  aws_cmd ecr get-login-password | "${DOCKER_BIN}" login --username AWS --password-stdin "${account_id}.dkr.ecr.${REGION}.amazonaws.com" >/dev/null
 
-  echo "==> Pushing image"
-  "${DOCKER_BIN}" push "${image_uri}"
+  if [[ "${DOCKER_BUILDX}" == "true" ]]; then
+    echo "==> Building and pushing backend image via buildx (${DOCKER_PLATFORM}) -> ${image_uri}"
+    "${DOCKER_BIN}" buildx build \
+      --platform "${DOCKER_PLATFORM}" \
+      -f apps/backend-rs/Dockerfile \
+      -t "${image_uri}" \
+      --push \
+      apps/backend-rs
+  else
+    echo "==> Building backend image (ARM64 for Fargate) -> ${image_uri}"
+    "${DOCKER_BIN}" build \
+      -f apps/backend-rs/Dockerfile \
+      -t "${image_uri}" \
+      apps/backend-rs
+
+    echo "==> Pushing image"
+    "${DOCKER_BIN}" push "${image_uri}"
+  fi
 fi
 
 echo "==> Resolving network and load balancer resources"
