@@ -44,14 +44,15 @@ aws_cmd() {
 }
 
 resolve_existing_secret_ref() {
-  local secret_name="$1"
+  local env_var_name="$1"
+  local secret_name="$2"
   local existing_ref=""
 
   if [[ -n "${current_taskdef_arn:-}" ]]; then
     existing_ref="$(
       aws_cmd ecs describe-task-definition \
         --task-definition "${current_taskdef_arn}" \
-        --query "taskDefinition.containerDefinitions[?name=='${CONTAINER_NAME}'].secrets[?name=='${secret_name}'].valueFrom | [0][0]" \
+        --query "taskDefinition.containerDefinitions[?name=='${CONTAINER_NAME}'].secrets[?name=='${env_var_name}'].valueFrom | [0][0]" \
         --output text 2>/dev/null || true
     )"
     if [[ "${existing_ref}" == "None" ]]; then
@@ -105,8 +106,8 @@ if [[ "${current_taskdef_arn}" == "None" ]]; then
   current_taskdef_arn=""
 fi
 
-clerk_publishable_secret_ref="$(resolve_existing_secret_ref "${SECRET_CLERK_PUBLISHABLE_NAME}")"
-clerk_secret_ref="$(resolve_existing_secret_ref "${SECRET_CLERK_SECRET_NAME}")"
+clerk_publishable_secret_ref="$(resolve_existing_secret_ref "NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY" "${SECRET_CLERK_PUBLISHABLE_NAME}")"
+clerk_secret_ref="$(resolve_existing_secret_ref "CLERK_SECRET_KEY" "${SECRET_CLERK_SECRET_NAME}")"
 
 clerk_publishable_key="${NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY:-}"
 if [[ -z "${clerk_publishable_key}" ]]; then

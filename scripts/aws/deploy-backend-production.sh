@@ -39,14 +39,15 @@ aws_cmd() {
 }
 
 resolve_existing_secret_ref() {
-  local secret_name="$1"
+  local env_var_name="$1"
+  local secret_name="$2"
   local existing_ref=""
 
   if [[ -n "${current_taskdef_arn:-}" ]]; then
     existing_ref="$(
       aws_cmd ecs describe-task-definition \
         --task-definition "${current_taskdef_arn}" \
-        --query "taskDefinition.containerDefinitions[?name=='${CONTAINER_NAME}'].secrets[?name=='${secret_name}'].valueFrom | [0][0]" \
+        --query "taskDefinition.containerDefinitions[?name=='${CONTAINER_NAME}'].secrets[?name=='${env_var_name}'].valueFrom | [0][0]" \
         --output text 2>/dev/null || true
     )"
     if [[ "${existing_ref}" == "None" ]]; then
@@ -92,9 +93,9 @@ if [[ "${current_taskdef_arn}" == "None" ]]; then
   current_taskdef_arn=""
 fi
 
-database_url_secret_ref="$(resolve_existing_secret_ref "${SECRET_DATABASE_URL_NAME}")"
-openai_secret_ref="$(resolve_existing_secret_ref "${SECRET_OPENAI_NAME}")"
-internal_api_key_secret_ref="$(resolve_existing_secret_ref "${SECRET_INTERNAL_API_KEY_NAME}")"
+database_url_secret_ref="$(resolve_existing_secret_ref "DATABASE_URL" "${SECRET_DATABASE_URL_NAME}")"
+openai_secret_ref="$(resolve_existing_secret_ref "OPENAI_API_KEY" "${SECRET_OPENAI_NAME}")"
+internal_api_key_secret_ref="$(resolve_existing_secret_ref "INTERNAL_API_KEY" "${SECRET_INTERNAL_API_KEY_NAME}")"
 
 echo "==> Logging into ECR"
 aws_cmd ecr get-login-password | "${DOCKER_BIN}" login --username AWS --password-stdin "${account_id}.dkr.ecr.${REGION}.amazonaws.com" >/dev/null
