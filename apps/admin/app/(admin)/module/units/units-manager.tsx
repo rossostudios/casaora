@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createUnitFromUnitsModuleAction } from "@/app/(admin)/module/units/actions";
 import { UnitsFilterBar } from "@/app/(admin)/module/units/components/units-filter-bar";
 import { DataImportSheet } from "@/components/import/data-import-sheet";
@@ -115,6 +115,16 @@ export function UnitsManager({
   const isEn = locale === "en-US";
   const [open, setOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("new") === "1") {
+      setOpen(true);
+      const url = new URL(window.location.href);
+      url.searchParams.delete("new");
+      window.history.replaceState({}, "", url.pathname + url.search);
+    }
+  }, []);
 
   /* --- filter state --- */
   const [query, setQuery] = useState("");
