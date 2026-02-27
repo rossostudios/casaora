@@ -36,6 +36,7 @@ jobs:
       - name: Configure sccache
         uses: mozilla-actions/sccache-action@v0.0.7
 
+
       - name: Restore Rust cache
         uses: Swatinem/rust-cache@v2
         with:
