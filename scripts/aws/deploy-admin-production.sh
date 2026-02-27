@@ -147,17 +147,6 @@ else
   "${DOCKER_BIN}" push "${image_uri}"
 fi
 
-echo "==> Resolving network and load balancer resources"
-vpc_id="$(aws_cmd ec2 describe-vpcs --filters "Name=tag:Name,Values=${VPC_NAME}" --query 'Vpcs[0].VpcId' --output text)"
-ecs_sg_id="$(aws_cmd ec2 describe-security-groups --filters "Name=vpc-id,Values=${vpc_id}" "Name=group-name,Values=${ECS_SG_NAME}" --query 'SecurityGroups[0].GroupId' --output text)"
-subnets_json="$(aws_cmd ec2 describe-subnets \
-  --filters "Name=vpc-id,Values=${vpc_id}" "Name=tag:Name,Values=${NAME_PREFIX}-public-*" \
-  --query 'Subnets[].{id:SubnetId,az:AvailabilityZone}' --output json | jq 'sort_by(.az) | .[:2]')"
-subnet_a="$(echo "${subnets_json}" | jq -r '.[0].id')"
-subnet_b="$(echo "${subnets_json}" | jq -r '.[1].id')"
-target_group_arn="$(aws_cmd elbv2 describe-target-groups --names "${TARGET_GROUP_NAME}" --query 'TargetGroups[0].TargetGroupArn' --output text)"
-alb_dns_name="$(aws_cmd elbv2 describe-load-balancers --names "${ALB_NAME}" --query 'LoadBalancers[0].DNSName' --output text)"
-
 echo "==> Registering task definition"
 tmp_taskdef="$(mktemp)"
 jq \
@@ -196,28 +185,16 @@ service_arn="$(aws_cmd ecs describe-services --cluster "${CLUSTER_NAME}" --servi
   --query 'services[0].serviceArn' --output text 2>/dev/null || true)"
 
 if [[ -z "${service_arn}" || "${service_arn}" == "None" ]]; then
-  echo "==> Creating ECS service ${SERVICE_NAME}"
-  aws_cmd ecs create-service \
-    --cluster "${CLUSTER_NAME}" \
-    --service-name "${SERVICE_NAME}" \
-    --task-definition "${taskdef_arn}" \
-    --desired-count 1 \
-    --launch-type FARGATE \
-    --platform-version LATEST \
-    --health-check-grace-period-seconds 90 \
-    --deployment-configuration "deploymentCircuitBreaker={enable=true,rollback=true},maximumPercent=200,minimumHealthyPercent=50" \
-    --network-configuration "awsvpcConfiguration={subnets=[${subnet_a},${subnet_b}],securityGroups=[${ecs_sg_id}],assignPublicIp=ENABLED}" \
-    --load-balancers "targetGroupArn=${target_group_arn},containerName=${CONTAINER_NAME},containerPort=3000" \
-    --enable-execute-command \
-    >/dev/null
-else
-  echo "==> Updating ECS service ${SERVICE_NAME}"
-  aws_cmd ecs update-service \
-    --cluster "${CLUSTER_NAME}" \
-    --service "${SERVICE_NAME}" \
-    --task-definition "${taskdef_arn}" \
-    --force-new-deployment >/dev/null
+  echo "ECS service ${SERVICE_NAME} not found. This deploy script supports update-only production deploys." >&2
+  exit 1
 fi
+
+echo "==> Updating ECS service ${SERVICE_NAME}"
+aws_cmd ecs update-service \
+  --cluster "${CLUSTER_NAME}" \
+  --service "${SERVICE_NAME}" \
+  --task-definition "${taskdef_arn}" \
+  --force-new-deployment >/dev/null
 
 echo "==> Waiting for ECS service stability"
 aws_cmd ecs wait services-stable --cluster "${CLUSTER_NAME}" --services "${SERVICE_NAME}"
@@ -233,7 +210,7 @@ jq -n \
   --arg service "${SERVICE_NAME}" \
   --arg task_definition_arn "${taskdef_arn}" \
   --arg image_uri "${image_uri}" \
-  --arg alb_dns_name "${alb_dns_name}" \
+  --arg alb_dns_name "" \
   --arg smoke_base_url "${SMOKE_BASE_URL}" \
   --arg smoke_path "${SMOKE_PATH}" \
   --arg smoke_status "${smoke_status}" \
