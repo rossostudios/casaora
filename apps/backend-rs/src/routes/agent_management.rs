@@ -3,7 +3,7 @@ use axum::{
     http::HeaderMap,
     Json,
 };
-use serde::Deserialize;
+use serde::{Deserialize, Deserializer};
 use serde_json::{json, Value};
 use sqlx::Row;
 
@@ -57,11 +57,24 @@ struct AgentSlugPath {
 #[derive(Debug, Deserialize)]
 struct UpdateAgentInput {
     org_id: String,
-    is_active: Option<bool>,
-    model_override: Option<String>,
-    max_steps_override: Option<i32>,
-    allow_mutations_default: Option<bool>,
-    guardrail_overrides: Option<Value>,
+    #[serde(default, deserialize_with = "deserialize_patch_field")]
+    is_active: Option<Option<bool>>,
+    #[serde(default, deserialize_with = "deserialize_patch_field")]
+    model_override: Option<Option<String>>,
+    #[serde(default, deserialize_with = "deserialize_patch_field")]
+    max_steps_override: Option<Option<i32>>,
+    #[serde(default, deserialize_with = "deserialize_patch_field")]
+    allow_mutations_default: Option<Option<bool>>,
+    #[serde(default, deserialize_with = "deserialize_patch_field")]
+    guardrail_overrides: Option<Option<Value>>,
+}
+
+fn deserialize_patch_field<'de, D, T>(deserializer: D) -> Result<Option<Option<T>>, D::Error>
+where
+    D: Deserializer<'de>,
+    T: Deserialize<'de>,
+{
+    Ok(Some(Option::<T>::deserialize(deserializer)?))
 }
 
 async fn list_agents(
@@ -221,20 +234,40 @@ async fn update_agent(
         return Ok(Json(json!({ "ok": true, "message": "No changes." })));
     }
 
-    if let Some(max_steps) = payload.max_steps_override {
+    if let Some(Some(max_steps)) = payload.max_steps_override {
         if !(1..=24).contains(&max_steps) {
             return Err(AppError::BadRequest(
                 "max_steps_override must be between 1 and 24.".to_string(),
             ));
         }
     }
-    if let Some(guardrails) = payload.guardrail_overrides.as_ref() {
+    if let Some(Some(guardrails)) = payload.guardrail_overrides.as_ref() {
         if !guardrails.is_object() {
             return Err(AppError::BadRequest(
                 "guardrail_overrides must be a JSON object.".to_string(),
             ));
         }
     }
+
+    let update_is_active = payload.is_active.is_some();
+    let update_model_override = payload.model_override.is_some();
+    let update_max_steps_override = payload.max_steps_override.is_some();
+    let update_allow_mutations_default = payload.allow_mutations_default.is_some();
+    let update_guardrail_overrides = payload.guardrail_overrides.is_some();
+
+    let is_active_value = payload.is_active.flatten();
+    let model_override_value = payload
+        .model_override
+        .as_ref()
+        .and_then(|value| value.as_deref())
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
+    let max_steps_override_value = payload.max_steps_override.flatten();
+    let allow_mutations_default_value = payload.allow_mutations_default.flatten();
+    let guardrail_overrides_value = payload
+        .guardrail_overrides
+        .as_ref()
+        .map(|value| value.clone().unwrap_or_else(|| json!({})));
 
     let upserted = sqlx::query(
         "INSERT INTO agent_runtime_overrides (
@@ -258,13 +291,25 @@ async fn update_agent(
          )
          ON CONFLICT (organization_id, agent_slug)
          DO UPDATE SET
-            is_active = COALESCE(EXCLUDED.is_active, agent_runtime_overrides.is_active),
-            model_override = COALESCE(EXCLUDED.model_override, agent_runtime_overrides.model_override),
-            max_steps_override = COALESCE(EXCLUDED.max_steps_override, agent_runtime_overrides.max_steps_override),
-            allow_mutations_default = COALESCE(EXCLUDED.allow_mutations_default, agent_runtime_overrides.allow_mutations_default),
+            is_active = CASE
+              WHEN $9::boolean THEN EXCLUDED.is_active
+              ELSE agent_runtime_overrides.is_active
+            END,
+            model_override = CASE
+              WHEN $10::boolean THEN EXCLUDED.model_override
+              ELSE agent_runtime_overrides.model_override
+            END,
+            max_steps_override = CASE
+              WHEN $11::boolean THEN EXCLUDED.max_steps_override
+              ELSE agent_runtime_overrides.max_steps_override
+            END,
+            allow_mutations_default = CASE
+              WHEN $12::boolean THEN EXCLUDED.allow_mutations_default
+              ELSE agent_runtime_overrides.allow_mutations_default
+            END,
             guardrail_overrides = CASE
-              WHEN $7 IS NULL THEN agent_runtime_overrides.guardrail_overrides
-              ELSE EXCLUDED.guardrail_overrides
+              WHEN $13::boolean THEN EXCLUDED.guardrail_overrides
+              ELSE agent_runtime_overrides.guardrail_overrides
             END,
             updated_by = EXCLUDED.updated_by,
             updated_at = now()
@@ -272,18 +317,17 @@ async fn update_agent(
     )
     .bind(&payload.org_id)
     .bind(&path.agent_slug)
-    .bind(payload.is_active)
-    .bind(
-        payload
-            .model_override
-            .as_deref()
-            .map(str::trim)
-            .filter(|value| !value.is_empty()),
-    )
-    .bind(payload.max_steps_override)
-    .bind(payload.allow_mutations_default)
-    .bind(payload.guardrail_overrides.clone())
+    .bind(is_active_value)
+    .bind(model_override_value)
+    .bind(max_steps_override_value)
+    .bind(allow_mutations_default_value)
+    .bind(guardrail_overrides_value)
     .bind(&user_id)
+    .bind(update_is_active)
+    .bind(update_model_override)
+    .bind(update_max_steps_override)
+    .bind(update_allow_mutations_default)
+    .bind(update_guardrail_overrides)
     .fetch_optional(pool)
     .await
     .map_err(|e| {

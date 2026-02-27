@@ -57,6 +57,7 @@ export function AiComposeAssist({
       ? `Draft a concise and professional ${channel} reply for guest ${guestName}. Use the conversation context and return only the reply body.`
       : `Redacta una respuesta breve y profesional por ${channel} para el huesped ${guestName}. Usa el contexto de la conversacion y devuelve solo el texto de respuesta.`;
 
+    let chatId = "";
     try {
       const chat = await authedFetch<{ id?: string }>("/agent/chats", {
         method: "POST",
@@ -66,7 +67,7 @@ export function AiComposeAssist({
           title: isEn ? "AI Compose Assist" : "Asistente de Redacción IA",
         }),
       });
-      const chatId = typeof chat.id === "string" ? chat.id : "";
+      chatId = typeof chat.id === "string" ? chat.id : "";
       if (!chatId) {
         throw new Error(fallbackErrMsg);
       }
@@ -97,13 +98,19 @@ export function AiComposeAssist({
       } else {
         setError(noDraftMsg);
       }
-      setLoading(false);
     } catch (err) {
       let msg = fallbackErrMsg;
       if (err instanceof Error) {
         msg = err.message;
       }
       setError(msg);
+    } finally {
+      if (chatId) {
+        authedFetch(
+          `/agent/chats/${encodeURIComponent(chatId)}/archive?org_id=${encodeURIComponent(orgId)}`,
+          { method: "POST" }
+        ).catch(() => {});
+      }
       setLoading(false);
     }
   }, [orgId, conversation, channel, guestName, isEn]);

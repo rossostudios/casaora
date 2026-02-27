@@ -417,10 +417,13 @@ pub async fn run_ai_agent_chat(
 
     let role_value = normalize_role(params.role);
     let base_prompt = params
-        .agent_slug
-        .and_then(get_agent_spec)
-        .map(|spec| spec.system_prompt)
-        .or(params.agent_prompt)
+        .agent_prompt
+        .or_else(|| {
+            params
+                .agent_slug
+                .and_then(get_agent_spec)
+                .map(|spec| spec.system_prompt)
+        })
         .map(str::trim)
         .filter(|value| !value.is_empty())
         .map(ToOwned::to_owned)
@@ -856,10 +859,13 @@ pub async fn run_ai_agent_chat_streaming(
 
     let role_value = normalize_role(params.role);
     let base_prompt = params
-        .agent_slug
-        .and_then(get_agent_spec)
-        .map(|spec| spec.system_prompt)
-        .or(params.agent_prompt)
+        .agent_prompt
+        .or_else(|| {
+            params
+                .agent_slug
+                .and_then(get_agent_spec)
+                .map(|spec| spec.system_prompt)
+        })
         .map(str::trim)
         .filter(|value| !value.is_empty())
         .map(ToOwned::to_owned)
