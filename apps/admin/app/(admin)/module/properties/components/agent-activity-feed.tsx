@@ -36,12 +36,12 @@ function relativeTime(timestamp: string, isEn: boolean): string {
 export function AgentActivityFeed({ orgId, isEn }: AgentActivityFeedProps) {
   const pollInterval = useVisibilityPollingInterval({
     enabled: !!orgId,
-    foregroundMs: 15_000,
+    foregroundMs: 45_000,
     backgroundMs: 60_000,
   });
 
   const { data: approvals = [] } = useQuery<Approval[]>({
-    queryKey: ["agent-activity-feed", orgId],
+    queryKey: ["agent-approvals-feed", orgId],
     queryFn: async () => {
       const res = await fetch(
         `/api/agent/approvals?org_id=${encodeURIComponent(orgId)}`,
@@ -55,7 +55,6 @@ export function AgentActivityFeed({ orgId, isEn }: AgentActivityFeedProps) {
     enabled: !!orgId,
     retry: false,
     refetchInterval: pollInterval,
-    refetchOnWindowFocus: true,
   });
 
   if (approvals.length === 0) return null;

@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useCallback } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useCallback, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -12,8 +12,8 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { cn } from "@/lib/utils";
 import { authedFetch } from "@/lib/api-client";
+import { cn } from "@/lib/utils";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -24,9 +24,25 @@ type ApprovalMode = "required" | "auto" | "disabled";
 type ApprovalPolicy = {
   id: string;
   tool_name: string;
-  mode: ApprovalMode;
+  approval_mode: string;
+  enabled: boolean;
   updated_at?: string;
 };
+
+/** Map backend fields to the UI's three-state mode. */
+function toUiMode(p: ApprovalPolicy): ApprovalMode {
+  if (!p.enabled) return "disabled";
+  return p.approval_mode === "auto" ? "auto" : "required";
+}
+
+/** Map UI mode to backend payload. */
+function toBackendPayload(mode: ApprovalMode): {
+  approval_mode: string;
+  enabled: boolean;
+} {
+  if (mode === "disabled") return { approval_mode: "required", enabled: false };
+  return { approval_mode: mode, enabled: true };
+}
 
 type ApprovalPoliciesProps = {
   orgId: string;
@@ -69,8 +85,7 @@ const MODE_STYLES: Record<ApprovalMode, string> = {
   required:
     "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400",
   auto: "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
-  disabled:
-    "border-red-500/30 bg-red-500/10 text-red-700 dark:text-red-400",
+  disabled: "border-red-500/30 bg-red-500/10 text-red-700 dark:text-red-400",
 };
 
 const MODE_LABELS: Record<ApprovalMode, { en: string; es: string }> = {
@@ -116,7 +131,7 @@ export function ApprovalPolicies({ orgId, isEn }: ApprovalPoliciesProps) {
   const cyclePolicyMode = useCallback(
     async (toolName: string) => {
       const existing = policyMap.get(toolName);
-      const currentMode: ApprovalMode = existing?.mode ?? "required";
+      const currentMode: ApprovalMode = existing ? toUiMode(existing) : "required";
       const currentIdx = MODE_CYCLE.indexOf(currentMode);
       const nextMode = MODE_CYCLE[(currentIdx + 1) % MODE_CYCLE.length];
 
@@ -125,10 +140,10 @@ export function ApprovalPolicies({ orgId, isEn }: ApprovalPoliciesProps) {
 
       try {
         await authedFetch(
-          `/agent/approval-policies?org_id=${encodeURIComponent(orgId)}`,
+          `/agent/approval-policies/${encodeURIComponent(toolName)}?org_id=${encodeURIComponent(orgId)}`,
           {
-            method: "PUT",
-            body: JSON.stringify({ tool_name: toolName, mode: nextMode }),
+            method: "PATCH",
+            body: JSON.stringify(toBackendPayload(nextMode)),
           }
         );
 
@@ -139,7 +154,7 @@ export function ApprovalPolicies({ orgId, isEn }: ApprovalPoliciesProps) {
             const idx = prev.findIndex((p) => p.tool_name === toolName);
             if (idx >= 0) {
               const updated = [...prev];
-              updated[idx] = { ...updated[idx], mode: nextMode };
+              updated[idx] = { ...updated[idx], ...toBackendPayload(nextMode) };
               return updated;
             }
             return [
@@ -147,7 +162,7 @@ export function ApprovalPolicies({ orgId, isEn }: ApprovalPoliciesProps) {
               {
                 id: toolName,
                 tool_name: toolName,
-                mode: nextMode,
+                ...toBackendPayload(nextMode),
                 updated_at: new Date().toISOString(),
               },
             ];
@@ -170,9 +185,11 @@ export function ApprovalPolicies({ orgId, isEn }: ApprovalPoliciesProps) {
     <div className="space-y-4">
       {/* Approval Policy Table */}
       <Card>
-        <CardHeader className="space-y-1 border-b border-border/70 pb-4">
+        <CardHeader className="space-y-1 border-border/70 border-b pb-4">
           <CardTitle className="text-base">
-            {isEn ? "Tool Approval Policies" : "Politicas de Aprobacion de Herramientas"}
+            {isEn
+              ? "Tool Approval Policies"
+              : "Politicas de Aprobacion de Herramientas"}
           </CardTitle>
           <CardDescription>
             {isEn
@@ -191,10 +208,8 @@ export function ApprovalPolicies({ orgId, isEn }: ApprovalPoliciesProps) {
             <div className="space-y-1.5">
               {MUTATION_TOOLS.map((toolName) => {
                 const policy = policyMap.get(toolName);
-                const mode: ApprovalMode = policy?.mode ?? "required";
-                const toggling = togglingIds.has(
-                  policy?.id ?? toolName
-                );
+                const mode: ApprovalMode = policy ? toUiMode(policy) : "required";
+                const toggling = togglingIds.has(policy?.id ?? toolName);
 
                 return (
                   <div
@@ -209,14 +224,12 @@ export function ApprovalPolicies({ orgId, isEn }: ApprovalPoliciesProps) {
                     <div className="flex items-center gap-2">
                       <Badge
                         className={cn(
-                          "text-[10px] whitespace-nowrap",
+                          "whitespace-nowrap text-[10px]",
                           MODE_STYLES[mode]
                         )}
                         variant="outline"
                       >
-                        {isEn
-                          ? MODE_LABELS[mode].en
-                          : MODE_LABELS[mode].es}
+                        {isEn ? MODE_LABELS[mode].en : MODE_LABELS[mode].es}
                       </Badge>
                       <Button
                         className="shrink-0"
@@ -227,11 +240,7 @@ export function ApprovalPolicies({ orgId, isEn }: ApprovalPoliciesProps) {
                         size="sm"
                         variant="outline"
                       >
-                        {toggling
-                          ? "..."
-                          : isEn
-                            ? "Cycle"
-                            : "Cambiar"}
+                        {toggling ? "..." : isEn ? "Cycle" : "Cambiar"}
                       </Button>
                     </div>
                   </div>

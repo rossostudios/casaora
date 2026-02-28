@@ -11,6 +11,7 @@ import {
 } from "@hugeicons/core-free-icons";
 import { motion } from "motion/react";
 import Link from "next/link";
+import { useMemo } from "react";
 
 import { Icon } from "@/components/ui/icon";
 import type { AgentApproval } from "@/lib/api";
@@ -19,7 +20,7 @@ import type {
   PropertyNotificationItem,
   PropertyPortfolioRow,
 } from "@/lib/features/properties/types";
-import { formatCompactCurrency } from "@/lib/format";
+import { formatCompactCurrency, formatRelativeTime } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 const EASING = [0.22, 1, 0.36, 1] as const;
@@ -43,18 +44,6 @@ type AgenticSidebarProps = {
 };
 
 /* ── helpers ── */
-
-function relativeTimeLabel(timestamp: Date | string, isEn: boolean): string {
-  const time = typeof timestamp === "string" ? new Date(timestamp) : timestamp;
-  const deltaMs = Date.now() - time.getTime();
-  const minutes = Math.max(1, Math.floor(deltaMs / (1000 * 60)));
-
-  if (minutes < 60) return isEn ? `${minutes}m ago` : `${minutes}m atrás`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return isEn ? `${hours}h ago` : `hace ${hours}h`;
-  const days = Math.floor(hours / 24);
-  return isEn ? `${days}d ago` : `hace ${days}d`;
-}
 
 function occupancyColor(rate: number): string {
   if (rate >= 90) return "text-[var(--agentic-lavender)]";
@@ -95,7 +84,7 @@ function buildWorkLog(
     entries.push({
       id: item.id,
       text,
-      time: relativeTimeLabel(item.timestamp, isEn),
+      time: formatRelativeTime(item.timestamp, isEn),
       type: "activity",
       timestamp: item.timestamp.getTime(),
     });
@@ -128,7 +117,7 @@ function buildWorkLog(
     entries.push({
       id: `approval-${approval.id}`,
       text,
-      time: relativeTimeLabel(ts, isEn),
+      time: formatRelativeTime(ts, isEn),
       type: isPending ? "approval-pending" : "approval-executed",
       timestamp: new Date(ts).getTime(),
     });
@@ -158,7 +147,10 @@ export function AgenticSidebar({
   agentOnline,
 }: AgenticSidebarProps) {
   const hasAlerts = totalOverdueCollections > 0 || totalVacantUnits > 0;
-  const workLog = buildWorkLog(recentActivity, approvals, propertyRows, isEn);
+  const workLog = useMemo(
+    () => buildWorkLog(recentActivity, approvals, propertyRows, isEn),
+    [recentActivity, approvals, propertyRows, isEn]
+  );
 
   return (
     <div className="glass-panel rounded-2xl p-5">
