@@ -60,7 +60,7 @@ resolve_existing_secret_ref() {
     existing_ref="$(
       aws_cmd ecs describe-task-definition \
         --task-definition "${current_taskdef_arn}" \
-        --query "taskDefinition.containerDefinitions[?name=='${CONTAINER_NAME}'].secrets[?name=='${env_var_name}'].valueFrom | [0][0]" \
+        --query "taskDefinition.containerDefinitions[?name=='${CONTAINER_NAME}'] | [0].secrets[?name=='${env_var_name}'] | [0].valueFrom" \
         --output text 2>/dev/null || true
     )"
     if [[ "${existing_ref}" == "None" ]]; then
