@@ -41,7 +41,7 @@ export default async function GovernancePage() {
 
   const role = await getActiveRole(orgId);
 
-  if (role !== "owner_admin") {
+  if (role !== null && role !== "owner_admin") {
     return (
       <Card>
         <CardHeader>
