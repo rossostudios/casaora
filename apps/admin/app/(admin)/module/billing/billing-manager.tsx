@@ -591,7 +591,7 @@ function SparklineCard({
       </svg>
       <div className="mt-1 flex justify-between text-muted-foreground text-xs">
         {months.length > 0 && <span>{months[0].month}</span>}
-        {months.length > 1 && <span>{months.at(-1).month}</span>}
+        {months.length > 1 && <span>{months.at(-1)?.month}</span>}
       </div>
     </div>
   );
