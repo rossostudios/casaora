@@ -844,6 +844,7 @@ async fn fetch_property_overview_rows(
         .collect())
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn fetch_unit_overview_rows(
     pool: &sqlx::PgPool,
     org_id: &str,

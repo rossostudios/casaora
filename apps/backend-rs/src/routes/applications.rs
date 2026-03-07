@@ -1565,8 +1565,7 @@ async fn load_application_messages(
     }
 
     let mut values = deduped.into_values().collect::<Vec<_>>();
-    values
-        .sort_by(|left, right| value_str(right, "created_at").cmp(&value_str(left, "created_at")));
+    values.sort_by_key(|right| std::cmp::Reverse(value_str(right, "created_at")));
     Ok(values)
 }
 

@@ -242,7 +242,7 @@ pub async fn build_reservation_detail_overview(
         }
     }
 
-    blocked_periods.sort_by(|left, right| value_str(left, "from").cmp(&value_str(right, "from")));
+    blocked_periods.sort_by_key(|left| value_str(left, "from"));
 
     Ok(json!({
         "reservation": {
