@@ -265,8 +265,8 @@ export function ChatInputBar({
             }}
             placeholder={
               isEn
-                ? `What would you like ${placeholderName} to handle today?`
-                : `¿Qué te gustaría que ${placeholderName} gestione hoy?`
+                ? `What would you like ${placeholderName} to handle?`
+                : `¿Qué te gustaría que ${placeholderName} gestione?`
             }
             rows={1}
             value={displayValue}

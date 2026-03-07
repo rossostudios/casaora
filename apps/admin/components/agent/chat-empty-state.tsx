@@ -102,6 +102,7 @@ export function ChatEmptyState({
   agentDescription: _agentDescription,
   firstName,
   dailySummary,
+  isEmbedded,
 }: {
   quickPrompts: string[];
   contextualSuggestions?: string[];
@@ -112,8 +113,55 @@ export function ChatEmptyState({
   agentDescription?: string;
   firstName?: string;
   dailySummary?: DailySummaryItem[];
+  isEmbedded?: boolean;
 }) {
   const hasUrgent = dailySummary?.some((item) => item.urgent && item.count > 0);
+
+  if (isEmbedded) {
+    return (
+      <div className="flex min-h-[55vh] flex-col items-center justify-center px-4 pb-8">
+        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-casaora-gradient text-white">
+          <Icon className="h-7 w-7" icon={SparklesIcon} strokeWidth={1.8} />
+        </div>
+        <h2 className="mt-4 font-semibold text-lg">
+          {agentName || "Casaora AI"}
+        </h2>
+        <p className="mt-6 mb-3 font-medium text-[11px] text-muted-foreground/40 uppercase tracking-widest">
+          {isEn ? "Try asking" : "Prueba preguntar"}
+        </p>
+        <div className="flex w-full max-w-sm flex-col gap-2">
+          {quickPrompts.slice(0, 3).map((prompt, i) => {
+            const category = classifyPrompt(prompt);
+            const meta = CATEGORY_META[category];
+            return (
+              <button
+                className={cn(
+                  "group flex w-full cursor-pointer items-center gap-3 rounded-xl border border-border/40 bg-card/60 px-4 py-3 text-left text-[13px] text-foreground/80 leading-snug",
+                  "transition-all duration-200 ease-out",
+                  "hover:border-border/60 hover:bg-card hover:text-foreground hover:shadow-sm",
+                  "active:scale-[0.99]",
+                  "disabled:pointer-events-none disabled:opacity-40",
+                  "animate-[fadeInUp_0.4s_ease-out_both]"
+                )}
+                disabled={disabled}
+                key={prompt}
+                onClick={() => onSendPrompt(prompt)}
+                style={{ animationDelay: `${i * 80 + 100}ms` }}
+                type="button"
+              >
+                <Icon
+                  className={cn("h-3.5 w-3.5 shrink-0", meta.color)}
+                  icon={meta.icon}
+                  strokeWidth={1.8}
+                />
+                <span>{prompt}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-[55vh] flex-col items-center justify-center px-4 pb-8">

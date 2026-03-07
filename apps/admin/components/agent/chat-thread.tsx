@@ -27,7 +27,6 @@ import {
   type StreamToolEvent,
 } from "@/components/agent/chat-tool-event";
 import type { ExplanationPayload } from "@/components/agent/explainability-panel";
-import { getModelDisplayName } from "@/components/agent/model-display";
 import {
   type DataUIPart,
   isTextUIPart,
@@ -48,12 +47,15 @@ import {
 } from "@/components/ui/conversation";
 import { Icon } from "@/components/ui/icon";
 import { Message, MessageContent } from "@/components/ui/message";
-import {
-  PopoverContent,
-  PopoverRoot,
-  PopoverTrigger,
-} from "@/components/ui/popover";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  stripAIContextEnvelope,
+  summarizeAIContext,
+  wrapMessageWithAIContext,
+} from "@/lib/ai-context";
+import type {
+  AIContextPayload,
+} from "@/lib/workspace-types";
 import {
   type AutonomyLevel,
   deriveAutonomyLevel,
@@ -68,6 +70,8 @@ import type { Locale } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
 type StreamMeta = {
+  agent_run_id?: string | null;
+  trace_id?: string | null;
   model_used?: string | null;
   fallback_used?: boolean;
   tool_trace?: AgentChatMessage["tool_trace"];
@@ -122,6 +126,8 @@ export function ChatThread({
   firstName,
   dashboardStats,
   initialPrompt,
+  aiContext,
+  onClose,
 }: {
   orgId: string;
   locale: Locale;
@@ -132,6 +138,8 @@ export function ChatThread({
   firstName?: string;
   dashboardStats?: Record<string, unknown>;
   initialPrompt?: string;
+  aiContext?: AIContextPayload | null;
+  onClose?: () => void;
 }) {
   const isEn = locale === "en-US";
   const isEmbedded = mode === "embedded";
@@ -148,7 +156,6 @@ export function ChatThread({
   const [editingSourceId, setEditingSourceId] = useState<string | null>(null);
   const [activeChatId, setActiveChatId] = useState<string | undefined>(chatId);
   const [selectedModel, setSelectedModel] = useState<string>("");
-  const [modelBusy, setModelBusy] = useState(false);
   const [localChat, setLocalChat] = useState<AgentChatSummary | null>(null);
   const [streamToolEvents, setStreamToolEvents] = useState<StreamToolEvent[]>(
     []
@@ -260,29 +267,18 @@ export function ChatThread({
     retry: false,
   });
 
-  // Auto-select: prefer guest-concierge, fallback to first active
+  // Keep one visible assistant in the UI while still falling back safely if
+  // the supervisor agent is unavailable in a given environment.
   useEffect(() => {
     if (activeAgents.length === 0) return;
     const currentExists = activeAgents.some(
       (a) => a.slug === selectedAgentSlug
     );
     if (!currentExists) {
-      const preferred = activeAgents.find((a) => a.slug === "guest-concierge");
+      const preferred = activeAgents.find((a) => a.slug === "supervisor");
       setSelectedAgentSlug(preferred?.slug ?? activeAgents[0].slug);
     }
   }, [activeAgents, selectedAgentSlug]);
-
-  const selectedAgent = useMemo(
-    () => activeAgents.find((a) => a.slug === selectedAgentSlug) ?? null,
-    [activeAgents, selectedAgentSlug]
-  );
-
-  // biome-ignore lint/correctness/useExhaustiveDependencies: resetToFreshThread is safely defined
-  const handleAgentChange = useCallback((slug: string) => {
-    setSelectedAgentSlug(slug);
-    // Switching agents starts a fresh thread
-    resetToFreshThread();
-  }, []);
 
   // --- queries -------------------------------------------------------------
   const threadQuery = useQuery<ThreadData, Error>({
@@ -413,6 +409,8 @@ export function ChatThread({
       ) {
         const d = typed.data as {
           messageId?: unknown;
+          run_id?: unknown;
+          trace_id?: unknown;
           model_used?: unknown;
           fallback_used?: unknown;
           tool_trace?: unknown;
@@ -424,6 +422,8 @@ export function ChatThread({
           ...prev,
           [mid]: {
             ...(prev[mid] ?? {}),
+            agent_run_id: typeof d.run_id === "string" ? d.run_id : null,
+            trace_id: typeof d.trace_id === "string" ? d.trace_id : null,
             model_used: typeof d.model_used === "string" ? d.model_used : null,
             fallback_used:
               typeof d.fallback_used === "boolean" ? d.fallback_used : false,
@@ -445,6 +445,9 @@ export function ChatThread({
       const sync = async () => {
         await queryClient.invalidateQueries({
           queryKey: ["agent-thread", current, orgId],
+        });
+        await queryClient.invalidateQueries({
+          queryKey: ["agent-runs", orgId],
         });
         await queryClient.invalidateQueries({
           queryKey: ["agent-chats", orgId],
@@ -496,6 +499,9 @@ export function ChatThread({
   const serverMessages = threadQuery.data?.messages ?? [];
   const loading = !!activeChatId && threadQuery.isLoading;
   const isSending = status === "submitted" || status === "streaming";
+  const initialContextSummary = aiContext
+    ? summarizeAIContext(aiContext, isEn)
+    : null;
 
   // --- model preference ----------------------------------------------------
   const updatePreferredModel = useCallback(
@@ -503,7 +509,6 @@ export function ChatThread({
       setSelectedModel(nextModel);
       const cid = activeChatIdRef.current;
       if (!cid) return;
-      setModelBusy(true);
       setError(null);
       try {
         const res = await fetch(
@@ -541,8 +546,6 @@ export function ChatThread({
         });
       } catch (e) {
         setError(e instanceof Error ? e.message : String(e));
-      } finally {
-        setModelBusy(false);
       }
     },
     [isEn, orgId, queryClient]
@@ -602,15 +605,23 @@ export function ChatThread({
   // --- display messages ----------------------------------------------------
   const serverDisplayMessages = useMemo<DisplayMessage[]>(
     () =>
-      serverMessages.map((m) => ({
-        id: m.id,
-        role: m.role,
-        content: m.content,
-        model_used: m.model_used ?? null,
-        tool_trace: m.tool_trace,
-        feedback_rating: m.feedback_rating ?? null,
-        source: "server",
-      })),
+      serverMessages.map((m) => {
+        const parsed =
+          m.role === "user"
+            ? stripAIContextEnvelope(m.content)
+            : { context: null, message: m.content };
+
+        return {
+          id: m.id,
+          role: m.role,
+          content: parsed.message,
+          agent_run_id: m.agent_run_id ?? null,
+          model_used: m.model_used ?? null,
+          tool_trace: m.tool_trace,
+          feedback_rating: m.feedback_rating ?? null,
+          source: "server",
+        };
+      }),
     [serverMessages]
   );
 
@@ -618,13 +629,19 @@ export function ChatThread({
     const next: DisplayMessage[] = [];
     for (const m of liveMessages) {
       if (m.role !== "user" && m.role !== "assistant") continue;
-      const content = extractUiMessageText(m);
+      const rawContent = extractUiMessageText(m);
+      const parsed =
+        m.role === "user"
+          ? stripAIContextEnvelope(rawContent)
+          : { context: null, message: rawContent };
+      const content = parsed.message;
       if (!content && m.role === "assistant") continue;
       const meta = streamMetaByMessageId[m.id];
       next.push({
         id: m.id,
         role: m.role,
         content,
+        agent_run_id: meta?.agent_run_id ?? null,
         model_used: meta?.model_used ?? null,
         tool_trace: meta?.tool_trace,
         structured_content: meta?.structured_content ?? null,
@@ -655,6 +672,24 @@ export function ChatThread({
       }),
     ];
   }, [liveDisplayMessages, serverDisplayMessages]);
+
+  const activeAIContext = useMemo(() => {
+    if (aiContext) return aiContext;
+
+    for (const message of serverMessages) {
+      if (message.role !== "user") continue;
+      const parsed = stripAIContextEnvelope(message.content);
+      if (parsed.context) return parsed.context;
+    }
+
+    for (const message of liveMessages) {
+      if (message.role !== "user") continue;
+      const parsed = stripAIContextEnvelope(extractUiMessageText(message));
+      if (parsed.context) return parsed.context;
+    }
+
+    return null;
+  }, [aiContext, liveMessages, serverMessages]);
 
   // --- auto-speak for voice mode -------------------------------------------
   const lastSpokenRef = useRef<string | null>(null);
@@ -719,6 +754,7 @@ export function ChatThread({
     await queryClient.invalidateQueries({
       queryKey: ["agent-thread", targetChatId, orgId],
     });
+    await queryClient.invalidateQueries({ queryKey: ["agent-runs", orgId] });
     await queryClient.invalidateQueries({ queryKey: ["agent-chats", orgId] });
     await queryClient.invalidateQueries({
       queryKey: ["sidebar-chat-data", orgId],
@@ -739,6 +775,13 @@ export function ChatThread({
     const urls = attachmentHook.getReadyUrls();
     if (urls.length > 0) {
       fullMessage = `${message}\n\n[Attachments]\n${urls.join("\n")}`;
+    }
+
+    const hasUserMessages =
+      serverMessages.some((item) => item.role === "user") ||
+      liveDisplayMessages.some((item) => item.role === "user");
+    if (!hasUserMessages && aiContext) {
+      fullMessage = wrapMessageWithAIContext(fullMessage, aiContext);
     }
 
     setError(null);
@@ -933,7 +976,7 @@ export function ChatThread({
         isHero
           ? "overflow-hidden bg-background"
           : isEmbedded
-            ? "min-h-[38rem] overflow-hidden rounded-3xl border border-border/40 bg-card shadow-[var(--shadow-floating)]"
+            ? "overflow-hidden bg-background"
             : "min-h-[calc(100vh-4rem)] bg-background"
       )}
     >
@@ -944,121 +987,14 @@ export function ChatThread({
             <div className="flex h-6 w-6 items-center justify-center rounded-[8px] bg-casaora-gradient text-white shadow-casaora">
               <Icon className="h-3 w-3" icon={SparklesIcon} />
             </div>
-
-            {activeAgents.length > 1 ? (
-              <PopoverRoot>
-                <PopoverTrigger
-                  className="flex items-center gap-1.5 rounded-lg px-1 py-0.5 transition-colors hover:bg-muted/40"
-                  disabled={isSending}
-                >
-                  <h2 className="truncate font-semibold text-[13.5px] tracking-tight">
-                    {chat?.title ||
-                      selectedAgent?.name ||
-                      (isEn ? "New Chat" : "Nuevo Chat")}
-                  </h2>
-                  <svg
-                    aria-label="Expand chevron"
-                    className="h-3 w-3 text-muted-foreground/50 transition-transform"
-                    fill="none"
-                    role="img"
-                    stroke="currentColor"
-                    strokeWidth={2}
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      d="M6 9l6 6 6-6"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
-                </PopoverTrigger>
-                <PopoverContent align="start" className="w-64 p-1.5">
-                  <div className="px-2 py-1.5 font-medium text-[10px] text-muted-foreground/60 uppercase tracking-widest">
-                    {isEn ? "Agent" : "Agente"}
-                  </div>
-                  {activeAgents.map((agent) => (
-                    <button
-                      className={cn(
-                        "flex w-full flex-col gap-0.5 rounded-xl px-2.5 py-2 text-left transition-all duration-150 hover:bg-muted/50",
-                        agent.slug === selectedAgentSlug &&
-                          "bg-[var(--sidebar-primary)]/[0.06] text-[var(--sidebar-primary)]"
-                      )}
-                      key={agent.slug}
-                      onClick={() => handleAgentChange(agent.slug)}
-                      type="button"
-                    >
-                      <span className="truncate font-medium text-[13px]">
-                        {agent.name}
-                      </span>
-                      {agent.description ? (
-                        <span className="truncate text-[11px] text-muted-foreground">
-                          {agent.description}
-                        </span>
-                      ) : null}
-                    </button>
-                  ))}
-                </PopoverContent>
-              </PopoverRoot>
-            ) : (
-              <h2 className="truncate font-semibold text-[13.5px] tracking-tight">
-                {chat?.title ||
-                  selectedAgent?.name ||
-                  (isEn ? "New Chat" : "Nuevo Chat")}
-              </h2>
-            )}
+            <h2 className="truncate font-semibold text-[13.5px] tracking-tight">
+              {chat?.title || (isEn ? "Casaora AI" : "IA Casaora")}
+            </h2>
 
             <AutonomyIndicator isEn={isEn} level={autonomyLevel} />
           </div>
 
           <div className="flex items-center gap-1">
-            {modelOptions.length > 0 ? (
-              <PopoverRoot>
-                <PopoverTrigger
-                  className="flex items-center"
-                  disabled={isSending || modelBusy}
-                >
-                  <Badge
-                    className="cursor-pointer border-border/30 bg-transparent font-mono font-normal text-[10px] text-muted-foreground/70 transition-all hover:border-border/60 hover:bg-muted/30 hover:text-muted-foreground"
-                    variant="outline"
-                  >
-                    {getModelDisplayName(selectedModel || primaryModel) ||
-                      (isEn ? "Model" : "Modelo")}
-                  </Badge>
-                </PopoverTrigger>
-                <PopoverContent align="end" className="w-52 p-1.5">
-                  <div className="px-2 py-1.5 font-medium text-[10px] text-muted-foreground/60 uppercase tracking-widest">
-                    {isEn ? "Model" : "Modelo"}
-                  </div>
-                  {modelOptions.map((model) => (
-                    <button
-                      className={cn(
-                        "flex w-full items-center justify-between rounded-xl px-2.5 py-2 text-left text-sm transition-all duration-150 hover:bg-muted/50",
-                        model.model === (selectedModel || primaryModel) &&
-                          "bg-[var(--sidebar-primary)]/[0.06] text-[var(--sidebar-primary)]"
-                      )}
-                      key={model.model}
-                      onClick={() =>
-                        updatePreferredModel(model.model).catch(() => undefined)
-                      }
-                      type="button"
-                    >
-                      <span className="truncate font-mono text-[11px]">
-                        {getModelDisplayName(model.model)}
-                      </span>
-                      {model.is_primary ? (
-                        <Badge
-                          className="ml-1.5 text-[9px]"
-                          variant="secondary"
-                        >
-                          {isEn ? "primary" : "primario"}
-                        </Badge>
-                      ) : null}
-                    </button>
-                  ))}
-                </PopoverContent>
-              </PopoverRoot>
-            ) : null}
-
             <Button
               className="h-7 w-7 rounded-lg text-muted-foreground/60 hover:bg-muted/40 hover:text-foreground"
               disabled={isSending}
@@ -1074,48 +1010,36 @@ export function ChatThread({
           </div>
         </div>
       ) : (
-        <div className="flex items-center gap-2">
-          <div className="flex-1">
-            <ChatHeader
-              agents={activeAgents}
-              busy={busy}
-              chatTitle={chat?.title}
-              deleteArmed={deleteArmed}
-              isArchived={chat?.is_archived}
-              isChatDetailRoute={isChatDetailRoute}
-              isEmbedded={isEmbedded}
-              isEn={isEn}
-              isSending={isSending}
-              loading={loading}
-              modelBusy={modelBusy}
-              modelOptions={modelOptions}
-              onAgentChange={handleAgentChange}
-              onArchiveToggle={() => {
-                const action = chat?.is_archived ? "restore" : "archive";
-                mutateChat(action).catch(() => undefined);
-                setDeleteArmed(false);
-              }}
-              onDeleteArm={() => setDeleteArmed(true)}
-              onDeleteCancel={() => setDeleteArmed(false)}
-              onDeleteConfirm={() => {
-                mutateChat("delete").catch(() => undefined);
-                setDeleteArmed(false);
-              }}
-              onHistoryClick={() => router.push("/app/chats")}
-              onModelChange={(model) =>
-                updatePreferredModel(model).catch(() => undefined)
-              }
-              onNewThread={() => resetToFreshThread()}
-              primaryModel={primaryModel}
-              selectedAgentName={selectedAgent?.name}
-              selectedAgentSlug={selectedAgentSlug}
-              selectedModel={selectedModel}
-            />
-          </div>
-          <div className="mr-3 shrink-0">
-            <AutonomyIndicator isEn={isEn} level={autonomyLevel} />
-          </div>
-        </div>
+        <ChatHeader
+          busy={busy}
+          chatTitle={chat?.title}
+          deleteArmed={deleteArmed}
+          isArchived={chat?.is_archived}
+          isChatDetailRoute={isChatDetailRoute}
+          isEmbedded={isEmbedded}
+          isEn={isEn}
+          isSending={isSending}
+          loading={loading}
+          modelOptions={modelOptions}
+          onArchiveToggle={() => {
+            const action = chat?.is_archived ? "restore" : "archive";
+            mutateChat(action).catch(() => undefined);
+            setDeleteArmed(false);
+          }}
+          onClose={onClose}
+          onDeleteArm={() => setDeleteArmed(true)}
+          onDeleteCancel={() => setDeleteArmed(false)}
+          onDeleteConfirm={() => {
+            mutateChat("delete").catch(() => undefined);
+            setDeleteArmed(false);
+          }}
+          onHistoryClick={() => router.push("/app/chats")}
+          onModelChange={(model) => {
+            updatePreferredModel(model).catch(() => undefined);
+          }}
+          onNewThread={() => resetToFreshThread()}
+          selectedModel={selectedModel}
+        />
       )}
 
       {/* Message area — Conversation auto-scroll wrapper */}
@@ -1141,6 +1065,32 @@ export function ChatThread({
               <AlertTitle>Error</AlertTitle>
               <AlertDescription>{displayError}</AlertDescription>
             </Alert>
+          ) : null}
+
+          {activeAIContext ? (
+            <div className="rounded-2xl border border-border/60 bg-card/70 p-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="space-y-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge variant="secondary">
+                      {initialContextSummary ||
+                        summarizeAIContext(activeAIContext, isEn)}
+                    </Badge>
+                    <Badge variant="outline">
+                      {isEn ? "Return path saved" : "Ruta de regreso guardada"}
+                    </Badge>
+                  </div>
+                  <p className="text-muted-foreground text-sm">
+                    {activeAIContext.summary}
+                  </p>
+                </div>
+                <Button asChild size="sm" variant="outline">
+                  <a href={activeAIContext.returnPath}>
+                    {isEn ? "Back to workspace" : "Volver al espacio"}
+                  </a>
+                </Button>
+              </div>
+            </div>
           ) : null}
 
           {/* Body */}
@@ -1169,14 +1119,19 @@ export function ChatThread({
               />
             ) : (
               <ChatEmptyState
-                agentDescription={selectedAgent?.description}
-                agentName={selectedAgent?.name}
+                agentDescription={
+                  isEn
+                    ? "One assistant for operations, leasing, finance, and guest workflows."
+                    : "Un asistente para operaciones, leasing, finanzas y flujos de huéspedes."
+                }
+                agentName={isEn ? "Casaora AI" : "IA Casaora"}
                 contextualSuggestions={
                   contextualSuggestionsQuery.data?.map((s) => s.text) ?? []
                 }
                 dailySummary={dailySummaryQuery.data}
                 disabled={isSending}
                 firstName={isHero ? firstName : undefined}
+                isEmbedded={isEmbedded}
                 isEn={isEn}
                 onSendPrompt={(prompt) => {
                   handleSend(prompt).catch(() => undefined);
@@ -1304,7 +1259,7 @@ export function ChatThread({
 
       {/* Input bar */}
       <ChatInputBar
-        agentName={selectedAgent?.name}
+        agentName={isEn ? "Casaora AI" : "IA Casaora"}
         attachments={attachmentHook.attachments}
         attachmentsReady={attachmentHook.allReady}
         draft={draft}
