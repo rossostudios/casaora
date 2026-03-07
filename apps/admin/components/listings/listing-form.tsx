@@ -7,7 +7,6 @@ import { useEffect, useRef, useState } from "react";
 import { Controller, type Resolver, useForm, useWatch } from "react-hook-form";
 import { toast } from "sonner";
 import { ImageUpload } from "@/app/(admin)/module/listings/listing-image-upload";
-import type { ListingRow } from "@/app/(admin)/module/listings/listings-manager";
 import { ReadinessRing } from "@/components/listings/readiness-ring";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -50,17 +49,45 @@ const READINESS_FIELD_MAP: Record<string, string> = {
   description: "description",
 };
 
+export type ListingEditorRecord = {
+  id: string;
+  title: string;
+  public_slug: string;
+  city: string;
+  neighborhood?: string | null;
+  property_type?: string | null;
+  description?: string | null;
+  summary?: string | null;
+  bedrooms?: number | null;
+  bathrooms?: number | null;
+  square_meters?: number | null;
+  furnished?: boolean;
+  pet_policy?: string | null;
+  parking_spaces?: number | null;
+  available_from?: string | null;
+  minimum_lease_months?: number | null;
+  maintenance_fee?: number | null;
+  cover_image_url?: string | null;
+  gallery_image_urls?: string[];
+  amenities?: string[];
+  currency?: string | null;
+  pricing_template_id?: string | null;
+  property_id?: string | null;
+  unit_id?: string | null;
+};
+
 type ListingFormProps = {
   orgId: string;
-  editing: ListingRow | null;
+  editing: ListingEditorRecord | null;
   isEn: boolean;
   locale: string;
   pricingTemplateOptions: { id: string; label: string }[];
   propertyOptions: { id: string; label: string }[];
   unitOptions: { id: string; label: string }[];
-  onSuccess: () => void;
+  onSuccess: (listingId: string) => void;
   onPreview?: () => void;
   scrollToField?: string;
+  requireUnitLink?: boolean;
 };
 
 export function ListingForm({
@@ -74,12 +101,19 @@ export function ListingForm({
   onSuccess,
   onPreview,
   scrollToField,
+  requireUnitLink = false,
 }: ListingFormProps) {
   const queryClient = useQueryClient();
   const isEditing = editing !== null;
   const [submitting, setSubmitting] = useState(false);
-  const [savedListingId, setSavedListingId] = useState<string | null>(null);
+  const [savedListingId, setSavedListingId] = useState<string | null>(
+    editing?.id ?? null
+  );
   const readinessQuery = useListingReadiness(savedListingId);
+
+  useEffect(() => {
+    setSavedListingId(editing?.id ?? null);
+  }, [editing?.id]);
 
   const cityKey =
     editing?.city?.toLowerCase().replace(/\s+/g, "_") || "asuncion";
@@ -231,6 +265,16 @@ export function ListingForm({
   async function onSubmit(values: ListingFormValues) {
     setSubmitting(true);
 
+    if (requireUnitLink && !values.unit_id) {
+      toast.error(isEn ? "Choose a unit first" : "Elige una unidad primero", {
+        description: isEn
+          ? "New listings in Casaora Marketplace must be linked to a rentable unit."
+          : "Los nuevos anuncios del Marketplace de Casaora deben vincularse a una unidad rentable.",
+      });
+      setSubmitting(false);
+      return;
+    }
+
     const payload: Record<string, unknown> = {
       title: values.title,
       public_slug: values.public_slug,
@@ -312,6 +356,7 @@ export function ListingForm({
       queryClient.invalidateQueries({ queryKey: ["listings"] });
       toast.success(successMsg);
       setSavedListingId(resultId);
+      onSuccess(resultId);
       setSubmitting(false);
     } catch (err) {
       let description: string;
@@ -395,7 +440,9 @@ export function ListingForm({
           ) : null}
           <Button
             className="w-full"
-            onClick={onSuccess}
+            onClick={() => {
+              if (savedListingId) onSuccess(savedListingId);
+            }}
             type="button"
             variant="outline"
           >

@@ -71,7 +71,7 @@ export function ReservationHero({
                     {isEn ? "Back" : "Volver"}
                   </Link>
                   <Badge
-                    className="h-7 border-border/10 bg-background/50 font-bold text-[10px] text-muted-foreground uppercase tracking-wider backdrop-blur-sm"
+                    className="h-7 border-border/10 bg-background font-bold text-[10px] text-muted-foreground uppercase tracking-wider"
                     variant="outline"
                   >
                     {isEn ? "Reservations" : "Reservas"}

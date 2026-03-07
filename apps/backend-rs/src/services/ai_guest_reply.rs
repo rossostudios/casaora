@@ -273,6 +273,7 @@ pub async fn generate_ai_reply(
             role: "operator",
             message: message_text,
             conversation: &conversation,
+            agent_run_id: None,
             allow_mutations: false,
             confirm_write: false,
             agent_name: "Guest Concierge",

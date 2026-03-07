@@ -1,14 +1,26 @@
 import { OrgAccessChanged } from "@/components/shell/org-access-changed";
-import { fetchList } from "@/lib/api";
 import { errorMessage, isOrgMembershipError } from "@/lib/errors";
 import { getActiveLocale } from "@/lib/i18n/server";
 import { safeDecode } from "@/lib/module-helpers";
 import { getActiveOrgId } from "@/lib/org";
+import { fetchList } from "@/lib/api";
+import { fetchPortfolioUnitsOverview } from "@/lib/portfolio-overview";
 import { ApiErrorCard, NoOrgCard } from "@/lib/page-helpers";
 import { UnitsManager } from "./units-manager";
 
 type PageProps = {
-  searchParams: Promise<{ success?: string; error?: string }>;
+  searchParams: Promise<{
+    q?: string;
+    property_id?: string;
+    status?: string;
+    unit_type?: string;
+    condition_status?: string;
+    view?: string;
+    sort?: string;
+    create?: string;
+    success?: string;
+    error?: string;
+  }>;
 };
 
 const DUPLICATE_UNIT_ERROR_RE =
@@ -52,42 +64,58 @@ function errorLabel(isEn: boolean, raw: string): string {
 }
 
 export default async function UnitsModulePage({ searchParams }: PageProps) {
-  const locale = await getActiveLocale();
+  const [locale, orgId, params] = await Promise.all([
+    getActiveLocale(),
+    getActiveOrgId(),
+    searchParams,
+  ]);
   const isEn = locale === "en-US";
-  const orgId = await getActiveOrgId();
-  const { success, error } = await searchParams;
-
-  const successMessage = success ? successLabel(isEn, safeDecode(success)) : "";
-  const errorAlertMessage = error ? errorLabel(isEn, safeDecode(error)) : "";
 
   if (!orgId) {
     return <NoOrgCard isEn={isEn} resource={["units", "unidades"]} />;
   }
 
-  let units: Record<string, unknown>[] = [];
-  let properties: Record<string, unknown>[] = [];
-
   try {
-    [units, properties] = (await Promise.all([
-      fetchList("/units", orgId, 500),
-      fetchList("/properties", orgId, 500),
-    ])) as [Record<string, unknown>[], Record<string, unknown>[]];
+    const [overview, properties] = await Promise.all([
+      fetchPortfolioUnitsOverview({
+        org_id: orgId,
+        q: params.q,
+        property_id: params.property_id,
+        status: params.status,
+        unit_type: params.unit_type,
+        condition_status: params.condition_status,
+        view: params.view,
+        sort: params.sort,
+        limit: 100,
+        offset: 0,
+      }),
+      fetchList("/properties", orgId, 300),
+    ]);
+
+    return (
+      <UnitsManager
+        error={params.error ? errorLabel(isEn, safeDecode(params.error)) : ""}
+        initialFilters={{
+          conditionStatus: params.condition_status ?? "",
+          create: params.create === "1",
+          propertyId: params.property_id ?? "",
+          q: params.q ?? "",
+          sort: params.sort ?? "",
+          status: params.status ?? "",
+          unitType: params.unit_type ?? "",
+          view: params.view ?? "all",
+        }}
+        orgId={orgId}
+        overview={overview}
+        properties={properties as Record<string, unknown>[]}
+        success={params.success ? successLabel(isEn, safeDecode(params.success)) : ""}
+      />
+    );
   } catch (err) {
     const message = errorMessage(err);
     if (isOrgMembershipError(message)) {
       return <OrgAccessChanged orgId={orgId} />;
     }
-
     return <ApiErrorCard isEn={isEn} message={message} />;
   }
-
-  return (
-    <UnitsManager
-      error={errorAlertMessage}
-      orgId={orgId}
-      properties={properties}
-      success={successMessage}
-      units={units}
-    />
-  );
 }

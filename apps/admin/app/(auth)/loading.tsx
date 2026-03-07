@@ -7,7 +7,7 @@ export default async function Loading() {
 
   return (
     <div className="flex min-h-[50vh] items-center justify-center">
-      <div className="flex items-center gap-3 rounded-xl border bg-card/60 px-4 py-3 shadow-sm backdrop-blur">
+      <div className="flex items-center gap-3 rounded-xl border bg-card px-4 py-3 shadow-sm">
         <Spinner size="md" />
         <p className="text-muted-foreground text-sm">
           {isEn ? "Loading…" : "Cargando…"}

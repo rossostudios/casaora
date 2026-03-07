@@ -118,12 +118,16 @@ export async function loadPropertyDetailData(params: {
     .filter((value): value is string => Boolean(value))
     .join(" · ");
 
+  const propertyType =
+    getFirstValue(record, ["property_type", "type", "kind"]) || null;
+
   const data: PropertyDetailPageData = {
     record,
     recordId,
     title,
     propertyCodeLabel,
     propertyLocationLabel,
+    propertyType,
     overview: snapshot
       ? buildPropertyOverview({ snapshot, locale, recordId })
       : null,

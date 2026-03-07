@@ -1,739 +1,814 @@
 "use client";
 
-import { ArrowRight01Icon } from "@hugeicons/core-free-icons";
-import { AnimatePresence, motion } from "motion/react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
-import { SectionLabel } from "@/components/agent/briefing/helpers";
-import { Icon } from "@/components/ui/icon";
-import { useActiveLocale } from "@/lib/i18n/client";
-import { EASING, bold, daysRemaining, fmtPyg, initials } from "@/lib/module-helpers";
-import { cn } from "@/lib/utils";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import {
-  asNumber,
-  asString,
-  type LeaseRow,
-  statusLabel,
-} from "./lease-types";
+  sendRenewalOfferAction,
+  setLeaseStatusAction,
+} from "@/app/(admin)/module/leases/actions";
+import { ActionRail } from "@/components/ui/action-rail";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Field } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import { ListDetailLayout } from "@/components/ui/list-detail-layout";
+import { PageScaffold } from "@/components/ui/page-scaffold";
+import { Select } from "@/components/ui/select";
+import { StatusBadge } from "@/components/ui/status-badge";
+import { buildAgentContextHref } from "@/lib/ai-context";
+import { formatCurrency } from "@/lib/format";
+import type {
+  LeasesOverviewResponse,
+  LeasesOverviewRow,
+} from "@/lib/leases-overview";
+import { LeaseFormSheet } from "./lease-form-sheet";
 
-const STATUS_COLORS: Record<string, string> = {
-  active: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400",
-  draft: "bg-muted text-muted-foreground",
-  delinquent: "bg-red-500/15 text-red-700 dark:text-red-400",
-  terminated: "bg-amber-500/15 text-amber-700 dark:text-amber-400",
-  completed: "bg-blue-500/15 text-blue-700 dark:text-blue-400",
+type LeasesManagerProps = {
+  orgId: string;
+  locale: string;
+  overview: LeasesOverviewResponse;
+  properties: Record<string, unknown>[];
+  units: Record<string, unknown>[];
+  initialFilters: {
+    q: string;
+    leaseStatus: string;
+    renewalStatus: string;
+    propertyId: string;
+    unitId: string;
+    view: string;
+    sort: string;
+    offset: number;
+  };
+  openCreateOnLoad?: boolean;
+  error?: string;
+  success?: string;
 };
 
-function toRow(r: Record<string, unknown>, isEn: boolean): LeaseRow {
-  const status = asString(r.lease_status).trim();
-  return {
-    id: asString(r.id).trim(),
-    tenant_full_name: asString(r.tenant_full_name).trim(),
-    tenant_email: asString(r.tenant_email).trim() || null,
-    tenant_phone_e164: asString(r.tenant_phone_e164).trim() || null,
-    lease_status: status,
-    lease_status_label: statusLabel(status, isEn),
-    renewal_status: asString(r.renewal_status).trim(),
-    property_id: asString(r.property_id).trim() || null,
-    unit_id: asString(r.unit_id).trim() || null,
-    starts_on: asString(r.starts_on).trim(),
-    ends_on: asString(r.ends_on).trim() || null,
-    currency: asString(r.currency).trim().toUpperCase() || "PYG",
-    monthly_rent: asNumber(r.monthly_rent),
-    service_fee_flat: asNumber(r.service_fee_flat),
-    security_deposit: asNumber(r.security_deposit),
-    guarantee_option_fee: asNumber(r.guarantee_option_fee),
-    tax_iva: asNumber(r.tax_iva),
-    platform_fee: asNumber(r.platform_fee),
-    notes: asString(r.notes).trim() || null,
-  };
+type Option = {
+  id: string;
+  label: string;
+};
+
+function asString(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
 }
 
-/* ------------------------------------------------------------------ */
-/* LeasesManager                                                       */
-/* ------------------------------------------------------------------ */
+function SummaryCard({
+  label,
+  value,
+  detail,
+}: {
+  label: string;
+  value: string;
+  detail: string;
+}) {
+  return (
+    <Card className="border border-border/60 bg-card/80 shadow-sm">
+      <CardContent className="space-y-1 p-5">
+        <p className="font-medium text-[11px] text-muted-foreground uppercase tracking-[0.14em]">
+          {label}
+        </p>
+        <p className="font-semibold text-3xl tracking-tight">{value}</p>
+        <p className="text-muted-foreground text-sm">{detail}</p>
+      </CardContent>
+    </Card>
+  );
+}
+
+function statusAction(
+  row: LeasesOverviewRow,
+): { status: string; label: string } | null {
+  switch (row.leaseStatus) {
+    case "draft":
+      return { status: "active", label: "Activate" };
+    case "active":
+    case "delinquent":
+      return { status: "terminated", label: "Terminate" };
+    case "terminated":
+      return { status: "completed", label: "Complete" };
+    default:
+      return null;
+  }
+}
+
+function canOfferRenewal(row: LeasesOverviewRow): boolean {
+  return (
+    ["active", "delinquent", "completed"].includes(row.leaseStatus) &&
+    !["offered", "accepted"].includes(row.renewalStatus ?? "")
+  );
+}
+
+function buildReturnPath(
+  pathname: string,
+  searchParams: URLSearchParams,
+): string {
+  const next = searchParams.toString();
+  return next ? `${pathname}?${next}` : pathname;
+}
+
+function formatDate(value: string | null, locale: string): string {
+  if (!value) return "—";
+  const parsed = new Date(`${value}T00:00:00`);
+  if (Number.isNaN(parsed.valueOf())) return value;
+  return new Intl.DateTimeFormat(locale, { dateStyle: "medium" }).format(
+    parsed,
+  );
+}
 
 export function LeasesManager({
   orgId,
-  leases,
+  locale,
+  overview,
   properties,
   units,
-  error: errorLabel,
-  success: successMessage,
-}: {
-  orgId: string;
-  leases: Record<string, unknown>[];
-  properties: Record<string, unknown>[];
-  units: Record<string, unknown>[];
-  error?: string;
-  success?: string;
-}) {
-  const locale = useActiveLocale();
+  initialFilters,
+  openCreateOnLoad = false,
+  error,
+  success,
+}: LeasesManagerProps) {
   const isEn = locale === "en-US";
-  const fmtLocale = isEn ? "en-US" : "es-PY";
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const [, startTransition] = useTransition();
 
-  const rows = useMemo<LeaseRow[]>(
-    () => leases.map((r) => toRow(r, isEn)),
-    [leases, isEn],
+  const [query, setQuery] = useState(initialFilters.q);
+  const [createOpen, setCreateOpen] = useState(openCreateOnLoad);
+
+  useEffect(() => {
+    setQuery(initialFilters.q);
+  }, [initialFilters.q]);
+
+  useEffect(() => {
+    if (!openCreateOnLoad) return;
+    const params = new URLSearchParams(searchParams.toString());
+    if (params.get("new") !== "1") return;
+    params.delete("new");
+    const next = params.toString();
+    router.replace(next ? `${pathname}?${next}` : pathname);
+  }, [openCreateOnLoad, pathname, router, searchParams]);
+
+  const propertyOptions = useMemo<Option[]>(
+    () =>
+      properties
+        .map((property) => ({
+          id: asString(property.id),
+          label: asString(property.name),
+        }))
+        .filter((property) => property.id && property.label)
+        .sort((left, right) => left.label.localeCompare(right.label)),
+    [properties],
   );
 
-  // Build property/unit lookup maps
-  const propertyMap = useMemo(() => {
-    const m = new Map<string, string>();
-    for (const p of properties) {
-      const id = asString(p.id).trim();
-      if (id) m.set(id, asString(p.name).trim() || id);
+  const propertyNames = useMemo(
+    () =>
+      new Map(
+        propertyOptions.map(
+          (property) => [property.id, property.label] as const,
+        ),
+      ),
+    [propertyOptions],
+  );
+
+  const unitOptions = useMemo<Option[]>(
+    () =>
+      units
+        .map((unit) => {
+          const id = asString(unit.id);
+          const label = asString(unit.name) || asString(unit.code);
+          const propertyName = propertyNames.get(asString(unit.property_id));
+          return {
+            id,
+            label: propertyName ? `${propertyName} · ${label}` : label,
+          };
+        })
+        .filter((unit) => unit.id && unit.label)
+        .sort((left, right) => left.label.localeCompare(right.label)),
+    [propertyNames, units],
+  );
+
+  function updateParams(
+    updates: Record<string, string | null | undefined>,
+    options?: { replace?: boolean },
+  ) {
+    const params = new URLSearchParams(searchParams.toString());
+    for (const [key, value] of Object.entries(updates)) {
+      if (!value) params.delete(key);
+      else params.set(key, value);
     }
-    return m;
-  }, [properties]);
+    params.delete("new");
+    const next = params.toString();
+    startTransition(() => {
+      const href = next ? `${pathname}?${next}` : pathname;
+      if (options?.replace) router.replace(href);
+      else router.push(href);
+    });
+  }
 
-  const unitMap = useMemo(() => {
-    const m = new Map<string, string>();
-    for (const u of units) {
-      const id = asString(u.id).trim();
-      if (id) m.set(id, asString(u.name).trim() || asString(u.code).trim() || id);
-    }
-    return m;
-  }, [units]);
+  useEffect(() => {
+    const handle = window.setTimeout(() => {
+      if (query !== initialFilters.q) {
+        updateParams({ q: query || null }, { replace: true });
+      }
+    }, 250);
+    return () => window.clearTimeout(handle);
+  }, [initialFilters.q, query]);
 
-  // Computed stats
-  const active = rows.filter((r) => r.lease_status === "active" || r.lease_status === "delinquent");
-  const totalDue = active.reduce((s, r) => s + r.monthly_rent, 0);
-  const delinquent = rows.filter((r) => r.lease_status === "delinquent");
-  const expired = rows.filter((r) => {
-    const d = daysRemaining(r.ends_on);
-    return d !== null && d <= 0 && r.lease_status === "active";
+  const returnPath = useMemo(
+    () =>
+      buildReturnPath(pathname, new URLSearchParams(searchParams.toString())),
+    [pathname, searchParams],
+  );
+
+  const askAiHref = buildAgentContextHref({
+    prompt: isEn
+      ? "What needs attention in this lease queue?"
+      : "¿Qué necesita atención en esta cola de contratos?",
+    context: {
+      source: "leases",
+      entityIds: overview.rows.map((row) => row.id),
+      filters: Object.fromEntries(
+        [
+          ["q", initialFilters.q],
+          ["lease_status", initialFilters.leaseStatus],
+          ["renewal_status", initialFilters.renewalStatus],
+          ["property_id", initialFilters.propertyId],
+          ["unit_id", initialFilters.unitId],
+          ["view", initialFilters.view],
+        ].filter((entry): entry is [string, string] => Boolean(entry[1])),
+      ),
+      summary: isEn
+        ? `${overview.summary.active} active leases, ${overview.summary.expiring60d} expiring within 60 days, ${overview.summary.delinquent} delinquent.`
+        : `${overview.summary.active} contratos activos, ${overview.summary.expiring60d} vencen en 60 días, ${overview.summary.delinquent} morosos.`,
+      returnPath,
+    },
   });
-  const expiringSoon = rows.filter((r) => {
-    const d = daysRemaining(r.ends_on);
-    return d !== null && d > 0 && d <= 60 && r.lease_status === "active";
-  });
-  const totalUnits = units.length;
-  const leasedUnitIds = new Set(active.map((r) => r.unit_id).filter(Boolean));
-  const vacantCount = totalUnits - leasedUnitIds.size;
 
-  // Attention items
-  const attentionItems: { key: string; emoji: string; text: string; actions: { label: string; prompt: string }[] }[] = [];
-  for (const lease of expired) {
-    attentionItems.push({
-      key: `expired-${lease.id}`,
-      emoji: "⚠️",
-      text: isEn
-        ? `${lease.tenant_full_name}'s lease expired`
-        : `El contrato de ${lease.tenant_full_name} venció`,
-      actions: [
-        {
-          label: isEn ? "Send renewal" : "Enviar renovación",
-          prompt: isEn
-            ? `Send a renewal offer to ${lease.tenant_full_name}`
-            : `Enviar oferta de renovación a ${lease.tenant_full_name}`,
-        },
-        {
-          label: isEn ? "Convert to month-to-month" : "Convertir a mes a mes",
-          prompt: isEn
-            ? `Convert ${lease.tenant_full_name}'s lease to month-to-month`
-            : `Convertir contrato de ${lease.tenant_full_name} a mes a mes`,
-        },
-      ],
-    });
-  }
-  for (const lease of expiringSoon) {
-    const d = daysRemaining(lease.ends_on);
-    attentionItems.push({
-      key: `expiring-${lease.id}`,
-      emoji: "📅",
-      text: isEn
-        ? `${lease.tenant_full_name}'s lease expires in ${d} days`
-        : `El contrato de ${lease.tenant_full_name} vence en ${d} días`,
-      actions: [
-        {
-          label: isEn ? "Set reminder" : "Poner recordatorio",
-          prompt: isEn
-            ? `Set a renewal reminder for ${lease.tenant_full_name}'s lease`
-            : `Poner recordatorio de renovación para ${lease.tenant_full_name}`,
-        },
-      ],
-    });
-  }
-  for (const lease of delinquent) {
-    attentionItems.push({
-      key: `delinquent-${lease.id}`,
-      emoji: "🔴",
-      text: isEn
-        ? `${lease.tenant_full_name} is behind on rent`
-        : `${lease.tenant_full_name} está atrasado en el pago`,
-      actions: [
-        {
-          label: isEn ? "Send reminder" : "Enviar recordatorio",
-          prompt: isEn
-            ? `Send a payment reminder to ${lease.tenant_full_name}`
-            : `Enviar recordatorio de pago a ${lease.tenant_full_name}`,
-        },
-      ],
-    });
-  }
-  if (vacantCount > 0) {
-    attentionItems.push({
-      key: "vacant",
-      emoji: "🏠",
-      text: isEn
-        ? `${vacantCount} vacant ${vacantCount === 1 ? "unit" : "units"}`
-        : `${vacantCount} ${vacantCount === 1 ? "unidad vacante" : "unidades vacantes"}`,
-      actions: [
-        {
-          label: isEn ? "View listings" : "Ver listados",
-          prompt: isEn ? "Show me my vacant units and listings" : "Muéstrame mis unidades vacantes y listados",
-        },
-      ],
-    });
-  }
-
-  // Collection progress (simple estimate: active = paid, delinquent = overdue)
-  const paidOnTime = active.length - delinquent.length;
-  const paidAmount = paidOnTime > 0 ? active.filter((r) => r.lease_status === "active").reduce((s, r) => s + r.monthly_rent, 0) : 0;
-  const progressPct = totalDue > 0 ? Math.round((paidAmount / totalDue) * 100) : 0;
-
-  // Month name
-  const monthName = new Date().toLocaleString(isEn ? "en-US" : "es-PY", { month: "long" }).toUpperCase();
-
-  // Chips
-  const firstTenant = rows[0]?.tenant_full_name;
-  const chips = isEn
-    ? [
-        firstTenant ? `Send a renewal offer to ${firstTenant}` : "Send a renewal offer",
-        "Draft a lease for a new tenant",
-        "Show me rent collection history",
-        "Which leases expire soon?",
-      ]
-    : [
-        firstTenant ? `Enviar oferta de renovación a ${firstTenant}` : "Enviar oferta de renovación",
-        "Redactar contrato para nuevo inquilino",
-        "Mostrar historial de cobros de alquiler",
-        "¿Qué contratos vencen pronto?",
-      ];
+  const blockedRenewals = overview.rows
+    .filter((row) => canOfferRenewal(row))
+    .slice(0, 3);
 
   return (
-    <div className="mx-auto flex min-h-[calc(100vh-7rem)] max-w-5xl flex-col px-4 py-8 sm:px-6">
-      <div className="space-y-8">
-        {/* Alex overview */}
-        <AlexOverview
-          activeCount={active.length}
-          delinquentCount={delinquent.length}
-          expiredLeases={expired}
-          isEn={isEn}
-          totalUnits={totalUnits}
-        />
-
-        {/* Rent Collection Metrics */}
-        <motion.div
-          animate={{ opacity: 1, y: 0 }}
-          className="glass-inner overflow-hidden rounded-2xl"
-          initial={{ opacity: 0, y: 8 }}
-          transition={{ delay: 0.1, duration: 0.35, ease: EASING }}
-        >
-          <div className="p-5">
-            <p className="text-muted-foreground/70 text-xs font-medium tracking-wider uppercase">
-              {monthName} {isEn ? "RENT COLLECTION" : "COBRO DE ALQUILER"}
-            </p>
-            <div className="mt-3 flex items-baseline gap-2">
-              <span className="font-semibold text-2xl tabular-nums tracking-tight text-foreground">
-                {fmtPyg(paidAmount, fmtLocale)}
-              </span>
-              <span className="text-muted-foreground/60 text-sm">
-                {isEn ? "of" : "de"} {fmtPyg(totalDue, fmtLocale)} {isEn ? "due" : "esperado"}
-              </span>
-            </div>
-            {/* Progress bar */}
-            <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-muted/60">
-              <motion.div
-                animate={{ width: `${progressPct}%` }}
-                className={cn(
-                  "h-full rounded-full",
-                  progressPct >= 80 ? "bg-emerald-500" : progressPct >= 50 ? "bg-amber-500" : "bg-red-500",
-                )}
-                initial={{ width: 0 }}
-                transition={{ delay: 0.3, duration: 0.6, ease: EASING }}
-              />
-            </div>
-            {/* Stats row */}
-            <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-              <MiniStat label={isEn ? "Paid on time" : "Pagados a tiempo"} value={String(paidOnTime)} tone="success" />
-              <MiniStat label={isEn ? "Late" : "Atrasados"} value="0" />
-              <MiniStat label={isEn ? "Overdue" : "Morosos"} value={String(delinquent.length)} tone={delinquent.length > 0 ? "danger" : undefined} />
-              <MiniStat label={isEn ? "Vacant" : "Vacantes"} value={String(vacantCount)} tone={vacantCount > 0 ? "warning" : undefined} />
-            </div>
-          </div>
-        </motion.div>
-
-        {/* Feedback */}
-        {errorLabel ? (
-          <div className="rounded-xl border border-red-500/30 bg-red-500/5 px-4 py-3 text-red-600 text-sm dark:text-red-400">
-            {errorLabel}
-          </div>
-        ) : null}
-        {successMessage ? (
-          <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 px-4 py-3 text-emerald-600 text-sm dark:text-emerald-400">
-            {successMessage}
-          </div>
-        ) : null}
-
-        {/* Needs Attention */}
-        {attentionItems.length > 0 && (
+    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
+      <PageScaffold
+        actions={
           <>
-            <SectionLabel>{isEn ? "NEEDS ATTENTION" : "REQUIERE ATENCIÓN"}</SectionLabel>
-            <div className="space-y-3">
-              {attentionItems.map((item) => (
-                <AttentionCard item={item} key={item.key} />
-              ))}
-            </div>
+            <Button asChild variant="outline">
+              <Link href={askAiHref}>{isEn ? "Ask AI" : "Preguntar a IA"}</Link>
+            </Button>
+            <Button onClick={() => setCreateOpen(true)} type="button">
+              {isEn ? "Create lease" : "Crear contrato"}
+            </Button>
           </>
-        )}
-
-        {/* Active Leases */}
-        <SectionLabel>{isEn ? "ACTIVE LEASES" : "CONTRATOS ACTIVOS"}</SectionLabel>
-
-        {rows.length > 0 ? (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {rows.map((row) => (
-              <LeaseCard
-                fmtLocale={fmtLocale}
-                isEn={isEn}
-                key={row.id}
-                propertyName={row.property_id ? propertyMap.get(row.property_id) : undefined}
-                row={row}
-                unitName={row.unit_id ? unitMap.get(row.unit_id) : undefined}
-              />
-            ))}
-            <AddLeaseCard isEn={isEn} />
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            <AddLeaseCard isEn={isEn} />
-          </div>
-        )}
-      </div>
-
-      {/* Chat + chips pinned to bottom */}
-      <div className="mt-auto space-y-4 pt-12">
-        <ChatInput isEn={isEn} placeholder={isEn ? "Ask about your leases..." : "Pregunta sobre tus contratos..."} />
-        <Chips chips={chips} />
-      </div>
-    </div>
-  );
-}
-
-/* ------------------------------------------------------------------ */
-/* AlexOverview                                                        */
-/* ------------------------------------------------------------------ */
-
-function AlexOverview({
-  activeCount,
-  delinquentCount,
-  expiredLeases,
-  totalUnits,
-  isEn,
-}: {
-  activeCount: number;
-  delinquentCount: number;
-  expiredLeases: LeaseRow[];
-  totalUnits: number;
-  isEn: boolean;
-}) {
-  let text: string;
-  if (activeCount === 0 && totalUnits === 0) {
-    text = isEn
-      ? "No leases yet. Tell me about a tenant and I\u2019ll help you draft a lease."
-      : "Sin contratos a\u00FAn. Cu\u00E9ntame sobre un inquilino y te ayudo a redactar un contrato.";
-  } else if (activeCount === 0) {
-    text = isEn
-      ? `You have **${totalUnits} ${totalUnits === 1 ? "unit" : "units"}** but no active leases. Let me help you draft one.`
-      : `Tienes **${totalUnits} ${totalUnits === 1 ? "unidad" : "unidades"}** pero sin contratos activos. Te ayudo a crear uno.`;
-  } else {
-    const parts: string[] = [];
-    if (isEn) {
-      parts.push(`You have **${activeCount} active ${activeCount === 1 ? "lease" : "leases"}**`);
-      if (delinquentCount === 0) {
-        parts.push(" \u2014 all tenants are current on rent.");
-      } else {
-        parts.push(`. **${delinquentCount} ${delinquentCount === 1 ? "tenant is" : "tenants are"} behind** on payments.`);
-      }
-      if (expiredLeases.length > 0) {
-        const name = expiredLeases[0].tenant_full_name;
-        parts.push(` ${name}\u2019s lease has expired \u2014 consider sending a renewal.`);
-      }
-    } else {
-      parts.push(`Tienes **${activeCount} ${activeCount === 1 ? "contrato activo" : "contratos activos"}**`);
-      if (delinquentCount === 0) {
-        parts.push(" \u2014 todos los inquilinos est\u00E1n al d\u00EDa.");
-      } else {
-        parts.push(`. **${delinquentCount} ${delinquentCount === 1 ? "inquilino est\u00E1 atrasado" : "inquilinos est\u00E1n atrasados"}** en pagos.`);
-      }
-      if (expiredLeases.length > 0) {
-        const name = expiredLeases[0].tenant_full_name;
-        parts.push(` El contrato de ${name} ha vencido \u2014 considera enviar una renovaci\u00F3n.`);
-      }
-    }
-    text = parts.join("");
-  }
-
-  return (
-    <div className="space-y-1">
-      <p className="font-semibold text-foreground text-sm">Alex</p>
-      <p className="text-muted-foreground text-sm leading-relaxed">{bold(text)}</p>
-    </div>
-  );
-}
-
-/* ------------------------------------------------------------------ */
-/* MiniStat                                                            */
-/* ------------------------------------------------------------------ */
-
-function MiniStat({ label, value, tone }: { label: string; value: string; tone?: "success" | "warning" | "danger" }) {
-  return (
-    <div>
-      <p
-        className={cn(
-          "font-semibold text-lg tabular-nums",
-          tone === "success" && "text-emerald-600 dark:text-emerald-400",
-          tone === "warning" && "text-amber-600 dark:text-amber-400",
-          tone === "danger" && "text-red-600 dark:text-red-400",
-          !tone && "text-foreground",
-        )}
+        }
+        description={
+          isEn
+            ? "Manage active terms, upcoming expirations, renewals, and collections context from one queue."
+            : "Gestiona vigencias, vencimientos, renovaciones y contexto de cobros desde una sola cola."
+        }
+        eyebrow={isEn ? "Leasing" : "Leasing"}
+        title={isEn ? "Leases" : "Contratos"}
       >
-        {value}
-      </p>
-      <p className="text-muted-foreground/60 text-xs">{label}</p>
-    </div>
-  );
-}
+        {error ? (
+          <div className="rounded-2xl border border-red-500/20 bg-red-500/5 px-4 py-3 text-red-600 text-sm">
+            {error}
+          </div>
+        ) : null}
+        {success ? (
+          <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/5 px-4 py-3 text-emerald-600 text-sm">
+            {success}
+          </div>
+        ) : null}
 
-/* ------------------------------------------------------------------ */
-/* AttentionCard                                                       */
-/* ------------------------------------------------------------------ */
+        <div
+          className="grid gap-4 md:grid-cols-4"
+          data-testid="leases-summary-band"
+        >
+          <SummaryCard
+            detail={
+              isEn ? "occupancy-bearing terms" : "contratos que ocupan unidades"
+            }
+            label={isEn ? "Active leases" : "Activos"}
+            value={String(overview.summary.active)}
+          />
+          <SummaryCard
+            detail={isEn ? "renewal follow-up window" : "ventana de renovación"}
+            label={isEn ? "Expiring in 60d" : "Vencen en 60d"}
+            value={String(overview.summary.expiring60d)}
+          />
+          <SummaryCard
+            detail={
+              isEn ? "collections need action" : "cobros requieren acción"
+            }
+            label={isEn ? "Delinquent" : "Morosos"}
+            value={String(overview.summary.delinquent)}
+          />
+          <SummaryCard
+            detail={isEn ? "monthly recurring due" : "recurrente mensual"}
+            label={isEn ? "Monthly recurring due" : "Recurrente mensual"}
+            value={formatCurrency(
+              overview.summary.monthlyRecurringDue,
+              "PYG",
+              locale,
+            )}
+          />
+        </div>
 
-function AttentionCard({
-  item,
-}: {
-  item: { emoji: string; text: string; actions: { label: string; prompt: string }[] };
-}) {
-  return (
-    <motion.div
-      animate={{ opacity: 1, y: 0 }}
-      className="glass-inner flex items-start gap-3 rounded-xl p-4"
-      initial={{ opacity: 0, y: 6 }}
-      transition={{ duration: 0.3, ease: EASING }}
-    >
-      <span className="mt-0.5 text-base">{item.emoji}</span>
-      <div className="min-w-0 flex-1">
-        <p className="text-foreground text-sm">{item.text}</p>
-        <div className="mt-2 flex flex-wrap gap-2">
-          {item.actions.map((a) => (
-            <Link
-              className="rounded-full border border-border/50 px-3 py-1 text-xs text-muted-foreground transition-colors hover:border-foreground/20 hover:text-foreground"
-              href={`/app/agents?prompt=${encodeURIComponent(a.prompt)}`}
-              key={a.label}
+        <ListDetailLayout
+          aside={
+            <ActionRail
+              description={
+                isEn
+                  ? "Use the queue for triage, then complete edits, renewals, documents, and collections drill-down from the lease workbench."
+                  : "Usa la cola para priorizar y completa ediciones, renovaciones, documentos y cobros desde el workbench del contrato."
+              }
+              title={isEn ? "Lease actions" : "Acciones"}
             >
-              {a.label}
-            </Link>
-          ))}
-        </div>
-      </div>
-    </motion.div>
-  );
-}
-
-/* ------------------------------------------------------------------ */
-/* LeaseCard                                                           */
-/* ------------------------------------------------------------------ */
-
-function LeaseCard({
-  row,
-  isEn,
-  fmtLocale,
-  propertyName,
-  unitName,
-}: {
-  row: LeaseRow;
-  isEn: boolean;
-  fmtLocale: string;
-  propertyName?: string;
-  unitName?: string;
-}) {
-  const [expanded, setExpanded] = useState(false);
-  const days = daysRemaining(row.ends_on);
-  const status = row.lease_status.toLowerCase();
-  const colorClass = STATUS_COLORS[status] ?? STATUS_COLORS.draft;
-
-  const location = [propertyName, unitName].filter(Boolean).join(" · ");
-
-  let daysLabel: string;
-  if (days === null) {
-    daysLabel = isEn ? "No end date" : "Sin fecha de fin";
-  } else if (days < 0) {
-    daysLabel = isEn ? `Expired ${Math.abs(days)}d ago` : `Venció hace ${Math.abs(days)}d`;
-  } else if (days === 0) {
-    daysLabel = isEn ? "Expires today" : "Vence hoy";
-  } else {
-    daysLabel = isEn ? `${days}d remaining` : `${days}d restantes`;
-  }
-
-  return (
-    <motion.div
-      animate={{ opacity: 1, y: 0 }}
-      className="glass-inner overflow-hidden rounded-2xl transition-shadow hover:shadow-[var(--shadow-soft)]"
-      initial={{ opacity: 0, y: 6 }}
-      transition={{ duration: 0.3, ease: EASING }}
-    >
-      <button
-        className="flex w-full items-start gap-3 p-4 text-left sm:p-5"
-        onClick={() => setExpanded((p) => !p)}
-        type="button"
-      >
-        {/* Initials avatar */}
-        <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-muted/60 font-medium text-foreground/70 text-xs">
-          {initials(row.tenant_full_name)}
-        </span>
-
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <h3 className="truncate font-medium text-foreground text-sm tracking-tight">
-              {row.tenant_full_name}
-            </h3>
-            <span className={cn("ml-auto shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide", colorClass)}>
-              {row.lease_status_label}
-            </span>
-          </div>
-
-          <p className="mt-0.5 truncate text-muted-foreground/60 text-xs">
-            {location || (isEn ? "No unit assigned" : "Sin unidad asignada")}
-          </p>
-
-          <div className="mt-2.5 flex items-center gap-3 text-xs">
-            <span className="font-medium tabular-nums text-foreground">
-              {fmtPyg(row.monthly_rent, fmtLocale)}<span className="text-muted-foreground/50">/mo</span>
-            </span>
-            <span className="text-muted-foreground/50">·</span>
-            <span className={cn(
-              "tabular-nums",
-              days !== null && days <= 0 ? "text-red-600 dark:text-red-400" : days !== null && days <= 30 ? "text-amber-600 dark:text-amber-400" : "text-muted-foreground",
-            )}>
-              {daysLabel}
-            </span>
-          </div>
-        </div>
-      </button>
-
-      <AnimatePresence initial={false}>
-        {expanded && (
-          <motion.div
-            animate={{ height: "auto", opacity: 1 }}
-            className="overflow-hidden"
-            exit={{ height: 0, opacity: 0 }}
-            initial={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.25, ease: EASING }}
-          >
-            <div className="border-border/40 border-t px-4 py-4 sm:px-5">
-              {/* Lease terms grid */}
-              <p className="mb-2 text-muted-foreground/50 text-[10px] font-medium tracking-wider uppercase">
-                {isEn ? "LEASE TERMS" : "TÉRMINOS DEL CONTRATO"}
-              </p>
-              <div className="grid grid-cols-2 gap-3 text-xs">
-                <Stat label={isEn ? "Start" : "Inicio"} value={row.starts_on || "—"} />
-                <Stat label={isEn ? "End" : "Fin"} value={row.ends_on || "—"} />
-                <Stat label={isEn ? "Monthly rent" : "Alquiler mensual"} value={fmtPyg(row.monthly_rent, fmtLocale)} />
-                <Stat label={isEn ? "Security deposit" : "Depósito"} value={fmtPyg(row.security_deposit, fmtLocale)} />
-                <Stat label={isEn ? "IVA" : "IVA"} value={fmtPyg(row.tax_iva, fmtLocale)} />
-                <Stat label={isEn ? "Service fee" : "Tarifa de servicio"} value={fmtPyg(row.service_fee_flat, fmtLocale)} />
-              </div>
-
-              {/* Tenant contact */}
-              {(row.tenant_email || row.tenant_phone_e164) && (
-                <div className="mt-4">
-                  <p className="mb-2 text-muted-foreground/50 text-[10px] font-medium tracking-wider uppercase">
-                    {isEn ? "TENANT CONTACT" : "CONTACTO DEL INQUILINO"}
+              <Button
+                className="w-full justify-start"
+                onClick={() => setCreateOpen(true)}
+                type="button"
+              >
+                {isEn ? "Create lease" : "Crear contrato"}
+              </Button>
+              <Button
+                asChild
+                className="w-full justify-start"
+                variant="outline"
+              >
+                <Link href="/module/collections">
+                  {isEn ? "Open Collections" : "Abrir cobros"}
+                </Link>
+              </Button>
+              <Button
+                asChild
+                className="w-full justify-start"
+                variant="outline"
+              >
+                <Link href="/module/leases?view=expiring_60d">
+                  {isEn ? "Review expiring leases" : "Revisar vencimientos"}
+                </Link>
+              </Button>
+              {blockedRenewals.length > 0 ? (
+                <div className="space-y-2 rounded-2xl border border-border/60 bg-background/70 p-3">
+                  <p className="font-medium text-sm">
+                    {isEn ? "Ready for renewal offers" : "Listos para renovar"}
                   </p>
-                  <div className="space-y-1 text-xs text-muted-foreground">
-                    {row.tenant_email && <p>{row.tenant_email}</p>}
-                    {row.tenant_phone_e164 && <p>{row.tenant_phone_e164}</p>}
+                  {blockedRenewals.map((row) => (
+                    <Link
+                      className="block text-muted-foreground text-sm hover:text-foreground"
+                      href={`${row.primaryHref}?return_to=${encodeURIComponent(returnPath)}`}
+                      key={row.id}
+                    >
+                      {row.tenantName}
+                    </Link>
+                  ))}
+                </div>
+              ) : null}
+            </ActionRail>
+          }
+          primary={
+            <div className="space-y-4">
+              <Card className="border border-border/60 bg-card/80 shadow-sm">
+                <CardContent className="space-y-4 p-5">
+                  <div className="grid gap-4 md:grid-cols-6">
+                    <Field
+                      htmlFor="leases-search"
+                      label={isEn ? "Search" : "Buscar"}
+                      className="md:col-span-2"
+                    >
+                      <Input
+                        id="leases-search"
+                        onChange={(event) => setQuery(event.target.value)}
+                        placeholder={
+                          isEn
+                            ? "Tenant, property, unit"
+                            : "Inquilino, propiedad, unidad"
+                        }
+                        value={query}
+                      />
+                    </Field>
+                    <Field
+                      htmlFor="leases-view"
+                      label={isEn ? "View" : "Vista"}
+                    >
+                      <Select
+                        defaultValue={initialFilters.view}
+                        id="leases-view"
+                        onChange={(event) =>
+                          updateParams({
+                            view: event.target.value || null,
+                            offset: null,
+                          })
+                        }
+                      >
+                        <option value="all">{isEn ? "All" : "Todos"}</option>
+                        <option value="drafts">
+                          {isEn ? "Drafts" : "Borradores"}
+                        </option>
+                        <option value="expiring_60d">
+                          {isEn ? "Expiring in 60d" : "Vencen en 60d"}
+                        </option>
+                        <option value="delinquent">
+                          {isEn ? "Delinquent" : "Morosos"}
+                        </option>
+                        <option value="renewal_offered">
+                          {isEn ? "Renewal offered" : "Renovación ofrecida"}
+                        </option>
+                      </Select>
+                    </Field>
+                    <Field
+                      htmlFor="leases-status"
+                      label={isEn ? "Lease status" : "Estado"}
+                    >
+                      <Select
+                        defaultValue={initialFilters.leaseStatus}
+                        id="leases-status"
+                        onChange={(event) =>
+                          updateParams({
+                            lease_status: event.target.value || null,
+                            offset: null,
+                          })
+                        }
+                      >
+                        <option value="">
+                          {isEn ? "All statuses" : "Todos"}
+                        </option>
+                        <option value="draft">
+                          {isEn ? "Draft" : "Borrador"}
+                        </option>
+                        <option value="active">
+                          {isEn ? "Active" : "Activo"}
+                        </option>
+                        <option value="delinquent">
+                          {isEn ? "Delinquent" : "Moroso"}
+                        </option>
+                        <option value="terminated">
+                          {isEn ? "Terminated" : "Terminado"}
+                        </option>
+                        <option value="completed">
+                          {isEn ? "Completed" : "Completado"}
+                        </option>
+                      </Select>
+                    </Field>
+                    <Field
+                      htmlFor="leases-renewal"
+                      label={isEn ? "Renewal" : "Renovación"}
+                    >
+                      <Select
+                        defaultValue={initialFilters.renewalStatus}
+                        id="leases-renewal"
+                        onChange={(event) =>
+                          updateParams({
+                            renewal_status: event.target.value || null,
+                            offset: null,
+                          })
+                        }
+                      >
+                        <option value="">
+                          {isEn ? "All renewal states" : "Todas"}
+                        </option>
+                        <option value="pending">
+                          {isEn ? "Pending" : "Pendiente"}
+                        </option>
+                        <option value="offered">
+                          {isEn ? "Offered" : "Ofrecida"}
+                        </option>
+                        <option value="accepted">
+                          {isEn ? "Accepted" : "Aceptada"}
+                        </option>
+                        <option value="rejected">
+                          {isEn ? "Rejected" : "Rechazada"}
+                        </option>
+                        <option value="expired">
+                          {isEn ? "Expired" : "Vencida"}
+                        </option>
+                      </Select>
+                    </Field>
+                    <Field
+                      htmlFor="leases-sort"
+                      label={isEn ? "Sort" : "Orden"}
+                    >
+                      <Select
+                        defaultValue={initialFilters.sort}
+                        id="leases-sort"
+                        onChange={(event) =>
+                          updateParams({ sort: event.target.value || null })
+                        }
+                      >
+                        <option value="end_asc">
+                          {isEn ? "End date" : "Fecha fin"}
+                        </option>
+                        <option value="tenant_asc">
+                          {isEn ? "Tenant A-Z" : "Inquilino A-Z"}
+                        </option>
+                        <option value="rent_desc">
+                          {isEn ? "Rent high-low" : "Renta mayor-menor"}
+                        </option>
+                        <option value="updated_desc">
+                          {isEn ? "Updated" : "Actualizado"}
+                        </option>
+                      </Select>
+                    </Field>
+                  </div>
+
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <Field
+                      htmlFor="leases-property"
+                      label={isEn ? "Property" : "Propiedad"}
+                    >
+                      <Select
+                        defaultValue={initialFilters.propertyId}
+                        id="leases-property"
+                        onChange={(event) =>
+                          updateParams({
+                            property_id: event.target.value || null,
+                            unit_id: null,
+                            offset: null,
+                          })
+                        }
+                      >
+                        <option value="">
+                          {isEn ? "All properties" : "Todas"}
+                        </option>
+                        {propertyOptions.map((property) => (
+                          <option key={property.id} value={property.id}>
+                            {property.label}
+                          </option>
+                        ))}
+                      </Select>
+                    </Field>
+                    <Field
+                      htmlFor="leases-unit"
+                      label={isEn ? "Unit" : "Unidad"}
+                    >
+                      <Select
+                        defaultValue={initialFilters.unitId}
+                        id="leases-unit"
+                        onChange={(event) =>
+                          updateParams({
+                            unit_id: event.target.value || null,
+                            offset: null,
+                          })
+                        }
+                      >
+                        <option value="">{isEn ? "All units" : "Todas"}</option>
+                        {unitOptions.map((unit) => (
+                          <option key={unit.id} value={unit.id}>
+                            {unit.label}
+                          </option>
+                        ))}
+                      </Select>
+                    </Field>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {overview.rows.length === 0 ? (
+                <Card
+                  className="border border-dashed border-border/70 bg-card/70 shadow-sm"
+                  data-testid="leases-empty-state"
+                >
+                  <CardContent className="space-y-4 p-6">
+                    <div className="space-y-1">
+                      <h2 className="font-semibold text-xl">
+                        {isEn
+                          ? "No leases in this view"
+                          : "No hay contratos en esta vista"}
+                      </h2>
+                      <p className="text-muted-foreground text-sm">
+                        {isEn
+                          ? "Start with a unit-backed lease so collections, renewals, and property context stay connected."
+                          : "Comienza con un contrato ligado a una unidad para mantener conectados cobros, renovaciones y contexto del portafolio."}
+                      </p>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button onClick={() => setCreateOpen(true)} type="button">
+                        {isEn ? "Create lease" : "Crear contrato"}
+                      </Button>
+                      <Button asChild variant="outline">
+                        <Link href="/module/units">
+                          {isEn ? "Open units" : "Abrir unidades"}
+                        </Link>
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              ) : (
+                <div
+                  className="overflow-hidden rounded-2xl border border-border/60 bg-card/80 shadow-sm"
+                  data-testid="leases-queue-table"
+                >
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full divide-y divide-border/60 text-sm">
+                      <thead className="bg-muted/30">
+                        <tr className="text-left text-muted-foreground">
+                          <th className="px-4 py-3 font-medium">
+                            {isEn ? "Tenant" : "Inquilino"}
+                          </th>
+                          <th className="px-4 py-3 font-medium">
+                            {isEn ? "Occupancy" : "Ocupación"}
+                          </th>
+                          <th className="px-4 py-3 font-medium">
+                            {isEn ? "Status" : "Estado"}
+                          </th>
+                          <th className="px-4 py-3 font-medium">
+                            {isEn ? "Term" : "Vigencia"}
+                          </th>
+                          <th className="px-4 py-3 font-medium">
+                            {isEn ? "Monthly" : "Mensual"}
+                          </th>
+                          <th className="px-4 py-3 font-medium">
+                            {isEn ? "Collections" : "Cobros"}
+                          </th>
+                          <th className="px-4 py-3 font-medium">
+                            {isEn ? "Documents" : "Documentos"}
+                          </th>
+                          <th className="px-4 py-3 font-medium">
+                            {isEn ? "Actions" : "Acciones"}
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-border/60">
+                        {overview.rows.map((row) => {
+                          const nextStatus = statusAction(row);
+                          const detailHref = `${row.primaryHref}?return_to=${encodeURIComponent(
+                            returnPath,
+                          )}`;
+                          return (
+                            <tr key={row.id} className="align-top">
+                              <td className="px-4 py-4">
+                                <div className="space-y-1">
+                                  <Link
+                                    className="font-medium hover:underline"
+                                    href={detailHref}
+                                  >
+                                    {row.tenantName}
+                                  </Link>
+                                  <p className="text-muted-foreground text-xs">
+                                    {row.tenantEmail ||
+                                      row.tenantPhoneE164 ||
+                                      "—"}
+                                  </p>
+                                </div>
+                              </td>
+                              <td className="px-4 py-4">
+                                <div className="space-y-1">
+                                  <p>
+                                    {[row.propertyName, row.unitName]
+                                      .filter(Boolean)
+                                      .join(" · ") || "—"}
+                                  </p>
+                                  {(row.spaceName || row.bedCode) && (
+                                    <p className="text-muted-foreground text-xs">
+                                      {[row.spaceName, row.bedCode]
+                                        .filter(Boolean)
+                                        .join(" · ")}
+                                    </p>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="px-4 py-4">
+                                <div className="flex flex-wrap gap-2">
+                                  <StatusBadge
+                                    label={row.leaseStatusLabel}
+                                    value={row.leaseStatus}
+                                  />
+                                  {row.renewalStatus ? (
+                                    <StatusBadge
+                                      label={row.renewalStatus}
+                                      value={row.renewalStatus}
+                                    />
+                                  ) : null}
+                                </div>
+                              </td>
+                              <td className="px-4 py-4">
+                                <div className="space-y-1">
+                                  <p>{formatDate(row.startsOn, locale)}</p>
+                                  <p className="text-muted-foreground text-xs">
+                                    {formatDate(row.endsOn, locale)}
+                                  </p>
+                                </div>
+                              </td>
+                              <td className="px-4 py-4">
+                                {formatCurrency(
+                                  row.monthlyRecurringTotal,
+                                  row.currency,
+                                  locale,
+                                )}
+                              </td>
+                              <td className="px-4 py-4">
+                                <div className="space-y-1">
+                                  <StatusBadge
+                                    label={row.collectionState}
+                                    value={row.collectionState}
+                                  />
+                                  <p className="text-muted-foreground text-xs">
+                                    {row.overdueCount > 0
+                                      ? `${row.overdueCount} ${isEn ? "overdue" : "vencidos"}`
+                                      : formatCurrency(
+                                          row.unpaidAmount,
+                                          row.currency,
+                                          locale,
+                                        )}
+                                  </p>
+                                </div>
+                              </td>
+                              <td className="px-4 py-4">
+                                {row.documentsCount}
+                              </td>
+                              <td className="px-4 py-4">
+                                <div className="flex flex-wrap gap-2">
+                                  <Button asChild size="sm" variant="outline">
+                                    <Link href={detailHref}>
+                                      {isEn ? "Open" : "Abrir"}
+                                    </Link>
+                                  </Button>
+                                  {nextStatus ? (
+                                    <form action={setLeaseStatusAction}>
+                                      <input
+                                        name="lease_id"
+                                        type="hidden"
+                                        value={row.id}
+                                      />
+                                      <input
+                                        name="lease_status"
+                                        type="hidden"
+                                        value={nextStatus.status}
+                                      />
+                                      <input
+                                        name="next"
+                                        type="hidden"
+                                        value={returnPath}
+                                      />
+                                      <Button
+                                        size="sm"
+                                        type="submit"
+                                        variant="ghost"
+                                      >
+                                        {isEn
+                                          ? nextStatus.label
+                                          : nextStatus.label}
+                                      </Button>
+                                    </form>
+                                  ) : null}
+                                  {canOfferRenewal(row) ? (
+                                    <form action={sendRenewalOfferAction}>
+                                      <input
+                                        name="lease_id"
+                                        type="hidden"
+                                        value={row.id}
+                                      />
+                                      <input
+                                        name="next"
+                                        type="hidden"
+                                        value={returnPath}
+                                      />
+                                      <Button
+                                        size="sm"
+                                        type="submit"
+                                        variant="ghost"
+                                      >
+                                        {isEn
+                                          ? "Send renewal offer"
+                                          : "Enviar oferta"}
+                                      </Button>
+                                    </form>
+                                  ) : null}
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
                   </div>
                 </div>
               )}
-
-              {/* Notes */}
-              {row.notes && (
-                <div className="mt-4">
-                  <p className="mb-2 text-muted-foreground/50 text-[10px] font-medium tracking-wider uppercase">
-                    {isEn ? "NOTES" : "NOTAS"}
-                  </p>
-                  <p className="text-muted-foreground text-xs leading-relaxed">{row.notes}</p>
-                </div>
-              )}
-
-              {/* Action buttons */}
-              <div className="mt-4 flex flex-wrap gap-2">
-                <ActionChip
-                  label={isEn ? "Send renewal offer" : "Enviar renovación"}
-                  prompt={isEn ? `Send a renewal offer to ${row.tenant_full_name}` : `Enviar oferta de renovación a ${row.tenant_full_name}`}
-                />
-                <ActionChip
-                  label={isEn ? "Message tenant" : "Enviar mensaje"}
-                  prompt={isEn ? `Send a message to ${row.tenant_full_name}` : `Enviar mensaje a ${row.tenant_full_name}`}
-                />
-                <ActionChip
-                  label={isEn ? "Record payment" : "Registrar pago"}
-                  prompt={isEn ? `Record a rent payment for ${row.tenant_full_name}` : `Registrar pago de alquiler de ${row.tenant_full_name}`}
-                />
-                <ActionChip
-                  label={isEn ? "Generate document" : "Generar documento"}
-                  prompt={isEn ? `Generate a lease document for ${row.tenant_full_name}` : `Generar documento de contrato para ${row.tenant_full_name}`}
-                />
-              </div>
             </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </motion.div>
-  );
-}
+          }
+        />
+      </PageScaffold>
 
-/* ------------------------------------------------------------------ */
-/* Stat                                                                */
-/* ------------------------------------------------------------------ */
-
-function Stat({ label, value, tone }: { label: string; value: string; tone?: "success" | "warning" | "danger" }) {
-  return (
-    <div>
-      <p className="text-muted-foreground/60">{label}</p>
-      <p
-        className={cn(
-          "font-medium tabular-nums",
-          tone === "success" && "text-emerald-600 dark:text-emerald-400",
-          tone === "warning" && "text-amber-600 dark:text-amber-400",
-          tone === "danger" && "text-red-600 dark:text-red-400",
-          !tone && "text-foreground",
-        )}
-      >
-        {value}
-      </p>
-    </div>
-  );
-}
-
-/* ------------------------------------------------------------------ */
-/* ActionChip                                                          */
-/* ------------------------------------------------------------------ */
-
-function ActionChip({ label, prompt }: { label: string; prompt: string }) {
-  return (
-    <Link
-      className="rounded-full border border-border/50 px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:border-foreground/20 hover:text-foreground"
-      href={`/app/agents?prompt=${encodeURIComponent(prompt)}`}
-    >
-      {label}
-    </Link>
-  );
-}
-
-/* ------------------------------------------------------------------ */
-/* AddLeaseCard                                                        */
-/* ------------------------------------------------------------------ */
-
-function AddLeaseCard({ isEn }: { isEn: boolean }) {
-  const router = useRouter();
-
-  return (
-    <button
-      className="group flex min-h-[120px] flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-border/40 p-6 transition-colors hover:border-border/70 hover:bg-muted/10"
-      onClick={() =>
-        router.push(
-          `/app/agents?prompt=${encodeURIComponent(isEn ? "Draft a lease for a new tenant" : "Redactar un contrato para nuevo inquilino")}`,
-        )
-      }
-      type="button"
-    >
-      <span className="text-muted-foreground/40 text-xl transition-colors group-hover:text-muted-foreground/60">+</span>
-      <span className="font-medium text-muted-foreground/50 text-sm transition-colors group-hover:text-muted-foreground/70">
-        {isEn ? "Create a new lease" : "Crear un nuevo contrato"}
-      </span>
-      <span className="text-muted-foreground/30 text-xs transition-colors group-hover:text-muted-foreground/50">
-        {isEn ? "Tell Alex about your tenant" : "Cuéntale a Alex sobre tu inquilino"}
-      </span>
-    </button>
-  );
-}
-
-/* ------------------------------------------------------------------ */
-/* ChatInput                                                           */
-/* ------------------------------------------------------------------ */
-
-function ChatInput({ isEn, placeholder }: { isEn: boolean; placeholder: string }) {
-  const router = useRouter();
-  const [value, setValue] = useState("");
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const trimmed = value.trim();
-    if (!trimmed) return;
-    router.push(`/app/agents?prompt=${encodeURIComponent(trimmed)}`);
-  };
-
-  return (
-    <form className="relative" onSubmit={handleSubmit}>
-      <input
-        className={cn(
-          "h-12 w-full rounded-full border border-border/50 bg-background pr-12 pl-5 text-sm",
-          "placeholder:text-muted-foreground/40",
-          "focus:border-primary/50 focus:outline-none focus:ring-1 focus:ring-primary/20",
-          "transition-colors",
-        )}
-        onChange={(e) => setValue(e.target.value)}
-        placeholder={placeholder}
-        type="text"
-        value={value}
+      <LeaseFormSheet
+        defaultPropertyId={initialFilters.propertyId || null}
+        editing={null}
+        isEn={isEn}
+        nextPath={returnPath}
+        onOpenChange={setCreateOpen}
+        open={createOpen}
+        orgId={orgId}
+        propertyOptions={propertyOptions.map((property) => ({
+          id: property.id,
+          label: property.label,
+        }))}
+        unitOptions={units.map((unit) => ({
+          id: asString(unit.id),
+          label: asString(unit.name) || asString(unit.code),
+          propertyId: asString(unit.property_id),
+        }))}
       />
-      <button
-        className={cn(
-          "absolute top-1/2 right-1.5 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full",
-          "bg-foreground text-background transition-opacity",
-          value.trim() ? "opacity-100" : "opacity-30",
-        )}
-        disabled={!value.trim()}
-        type="submit"
-      >
-        <Icon icon={ArrowRight01Icon} size={16} />
-      </button>
-    </form>
-  );
-}
-
-/* ------------------------------------------------------------------ */
-/* Chips                                                               */
-/* ------------------------------------------------------------------ */
-
-function Chips({ chips }: { chips: string[] }) {
-  return (
-    <motion.div
-      animate={{ opacity: 1, y: 0 }}
-      className="flex flex-wrap gap-2"
-      initial={{ opacity: 0, y: 8 }}
-      transition={{ delay: 0.3, duration: 0.4, ease: EASING }}
-    >
-      {chips.map((chip, i) => (
-        <motion.div
-          animate={{ opacity: 1, scale: 1 }}
-          initial={{ opacity: 0, scale: 0.95 }}
-          key={chip}
-          transition={{ delay: 0.35 + i * 0.04, duration: 0.25, ease: EASING }}
-        >
-          <Link
-            className="glass-inner inline-block rounded-full px-3.5 py-2 text-[12.5px] text-muted-foreground/70 transition-all hover:text-foreground hover:shadow-sm"
-            href={`/app/agents?prompt=${encodeURIComponent(chip)}`}
-          >
-            {chip}
-          </Link>
-        </motion.div>
-      ))}
-    </motion.div>
+    </div>
   );
 }

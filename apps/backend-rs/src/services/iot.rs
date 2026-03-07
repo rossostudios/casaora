@@ -345,6 +345,26 @@ pub async fn tool_process_sensor_event(
                 .execute(pool)
                 .await;
                 ticket_created = true;
+
+                // Fire iot_alert workflow trigger for agent handling
+                let mut ctx = serde_json::Map::new();
+                ctx.insert("device_id".to_string(), json!(device_id));
+                ctx.insert("device_name".to_string(), json!(&dev_name));
+                ctx.insert("device_type".to_string(), json!(&dev_type));
+                ctx.insert("severity".to_string(), json!(severity));
+                ctx.insert("event_type".to_string(), json!(event_type));
+                ctx.insert("description".to_string(), json!(description));
+                if let Some(uid) = &dev_unit {
+                    ctx.insert("unit_id".to_string(), json!(uid));
+                }
+                crate::services::workflows::fire_trigger(
+                    pool,
+                    org_id,
+                    "iot_alert",
+                    &ctx,
+                    state.config.workflow_engine_mode,
+                )
+                .await;
             }
         }
     }

@@ -1,160 +1,101 @@
-import dynamic from "next/dynamic";
-import { Suspense } from "react";
 import { OrgAccessChanged } from "@/components/shell/org-access-changed";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { fetchList } from "@/lib/api";
 import { errorMessage, isOrgMembershipError } from "@/lib/errors";
 import { getActiveLocale } from "@/lib/i18n/server";
 import { safeDecode } from "@/lib/module-helpers";
 import { getActiveOrgId } from "@/lib/org";
 import { ApiErrorCard, NoOrgCard } from "@/lib/page-helpers";
-
-const ApplicationsManager = dynamic(() =>
-  import("./applications-manager").then((m) => m.ApplicationsManager)
-);
-
-const LeasingPipeline = dynamic(() =>
-  import("./leasing-pipeline").then((m) => m.LeasingPipeline)
-);
+import { fetchApplicationsOverview } from "@/lib/applications-overview";
+import { fetchList } from "@/lib/api";
+import { ApplicationsManager } from "./applications-manager";
 
 type PageProps = {
-  searchParams: Promise<{ success?: string; error?: string }>;
+  searchParams: Promise<{
+    q?: string;
+    status?: string;
+    assigned_user_id?: string;
+    listing_id?: string;
+    property_id?: string;
+    qualification_band?: string;
+    response_sla_status?: string;
+    source?: string;
+    view?: string;
+    sort?: string;
+    limit?: string;
+    offset?: string;
+    success?: string;
+    error?: string;
+  }>;
 };
 
-export default async function ApplicationsModulePage({
-  searchParams,
-}: PageProps) {
-  const locale = await getActiveLocale();
+export default async function ApplicationsModulePage({ searchParams }: PageProps) {
+  const [locale, orgId, params] = await Promise.all([
+    getActiveLocale(),
+    getActiveOrgId(),
+    searchParams,
+  ]);
   const isEn = locale === "en-US";
-
-  const orgId = await getActiveOrgId();
-  const { success, error } = await searchParams;
-
-  const successLabel = success ? safeDecode(success).replaceAll("-", " ") : "";
-  const errorLabel = error ? safeDecode(error) : "";
 
   if (!orgId) {
     return <NoOrgCard isEn={isEn} resource={["applications", "aplicaciones"]} />;
   }
 
-  let applications: Record<string, unknown>[] = [];
-  let members: Record<string, unknown>[] = [];
-  let messageTemplates: Record<string, unknown>[] = [];
-  let submissionAlerts: Record<string, unknown>[] = [];
-  let leasingConversations: Record<string, unknown>[] = [];
-  try {
-    const [applicationRows, memberRows, templateRows, alertRows, convRows] =
-      await Promise.all([
-        fetchList("/applications", orgId, 250),
-        fetchList(`/organizations/${orgId}/members`, orgId, 150),
-        fetchList("/message-templates", orgId, 120),
-        fetchList("/integration-events", orgId, 100, {
-          provider: "alerting",
-          event_type: "application_submit_failed",
-          status: "failed",
-        }),
-        fetchList("/leasing-conversations", orgId, 200).catch(() => []),
-      ]);
+  const successMessage = params.success
+    ? safeDecode(params.success).replaceAll("-", " ")
+    : "";
+  const errorLabel = params.error ? safeDecode(params.error) : "";
 
-    applications = applicationRows as Record<string, unknown>[];
-    members = memberRows as Record<string, unknown>[];
-    messageTemplates = templateRows as Record<string, unknown>[];
-    submissionAlerts = alertRows as Record<string, unknown>[];
-    leasingConversations = convRows as Record<string, unknown>[];
+  try {
+    const [overview, members, messageTemplates] = await Promise.all([
+      fetchApplicationsOverview({
+        org_id: orgId,
+        q: params.q,
+        status: params.status,
+        assigned_user_id: params.assigned_user_id,
+        listing_id: params.listing_id,
+        property_id: params.property_id,
+        qualification_band: params.qualification_band,
+        response_sla_status: params.response_sla_status,
+        source: params.source,
+        view: params.view,
+        sort: params.sort,
+        limit: params.limit ? Number(params.limit) : 50,
+        offset: params.offset ? Number(params.offset) : 0,
+      }),
+      fetchList(`/organizations/${orgId}/members`, orgId, 150).catch(
+        () => [] as unknown[]
+      ),
+      fetchList("/message-templates", orgId, 120).catch(() => [] as unknown[]),
+    ]);
+
+    return (
+      <ApplicationsManager
+        error={errorLabel}
+        initialFilters={{
+          assignedUserId: params.assigned_user_id ?? "",
+          limit: params.limit ? Number(params.limit) : 50,
+          listingId: params.listing_id ?? "",
+          offset: params.offset ? Number(params.offset) : 0,
+          propertyId: params.property_id ?? "",
+          q: params.q ?? "",
+          qualificationBand: params.qualification_band ?? "",
+          responseSlaStatus: params.response_sla_status ?? "",
+          sort: params.sort ?? "last_touch_desc",
+          source: params.source ?? "",
+          status: params.status ?? "",
+          view: params.view ?? "all",
+        }}
+        members={members as Record<string, unknown>[]}
+        messageTemplates={messageTemplates as Record<string, unknown>[]}
+        orgId={orgId}
+        overview={overview}
+        success={successMessage}
+      />
+    );
   } catch (err) {
     const message = errorMessage(err);
     if (isOrgMembershipError(message)) {
       return <OrgAccessChanged orgId={orgId} />;
     }
-
     return <ApiErrorCard isEn={isEn} message={message} />;
   }
-
-  return (
-    <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-2xl">
-            {isEn ? "Applications pipeline" : "Pipeline de aplicaciones"}
-          </CardTitle>
-          <CardDescription>
-            {isEn
-              ? "Run qualification workflow and convert qualified applicants to leases."
-              : "Ejecuta calificación y convierte solicitantes calificados a contratos."}
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {errorLabel ? (
-            <Alert variant="destructive">
-              <AlertTitle>
-                {isEn
-                  ? "Could not complete request"
-                  : "No se pudo completar la solicitud"}
-              </AlertTitle>
-              <AlertDescription>{errorLabel}</AlertDescription>
-            </Alert>
-          ) : null}
-          {successLabel ? (
-            <Alert variant="success">
-              <AlertTitle>
-                {isEn ? "Success" : "Éxito"}: {successLabel}
-              </AlertTitle>
-            </Alert>
-          ) : null}
-          {submissionAlerts.length > 0 ? (
-            <Alert variant="warning">
-              <AlertTitle>
-                {isEn
-                  ? `Submission alerts detected: ${submissionAlerts.length}`
-                  : `Alertas de envío detectadas: ${submissionAlerts.length}`}
-              </AlertTitle>
-              <AlertDescription className="mt-1 text-xs">
-                {isEn
-                  ? "Review Channel Events for failed marketplace application submissions."
-                  : "Revisa Eventos de canales para envíos fallidos de aplicaciones del marketplace."}
-              </AlertDescription>
-            </Alert>
-          ) : null}
-
-          <Suspense fallback={null}>
-            <ApplicationsManager
-              applications={applications}
-              members={members}
-              messageTemplates={messageTemplates}
-            />
-          </Suspense>
-        </CardContent>
-      </Card>
-
-      {/* Leasing Pipeline Kanban */}
-      <Card>
-        <CardHeader>
-          <CardTitle>
-            {isEn ? "AI Leasing Pipeline" : "Pipeline de Leasing IA"}
-          </CardTitle>
-          <CardDescription>
-            {isEn
-              ? "Track AI-driven leasing conversations through the qualification funnel. Leads are auto-qualified, matched to units, and scheduled for tours."
-              : "Rastrea las conversaciones de leasing impulsadas por IA a través del embudo de calificación. Los prospectos se califican automáticamente, se emparejan con unidades y se programan para tours."}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Suspense fallback={null}>
-            <LeasingPipeline
-              initialConversations={leasingConversations as never[]}
-              locale={locale}
-              orgId={orgId}
-            />
-          </Suspense>
-        </CardContent>
-      </Card>
-    </div>
-  );
 }

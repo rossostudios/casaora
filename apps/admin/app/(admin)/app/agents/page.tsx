@@ -1,12 +1,18 @@
 import { currentUser } from "@clerk/nextjs/server";
 import { ChatThread } from "@/components/agent/chat-thread";
+import { parseAIContext } from "@/lib/ai-context";
 import { fetchJson } from "@/lib/api";
 import { NoOrgCard } from "@/lib/page-helpers";
 import { getActiveLocale } from "@/lib/i18n/server";
 import { getActiveOrgId } from "@/lib/org";
 
 type PageProps = {
-  searchParams: Promise<{ new?: string; agent?: string; prompt?: string }>;
+  searchParams: Promise<{
+    new?: string;
+    prompt?: string;
+    q?: string;
+    context?: string;
+  }>;
 };
 
 export default async function AgentsPage({ searchParams }: PageProps) {
@@ -17,17 +23,14 @@ export default async function AgentsPage({ searchParams }: PageProps) {
   ]);
   const isEn = locale === "en-US";
   const params = await searchParams;
+  const aiContext =
+    typeof params.context === "string" ? parseAIContext(params.context) : null;
 
   if (!orgId) {
     return (
       <NoOrgCard isEn={isEn} resource={["agents", "agentes"]} />
     );
   }
-
-  const initialAgentSlug =
-    typeof params.agent === "string" && params.agent.trim()
-      ? params.agent.trim()
-      : "supervisor";
 
   let dashboardStats: Record<string, unknown> = {};
   try {
@@ -43,14 +46,17 @@ export default async function AgentsPage({ searchParams }: PageProps) {
     <div className="-m-3 h-[calc(100vh-3.5rem)] sm:-m-4 lg:-m-5 xl:-m-7">
       <ChatThread
         dashboardStats={dashboardStats}
-        defaultAgentSlug={initialAgentSlug}
+        defaultAgentSlug="supervisor"
         firstName={user?.firstName ?? undefined}
         freshKey={typeof params.new === "string" ? params.new : undefined}
         initialPrompt={
           typeof params.prompt === "string" && params.prompt.trim()
             ? params.prompt.trim()
-            : undefined
+            : typeof params.q === "string" && params.q.trim()
+              ? params.q.trim()
+              : aiContext?.draftPrompt
         }
+        aiContext={aiContext}
         locale={locale}
         mode="hero"
         orgId={orgId}

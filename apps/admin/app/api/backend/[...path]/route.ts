@@ -1,5 +1,12 @@
 import { NextResponse } from "next/server";
-import { getServerAccessToken } from "@/lib/auth/server-access-token";
+import {
+  getServerAccessTokenResult,
+  shouldThrowAdminAuthConfigurationError,
+} from "@/lib/auth/server-access-token";
+import {
+  createAdminAuthConfigurationError,
+  isAdminAuthConfigurationError,
+} from "@/lib/errors";
 import { SERVER_API_BASE_URL } from "@/lib/server-api-base";
 
 const PROXY_TIMEOUT_MS = 30_000;
@@ -60,7 +67,19 @@ async function proxyBackendRequest(
 
   let authorization = request.headers.get("authorization");
   if (!authorization) {
-    const token = await getServerAccessToken();
+    const tokenResult = await getServerAccessTokenResult();
+    if (shouldThrowAdminAuthConfigurationError(tokenResult)) {
+      const error = createAdminAuthConfigurationError();
+      return NextResponse.json(
+        {
+          ok: false,
+          code: "admin_auth_configuration_error",
+          error: error.message,
+        },
+        { status: 500 }
+      );
+    }
+    const token = tokenResult.token;
     if (!token) {
       return NextResponse.json(
         { ok: false, error: "Unauthorized" },
@@ -99,6 +118,19 @@ async function proxyBackendRequest(
       headers: filterHeaders(upstreamResponse.headers),
     });
   } catch (error) {
+    if (
+      error instanceof Error &&
+      isAdminAuthConfigurationError(error.message)
+    ) {
+      return NextResponse.json(
+        {
+          ok: false,
+          code: "admin_auth_configuration_error",
+          error: error.message,
+        },
+        { status: 500 }
+      );
+    }
     if (error instanceof DOMException && error.name === "AbortError") {
       return NextResponse.json(
         { ok: false, error: "Backend request timed out" },

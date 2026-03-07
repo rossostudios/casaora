@@ -70,7 +70,7 @@ function SidebarContent({
         </div>
 
         <div className="px-3 pb-2">
-          <div className="flex items-center gap-1 rounded-xl bg-white/35 p-1 ring-1 ring-white/40 ring-inset dark:bg-mauve-400/8 dark:ring-mauve-400/8">
+          <div className="flex items-center gap-1 rounded-xl bg-sidebar-accent p-1 ring-1 ring-sidebar-border ring-inset dark:bg-taupe-400/8 dark:ring-taupe-400/8">
             <div className="flex min-w-0 flex-1 items-center gap-0.5">
               {PRIMARY_TABS.map((tab) => {
                 const active = tab.key === activeTab;
@@ -80,8 +80,8 @@ function SidebarContent({
                     className={cn(
                       "inline-flex min-w-0 items-center gap-1.5 rounded-lg px-2 py-1.5 font-medium text-[12px] transition-all duration-200",
                       active
-                        ? "bg-white/60 text-sidebar-primary shadow-sm ring-1 ring-white/50 ring-inset dark:bg-mauve-400/12 dark:ring-mauve-300/10"
-                        : "text-sidebar-foreground/75 hover:bg-white/30 hover:text-sidebar-foreground dark:hover:bg-mauve-400/8"
+                        ? "bg-card text-sidebar-primary shadow-sm ring-1 ring-border ring-inset dark:bg-taupe-400/12 dark:ring-taupe-300/10"
+                        : "text-sidebar-foreground/75 hover:bg-sidebar-accent hover:text-sidebar-foreground dark:hover:bg-taupe-400/8"
                     )}
                     href={tab.href}
                     key={tab.key}
@@ -126,7 +126,7 @@ function SidebarContent({
                 <TooltipTrigger asChild>
                   <button
                     aria-label={isEn ? "Search" : "Buscar"}
-                    className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-sidebar-foreground/60 transition-colors hover:bg-white/30 hover:text-sidebar-foreground dark:hover:bg-mauve-400/8"
+                    className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-sidebar-foreground/60 transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground dark:hover:bg-taupe-400/8"
                     onClick={openSearch}
                     type="button"
                   >
@@ -159,20 +159,60 @@ function SidebarContent({
               key={activeTab}
               transition={{ duration: 0.15, ease: EASING }}
             >
-              {activeTab === "chat" ? (
-                <SidebarChatTab locale={locale} orgId={orgId} role={role} />
-              ) : null}
-
-              {activeTab === "inbox" ? (
+              {activeTab === "conversations" ? (
                 <SidebarInboxTab locale={locale} />
               ) : null}
 
-              {activeTab === "home" ? (
+              {activeTab === "ai" ? (
+                <SidebarChatTab locale={locale} orgId={orgId} role={role} />
+              ) : null}
+
+              {activeTab === "today" ? (
                 <SidebarHomeTab
                   locale={locale}
                   onboardingProgress={onboardingProgress}
                   orgId={orgId}
                   role={role}
+                />
+              ) : null}
+
+              {activeTab === "portfolio" ? (
+                <SidebarHomeTab
+                  locale={locale}
+                  onboardingProgress={onboardingProgress}
+                  orgId={orgId}
+                  role={role}
+                  sectionKeys={["portfolio"]}
+                />
+              ) : null}
+
+              {activeTab === "leasing" ? (
+                <SidebarHomeTab
+                  locale={locale}
+                  onboardingProgress={onboardingProgress}
+                  orgId={orgId}
+                  role={role}
+                  sectionKeys={["rentals"]}
+                />
+              ) : null}
+
+              {activeTab === "operations" ? (
+                <SidebarHomeTab
+                  locale={locale}
+                  onboardingProgress={onboardingProgress}
+                  orgId={orgId}
+                  role={role}
+                  sectionKeys={["operations"]}
+                />
+              ) : null}
+
+              {activeTab === "finance" ? (
+                <SidebarHomeTab
+                  locale={locale}
+                  onboardingProgress={onboardingProgress}
+                  orgId={orgId}
+                  role={role}
+                  sectionKeys={["finance"]}
                 />
               ) : null}
             </motion.div>
@@ -182,7 +222,7 @@ function SidebarContent({
         <div className="shrink-0 space-y-2 p-3 pt-0">
           <div className="flex items-center gap-1.5">
             <Link
-              className="glass-inner group inline-flex h-10 min-w-0 flex-1 items-center justify-center gap-2 rounded-full px-3 font-medium text-[13px] text-sidebar-foreground/80 transition-all duration-300 hover:bg-white/70 hover:text-sidebar-foreground hover:shadow-sm dark:hover:bg-white/10"
+              className="glass-inner group inline-flex h-10 min-w-0 flex-1 items-center justify-center gap-2 rounded-full px-3 font-medium text-[13px] text-sidebar-foreground/80 transition-all duration-300 hover:bg-sidebar-accent hover:text-sidebar-foreground hover:shadow-sm dark:hover:bg-white/10"
               href="/app/agents?new=1"
             >
               <Icon

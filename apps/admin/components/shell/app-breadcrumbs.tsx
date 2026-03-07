@@ -48,11 +48,11 @@ function buildCrumbs(pathname: string, locale: Locale): Crumb[] {
   const pathPrefix = isAppScoped ? "/app" : "";
 
   if (parts.length === 0) {
-    return [{ label: isEn ? "Dashboard" : "Panel", current: true }];
+    return [{ label: isEn ? "Today" : "Hoy", current: true }];
   }
 
   const crumbs: Crumb[] = [
-    { label: isEn ? "Dashboard" : "Panel", href: "/app" },
+    { label: isEn ? "Today" : "Hoy", href: "/app" },
   ];
 
   if (parts[0] === "setup") {

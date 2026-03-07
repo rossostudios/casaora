@@ -37,7 +37,7 @@ export function ListingPreviewModal({
     queryKey: ["listing-preview", listingId],
     queryFn: () =>
       authedFetch<Record<string, unknown>>(
-        `/listings/${encodeURIComponent(listingId)}`
+        `/listings/${encodeURIComponent(listingId)}/preview`
       ),
   });
 

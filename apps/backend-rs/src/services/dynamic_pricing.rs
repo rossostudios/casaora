@@ -727,7 +727,7 @@ pub async fn run_daily_pricing_recommendations(state: &AppState) {
     // Auto-approve pricing changes with < 10% delta (skip approval queue)
     let mut auto_applied = 0u32;
     for (org_id,) in &org_ids {
-        match auto_approve_small_pricing_changes(pool, org_id).await {
+        match auto_approve_small_pricing_changes(pool, org_id, 10.0).await {
             Ok(count) => auto_applied += count,
             Err(e) => {
                 tracing::warn!(org_id, error = %e, "Daily pricing: auto-approve failed");
@@ -743,8 +743,15 @@ pub async fn run_daily_pricing_recommendations(state: &AppState) {
     );
 }
 
-/// Auto-approve pricing recommendations where the change delta is less than 10%.
-async fn auto_approve_small_pricing_changes(pool: &sqlx::PgPool, org_id: &str) -> AppResult<u32> {
+/// Auto-approve pricing recommendations where the change delta is within threshold.
+/// Uses the org-configurable `auto_pricing_max_delta_pct` (default 10%).
+async fn auto_approve_small_pricing_changes(
+    pool: &sqlx::PgPool,
+    org_id: &str,
+    max_delta_pct: f64,
+) -> AppResult<u32> {
+    let threshold = max_delta_pct / 100.0;
+
     let rows = sqlx::query_as::<_, (String, String, f64, f64)>(
         "SELECT pr.id::text, pr.pricing_template_id::text,
                 pr.recommended_price::float8, pt.base_price::float8
@@ -766,8 +773,8 @@ async fn auto_approve_small_pricing_changes(pool: &sqlx::PgPool, org_id: &str) -
     let mut count = 0u32;
     for (rec_id, template_id, recommended, current) in &rows {
         let delta_pct = ((recommended - current) / current).abs();
-        if delta_pct >= 0.10 {
-            continue; // Needs human review
+        if delta_pct >= threshold {
+            continue; // Exceeds threshold — needs human review
         }
 
         // Apply the small change directly
@@ -794,4 +801,43 @@ async fn auto_approve_small_pricing_changes(pool: &sqlx::PgPool, org_id: &str) -
     }
 
     Ok(count)
+}
+
+/// Daily auto-apply pricing recommendations for orgs with auto_pricing_enabled.
+/// Respects per-org `auto_pricing_max_delta_pct` threshold.
+/// Called by the scheduler after `run_daily_pricing_recommendations`.
+pub async fn run_daily_pricing_auto_apply(state: &AppState) {
+    let pool = match state.db_pool.as_ref() {
+        Some(p) => p,
+        None => return,
+    };
+
+    let orgs: Vec<(String, f64)> = sqlx::query_as(
+        "SELECT id::text, auto_pricing_max_delta_pct::float8
+         FROM organizations
+         WHERE is_active = true
+           AND auto_pricing_enabled = true
+         LIMIT 100",
+    )
+    .fetch_all(pool)
+    .await
+    .unwrap_or_default();
+
+    let mut total_applied = 0u32;
+    for (org_id, max_delta_pct) in &orgs {
+        match auto_approve_small_pricing_changes(pool, org_id, *max_delta_pct).await {
+            Ok(count) => total_applied += count,
+            Err(e) => {
+                tracing::warn!(org_id, error = %e, "Pricing auto-apply failed");
+            }
+        }
+    }
+
+    if total_applied > 0 || !orgs.is_empty() {
+        tracing::info!(
+            org_count = orgs.len(),
+            applied = total_applied,
+            "Daily pricing auto-apply completed"
+        );
+    }
 }

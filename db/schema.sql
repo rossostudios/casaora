@@ -221,6 +221,17 @@ AS $$
   SELECT NULLIF(current_setting('request.jwt.claim.sub', true), '')::uuid;
 $$;
 
+CREATE TABLE schema_migrations (
+  filename text PRIMARY KEY,
+  checksum_sha256 text NOT NULL,
+  applied_at timestamptz NOT NULL DEFAULT now(),
+  applied_by text,
+  execution_ms integer
+);
+
+CREATE INDEX idx_schema_migrations_applied_at
+  ON schema_migrations(applied_at DESC);
+
 -- ---------- Identity and tenancy ----------
 
 CREATE TABLE app_users (
@@ -251,6 +262,8 @@ CREATE TABLE organizations (
   qr_image_url text,
   org_slug text UNIQUE,
   booking_enabled boolean NOT NULL DEFAULT false,
+  auto_pricing_enabled boolean NOT NULL DEFAULT false,
+  auto_pricing_max_delta_pct numeric(5,2) NOT NULL DEFAULT 10.0,
   brand_color text DEFAULT '#2563eb',
   logo_url text,
   created_at timestamptz NOT NULL DEFAULT now(),
@@ -853,6 +866,15 @@ CREATE INDEX idx_listings_org_slug
   ON listings(organization_id, public_slug);
 CREATE INDEX idx_listings_org_scores
   ON listings(organization_id, walkability_score, transit_score);
+CREATE INDEX idx_listings_org_property
+  ON listings(organization_id, property_id, updated_at DESC);
+CREATE INDEX idx_listings_org_unit
+  ON listings(organization_id, unit_id, updated_at DESC);
+CREATE INDEX idx_listings_org_updated
+  ON listings(organization_id, updated_at DESC);
+CREATE UNIQUE INDEX idx_listings_one_published_per_unit
+  ON listings(organization_id, unit_id)
+  WHERE unit_id IS NOT NULL AND is_published = true;
 
 CREATE TABLE listing_fee_lines (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -918,6 +940,8 @@ CREATE TABLE leases (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   organization_id uuid NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
   application_id uuid REFERENCES application_submissions(id) ON DELETE SET NULL,
+  parent_lease_id uuid REFERENCES leases(id) ON DELETE SET NULL,
+  is_renewal boolean NOT NULL DEFAULT false,
   property_id uuid REFERENCES properties(id) ON DELETE SET NULL,
   unit_id uuid REFERENCES units(id) ON DELETE SET NULL,
   space_id uuid REFERENCES unit_spaces(id) ON DELETE SET NULL,
@@ -926,6 +950,14 @@ CREATE TABLE leases (
   tenant_email citext,
   tenant_phone_e164 text,
   lease_status lease_status NOT NULL DEFAULT 'draft',
+  renewal_status text
+    CHECK (renewal_status IS NULL OR renewal_status IN (
+      'pending', 'offered', 'accepted', 'rejected', 'expired'
+    )),
+  renewal_offered_at timestamptz,
+  renewal_decided_at timestamptz,
+  renewal_offered_rent numeric(12, 2),
+  renewal_notes text,
   starts_on date NOT NULL,
   ends_on date,
   currency char(3) NOT NULL DEFAULT 'PYG' CHECK (currency IN ('PYG', 'USD')),
@@ -960,6 +992,18 @@ CREATE INDEX idx_leases_org_property_starts
 CREATE INDEX idx_leases_unit_active_window
   ON leases(unit_id, starts_on, ends_on)
   WHERE lease_status IN ('draft', 'active', 'delinquent');
+CREATE INDEX idx_leases_parent
+  ON leases(parent_lease_id)
+  WHERE parent_lease_id IS NOT NULL;
+CREATE INDEX idx_leases_renewal_status
+  ON leases(renewal_status)
+  WHERE renewal_status IS NOT NULL;
+CREATE INDEX idx_leases_org_ends_active
+  ON leases(organization_id, ends_on)
+  WHERE lease_status IN ('active', 'delinquent') AND ends_on IS NOT NULL;
+CREATE INDEX idx_leases_org_renewal_ends
+  ON leases(organization_id, renewal_status, ends_on)
+  WHERE renewal_status IS NOT NULL;
 
 CREATE TABLE lease_charges (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -1030,6 +1074,7 @@ CREATE TABLE message_logs (
   organization_id uuid NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
   reservation_id uuid REFERENCES reservations(id) ON DELETE SET NULL,
   guest_id uuid REFERENCES guests(id) ON DELETE SET NULL,
+  application_id uuid REFERENCES application_submissions(id) ON DELETE SET NULL,
   template_id uuid REFERENCES message_templates(id) ON DELETE SET NULL,
   channel message_channel NOT NULL DEFAULT 'whatsapp',
   recipient text NOT NULL,
@@ -1047,6 +1092,8 @@ CREATE TABLE message_logs (
 );
 
 CREATE INDEX idx_message_logs_org_status ON message_logs(organization_id, status, created_at);
+CREATE INDEX idx_message_logs_org_application_created
+  ON message_logs(organization_id, application_id, created_at DESC);
 CREATE INDEX idx_message_logs_recipient ON message_logs(recipient);
 CREATE INDEX idx_message_logs_direction ON message_logs(direction, created_at DESC);
 
@@ -1123,6 +1170,8 @@ CREATE TABLE ai_agents (
   icon_key text NOT NULL DEFAULT 'SparklesIcon',
   system_prompt text NOT NULL,
   allowed_tools jsonb NOT NULL DEFAULT '[]'::jsonb CHECK (jsonb_typeof(allowed_tools) = 'array'),
+  model_policy jsonb NOT NULL DEFAULT '{}'::jsonb CHECK (jsonb_typeof(model_policy) = 'object'),
+  autonomy_policy jsonb NOT NULL DEFAULT '{}'::jsonb CHECK (jsonb_typeof(autonomy_policy) = 'object'),
   is_active boolean NOT NULL DEFAULT true,
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now()
@@ -1211,6 +1260,7 @@ CREATE TABLE ai_chat_messages (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   chat_id uuid NOT NULL REFERENCES ai_chats(id) ON DELETE CASCADE,
   organization_id uuid NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  agent_run_id uuid REFERENCES agent_runs(id) ON DELETE SET NULL,
   role text NOT NULL CHECK (role IN ('user', 'assistant')),
   content text NOT NULL,
   tool_trace jsonb,
@@ -1226,6 +1276,71 @@ CREATE INDEX idx_ai_chat_messages_chat_created
 CREATE INDEX idx_ai_chat_messages_org_user_created
   ON ai_chat_messages(organization_id, created_by_user_id, created_at DESC);
 
+CREATE INDEX idx_ai_chat_messages_run_created
+  ON ai_chat_messages(agent_run_id, created_at DESC)
+  WHERE agent_run_id IS NOT NULL;
+
+CREATE TABLE agent_runs (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  organization_id uuid NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  chat_id uuid REFERENCES ai_chats(id) ON DELETE SET NULL,
+  agent_slug text NOT NULL DEFAULT 'supervisor',
+  mode text NOT NULL DEFAULT 'copilot'
+    CHECK (mode IN ('copilot', 'autonomous')),
+  status text NOT NULL DEFAULT 'queued'
+    CHECK (status IN ('queued', 'running', 'waiting_for_approval', 'failed', 'completed', 'cancelled')),
+  task text NOT NULL,
+  context jsonb NOT NULL DEFAULT '{}'::jsonb CHECK (jsonb_typeof(context) = 'object'),
+  preferred_provider text
+    CHECK (preferred_provider IS NULL OR preferred_provider IN ('openai', 'anthropic')),
+  preferred_model text,
+  allow_mutations boolean NOT NULL DEFAULT false,
+  provider text,
+  model text,
+  token_usage jsonb NOT NULL DEFAULT '{}'::jsonb CHECK (jsonb_typeof(token_usage) = 'object'),
+  cost_estimate_usd numeric(12,6),
+  result jsonb,
+  error_message text,
+  runtime_trace_id text,
+  created_by_user_id uuid REFERENCES app_users(id) ON DELETE SET NULL,
+  cancelled_by_user_id uuid REFERENCES app_users(id) ON DELETE SET NULL,
+  started_at timestamptz,
+  completed_at timestamptz,
+  cancelled_at timestamptz,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX idx_agent_runs_org_created
+  ON agent_runs (organization_id, created_at DESC);
+
+CREATE INDEX idx_agent_runs_org_status_created
+  ON agent_runs (organization_id, status, created_at DESC);
+
+CREATE INDEX idx_agent_runs_chat
+  ON agent_runs (chat_id)
+  WHERE chat_id IS NOT NULL;
+
+CREATE TRIGGER trg_agent_runs_updated_at
+  BEFORE UPDATE ON agent_runs
+  FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+CREATE TABLE agent_run_events (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  run_id uuid NOT NULL REFERENCES agent_runs(id) ON DELETE CASCADE,
+  organization_id uuid NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  event_type text NOT NULL
+    CHECK (event_type IN ('status', 'text_delta', 'tool_call', 'tool_result', 'approval_required', 'error')),
+  data jsonb NOT NULL DEFAULT '{}'::jsonb CHECK (jsonb_typeof(data) = 'object'),
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX idx_agent_run_events_run_created
+  ON agent_run_events (run_id, created_at ASC);
+
+CREATE INDEX idx_agent_run_events_org_created
+  ON agent_run_events (organization_id, created_at DESC);
+
 CREATE TABLE agent_traces (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   organization_id uuid NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
@@ -1233,17 +1348,24 @@ CREATE TABLE agent_traces (
   agent_slug text NOT NULL DEFAULT 'supervisor',
   user_id uuid REFERENCES app_users(id) ON DELETE SET NULL,
   model_used text,
+  provider text,
+  stop_reason text,
   prompt_tokens integer NOT NULL DEFAULT 0,
   completion_tokens integer NOT NULL DEFAULT 0,
   total_tokens integer NOT NULL DEFAULT 0,
+  cache_creation_input_tokens integer NOT NULL DEFAULT 0,
+  cache_read_input_tokens integer NOT NULL DEFAULT 0,
   latency_ms integer NOT NULL DEFAULT 0,
   tool_calls jsonb NOT NULL DEFAULT '[]'::jsonb,
   tool_count integer NOT NULL DEFAULT 0,
   fallback_used boolean NOT NULL DEFAULT false,
+  fallback_from text,
   success boolean NOT NULL DEFAULT true,
   error_message text,
   llm_transport text NOT NULL DEFAULT 'responses'
     CHECK (llm_transport IN ('responses', 'chat_completions')),
+  run_mode text NOT NULL DEFAULT 'copilot'
+    CHECK (run_mode IN ('copilot', 'autonomous')),
   runtime_run_id text,
   runtime_trace_id text,
   is_shadow_run boolean NOT NULL DEFAULT false,
@@ -1322,6 +1444,7 @@ CREATE TABLE agent_approvals (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   organization_id uuid NOT NULL REFERENCES organizations(id),
   chat_id uuid REFERENCES ai_chats(id) ON DELETE SET NULL,
+  agent_run_id uuid REFERENCES agent_runs(id) ON DELETE SET NULL,
   agent_slug text NOT NULL,
   tool_name text NOT NULL,
   tool_args jsonb NOT NULL DEFAULT '{}'::jsonb,
@@ -1346,6 +1469,9 @@ CREATE INDEX idx_agent_approvals_org_status
 CREATE INDEX idx_agent_approvals_chat
   ON agent_approvals(chat_id)
   WHERE chat_id IS NOT NULL;
+CREATE INDEX idx_agent_approvals_run
+  ON agent_approvals(agent_run_id)
+  WHERE agent_run_id IS NOT NULL;
 CREATE INDEX idx_agent_approvals_tool_status
   ON agent_approvals(organization_id, tool_name, status);
 CREATE UNIQUE INDEX idx_agent_approvals_execution_key
@@ -1354,8 +1480,9 @@ CREATE UNIQUE INDEX idx_agent_approvals_execution_key
 
 CREATE TABLE agent_approval_policies (
   organization_id uuid NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
-  tool_name text NOT NULL CHECK (tool_name IN ('create_row', 'update_row', 'delete_row')),
-  approval_mode text NOT NULL DEFAULT 'required' CHECK (approval_mode IN ('required', 'auto')),
+  tool_name text NOT NULL CHECK (tool_name ~ '^[a-z_]+$'),
+  approval_mode text NOT NULL DEFAULT 'required' CHECK (approval_mode IN ('required', 'auto', 'confidence')),
+  auto_approve_threshold numeric(3,2) DEFAULT 0.85,
   enabled boolean NOT NULL DEFAULT true,
   updated_by uuid REFERENCES app_users(id) ON DELETE SET NULL,
   created_at timestamptz NOT NULL DEFAULT now(),
@@ -1514,6 +1641,112 @@ CREATE INDEX idx_payment_instructions_collection
 CREATE INDEX idx_payment_instructions_reference
   ON payment_instructions(reference_code);
 
+-- ---------- IoT & Access Codes ----------
+
+CREATE TABLE iot_devices (
+  id                uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  organization_id   uuid NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  property_id       uuid REFERENCES properties(id) ON DELETE SET NULL,
+  unit_id           uuid REFERENCES units(id) ON DELETE SET NULL,
+  device_type       text NOT NULL DEFAULT 'smart_lock'
+                      CHECK (device_type IN ('smart_lock', 'temperature', 'humidity',
+                                              'motion', 'door_sensor', 'smoke', 'water_leak',
+                                              'energy_meter', 'camera', 'other')),
+  device_name       text NOT NULL,
+  manufacturer      text,
+  model             text,
+  serial_number     text,
+  external_id       text,
+  status            text NOT NULL DEFAULT 'online'
+                      CHECK (status IN ('online', 'offline', 'low_battery', 'error')),
+  battery_level     integer,
+  last_seen_at      timestamptz,
+  firmware_version  text,
+  configuration     jsonb DEFAULT '{}',
+  metadata          jsonb DEFAULT '{}',
+  is_active         boolean NOT NULL DEFAULT true,
+  created_at        timestamptz NOT NULL DEFAULT now(),
+  updated_at        timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX idx_iot_devices_org ON iot_devices(organization_id, device_type);
+CREATE INDEX idx_iot_devices_unit ON iot_devices(unit_id) WHERE unit_id IS NOT NULL;
+CREATE INDEX idx_iot_devices_health ON iot_devices(organization_id, status, last_seen_at) WHERE is_active = true;
+
+CREATE TRIGGER trg_iot_devices_updated_at
+  BEFORE UPDATE ON iot_devices
+  FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+ALTER TABLE iot_devices ENABLE ROW LEVEL SECURITY;
+CREATE POLICY iot_devices_org_member_all ON iot_devices FOR ALL
+  USING (is_org_member(organization_id))
+  WITH CHECK (is_org_member(organization_id));
+
+CREATE TABLE iot_events (
+  id                uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  organization_id   uuid NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  device_id         uuid NOT NULL REFERENCES iot_devices(id) ON DELETE CASCADE,
+  event_type        text NOT NULL DEFAULT 'reading'
+                      CHECK (event_type IN ('reading', 'alert', 'status_change',
+                                             'lock_action', 'battery_low', 'offline')),
+  severity          text DEFAULT 'info'
+                      CHECK (severity IN ('info', 'warning', 'critical')),
+  value             double precision,
+  unit_of_measure   text,
+  description       text,
+  acknowledged      boolean NOT NULL DEFAULT false,
+  acknowledged_by   uuid REFERENCES app_users(id) ON DELETE SET NULL,
+  metadata          jsonb DEFAULT '{}',
+  created_at        timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX idx_iot_events_device ON iot_events(device_id, created_at DESC);
+CREATE INDEX idx_iot_events_org_alerts ON iot_events(organization_id, event_type, created_at DESC) WHERE event_type = 'alert';
+
+ALTER TABLE iot_events ENABLE ROW LEVEL SECURITY;
+CREATE POLICY iot_events_org_member_all ON iot_events FOR ALL
+  USING (is_org_member(organization_id))
+  WITH CHECK (is_org_member(organization_id));
+
+CREATE TABLE access_codes (
+  id                uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  organization_id   uuid NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  device_id         uuid REFERENCES iot_devices(id) ON DELETE SET NULL,
+  unit_id           uuid REFERENCES units(id) ON DELETE SET NULL,
+  reservation_id    uuid REFERENCES reservations(id) ON DELETE SET NULL,
+  lease_id          uuid REFERENCES leases(id) ON DELETE SET NULL,
+  code              text NOT NULL,
+  code_type         text NOT NULL DEFAULT 'temporary'
+                      CHECK (code_type IN ('temporary', 'permanent', 'one_time', 'recurring')),
+  status            text NOT NULL DEFAULT 'active'
+                      CHECK (status IN ('active', 'expired', 'revoked', 'used')),
+  valid_from        timestamptz NOT NULL DEFAULT now(),
+  valid_until       timestamptz,
+  guest_name        text,
+  guest_phone       text,
+  sent_via          text CHECK (sent_via IN ('whatsapp', 'sms', 'email', 'manual', NULL)),
+  sent_at           timestamptz,
+  used_count        integer NOT NULL DEFAULT 0,
+  max_uses          integer,
+  revoked_at        timestamptz,
+  revoked_by        uuid REFERENCES app_users(id) ON DELETE SET NULL,
+  created_at        timestamptz NOT NULL DEFAULT now(),
+  updated_at        timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX idx_access_codes_unit ON access_codes(unit_id, status) WHERE unit_id IS NOT NULL;
+CREATE INDEX idx_access_codes_reservation ON access_codes(reservation_id) WHERE reservation_id IS NOT NULL;
+CREATE INDEX idx_access_codes_active ON access_codes(organization_id, status, valid_until) WHERE status = 'active';
+
+CREATE TRIGGER trg_access_codes_updated_at
+  BEFORE UPDATE ON access_codes
+  FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+ALTER TABLE access_codes ENABLE ROW LEVEL SECURITY;
+CREATE POLICY access_codes_org_member_all ON access_codes FOR ALL
+  USING (is_org_member(organization_id))
+  WITH CHECK (is_org_member(organization_id));
+
 -- ---------- Notification rules ----------
 
 CREATE TABLE notification_rules (
@@ -1636,13 +1869,16 @@ CREATE TYPE workflow_trigger_event AS ENUM (
   'application_received', 'maintenance_submitted',
   'task_completed', 'payment_received', 'lease_expiring',
   'anomaly_detected', 'task_overdue_24h', 'application_stalled_48h',
-  'lease_expiring_30d', 'owner_statement_ready'
+  'lease_expiring_30d', 'owner_statement_ready',
+  'iot_alert', 'device_offline',
+  'ml_prediction_actionable', 'chain_step_completed',
+  'deliberation_requested'
 );
 
 CREATE TYPE workflow_action_type AS ENUM (
   'create_task', 'send_notification', 'update_status', 'create_expense',
   'send_whatsapp', 'assign_task_round_robin',
-  'run_agent_playbook', 'request_agent_approval'
+  'run_agent_playbook', 'request_agent_approval', 'invoke_agent', 'chain'
 );
 
 CREATE TABLE workflow_rules (
@@ -1737,6 +1973,104 @@ CREATE TRIGGER trg_workflow_jobs_updated_at
 CREATE TRIGGER trg_workflow_round_robin_state_updated_at
   BEFORE UPDATE ON workflow_round_robin_state
   FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+-- ---------- Agent Event Bus ----------
+
+CREATE TABLE agent_events (
+  id                uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  organization_id   uuid NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  source_agent      text NOT NULL,
+  target_agent      text,
+  event_type        text NOT NULL,
+  payload           jsonb NOT NULL DEFAULT '{}'::jsonb,
+  priority          text NOT NULL DEFAULT 'medium'
+                      CHECK (priority IN ('low', 'medium', 'high', 'critical')),
+  status            text NOT NULL DEFAULT 'pending'
+                      CHECK (status IN ('pending', 'processing', 'delivered', 'failed', 'expired')),
+  processed_at      timestamptz,
+  expires_at        timestamptz DEFAULT now() + interval '24 hours',
+  created_at        timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX idx_agent_events_pending
+  ON agent_events(organization_id, status, priority DESC, created_at ASC)
+  WHERE status = 'pending';
+
+ALTER TABLE agent_events ENABLE ROW LEVEL SECURITY;
+CREATE POLICY agent_events_org_member_all ON agent_events FOR ALL
+  USING (is_org_member(organization_id))
+  WITH CHECK (is_org_member(organization_id));
+
+-- ---------- Agent Watchers ----------
+
+CREATE TABLE agent_watchers (
+  id                uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  organization_id   uuid NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  name              text NOT NULL,
+  watch_table       text NOT NULL,
+  watch_filter      jsonb NOT NULL DEFAULT '{}'::jsonb,
+  agent_slug        text NOT NULL,
+  message_template  text NOT NULL DEFAULT 'New {{watch_table}} detected. Please review.',
+  is_active         boolean NOT NULL DEFAULT true,
+  last_seen_id      uuid,
+  last_checked_at   timestamptz DEFAULT now(),
+  created_at        timestamptz NOT NULL DEFAULT now(),
+  updated_at        timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX idx_agent_watchers_active
+  ON agent_watchers(organization_id, is_active, watch_table)
+  WHERE is_active = true;
+
+CREATE TRIGGER trg_agent_watchers_updated_at
+  BEFORE UPDATE ON agent_watchers
+  FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+ALTER TABLE agent_watchers ENABLE ROW LEVEL SECURITY;
+CREATE POLICY agent_watchers_org_member_all ON agent_watchers FOR ALL
+  USING (is_org_member(organization_id))
+  WITH CHECK (is_org_member(organization_id));
+
+-- ---------- ML Pipeline ----------
+
+CREATE TABLE ml_features (
+  id                uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  organization_id   uuid NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  feature_set       text NOT NULL,
+  entity_id         uuid,
+  features          jsonb NOT NULL DEFAULT '{}'::jsonb,
+  computed_at       timestamptz NOT NULL DEFAULT now(),
+  created_at        timestamptz NOT NULL DEFAULT now(),
+  UNIQUE(organization_id, feature_set, entity_id)
+);
+
+CREATE INDEX idx_ml_features_org_set ON ml_features(organization_id, feature_set);
+
+ALTER TABLE ml_features ENABLE ROW LEVEL SECURITY;
+CREATE POLICY ml_features_org_member_all ON ml_features FOR ALL
+  USING (is_org_member(organization_id))
+  WITH CHECK (is_org_member(organization_id));
+
+CREATE TABLE ml_models (
+  id                uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  organization_id   uuid NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  model_type        text NOT NULL,
+  version           integer NOT NULL DEFAULT 1,
+  parameters        jsonb NOT NULL DEFAULT '{}'::jsonb,
+  metrics           jsonb NOT NULL DEFAULT '{}'::jsonb,
+  is_active         boolean NOT NULL DEFAULT true,
+  trained_at        timestamptz NOT NULL DEFAULT now(),
+  created_at        timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX idx_ml_models_active
+  ON ml_models(organization_id, model_type, is_active)
+  WHERE is_active = true;
+
+ALTER TABLE ml_models ENABLE ROW LEVEL SECURITY;
+CREATE POLICY ml_models_org_member_all ON ml_models FOR ALL
+  USING (is_org_member(organization_id))
+  WITH CHECK (is_org_member(organization_id));
 
 -- ---------- SaaS subscriptions ----------
 
@@ -2530,6 +2864,71 @@ CREATE POLICY knowledge_chunks_org_member_all
   ON knowledge_chunks FOR ALL
   USING (is_org_member(organization_id))
   WITH CHECK (is_org_member(organization_id));
+
+-- ═══════════════════════════════════════════════════════════════════════
+-- Property State (Digital Twin)
+-- ═══════════════════════════════════════════════════════════════════════
+
+CREATE TABLE property_state (
+  id                    uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  organization_id       uuid NOT NULL REFERENCES organizations(id),
+  property_id           uuid NOT NULL REFERENCES properties(id),
+  health_score          numeric(5,2) DEFAULT 0,
+  occupancy_rate        numeric(5,2) DEFAULT 0,
+  avg_daily_rate        numeric(12,2) DEFAULT 0,
+  revenue_mtd           numeric(14,2) DEFAULT 0,
+  pending_maintenance   integer DEFAULT 0,
+  avg_review_score      numeric(3,2) DEFAULT 0,
+  guest_sentiment_score numeric(5,2) DEFAULT 0,
+  risk_flags            jsonb DEFAULT '[]',
+  state_snapshot        jsonb DEFAULT '{}',
+  refreshed_at          timestamptz DEFAULT now(),
+  created_at            timestamptz DEFAULT now(),
+  UNIQUE(organization_id, property_id)
+);
+
+ALTER TABLE property_state ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY property_state_org ON property_state
+  USING (is_org_member(organization_id));
+
+CREATE INDEX idx_property_state_org ON property_state(organization_id);
+
+-- ═══════════════════════════════════════════════════════════════════════
+-- Seed data
+-- ═══════════════════════════════════════════════════════════════════════
+
+INSERT INTO ai_agents (slug, name, description, is_active)
+VALUES (
+  'portfolio-manager',
+  'Portfolio Strategy Agent',
+  'Portfolio-level reasoning, cross-property optimization, and investment strategy.',
+  true
+)
+ON CONFLICT (slug) DO NOTHING;
+
+UPDATE ai_agents
+SET
+  model_policy = jsonb_build_object(
+    'defaultProvider', 'openai',
+    'defaultModel', 'gpt-5.2',
+    'fallbackChain', jsonb_build_array(
+      jsonb_build_object('provider', 'openai', 'model', 'gpt-5-mini'),
+      jsonb_build_object('provider', 'anthropic', 'model', 'claude-sonnet-4-6')
+    ),
+    'longContextProvider', 'anthropic',
+    'longContextThresholdTokens', 120000,
+    'reasoningEffort', 'medium',
+    'costCeilingUsd', 2.5
+  ),
+  autonomy_policy = jsonb_build_object(
+    'defaultMode', 'copilot',
+    'allowMutationsByDefault', false,
+    'allowAutonomousLowRisk', false,
+    'approvalMode', 'selective'
+  )
+WHERE model_policy = '{}'::jsonb
+  AND autonomy_policy = '{}'::jsonb;
 
 INSERT INTO agent_approval_policies (organization_id, tool_name, approval_mode, enabled)
 SELECT o.id, t.tool_name, 'required', true

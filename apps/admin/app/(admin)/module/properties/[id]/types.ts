@@ -1,5 +1,23 @@
 import type { PropertyHealthState } from "@/lib/features/properties/types";
 
+export type TwinData = {
+  health_score: number;
+  occupancy_rate: number;
+  avg_daily_rate: number;
+  revenue_mtd: number;
+  pending_maintenance: number;
+  avg_review_score: number;
+  guest_sentiment_score: number;
+  risk_flags: Array<{
+    type: string;
+    severity: string;
+    detail: string;
+  }>;
+  state_snapshot: Record<string, unknown>;
+  refreshed_at: string;
+  error?: string;
+};
+
 export type PropertyStatusTone = "occupied" | "maintenance" | "vacant";
 
 export type PropertyUnitCard = {
@@ -78,6 +96,7 @@ export type PropertyDetailPageData = {
   title: string;
   propertyCodeLabel: string | null;
   propertyLocationLabel: string;
+  propertyType: string | null;
   overview: PropertyOverview | null;
   keys: string[];
   relatedLinks: PropertyRelatedLink[];

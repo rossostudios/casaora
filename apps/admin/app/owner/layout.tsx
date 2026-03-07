@@ -1,8 +1,6 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
-
-import { PublicFooter } from "@/components/marketplace/public-footer";
-import { PublicHeader } from "@/components/marketplace/public-header";
+import { PortalScaffold } from "@/components/ui/portal-scaffold";
 import { getActiveLocale } from "@/lib/i18n/server";
 
 export const metadata: Metadata = {
@@ -16,14 +14,34 @@ export default async function OwnerLayout({
   children: ReactNode;
 }) {
   const locale = await getActiveLocale();
+  const isEn = locale === "en-US";
 
   return (
-    <div className="flex min-h-dvh flex-col bg-background">
-      <PublicHeader locale={locale} />
-      <main className="mx-auto w-full max-w-4xl flex-1 px-4 py-8">
-        {children}
-      </main>
-      <PublicFooter locale={locale} />
-    </div>
+    <PortalScaffold
+      hideNavOnPrefixes={["/owner/login"]}
+      locale={locale}
+      maxWidthClassName="max-w-5xl"
+      navItems={[
+        {
+          href: "/owner/dashboard",
+          label: isEn ? "Overview" : "Resumen",
+        },
+        {
+          href: "/owner/properties",
+          label: isEn ? "Portfolio" : "Portafolio",
+        },
+        {
+          href: "/owner/reservations",
+          label: isEn ? "Reservations" : "Reservas",
+        },
+        {
+          href: "/owner/statements",
+          label: isEn ? "Statements" : "Liquidaciones",
+        },
+      ]}
+      title={isEn ? "Owner portal" : "Portal de propietario"}
+    >
+      {children}
+    </PortalScaffold>
   );
 }

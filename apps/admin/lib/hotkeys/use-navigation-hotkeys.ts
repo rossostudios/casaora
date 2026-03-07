@@ -4,15 +4,14 @@ import { isInputFocused } from "@/lib/hotkeys/is-input-focused";
 
 const SEQUENCE_MAP: Record<string, string> = {
   h: "/app",
-  i: "/module/messaging",
+  i: "/module/action-center",
   c: "/app/agents",
   p: "/module/properties",
   u: "/module/units",
   r: "/module/reservations",
-  t: "/module/operations?tab=tasks",
+  t: "/module/operations",
   e: "/module/expenses",
   l: "/module/leases",
-  a: "/module/calendar",
   s: "/settings",
 };
 

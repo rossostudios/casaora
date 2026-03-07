@@ -1,58 +1,16 @@
 "use client";
-"use no memo";
 
-import {
-  Building06Icon,
-  CheckmarkCircle02Icon,
-  Delete02Icon,
-  DollarCircleIcon,
-  Door01Icon,
-  Layers01Icon,
-  MoreVerticalIcon,
-  PencilEdit02Icon,
-  SlidersHorizontalIcon,
-  Tag01Icon,
-  ViewIcon,
-} from "@hugeicons/core-free-icons";
-import {
-  type ColumnDef,
-  flexRender,
-  getCoreRowModel,
-  getPaginationRowModel,
-  getSortedRowModel,
-  type SortingState,
-  useReactTable,
-  type VisibilityState,
-} from "@tanstack/react-table";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import {
-  useCallback,
-  useMemo,
-  useOptimistic,
-  useState,
-  useTransition,
-} from "react";
+import { useTransition } from "react";
 import { toast } from "sonner";
-
-import { updateUnitInlineAction } from "@/app/(admin)/module/units/actions";
+import {
+  deleteUnitFromUnitsModuleAction,
+  updateUnitInlineAction,
+} from "@/app/(admin)/module/units/actions";
 import { EditableCell } from "@/components/properties/editable-cell";
-import { buttonVariants } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { DataTablePagination } from "@/components/ui/data-table-pagination";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { Icon } from "@/components/ui/icon";
-import {
-  PopoverContent,
-  PopoverRoot,
-  PopoverTrigger,
-} from "@/components/ui/popover";
 import { StatusBadge } from "@/components/ui/status-badge";
 import {
   Table,
@@ -62,523 +20,200 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { humanizeKey } from "@/lib/format";
-import { cn } from "@/lib/utils";
-
-/* ---------- helpers ---------- */
-
-function ColHeader({
-  icon,
-  label,
-}: {
-  icon: typeof Building06Icon;
-  label: string;
-}) {
-  return (
-    <span className="inline-flex items-center gap-1.5">
-      <Icon className="text-muted-foreground/70" icon={icon} size={13} />
-      <span>{label}</span>
-    </span>
-  );
-}
-
-/* ---------- types ---------- */
-
-export type UnitRow = {
-  id: string;
-  property_id: string | null;
-  property_name: string | null;
-  code: string | null;
-  name: string | null;
-  max_guests: number | null;
-  bedrooms: number | null;
-  bathrooms: number | null;
-  currency: string | null;
-  is_active: boolean;
-};
-
-type OptimisticAction = {
-  id: string;
-  field: keyof UnitRow;
-  value: string | number | boolean;
-};
-
-const CURRENCY_OPTIONS = [
-  { label: "PYG", value: "PYG" },
-  { label: "USD", value: "USD" },
-];
-
-/* ---------- component ---------- */
+import type { PortfolioUnitRow } from "@/lib/portfolio-overview";
 
 export function UnitNotionTable({
   rows,
   isEn,
-  totalRowCount,
+  selectedIds,
+  onSelectedIdsChange,
+  onOpenBulkUpdate,
+  onOpenCreate,
+  askAiHref,
 }: {
-  rows: UnitRow[];
+  rows: PortfolioUnitRow[];
   isEn: boolean;
-  totalRowCount: number;
+  selectedIds: string[];
+  onSelectedIdsChange: (ids: string[]) => void;
+  onOpenBulkUpdate: () => void;
+  onOpenCreate: () => void;
+  askAiHref: (row: PortfolioUnitRow) => string;
 }) {
-  "use no memo";
   const router = useRouter();
   const [, startTransition] = useTransition();
+  const selectedSet = new Set(selectedIds);
 
-  const [sorting, setSorting] = useState<SortingState>([]);
-  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
+  function toggleRow(unitId: string, checked: boolean) {
+    const next = new Set(selectedIds);
+    if (checked) next.add(unitId);
+    else next.delete(unitId);
+    onSelectedIdsChange(Array.from(next));
+  }
 
-  const [optimisticRows, addOptimistic] = useOptimistic(
-    rows,
-    (current: UnitRow[], action: OptimisticAction) =>
-      current.map((r) =>
-        r.id === action.id ? { ...r, [action.field]: action.value } : r
-      )
-  );
+  function toggleAll(checked: boolean) {
+    if (checked) {
+      onSelectedIdsChange(rows.map((row) => row.id));
+      return;
+    }
+    onSelectedIdsChange([]);
+  }
 
-  const commitEdit = useCallback(
-    async (unitId: string, field: string, next: string | number | boolean) => {
-      startTransition(() => {
-        addOptimistic({
-          id: unitId,
-          field: field as keyof UnitRow,
-          value: next,
-        });
+  async function saveField(
+    unitId: string,
+    field: string,
+    value: string | number
+  ): Promise<void> {
+    const result = await updateUnitInlineAction({ unitId, field, value });
+    if (!result.ok) {
+      toast.error(isEn ? "Could not save unit" : "No se pudo guardar", {
+        description: result.error,
       });
+      return;
+    }
+    toast.success(isEn ? "Unit updated" : "Unidad actualizada");
+    startTransition(() => router.refresh());
+  }
 
-      const result = await updateUnitInlineAction({
-        unitId,
-        field,
-        value: next,
+  async function deleteRow(row: PortfolioUnitRow): Promise<void> {
+    const confirmed = window.confirm(
+      isEn
+        ? `Delete unit ${row.code}?`
+        : `¿Eliminar la unidad ${row.code}?`
+    );
+    if (!confirmed) return;
+
+    const result = await deleteUnitFromUnitsModuleAction({
+      propertyId: row.propertyId,
+      unitId: row.id,
+    });
+    if (!result.ok) {
+      toast.error(isEn ? "Could not delete unit" : "No se pudo eliminar", {
+        description: result.error,
       });
+      return;
+    }
 
-      if (result.ok) {
-        toast.success(isEn ? "Saved" : "Guardado");
-      } else {
-        toast.error(isEn ? "Failed to save" : "Error al guardar", {
-          description: result.error,
-        });
-      }
-    },
-    [addOptimistic, isEn]
-  );
+    onSelectedIdsChange(selectedIds.filter((value) => value !== row.id));
+    toast.success(isEn ? "Unit deleted" : "Unidad eliminada");
+    startTransition(() => router.refresh());
+  }
 
-  const commitText = useCallback(
-    (unitId: string, field: string) => (next: string) =>
-      commitEdit(unitId, field, next),
-    [commitEdit]
-  );
-
-  const commitNumber = useCallback(
-    (unitId: string, field: string) => async (next: string) => {
-      const parsed = Number(next);
-      if (!Number.isFinite(parsed)) return;
-      await commitEdit(unitId, field, parsed);
-    },
-    [commitEdit]
-  );
-
-  const columns = useMemo<ColumnDef<UnitRow>[]>(
-    () => [
-      {
-        id: "select",
-        size: 40,
-        minSize: 40,
-        maxSize: 40,
-        enableResizing: false,
-        enableHiding: false,
-        header: ({ table }) => (
-          <Checkbox
-            aria-label="Select all"
-            checked={table.getIsAllPageRowsSelected()}
-            indeterminate={table.getIsSomePageRowsSelected()}
-            onCheckedChange={(v) => table.toggleAllPageRowsSelected(!!v)}
-          />
-        ),
-        cell: ({ row }) => (
-          <Checkbox
-            aria-label="Select row"
-            checked={row.getIsSelected()}
-            onCheckedChange={(v) => row.toggleSelected(!!v)}
-          />
-        ),
-      },
-      {
-        accessorKey: "property_name",
-        size: 160,
-        minSize: 100,
-        header: () => (
-          <ColHeader
-            icon={Building06Icon}
-            label={isEn ? "Property" : "Propiedad"}
-          />
-        ),
-        cell: ({ row }) => (
-          <span className="truncate text-sm">
-            {row.original.property_name ?? "-"}
-          </span>
-        ),
-      },
-      {
-        accessorKey: "name",
-        size: 160,
-        minSize: 100,
-        header: () => (
-          <ColHeader icon={Door01Icon} label={isEn ? "Name" : "Nombre"} />
-        ),
-        cell: ({ row }) => {
-          const data = row.original;
-          return (
-            <EditableCell
-              onCommit={commitText(data.id, "name")}
-              value={data.name ?? ""}
-            />
-          );
-        },
-      },
-      {
-        accessorKey: "code",
-        size: 100,
-        minSize: 70,
-        header: () => (
-          <ColHeader icon={Tag01Icon} label={isEn ? "Code" : "Código"} />
-        ),
-        cell: ({ row }) => {
-          const data = row.original;
-          return (
-            <EditableCell
-              displayNode={
-                <span className="font-mono text-muted-foreground text-xs">
-                  {data.code ?? ""}
-                </span>
-              }
-              onCommit={commitText(data.id, "code")}
-              value={data.code ?? ""}
-            />
-          );
-        },
-      },
-      {
-        accessorKey: "max_guests",
-        size: 90,
-        minSize: 60,
-        header: () => (
-          <ColHeader
-            icon={Layers01Icon}
-            label={isEn ? "Guests" : "Huéspedes"}
-          />
-        ),
-        cell: ({ row }) => {
-          const data = row.original;
-          return (
-            <EditableCell
-              displayNode={
-                <span className="text-sm tabular-nums">
-                  {data.max_guests ?? "-"}
-                </span>
-              }
-              onCommit={commitNumber(data.id, "max_guests")}
-              value={String(data.max_guests ?? "")}
-            />
-          );
-        },
-      },
-      {
-        accessorKey: "bedrooms",
-        size: 100,
-        minSize: 60,
-        header: () => (
-          <ColHeader
-            icon={Door01Icon}
-            label={isEn ? "Bedrooms" : "Dormitorios"}
-          />
-        ),
-        cell: ({ row }) => {
-          const data = row.original;
-          return (
-            <EditableCell
-              displayNode={
-                <span className="text-sm tabular-nums">
-                  {data.bedrooms ?? "-"}
-                </span>
-              }
-              onCommit={commitNumber(data.id, "bedrooms")}
-              value={String(data.bedrooms ?? "")}
-            />
-          );
-        },
-      },
-      {
-        accessorKey: "bathrooms",
-        size: 100,
-        minSize: 60,
-        header: () => (
-          <ColHeader icon={Door01Icon} label={isEn ? "Bathrooms" : "Baños"} />
-        ),
-        cell: ({ row }) => {
-          const data = row.original;
-          return (
-            <EditableCell
-              displayNode={
-                <span className="text-sm tabular-nums">
-                  {data.bathrooms ?? "-"}
-                </span>
-              }
-              onCommit={commitNumber(data.id, "bathrooms")}
-              value={String(data.bathrooms ?? "")}
-            />
-          );
-        },
-      },
-      {
-        accessorKey: "currency",
-        size: 90,
-        minSize: 70,
-        header: () => (
-          <ColHeader
-            icon={DollarCircleIcon}
-            label={isEn ? "Currency" : "Moneda"}
-          />
-        ),
-        cell: ({ row }) => {
-          const data = row.original;
-          return (
-            <EditableCell
-              displayNode={
-                <span className="font-mono text-xs">
-                  {data.currency ?? "-"}
-                </span>
-              }
-              onCommit={commitText(data.id, "currency")}
-              options={CURRENCY_OPTIONS}
-              type="select"
-              value={data.currency ?? "PYG"}
-            />
-          );
-        },
-      },
-      {
-        accessorKey: "is_active",
-        size: 100,
-        minSize: 80,
-        header: () => (
-          <ColHeader
-            icon={CheckmarkCircle02Icon}
-            label={isEn ? "Active" : "Activo"}
-          />
-        ),
-        cell: ({ row }) => (
-          <StatusBadge value={row.original.is_active ? "active" : "inactive"} />
-        ),
-      },
-      {
-        id: "actions",
-        size: 48,
-        minSize: 48,
-        maxSize: 48,
-        enableResizing: false,
-        enableHiding: false,
-        cell: ({ row }) => {
-          const unit = row.original;
-          return (
-            <DropdownMenu>
-              <DropdownMenuTrigger
-                className={cn(
-                  buttonVariants({ variant: "ghost" }),
-                  "h-7 w-7 p-0"
-                )}
-              >
-                <span className="sr-only">Open menu</span>
-                <Icon icon={MoreVerticalIcon} size={15} />
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuLabel>
-                  {isEn ? "Actions" : "Acciones"}
-                </DropdownMenuLabel>
-                <DropdownMenuItem
-                  onClick={() => router.push(`/module/units/${unit.id}`)}
-                >
-                  <Icon className="mr-2" icon={ViewIcon} size={14} />
-                  {isEn ? "View details" : "Ver detalles"}
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={() => navigator.clipboard.writeText(unit.id)}
-                >
-                  <Icon className="mr-2" icon={PencilEdit02Icon} size={14} />
-                  {isEn ? "Copy ID" : "Copiar ID"}
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem className="text-red-600 focus:bg-red-50 focus:text-red-600 dark:focus:bg-red-900/10">
-                  <Icon className="mr-2" icon={Delete02Icon} size={14} />
-                  {isEn ? "Delete" : "Eliminar"}
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          );
-        },
-      },
-    ],
-    [isEn, commitText, commitNumber, router]
-  );
-
-  const COLUMN_LABELS: Record<string, string> = {
-    property_name: isEn ? "Property" : "Propiedad",
-    name: isEn ? "Name" : "Nombre",
-    code: isEn ? "Code" : "Código",
-    max_guests: isEn ? "Guests" : "Huéspedes",
-    bedrooms: isEn ? "Bedrooms" : "Dormitorios",
-    bathrooms: isEn ? "Bathrooms" : "Baños",
-    currency: isEn ? "Currency" : "Moneda",
-    is_active: isEn ? "Active" : "Activo",
-  };
-
-  // eslint-disable-next-line react-hooks-js/incompatible-library
-  const table = useReactTable({
-    data: optimisticRows,
-    columns,
-    columnResizeMode: "onChange",
-    state: {
-      sorting,
-      columnVisibility,
-    },
-    onSortingChange: setSorting,
-    onColumnVisibilityChange: setColumnVisibility,
-    getCoreRowModel: getCoreRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
-    getSortedRowModel: getSortedRowModel(),
-  });
+  const allSelected = rows.length > 0 && rows.every((row) => selectedSet.has(row.id));
 
   return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-end">
-        <PopoverRoot>
-          <PopoverTrigger
-            className={cn(
-              buttonVariants({ variant: "outline", size: "sm" }),
-              "h-9 gap-2 rounded-xl border-border/60 font-semibold text-muted-foreground hover:bg-muted"
-            )}
+    <div className="space-y-4">
+      {selectedIds.length > 0 ? (
+        <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-border/60 bg-card/80 p-4">
+          <p className="text-muted-foreground text-sm">
+            {selectedIds.length} {isEn ? "units selected" : "unidades seleccionadas"}
+          </p>
+          <Button onClick={onOpenBulkUpdate} size="sm" type="button">
+            {isEn ? "Bulk update" : "Actualizar"}
+          </Button>
+          <Button
+            onClick={() => onSelectedIdsChange([])}
+            size="sm"
+            type="button"
+            variant="outline"
           >
-            <Icon icon={SlidersHorizontalIcon} size={15} />
-            {isEn ? "Columns" : "Columnas"}
-          </PopoverTrigger>
-          <PopoverContent align="end" className="w-[200px] p-2">
-            {table
-              .getAllLeafColumns()
-              .filter((col) => col.getCanHide())
-              .map((col) => (
-                <label
-                  className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-sm hover:bg-muted"
-                  key={col.id}
-                >
-                  <Checkbox
-                    checked={col.getIsVisible()}
-                    onCheckedChange={(v) => col.toggleVisibility(!!v)}
-                  />
-                  <span className="truncate">
-                    {COLUMN_LABELS[col.id] ?? humanizeKey(col.id)}
-                  </span>
-                </label>
-              ))}
-          </PopoverContent>
-        </PopoverRoot>
-      </div>
-      <div className="overflow-x-auto rounded-xl border bg-background shadow-[var(--shadow-floating)]">
-        <Table
-          className="w-full table-fixed"
-          style={{ minWidth: table.getTotalSize() }}
-        >
+            {isEn ? "Clear selection" : "Limpiar selección"}
+          </Button>
+        </div>
+      ) : null}
+
+      <div className="overflow-hidden rounded-2xl border border-border/60 bg-background shadow-sm">
+        <Table>
           <TableHeader>
-            {table.getHeaderGroups().map((hg) => (
-              <TableRow key={hg.id}>
-                {hg.headers.map((header) => (
-                  <TableHead
-                    className="relative select-none whitespace-nowrap text-[11px] uppercase tracking-wider"
-                    grid
-                    key={header.id}
-                    style={{ width: header.getSize() }}
-                  >
-                    {header.isPlaceholder ? null : header.column.getCanSort() ? (
-                      <button
-                        className="inline-flex items-center gap-1 hover:text-foreground"
-                        onClick={header.column.getToggleSortingHandler()}
-                        type="button"
-                      >
-                        {flexRender(
-                          header.column.columnDef.header,
-                          header.getContext()
-                        )}
-                        {{
-                          asc: <span className="ml-1 text-[10px]">↑</span>,
-                          desc: <span className="ml-1 text-[10px]">↓</span>,
-                        }[header.column.getIsSorted() as string] ?? null}
-                      </button>
-                    ) : (
-                      flexRender(
-                        header.column.columnDef.header,
-                        header.getContext()
-                      )
-                    )}
-
-                    {header.column.getCanResize() && (
-                      <button
-                        aria-label="Resize column"
-                        className={cn(
-                          "absolute top-0 right-0 h-full w-1 cursor-col-resize touch-none select-none",
-                          "hover:bg-primary/30",
-                          header.column.getIsResizing() && "bg-primary/50"
-                        )}
-                        onDoubleClick={() => header.column.resetSize()}
-                        onMouseDown={header.getResizeHandler()}
-                        onTouchStart={header.getResizeHandler()}
-                        type="button"
-                      />
-                    )}
-                  </TableHead>
-                ))}
-              </TableRow>
-            ))}
+            <TableRow>
+              <TableHead className="w-12">
+                <Checkbox
+                  checked={allSelected}
+                  onCheckedChange={(checked) => toggleAll(Boolean(checked))}
+                />
+              </TableHead>
+              <TableHead>{isEn ? "Unit" : "Unidad"}</TableHead>
+              <TableHead>{isEn ? "Property" : "Propiedad"}</TableHead>
+              <TableHead>{isEn ? "Status" : "Estado"}</TableHead>
+              <TableHead>{isEn ? "Condition" : "Condición"}</TableHead>
+              <TableHead>{isEn ? "Lease" : "Contrato"}</TableHead>
+              <TableHead>{isEn ? "Rent" : "Renta"}</TableHead>
+              <TableHead className="text-right">{isEn ? "Actions" : "Acciones"}</TableHead>
+            </TableRow>
           </TableHeader>
-
           <TableBody>
-            {table.getRowModel().rows.length ? (
-              table.getRowModel().rows.map((row) => (
-                <TableRow
-                  className="hover:bg-muted/20"
-                  data-state={row.getIsSelected() && "selected"}
-                  key={row.id}
-                >
-                  {row.getVisibleCells().map((cell) => (
-                    <TableCell
-                      className="py-1.5"
-                      grid
-                      key={cell.id}
-                      style={{ width: cell.column.getSize() }}
+            {rows.map((row) => (
+              <TableRow key={row.id}>
+                <TableCell>
+                  <Checkbox
+                    checked={selectedSet.has(row.id)}
+                    onCheckedChange={(checked) => toggleRow(row.id, Boolean(checked))}
+                  />
+                </TableCell>
+                <TableCell className="min-w-[12rem] align-top">
+                  <div className="space-y-1">
+                    <p className="font-medium">{row.code}</p>
+                    <EditableCell
+                      displayNode={
+                        <p className="text-muted-foreground text-xs">
+                          {row.name || (isEn ? "Unnamed unit" : "Unidad sin nombre")}
+                        </p>
+                      }
+                      onCommit={(next) => saveField(row.id, "name", next)}
+                      value={row.name ?? ""}
+                    />
+                  </div>
+                </TableCell>
+                <TableCell className="align-top">
+                  <Link
+                    className="text-primary text-sm hover:underline"
+                    href={row.propertyHref}
+                  >
+                    {row.propertyName}
+                  </Link>
+                </TableCell>
+                <TableCell className="align-top">
+                  <StatusBadge value={row.status ?? "active"} />
+                </TableCell>
+                <TableCell className="align-top">{row.conditionStatus || "—"}</TableCell>
+                <TableCell className="align-top">{row.leaseState}</TableCell>
+                <TableCell className="align-top">
+                  {row.rentAmount > 0 ? `${row.currency} ${row.rentAmount}` : "—"}
+                </TableCell>
+                <TableCell className="align-top">
+                  <div className="flex justify-end gap-2">
+                    <Button asChild size="sm" variant="outline">
+                      <Link href={askAiHref(row)}>{isEn ? "Ask AI" : "Preguntar a IA"}</Link>
+                    </Button>
+                    <Button asChild size="sm" variant="outline">
+                      <Link href={row.primaryHref}>{isEn ? "Open" : "Abrir"}</Link>
+                    </Button>
+                    <Button
+                      onClick={() => deleteRow(row)}
+                      size="sm"
+                      type="button"
+                      variant="outline"
                     >
-                      {flexRender(
-                        cell.column.columnDef.cell,
-                        cell.getContext()
-                      )}
-                    </TableCell>
-                  ))}
-                </TableRow>
-              ))
-            ) : (
-              <TableRow>
-                <TableCell
-                  className="h-24 text-center"
-                  colSpan={columns.length}
-                >
-                  {isEn ? "No results." : "Sin resultados."}
+                      {isEn ? "Delete" : "Eliminar"}
+                    </Button>
+                  </div>
                 </TableCell>
               </TableRow>
-            )}
+            ))}
+            <TableRow>
+              <TableCell colSpan={8}>
+                <Button
+                  className="w-full justify-start"
+                  onClick={onOpenCreate}
+                  type="button"
+                  variant="ghost"
+                >
+                  + {isEn ? "Create unit" : "Crear unidad"}
+                </Button>
+              </TableCell>
+            </TableRow>
           </TableBody>
         </Table>
       </div>
-      <DataTablePagination
-        filteredRows={optimisticRows.length}
-        isEn={isEn}
-        table={table}
-        totalRows={totalRowCount}
-      />
     </div>
   );
 }

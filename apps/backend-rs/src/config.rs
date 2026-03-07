@@ -57,6 +57,10 @@ pub struct AppConfig {
     pub openai_primary_model: String,
     pub openai_fallback_models: Vec<String>,
     pub openai_model: Option<String>,
+    pub anthropic_api_key: Option<String>,
+    pub anthropic_api_base_url: String,
+    pub anthropic_primary_model: String,
+    pub anthropic_fallback_models: Vec<String>,
     pub ai_agent_use_responses_api: bool,
     pub ai_agent_max_tool_steps: u32,
     pub ai_agent_timeout_seconds: u64,
@@ -164,6 +168,16 @@ impl AppConfig {
             openai_primary_model: env_or("OPENAI_PRIMARY_MODEL", "gpt-5.2"),
             openai_fallback_models: parse_csv(&env_or("OPENAI_FALLBACK_MODELS", "")),
             openai_model: env_opt("OPENAI_MODEL"),
+            anthropic_api_key: env_opt("ANTHROPIC_API_KEY"),
+            anthropic_api_base_url: env_or(
+                "ANTHROPIC_API_BASE_URL",
+                "https://api.anthropic.com/v1",
+            ),
+            anthropic_primary_model: env_or(
+                "ANTHROPIC_PRIMARY_MODEL",
+                "claude-sonnet-4-6",
+            ),
+            anthropic_fallback_models: parse_csv(&env_or("ANTHROPIC_FALLBACK_MODELS", "")),
             ai_agent_use_responses_api,
             ai_agent_max_tool_steps: env_parse_or("AI_AGENT_MAX_TOOL_STEPS", 6),
             ai_agent_timeout_seconds: env_parse_or("AI_AGENT_TIMEOUT_SECONDS", 45),
@@ -318,6 +332,47 @@ impl AppConfig {
         models
     }
 
+    pub fn anthropic_model_chain(&self) -> Vec<String> {
+        let mut models = Vec::new();
+
+        let primary = self.anthropic_primary_model.trim();
+        if !primary.is_empty() {
+            models.push(primary.to_string());
+        }
+
+        for model in &self.anthropic_fallback_models {
+            let candidate = model.trim();
+            if candidate.is_empty() {
+                continue;
+            }
+            if !models.iter().any(|existing| existing == candidate) {
+                models.push(candidate.to_string());
+            }
+        }
+
+        models
+    }
+
+    pub fn configured_agent_models(&self) -> Vec<String> {
+        let mut models = Vec::new();
+
+        for model in self.openai_model_chain() {
+            let qualified = format!("openai:{model}");
+            if !models.iter().any(|existing| existing == &qualified) {
+                models.push(qualified);
+            }
+        }
+
+        for model in self.anthropic_model_chain() {
+            let qualified = format!("anthropic:{model}");
+            if !models.iter().any(|existing| existing == &qualified) {
+                models.push(qualified);
+            }
+        }
+
+        models
+    }
+
     pub fn openai_chat_completions_url(&self) -> String {
         let base = self.openai_api_base_url.trim().trim_end_matches('/');
         if base.is_empty() {
@@ -342,6 +397,19 @@ impl AppConfig {
         }
 
         format!("{base}/responses")
+    }
+
+    pub fn anthropic_messages_url(&self) -> String {
+        let base = self.anthropic_api_base_url.trim().trim_end_matches('/');
+        if base.is_empty() {
+            return "https://api.anthropic.com/v1/messages".to_string();
+        }
+
+        if base.ends_with("/messages") {
+            return base.to_string();
+        }
+
+        format!("{base}/messages")
     }
 
     pub fn rate_limit_enabled_runtime(&self) -> bool {

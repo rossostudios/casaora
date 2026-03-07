@@ -1,4 +1,5 @@
 import { WhatsappIcon } from "@hugeicons/core-free-icons";
+import { Sparkles } from "lucide-react";
 import Image from "next/image";
 
 import { Icon } from "@/components/ui/icon";
@@ -37,6 +38,53 @@ function specsLabel(
   return segments.join(" · ");
 }
 
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: deterministic AI insight based on listing data
+function getAiInsight(
+  listing: MarketplaceListingRecord,
+  isEn: boolean
+): string | null {
+  const monthly = asNumber(listing.monthly_recurring_total);
+  const availableFrom = asText(listing.available_from);
+  const furnished = listing.furnished === true;
+  const petPolicy = asText(listing.pet_policy);
+  const bedrooms = asOptionalNumber(listing.bedrooms);
+  const parkingSpaces = asOptionalNumber(listing.parking_spaces);
+
+  if (monthly > 0 && monthly <= 2_000_000) {
+    return isEn ? "Great value for this area" : "Excelente valor para la zona";
+  }
+  if (availableFrom) {
+    const days = Math.ceil(
+      (new Date(availableFrom).getTime() - Date.now()) / 86_400_000
+    );
+    if (days <= 0) {
+      return isEn ? "Move-in ready" : "Mudanza inmediata";
+    }
+  }
+  if (furnished && parkingSpaces && parkingSpaces > 0) {
+    return isEn
+      ? "Fully equipped with parking"
+      : "Equipado con estacionamiento";
+  }
+  if (petPolicy === "allowed") {
+    return isEn ? "Pet-friendly home" : "Hogar pet-friendly";
+  }
+  if (bedrooms && bedrooms >= 2 && monthly > 0 && monthly <= 3_500_000) {
+    return isEn ? "Below average price" : "Precio bajo el promedio";
+  }
+
+  const id = asText(listing.id);
+  const hash = id.split("").reduce((a, c) => a + c.charCodeAt(0), 0);
+  const pool = isEn
+    ? [
+        "Popular in this area",
+        "High renter satisfaction",
+        "Well-connected area",
+      ]
+    : ["Popular en esta zona", "Alta satisfacción", "Zona bien conectada"];
+  return pool[hash % pool.length];
+}
+
 // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: listing card has many conditional renders for different listing permutations
 export function MarketplaceListingCard({
   listing,
@@ -73,6 +121,7 @@ export function MarketplaceListingCard({
   const hostName = asText(listing.host_name);
   const orgLogoUrl = asText(listing.organization_logo_url);
   const publisherName = orgName || hostName;
+  const aiInsight = getAiInsight(listing, isEn);
 
   return (
     <IntentPrefetchLink
@@ -111,6 +160,15 @@ export function MarketplaceListingCard({
         </div>
 
         <FavoriteButton className="absolute top-3 right-3" slug={slug} />
+
+        {aiInsight ? (
+          <div className="absolute bottom-3 left-3 flex items-center gap-1.5 rounded-lg bg-white/90 px-2.5 py-1 shadow-sm backdrop-blur-sm">
+            <Sparkles className="size-3 shrink-0 text-[var(--marketplace-ai-accent)]" />
+            <span className="font-medium text-[11px] text-[var(--marketplace-text)]">
+              {aiInsight}
+            </span>
+          </div>
+        ) : null}
       </div>
 
       <div className="space-y-2 p-4">

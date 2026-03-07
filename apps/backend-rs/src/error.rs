@@ -211,6 +211,19 @@ fn classify_database_error(message: &str) -> Option<ClassifiedDbError> {
         });
     }
 
+    if normalized.contains("idx_listings_one_published_per_unit")
+        || (normalized.contains("duplicate key value")
+            && normalized.contains("published")
+            && normalized.contains("unit"))
+    {
+        return Some(ClassifiedDbError {
+            code: "listing_publish_conflict",
+            status: StatusCode::CONFLICT,
+            retryable: false,
+            detail: "This unit already has a published marketplace listing.",
+        });
+    }
+
     if normalized.contains("timed out")
         || normalized.contains("timeout")
         || normalized.contains("connection refused")

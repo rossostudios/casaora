@@ -14,11 +14,14 @@ use crate::{
     repository::table_service::{create_row, get_row, list_rows, update_row},
     schemas::{
         clamp_limit_in_range, remove_nulls, serialize_to_map, CreateLeaseInput, LeasePath,
-        LeaseRentRollQuery, LeasesQuery, UpdateLeaseInput,
+        LeaseRentRollQuery, LeasesOverviewQuery, LeasesQuery, UpdateLeaseInput,
     },
     services::{
-        audit::write_audit_log, lease_schedule::ensure_monthly_lease_schedule,
-        sequences::enroll_in_sequences, workflows::fire_trigger,
+        audit::write_audit_log,
+        lease_schedule::ensure_monthly_lease_schedule,
+        leases::{build_lease_detail_overview, build_leases_overview, enrich_lease_rows},
+        sequences::enroll_in_sequences,
+        workflows::fire_trigger,
     },
     state::AppState,
     tenancy::{assert_org_member, assert_org_role},
@@ -32,10 +35,15 @@ pub fn router() -> axum::Router<AppState> {
             "/leases",
             axum::routing::get(list_leases).post(create_lease),
         )
+        .route("/leases/overview", axum::routing::get(list_leases_overview))
         .route("/leases/rent-roll", axum::routing::get(get_rent_roll))
         .route(
             "/leases/{lease_id}",
             axum::routing::get(get_lease).patch(update_lease),
+        )
+        .route(
+            "/leases/{lease_id}/overview",
+            axum::routing::get(get_lease_overview),
         )
         .route(
             "/leases/{lease_id}/renew",
@@ -90,8 +98,22 @@ async fn list_leases(
     )
     .await?;
 
-    let enriched = enrich_leases(pool, rows).await?;
+    let enriched = enrich_lease_rows(pool, rows).await?;
     Ok(Json(json!({ "data": enriched })))
+}
+
+async fn list_leases_overview(
+    State(state): State<AppState>,
+    Query(query): Query<LeasesOverviewQuery>,
+    headers: HeaderMap,
+) -> AppResult<Json<Value>> {
+    ensure_lease_collections_enabled(&state)?;
+
+    let user_id = require_user_id(&state, &headers).await?;
+    assert_org_member(&state, &user_id, &query.org_id).await?;
+    let pool = db_pool(&state)?;
+
+    Ok(Json(build_leases_overview(pool, &query).await?))
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -596,7 +618,7 @@ async fn create_lease(
         }
     }
 
-    let mut enriched = enrich_leases(pool, vec![lease]).await?;
+    let mut enriched = enrich_lease_rows(pool, vec![lease]).await?;
     let lease_payload = enriched.pop().unwrap_or_else(|| Value::Object(Map::new()));
 
     Ok((
@@ -651,7 +673,7 @@ async fn get_lease(
     )
     .await?;
 
-    let mut enriched = enrich_leases(pool, vec![record]).await?;
+    let mut enriched = enrich_lease_rows(pool, vec![record]).await?;
     let mut item = enriched.pop().unwrap_or_else(|| Value::Object(Map::new()));
     if let Some(obj) = item.as_object_mut() {
         obj.insert("charges".to_string(), Value::Array(charges));
@@ -659,6 +681,24 @@ async fn get_lease(
     }
 
     Ok(Json(item))
+}
+
+async fn get_lease_overview(
+    State(state): State<AppState>,
+    Path(path): Path<LeasePath>,
+    headers: HeaderMap,
+) -> AppResult<Json<Value>> {
+    ensure_lease_collections_enabled(&state)?;
+
+    let user_id = require_user_id(&state, &headers).await?;
+    let pool = db_pool(&state)?;
+    let record = get_row(pool, "leases", &path.lease_id, "id").await?;
+    let org_id = value_str(&record, "organization_id");
+    assert_org_member(&state, &user_id, &org_id).await?;
+
+    Ok(Json(
+        build_lease_detail_overview(pool, &path.lease_id).await?,
+    ))
 }
 
 async fn update_lease(
@@ -817,7 +857,7 @@ async fn update_lease(
         }
     }
 
-    let mut enriched = enrich_leases(pool, vec![updated]).await?;
+    let mut enriched = enrich_lease_rows(pool, vec![updated]).await?;
     Ok(Json(
         enriched.pop().unwrap_or_else(|| Value::Object(Map::new())),
     ))
@@ -1253,168 +1293,6 @@ fn compute_totals(record: &Map<String, Value>) -> LeaseTotals {
         total_move_in: round2(total_move_in),
         monthly_recurring_total: round2(monthly_recurring_total),
     }
-}
-
-async fn enrich_leases(pool: &sqlx::PgPool, rows: Vec<Value>) -> AppResult<Vec<Value>> {
-    if rows.is_empty() {
-        return Ok(rows);
-    }
-
-    let property_ids = extract_ids(&rows, "property_id");
-    let unit_ids = extract_ids(&rows, "unit_id");
-    let lease_ids = extract_ids(&rows, "id");
-
-    let property_ids_for_query = property_ids.clone();
-    let unit_ids_for_query = unit_ids.clone();
-    let lease_ids_for_query = lease_ids.clone();
-    let (properties, units, collections) = tokio::try_join!(
-        async move {
-            if property_ids_for_query.is_empty() {
-                Ok(Vec::new())
-            } else {
-                list_rows(
-                    pool,
-                    "properties",
-                    Some(&json_map(&[(
-                        "id",
-                        Value::Array(
-                            property_ids_for_query
-                                .iter()
-                                .cloned()
-                                .map(Value::String)
-                                .collect(),
-                        ),
-                    )])),
-                    std::cmp::max(200, property_ids_for_query.len() as i64),
-                    0,
-                    "created_at",
-                    false,
-                )
-                .await
-            }
-        },
-        async move {
-            if unit_ids_for_query.is_empty() {
-                Ok(Vec::new())
-            } else {
-                list_rows(
-                    pool,
-                    "units",
-                    Some(&json_map(&[(
-                        "id",
-                        Value::Array(
-                            unit_ids_for_query
-                                .iter()
-                                .cloned()
-                                .map(Value::String)
-                                .collect(),
-                        ),
-                    )])),
-                    std::cmp::max(200, unit_ids_for_query.len() as i64),
-                    0,
-                    "created_at",
-                    false,
-                )
-                .await
-            }
-        },
-        async move {
-            if lease_ids_for_query.is_empty() {
-                Ok(Vec::new())
-            } else {
-                list_rows(
-                    pool,
-                    "collection_records",
-                    Some(&json_map(&[(
-                        "lease_id",
-                        Value::Array(
-                            lease_ids_for_query
-                                .iter()
-                                .cloned()
-                                .map(Value::String)
-                                .collect(),
-                        ),
-                    )])),
-                    std::cmp::max(300, (lease_ids_for_query.len() as i64) * 12),
-                    0,
-                    "created_at",
-                    false,
-                )
-                .await
-            }
-        }
-    )?;
-
-    let property_name = map_by_id_field(&properties, "name");
-    let unit_name = map_by_id_field(&units, "name");
-
-    let mut collection_stats: HashMap<String, LeaseCollectionStats> = HashMap::new();
-    for collection in collections {
-        let Some(collection_obj) = collection.as_object() else {
-            continue;
-        };
-        let Some(lease_id) = string_value(collection_obj.get("lease_id")) else {
-            continue;
-        };
-        let stats = collection_stats.entry(lease_id).or_default();
-        let amount = value_number(collection_obj.get("amount"));
-        stats.count += 1;
-        stats.amount += amount;
-        if string_value(collection_obj.get("status")).as_deref() == Some("paid") {
-            stats.paid_count += 1;
-            stats.paid_amount += amount;
-        }
-    }
-
-    let mut enriched = Vec::with_capacity(rows.len());
-    for mut row in rows {
-        if let Some(obj) = row.as_object_mut() {
-            if let Some(property_id) = string_value(obj.get("property_id")) {
-                obj.insert(
-                    "property_name".to_string(),
-                    property_name
-                        .get(&property_id)
-                        .cloned()
-                        .map(Value::String)
-                        .unwrap_or(Value::Null),
-                );
-            }
-            if let Some(unit_id) = string_value(obj.get("unit_id")) {
-                obj.insert(
-                    "unit_name".to_string(),
-                    unit_name
-                        .get(&unit_id)
-                        .cloned()
-                        .map(Value::String)
-                        .unwrap_or(Value::Null),
-                );
-            }
-
-            let lease_id = string_value(obj.get("id")).unwrap_or_default();
-            let stats = collection_stats.get(&lease_id).cloned().unwrap_or_default();
-            obj.insert("collection_count".to_string(), json!(stats.count));
-            obj.insert("collection_paid_count".to_string(), json!(stats.paid_count));
-            obj.insert(
-                "collection_amount_total".to_string(),
-                json!(round2(stats.amount)),
-            );
-            obj.insert(
-                "collection_amount_paid".to_string(),
-                json!(round2(stats.paid_amount)),
-            );
-        }
-        enriched.push(row);
-    }
-
-    Ok(enriched)
-}
-
-#[derive(Debug, Clone, Copy, Default)]
-struct LeaseCollectionStats {
-    count: i32,
-    paid_count: i32,
-    amount: f64,
-    paid_amount: f64,
 }
 
 fn extract_ids(rows: &[Value], key: &str) -> HashSet<String> {

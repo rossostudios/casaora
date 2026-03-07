@@ -21,7 +21,13 @@
       }
     ],
     "paths": {
-      "@/*": ["./*"]
+      "@/*": ["./*"],
+      "@casaora/marketplace-shared": [
+        "../../packages/marketplace-shared/src/index.ts"
+      ],
+      "@casaora/marketplace-shared/*": [
+        "../../packages/marketplace-shared/src/*"
+      ]
     }
   },
   "include": [

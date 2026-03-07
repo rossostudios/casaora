@@ -53,7 +53,7 @@ export function Topbar({
         <div className="min-w-0">
           {pathname === "/app" ? (
             <h2 className="truncate font-semibold text-base md:text-lg">
-              {isEn ? "Dashboard" : "Panel"}
+              {isEn ? "Today" : "Hoy"}
             </h2>
           ) : (
             <AppBreadcrumbs className="truncate" locale={locale} />

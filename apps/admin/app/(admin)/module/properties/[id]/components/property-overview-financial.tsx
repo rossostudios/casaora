@@ -13,6 +13,29 @@ type PropertyOverviewFinancialProps = {
   isEn: boolean;
 };
 
+const EXPENSE_COLORS = [
+  "bg-blue-500",
+  "bg-amber-500",
+  "bg-emerald-500",
+  "bg-purple-500",
+  "bg-red-500",
+  "bg-sky-500",
+  "bg-pink-500",
+  "bg-indigo-500",
+];
+
+const AMBIENT_EN = [
+  "Checking vacancy risk",
+  "Monitoring competitor pricing",
+  "Scanning maintenance signals",
+];
+
+const AMBIENT_ES = [
+  "Analizando riesgo de vacantes",
+  "Monitoreando precios competidores",
+  "Escaneando señales de mantenimiento",
+];
+
 export function PropertyOverviewFinancial({
   overview,
   recordId,
@@ -38,18 +61,27 @@ export function PropertyOverviewFinancial({
     ? String(overview.latestStatement.id ?? "")
     : "";
 
+  const collectionProgress =
+    overview.projectedRentPyg > 0
+      ? Math.round(
+          (overview.collectedThisMonthPyg / overview.projectedRentPyg) * 100
+        )
+      : 0;
+
+  const ambientLines = isEn ? AMBIENT_EN : AMBIENT_ES;
+
   return (
-    <section className="space-y-6">
+    <section className="space-y-8">
       {/* ---- Financial Pulse ---- */}
-      <div className="space-y-4 rounded-2xl border border-border/60 bg-card p-5">
+      <div className="space-y-5">
         <div className="flex items-center justify-between gap-3">
-          <h3 className="font-semibold text-[10px] text-muted-foreground/70 uppercase tracking-[0.1em]">
+          <h3 className="font-semibold text-[10px] text-muted-foreground/50 uppercase tracking-[0.1em]">
             {isEn ? "Financial pulse" : "Pulso financiero"}
           </h3>
           <Link
             className={cn(
-              buttonVariants({ size: "sm", variant: "outline" }),
-              "h-7 rounded-lg px-3 text-xs"
+              buttonVariants({ size: "sm", variant: "ghost" }),
+              "h-7 px-2 text-[11px] text-muted-foreground"
             )}
             href={`/module/reports?property_id=${encodeURIComponent(recordId)}`}
           >
@@ -57,23 +89,23 @@ export function PropertyOverviewFinancial({
           </Link>
         </div>
 
-        <p className="text-muted-foreground text-xs">
+        <p className="text-muted-foreground/50 text-xs">
           {isEn
             ? `Snapshot for ${overview.monthLabel}`
             : `Resumen de ${overview.monthLabel}`}
         </p>
 
-        {/* Net income — recessed card */}
-        <div className="rounded-xl bg-muted/30 p-4">
-          <p className="font-semibold text-[10px] text-muted-foreground/70 uppercase tracking-[0.1em]">
+        {/* Net income — flat, no card */}
+        <div className="space-y-1">
+          <p className="font-semibold text-[10px] text-muted-foreground/60 uppercase tracking-[0.1em]">
             {isEn ? "Net income" : "Ingreso neto"}
           </p>
-          <p className="mt-1 font-extrabold text-[28px] tabular-nums leading-8 tracking-tight">
+          <p className="font-bold text-2xl tabular-nums tracking-tight">
             {formatCurrency(overview.monthNetIncomePyg, "PYG", locale)}
           </p>
           <p
             className={cn(
-              "mt-1.5 font-medium text-xs",
+              "text-xs",
               netIncomePositive
                 ? "text-[var(--status-success-fg)]"
                 : "text-[var(--status-danger-fg)]"
@@ -89,32 +121,32 @@ export function PropertyOverviewFinancial({
           </p>
         </div>
 
-        {/* Income / Expenses side-by-side */}
-        <div className="grid grid-cols-2 gap-3">
+        {/* Income / Expenses */}
+        <div className="grid grid-cols-2 gap-6">
           <div className="space-y-0.5">
-            <p className="font-semibold text-[10px] text-muted-foreground/70 uppercase tracking-[0.1em]">
+            <p className="text-[10px] text-muted-foreground/60 uppercase tracking-wide">
               {isEn ? "Income" : "Ingreso"}
             </p>
-            <p className="font-bold text-[var(--status-success-fg)] text-lg tabular-nums tracking-tight">
+            <p className="font-semibold text-[var(--status-success-fg)] tabular-nums">
               {formatCurrency(overview.monthIncomePyg, "PYG", locale)}
             </p>
           </div>
           <div className="space-y-0.5">
-            <p className="font-semibold text-[10px] text-muted-foreground/70 uppercase tracking-[0.1em]">
+            <p className="text-[10px] text-muted-foreground/60 uppercase tracking-wide">
               {isEn ? "Expenses" : "Gastos"}
             </p>
-            <p className="font-bold text-lg tabular-nums tracking-tight">
+            <p className="font-semibold tabular-nums">
               {formatCurrency(overview.monthExpensePyg, "PYG", locale)}
             </p>
           </div>
         </div>
 
-        {/* Collected / Overdue row */}
+        {/* Collected / Overdue */}
         {(overview.collectedThisMonthPyg > 0 ||
           overview.overdueCollectionAmountPyg > 0) && (
-          <div className="grid grid-cols-2 gap-3 border-border/40 border-t pt-3">
+          <div className="grid grid-cols-2 gap-6">
             <div className="space-y-0.5">
-              <p className="font-semibold text-[10px] text-muted-foreground/70 uppercase tracking-[0.1em]">
+              <p className="text-[10px] text-muted-foreground/60 uppercase tracking-wide">
                 {isEn ? "Collected" : "Cobrado"}
               </p>
               <p className="font-semibold text-[var(--status-success-fg)] text-sm tabular-nums">
@@ -124,10 +156,10 @@ export function PropertyOverviewFinancial({
             <div className="space-y-0.5">
               <p
                 className={cn(
-                  "font-semibold text-[10px] uppercase tracking-[0.1em]",
+                  "text-[10px] uppercase tracking-wide",
                   overview.overdueCollectionAmountPyg > 0
                     ? "text-[var(--status-danger-fg)]"
-                    : "text-muted-foreground/70"
+                    : "text-muted-foreground/60"
                 )}
               >
                 {isEn ? "Overdue" : "Vencido"}
@@ -153,10 +185,12 @@ export function PropertyOverviewFinancial({
           </div>
         )}
 
-        {/* Occupancy / Expense ratio — bordered list rows */}
-        <div className="overflow-hidden rounded-xl border border-border/40">
-          <div className="flex items-center justify-between gap-3 px-3.5 py-2.5">
-            <span className="text-[13px] text-muted-foreground">
+        <div className="h-px bg-border/15" />
+
+        {/* Ratios — flat rows with spacing */}
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <span className="text-[13px] text-muted-foreground/60">
               {isEn ? "Occupancy" : "Ocupación"}
             </span>
             <span
@@ -172,112 +206,152 @@ export function PropertyOverviewFinancial({
               {occupancyValue}%
             </span>
           </div>
-          <div className="flex items-center justify-between gap-3 border-border/40 border-t px-3.5 py-2.5">
-            <span className="text-[13px] text-muted-foreground">
+          <div className="flex items-center justify-between">
+            <span className="text-[13px] text-muted-foreground/60">
               {isEn ? "Expense ratio" : "Ratio de gasto"}
             </span>
-            <span className="font-semibold text-[13px] tabular-nums">
-              {hasIncome ? `${expenseRatio}%` : "-"}
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="font-semibold text-[13px] tabular-nums">
+                {hasIncome ? `${expenseRatio}%` : "-"}
+              </span>
+              {hasIncome && expenseRatio > 50 && (
+                <span className="text-[10px] text-amber-600 dark:text-amber-400">
+                  {isEn ? "High" : "Alto"}
+                </span>
+              )}
+            </div>
           </div>
+          {overview.projectedRentPyg > 0 && (
+            <div className="flex items-center justify-between">
+              <span className="text-[13px] text-muted-foreground/60">
+                {isEn ? "Collection progress" : "Progreso de cobro"}
+              </span>
+              <span
+                className={cn(
+                  "font-semibold text-[13px] tabular-nums",
+                  collectionProgress >= 80
+                    ? "text-[var(--status-success-fg)]"
+                    : collectionProgress >= 50
+                      ? "text-[var(--status-warning-fg)]"
+                      : "text-[var(--status-danger-fg)]"
+                )}
+              >
+                {collectionProgress}%
+              </span>
+            </div>
+          )}
         </div>
 
-        {/* Expense breakdown */}
-        {overview.expenseCategoryBreakdown.length ? (
-          <div className="space-y-2 border-border/40 border-t pt-3">
-            <h4 className="font-semibold text-[10px] text-muted-foreground/70 uppercase tracking-[0.1em]">
-              {isEn ? "Expense breakdown" : "Desglose de gastos"}
-            </h4>
-            <div className="overflow-hidden rounded-xl border border-border/40">
-              {overview.expenseCategoryBreakdown.map((row, i) => {
-                const categoryShare =
-                  overview.monthExpensePyg > 0
-                    ? Math.round((row.amount / overview.monthExpensePyg) * 100)
-                    : 0;
-                return (
-                  <div
-                    className={cn(
-                      "flex items-center justify-between gap-3 px-3.5 py-2.5",
-                      i < overview.expenseCategoryBreakdown.length - 1 &&
-                        "border-border/20 border-b"
-                    )}
-                    key={row.category}
-                  >
-                    <span className="truncate text-[13px]">
-                      {humanizeKey(row.category)}
-                    </span>
-                    <div className="flex shrink-0 items-center gap-2">
-                      <span className="text-[11px] text-muted-foreground tabular-nums">
-                        {categoryShare}%
-                      </span>
-                      <span className="font-medium text-[13px] tabular-nums">
-                        {formatCurrency(row.amount, "PYG", locale)}
+        {/* Mini expense bar */}
+        {overview.expenseCategoryBreakdown.length > 0 &&
+          overview.monthExpensePyg > 0 && (
+            <>
+              <div className="h-px bg-border/15" />
+              <div className="space-y-2">
+                <h4 className="text-[10px] text-muted-foreground/50 uppercase tracking-wide">
+                  {isEn ? "Expense breakdown" : "Desglose de gastos"}
+                </h4>
+                <div className="flex h-1.5 overflow-hidden rounded-full bg-muted/20">
+                  {overview.expenseCategoryBreakdown.map((row, i) => {
+                    const pct = Math.max(
+                      1,
+                      Math.round(
+                        (row.amount / overview.monthExpensePyg) * 100
+                      )
+                    );
+                    return (
+                      <div
+                        className={cn(
+                          "h-full",
+                          EXPENSE_COLORS[i % EXPENSE_COLORS.length]
+                        )}
+                        key={row.category}
+                        style={{ width: `${pct}%` }}
+                        title={`${humanizeKey(row.category)}: ${pct}%`}
+                      />
+                    );
+                  })}
+                </div>
+                <div className="flex flex-wrap gap-x-3 gap-y-1">
+                  {overview.expenseCategoryBreakdown.map((row, i) => (
+                    <div className="flex items-center gap-1" key={row.category}>
+                      <div
+                        className={cn(
+                          "h-1.5 w-1.5 rounded-full",
+                          EXPENSE_COLORS[i % EXPENSE_COLORS.length]
+                        )}
+                      />
+                      <span className="text-[10px] text-muted-foreground/50">
+                        {humanizeKey(row.category)}
                       </span>
                     </div>
-                  </div>
-                );
-              })}
-            </div>
-            {overview.totalExpenseCategoryCount >
-            overview.expenseCategoryBreakdown.length ? (
-              <p className="text-center text-muted-foreground text-xs">
-                +
-                {overview.totalExpenseCategoryCount -
-                  overview.expenseCategoryBreakdown.length}{" "}
-                {isEn ? "more categories" : "categorías más"}
-              </p>
-            ) : null}
-          </div>
-        ) : null}
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
 
         {/* Latest statement */}
         {overview.latestStatement ? (
-          <div className="flex items-center justify-between gap-3 border-border/40 border-t pt-3">
-            <div className="min-w-0">
-              <p className="font-semibold text-[10px] text-muted-foreground/70 uppercase tracking-[0.1em]">
-                {isEn
-                  ? "Latest owner statement"
-                  : "Último estado del propietario"}
-              </p>
-              <p className="mt-0.5 font-medium text-sm tabular-nums">
-                {formatCurrency(
-                  Number(overview.latestStatement.net_payout ?? 0),
-                  String(overview.latestStatement.currency ?? "PYG"),
-                  locale
-                )}
-              </p>
+          <>
+            <div className="h-px bg-border/15" />
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-[10px] text-muted-foreground/50 uppercase tracking-wide">
+                  {isEn
+                    ? "Latest owner statement"
+                    : "Último estado del propietario"}
+                </p>
+                <p className="mt-0.5 font-medium text-sm tabular-nums">
+                  {formatCurrency(
+                    Number(overview.latestStatement.net_payout ?? 0),
+                    String(overview.latestStatement.currency ?? "PYG"),
+                    locale
+                  )}
+                </p>
+              </div>
+              <div className="flex shrink-0 items-center gap-2">
+                <StatusBadge
+                  value={String(overview.latestStatement.status ?? "unknown")}
+                />
+                {latestStatementId && isUuid(latestStatementId) ? (
+                  <Link
+                    className="text-primary text-xs hover:underline"
+                    href={`/module/owner-statements/${latestStatementId}`}
+                  >
+                    {isEn ? "Open" : "Abrir"}
+                  </Link>
+                ) : null}
+              </div>
             </div>
-            <div className="flex shrink-0 items-center gap-2">
-              <StatusBadge
-                value={String(overview.latestStatement.status ?? "unknown")}
-              />
-              {latestStatementId && isUuid(latestStatementId) ? (
-                <Link
-                  className="text-primary text-xs hover:underline"
-                  href={`/module/owner-statements/${latestStatementId}`}
-                >
-                  {isEn ? "Open" : "Abrir"}
-                </Link>
-              ) : null}
-            </div>
-          </div>
+          </>
         ) : null}
       </div>
 
+      {/* ---- AI Monitoring ---- */}
+      <div className="space-y-3">
+        <h3 className="font-semibold text-[10px] text-muted-foreground/50 uppercase tracking-[0.1em]">
+          {isEn ? "AI Monitoring" : "Monitoreo IA"}
+        </h3>
+        <div className="space-y-2">
+          {ambientLines.map((line) => (
+            <div
+              className="flex items-center gap-2 text-xs text-muted-foreground/40"
+              key={line}
+            >
+              <span className="gentle-pulse h-1.5 w-1.5 shrink-0 rounded-full bg-[var(--agentic-cyan)]" />
+              <span>{line}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
       {/* ---- Urgent Attention ---- */}
-      <div className="space-y-4 rounded-2xl border border-border/60 bg-card p-5">
-        <div className="space-y-1">
-          <h3 className="font-semibold text-[10px] text-muted-foreground/70 uppercase tracking-[0.1em]">
+      {overview.attentionItems.length > 0 && (
+        <div className="space-y-3">
+          <h3 className="font-semibold text-[10px] text-muted-foreground/50 uppercase tracking-[0.1em]">
             {isEn ? "Urgent attention" : "Atención urgente"}
           </h3>
-          <p className="text-muted-foreground text-xs">
-            {isEn
-              ? "Items that can impact occupancy, cash flow, or lease continuity."
-              : "Elementos que afectan ocupación, flujo de caja o continuidad del contrato."}
-          </p>
-        </div>
-
-        {overview.attentionItems.length ? (
           <div className="space-y-2">
             {overview.attentionItems.map((item) => {
               const borderColor =
@@ -289,19 +363,19 @@ export function PropertyOverviewFinancial({
               return (
                 <article
                   className={cn(
-                    "rounded-lg border-l-2 bg-muted/20 py-2.5 pr-3 pl-3",
+                    "rounded-lg border-l-2 py-2.5 pr-3 pl-3",
                     borderColor
                   )}
                   key={item.id}
                 >
                   <p className="font-medium text-sm">{item.title}</p>
-                  <p className="mt-0.5 text-muted-foreground text-xs">
+                  <p className="mt-0.5 text-muted-foreground/60 text-xs">
                     {item.detail}
                   </p>
                   <Link
                     className={cn(
-                      buttonVariants({ size: "sm", variant: "outline" }),
-                      "mt-2 h-6 rounded-md px-2 text-xs"
+                      buttonVariants({ size: "sm", variant: "ghost" }),
+                      "mt-1.5 h-6 px-2 text-[11px]"
                     )}
                     href={item.href}
                   >
@@ -311,57 +385,39 @@ export function PropertyOverviewFinancial({
               );
             })}
           </div>
-        ) : (
-          <p className="text-muted-foreground text-sm">
-            {isEn
-              ? "No urgent blockers right now."
-              : "No hay bloqueos urgentes por ahora."}
-          </p>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* ---- Lease Renewals ---- */}
-      {overview.leasesExpiringSoon.length > 0 ? (
-        <div className="space-y-4 rounded-2xl border border-border/60 bg-card p-5">
+      {overview.leasesExpiringSoon.length > 0 && (
+        <div className="space-y-3">
+          <h3 className="font-semibold text-[10px] text-muted-foreground/50 uppercase tracking-[0.1em]">
+            {isEn ? "Lease renewals" : "Renovaciones de contrato"}
+          </h3>
           <div className="space-y-1">
-            <h3 className="font-semibold text-[10px] text-muted-foreground/70 uppercase tracking-[0.1em]">
-              {isEn ? "Lease renewals" : "Renovaciones de contrato"}
-            </h3>
-            <p className="text-muted-foreground text-xs">
-              {isEn
-                ? "Leases expiring within 90 days."
-                : "Contratos que vencen en los próximos 90 días."}
-            </p>
-          </div>
-
-          <div className="overflow-hidden rounded-xl border border-border/40">
-            {overview.leasesExpiringSoon.map((lease, i) => {
+            {overview.leasesExpiringSoon.map((lease) => {
               const urgencyColor =
                 lease.daysLeft <= 30
-                  ? "status-tone-danger"
+                  ? "text-[var(--status-danger-fg)]"
                   : lease.daysLeft <= 60
-                    ? "status-tone-warning"
-                    : "status-tone-info";
+                    ? "text-[var(--status-warning-fg)]"
+                    : "text-muted-foreground";
               return (
                 <div
-                  className={cn(
-                    "flex items-center justify-between gap-3 px-3.5 py-2.5",
-                    i < overview.leasesExpiringSoon.length - 1 &&
-                      "border-border/20 border-b"
-                  )}
+                  className="flex items-center justify-between gap-3 py-1.5"
                   key={lease.leaseId}
                 >
-                  <div className="min-w-0 space-y-0.5">
-                    <p className="truncate font-medium text-[13px]">
+                  <div className="min-w-0">
+                    <p className="truncate text-[13px]">
                       {lease.tenantName}
                     </p>
-                    <p className="text-muted-foreground text-xs">
+                    <p className="text-muted-foreground/50 text-[11px]">
                       {lease.unitLabel}
                     </p>
                   </div>
                   <span
                     className={cn(
-                      "inline-flex shrink-0 rounded-full border px-2 py-0.5 font-medium text-[11px]",
+                      "shrink-0 font-medium text-[11px] tabular-nums",
                       urgencyColor
                     )}
                   >
@@ -372,7 +428,7 @@ export function PropertyOverviewFinancial({
             })}
           </div>
         </div>
-      ) : null}
+      )}
     </section>
   );
 }

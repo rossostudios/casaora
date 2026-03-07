@@ -14,6 +14,7 @@ import { getActiveOrgId } from "@/lib/org";
 
 import { AgentAnalytics } from "./agent-analytics";
 import { AgentHealth } from "./agent-health";
+import { AgentRuns } from "./agent-runs";
 import { AgentTraces } from "./agent-traces";
 import { CommandCenter } from "./command-center";
 
@@ -107,6 +108,8 @@ export default async function AgentDashboardPage(_props: PageProps) {
       </header>
 
       <CommandCenter initialStats={stats} locale={locale} orgId={orgId} />
+
+      <AgentRuns locale={locale} orgId={orgId} />
 
       <Card>
         <CardHeader className="space-y-1">

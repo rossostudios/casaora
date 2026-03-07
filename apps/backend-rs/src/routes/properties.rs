@@ -48,6 +48,10 @@ pub fn router() -> axum::Router<AppState> {
             "/properties/{property_id}/hierarchy",
             axum::routing::get(get_property_hierarchy),
         )
+        .route(
+            "/properties/{property_id}/twin",
+            axum::routing::get(get_property_twin),
+        )
         .route("/units/bulk-update", axum::routing::post(bulk_update_units))
         .route("/units", axum::routing::get(list_units).post(create_unit))
         .route(
@@ -323,6 +327,24 @@ async fn list_units(
     .await?;
     let enriched = enrich_units(&state, pool, rows, &org_id).await?;
     Ok(Json(json!({ "data": enriched })))
+}
+
+async fn get_property_twin(
+    State(state): State<AppState>,
+    Path(path): Path<PropertyPath>,
+    headers: HeaderMap,
+) -> AppResult<Json<Value>> {
+    let user_id = require_user_id(&state, &headers).await?;
+    let pool = db_pool(&state)?;
+
+    let property = get_row(pool, "properties", &path.property_id, "id").await?;
+    let org_id = value_str(&property, "organization_id");
+    assert_org_member(&state, &user_id, &org_id).await?;
+
+    let twin =
+        crate::services::digital_twin::get_property_state(pool, &org_id, &path.property_id).await?;
+
+    Ok(Json(twin))
 }
 
 const BULK_UPDATE_UNITS_APPLY_CAP: i64 = 500;
@@ -741,7 +763,7 @@ fn duplicate_unit_code_message(code: &str, suggestion: &str) -> String {
     format!("Unit code '{code}' already exists for this property.")
 }
 
-fn build_property_hierarchy(
+pub(crate) fn build_property_hierarchy(
     property: Value,
     mut floors: Vec<Value>,
     mut units: Vec<Value>,

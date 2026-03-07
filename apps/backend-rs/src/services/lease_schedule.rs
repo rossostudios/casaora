@@ -5,6 +5,7 @@ use sqlx::PgPool;
 use crate::{
     error::{AppError, AppResult},
     repository::table_service::{create_row, list_rows},
+    services::json_helpers::round2,
 };
 
 const DEFAULT_COLLECTION_SCHEDULE_MONTHS: i32 = 12;
@@ -272,6 +273,3 @@ fn value_str(value: Option<&Value>) -> Option<&str> {
         .filter(|value| !value.is_empty())
 }
 
-fn round2(value: f64) -> f64 {
-    (value * 100.0).round() / 100.0
-}

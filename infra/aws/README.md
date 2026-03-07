@@ -15,7 +15,10 @@ This directory contains the AWS infrastructure scaffold for Casaora on:
 - `infra/aws/ecs/taskdef.backend.json` — ECS task definition template (backend)
 - `infra/aws/ecs/taskdef.admin.json` — ECS task definition template (admin)
 - `infra/aws/ecs/taskdef.web.json` — ECS task definition template (web)
+- `infra/aws/ecs/taskdef.db-migration.json` — ECS task definition template for production SQL tasks
 - `scripts/aws/check-access.sh` — sanity checks for AWS CLI access and required services
+- `scripts/aws/run-rds-sql-task.sh` — run an arbitrary SQL file against the production RDS target through ECS
+- `scripts/aws/apply-rds-migrations.sh` — apply pending repo migrations using the `schema_migrations` ledger
 - `infra/aws/cloudflare-cutover-checklist.md` — Cloudflare cutover/rollback checklist
 
 ## Architecture
@@ -73,6 +76,22 @@ Frontend (admin task secrets/env):
 - `NEXT_PUBLIC_API_BASE_URL`
 - `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`
 - `CLERK_SECRET_KEY`
+
+Admin auth verification after deploy:
+
+- Confirm the latest admin task definition/image revision is running
+- Confirm `CLERK_SECRET_KEY` is still injected in the admin task
+- Sign into the admin app and verify `/api/auth/diagnostics` reports `canGetToken: true`
+- Verify `/module/properties` and `/module/applications` load without `401 Unauthorized`
+
+## Production Migrations
+
+- First adoption on an existing environment already brought up to current schema:
+  `./scripts/aws/apply-rds-migrations.sh --baseline-existing`
+- Normal ongoing use:
+  `./scripts/aws/apply-rds-migrations.sh`
+- The migration runner records applied filenames and checksums in `schema_migrations`
+- If a migration filename already exists in the ledger with a different checksum, the runner stops and reports drift
 
 Cloud Map (optional but recommended):
 

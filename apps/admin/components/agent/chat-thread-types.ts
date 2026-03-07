@@ -103,6 +103,8 @@ function normalizeMessages(payload: unknown): AgentChatMessage[] {
         id: String(row.id ?? ""),
         chat_id: String(row.chat_id ?? ""),
         org_id: String(row.org_id ?? ""),
+        agent_run_id:
+          typeof row.agent_run_id === "string" ? row.agent_run_id : null,
         role,
         content: String(row.content ?? ""),
         tool_trace: Array.isArray(row.tool_trace)

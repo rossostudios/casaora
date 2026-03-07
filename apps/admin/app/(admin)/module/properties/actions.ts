@@ -50,10 +50,26 @@ function propertiesUrl(params?: { success?: string; error?: string }): string {
   return suffix ? `/module/properties?${suffix}` : "/module/properties";
 }
 
+function appendParamsToReturnTo(
+  returnTo: string,
+  params?: { success?: string; error?: string }
+): string {
+  const trimmed = returnTo.trim();
+  if (!trimmed.startsWith("/")) {
+    return propertiesUrl(params);
+  }
+
+  const url = new URL(trimmed, "http://localhost");
+  if (params?.success) url.searchParams.set("success", params.success);
+  if (params?.error) url.searchParams.set("error", params.error);
+  return `${url.pathname}${url.search}`;
+}
+
 export async function createPropertyFromPropertiesModuleAction(
   formData: FormData
 ) {
   const organization_id = toStringValue(formData.get("organization_id"));
+  const return_to = toStringValue(formData.get("return_to"));
   const name = toStringValue(formData.get("name"));
   const code = toOptionalStringValue(formData, "code");
   const status = toOptionalStringValue(formData, "status")?.toLowerCase();
@@ -91,10 +107,16 @@ export async function createPropertyFromPropertiesModuleAction(
   );
 
   if (!organization_id) {
-    redirect(propertiesUrl({ error: "Missing organization context." }));
+    redirect(
+      appendParamsToReturnTo(return_to, {
+        error: "Missing organization context.",
+      })
+    );
   }
   if (!name) {
-    redirect(propertiesUrl({ error: "name is required" }));
+    redirect(
+      appendParamsToReturnTo(return_to, { error: "name is required" })
+    );
   }
 
   try {
@@ -123,12 +145,16 @@ export async function createPropertyFromPropertiesModuleAction(
   } catch (err) {
     unstable_rethrow(err);
     const message = err instanceof Error ? err.message : String(err);
-    redirect(propertiesUrl({ error: message.slice(0, 240) }));
+    redirect(
+      appendParamsToReturnTo(return_to, { error: message.slice(0, 240) })
+    );
   }
 
   revalidatePath("/module/properties");
   revalidatePath("/setup");
-  redirect(propertiesUrl({ success: "property-created" }));
+  redirect(
+    appendParamsToReturnTo(return_to, { success: "property-created" })
+  );
 }
 
 const FIELD_TO_API_KEY: Record<string, string> = {
@@ -152,5 +178,6 @@ export async function updatePropertyInlineAction({
     return { ok: false, error: message.slice(0, 240) };
   }
   revalidatePath("/module/properties");
+  revalidatePath(`/module/properties/${propertyId}`);
   return { ok: true };
 }

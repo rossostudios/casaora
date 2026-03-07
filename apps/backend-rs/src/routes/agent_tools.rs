@@ -182,6 +182,7 @@ async fn post_execute_tool(
             allowed_tools: allowed_tools.as_deref(),
             agent_slug: payload.agent_slug.as_deref(),
             chat_id: payload.chat_id.as_deref(),
+            agent_run_id: None,
             requested_by_user_id: Some(&user_id),
             approved_execution: false,
         },

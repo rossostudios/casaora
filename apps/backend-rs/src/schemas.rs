@@ -873,6 +873,27 @@ pub struct ReservationsQuery {
 }
 
 #[derive(Debug, Clone, Deserialize, serde::Serialize)]
+pub struct ReservationsOverviewQuery {
+    pub org_id: String,
+    pub q: Option<String>,
+    pub status: Option<String>,
+    pub source: Option<String>,
+    pub property_id: Option<String>,
+    pub unit_id: Option<String>,
+    pub stay_phase: Option<String>,
+    #[serde(rename = "from", alias = "from_date")]
+    pub from_date: Option<String>,
+    #[serde(rename = "to", alias = "to_date")]
+    pub to_date: Option<String>,
+    pub view: Option<String>,
+    pub sort: Option<String>,
+    #[serde(default = "default_overview_limit")]
+    pub limit: i64,
+    #[serde(default)]
+    pub offset: i64,
+}
+
+#[derive(Debug, Clone, Deserialize, serde::Serialize)]
 pub struct CalendarAvailabilityQuery {
     pub org_id: String,
     pub unit_id: String,
@@ -900,6 +921,25 @@ pub struct TasksQuery {
     pub reservation_id: Option<String>,
     #[serde(default = "default_limit_200")]
     pub limit: i64,
+}
+
+#[derive(Debug, Clone, Deserialize, serde::Serialize)]
+pub struct OperationsOverviewQuery {
+    pub org_id: String,
+    pub q: Option<String>,
+    pub property_id: Option<String>,
+    pub unit_id: Option<String>,
+    pub assigned_user_id: Option<String>,
+    pub reservation_id: Option<String>,
+    pub task_id: Option<String>,
+    pub request_id: Option<String>,
+    pub kind: Option<String>,
+    pub view: Option<String>,
+    pub sort: Option<String>,
+    #[serde(default = "default_overview_limit")]
+    pub limit: i64,
+    #[serde(default)]
+    pub offset: i64,
 }
 
 #[derive(Debug, Clone, Deserialize, serde::Serialize)]
@@ -948,6 +988,22 @@ pub struct LeasesQuery {
     pub bed_id: Option<String>,
     #[serde(default = "default_limit_300")]
     pub limit: i64,
+}
+
+#[derive(Debug, Clone, Deserialize, serde::Serialize)]
+pub struct LeasesOverviewQuery {
+    pub org_id: String,
+    pub q: Option<String>,
+    pub lease_status: Option<String>,
+    pub renewal_status: Option<String>,
+    pub property_id: Option<String>,
+    pub unit_id: Option<String>,
+    pub view: Option<String>,
+    pub sort: Option<String>,
+    #[serde(default = "default_overview_limit")]
+    pub limit: i64,
+    #[serde(default)]
+    pub offset: i64,
 }
 
 #[derive(Debug, Clone, Deserialize, serde::Serialize)]
@@ -1067,6 +1123,7 @@ pub struct SendMessageInput {
     pub template_id: Option<String>,
     pub reservation_id: Option<String>,
     pub guest_id: Option<String>,
+    pub application_id: Option<String>,
     pub variables: Option<serde_json::Value>,
     pub scheduled_at: Option<String>,
     pub body: Option<String>,
@@ -1139,6 +1196,25 @@ pub struct ApplicationsQuery {
 }
 
 #[derive(Debug, Clone, Deserialize, serde::Serialize)]
+pub struct ApplicationsOverviewQuery {
+    pub org_id: String,
+    pub q: Option<String>,
+    pub status: Option<String>,
+    pub assigned_user_id: Option<String>,
+    pub listing_id: Option<String>,
+    pub property_id: Option<String>,
+    pub qualification_band: Option<String>,
+    pub response_sla_status: Option<String>,
+    pub source: Option<String>,
+    pub view: Option<String>,
+    pub sort: Option<String>,
+    #[serde(default = "default_limit_50")]
+    pub limit: i64,
+    #[serde(default)]
+    pub offset: i64,
+}
+
+#[derive(Debug, Clone, Deserialize, serde::Serialize)]
 pub struct ApplicationPath {
     pub application_id: String,
 }
@@ -1147,6 +1223,7 @@ pub struct ApplicationPath {
 pub struct ApplicationStatusInput {
     pub status: String,
     pub assigned_user_id: Option<String>,
+    pub clear_assignee: Option<bool>,
     pub rejected_reason: Option<String>,
     pub note: Option<String>,
 }
@@ -1254,6 +1331,26 @@ pub struct ListingsQuery {
     pub sort_order: String,
     #[serde(default = "default_limit_200")]
     pub limit: i64,
+}
+
+fn default_overview_limit() -> i64 {
+    50
+}
+
+#[derive(Debug, Clone, Deserialize, serde::Serialize)]
+pub struct ListingsOverviewQuery {
+    pub org_id: String,
+    pub q: Option<String>,
+    pub property_id: Option<String>,
+    pub unit_id: Option<String>,
+    pub published_state: Option<String>,
+    pub lifecycle_state: Option<String>,
+    pub view: Option<String>,
+    pub sort: Option<String>,
+    #[serde(default = "default_overview_limit")]
+    pub limit: i64,
+    #[serde(default)]
+    pub offset: i64,
 }
 
 #[derive(Debug, Clone, Deserialize, serde::Serialize)]
@@ -1527,6 +1624,10 @@ fn default_limit_500() -> i64 {
     500
 }
 
+fn default_limit_50() -> i64 {
+    50
+}
+
 #[derive(Debug, Clone, Deserialize, serde::Serialize)]
 pub struct MessageLogsQuery {
     pub org_id: String,
@@ -1534,6 +1635,7 @@ pub struct MessageLogsQuery {
     pub status: Option<String>,
     pub direction: Option<String>,
     pub guest_id: Option<String>,
+    pub application_id: Option<String>,
     #[serde(default = "default_limit_500")]
     pub limit: i64,
 }

@@ -1,215 +1,148 @@
-import {
-  ChartIcon,
-  FilterIcon,
-  GridViewIcon,
-  MapsLocation01Icon,
-  Search01Icon,
-  SidebarRight01Icon,
-} from "@hugeicons/core-free-icons";
+import { Search01Icon } from "@hugeicons/core-free-icons";
 import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { Field, FieldGroup } from "@/components/ui/field";
 import { Icon } from "@/components/ui/icon";
 import { Input } from "@/components/ui/input";
-import type {
-  PropertyHealthFilter,
-  PropertyStatusFilter,
-  PropertyViewMode,
-} from "@/lib/features/properties/types";
+import { Select } from "@/components/ui/select";
+import type { SavedViewCount } from "@/lib/portfolio-overview";
 import { cn } from "@/lib/utils";
 
 type PropertiesFilterBarProps = {
   isEn: boolean;
   query: string;
-  statusFilter: PropertyStatusFilter;
-  healthFilter: PropertyHealthFilter;
-  viewMode: PropertyViewMode;
-  isSidebarOpen: boolean;
+  status: string;
+  health: string;
+  propertyType: string;
+  view: string;
+  savedViews: SavedViewCount[];
   onQueryChange: (value: string) => void;
-  onStatusFilterChange: (value: PropertyStatusFilter) => void;
-  onHealthFilterChange: (value: PropertyHealthFilter) => void;
-  onViewModeChange: (value: PropertyViewMode) => void;
-  onToggleSidebar: () => void;
+  onStatusChange: (value: string) => void;
+  onHealthChange: (value: string) => void;
+  onPropertyTypeChange: (value: string) => void;
+  onViewChange: (value: string) => void;
+};
+
+const VIEW_LABELS: Record<string, { "en-US": string; "es-PY": string }> = {
+  all: { "en-US": "All", "es-PY": "Todas" },
+  needs_attention: {
+    "en-US": "Needs Attention",
+    "es-PY": "Con atención",
+  },
+  vacancy_risk: { "en-US": "Vacancy Risk", "es-PY": "Riesgo vacante" },
+  healthy: { "en-US": "Healthy", "es-PY": "Saludables" },
 };
 
 export function PropertiesFilterBar({
   isEn,
   query,
-  statusFilter,
-  healthFilter,
-  viewMode,
-  isSidebarOpen,
+  status,
+  health,
+  propertyType,
+  view,
+  savedViews,
   onQueryChange,
-  onStatusFilterChange,
-  onHealthFilterChange,
-  onViewModeChange,
-  onToggleSidebar,
+  onStatusChange,
+  onHealthChange,
+  onPropertyTypeChange,
+  onViewChange,
 }: PropertiesFilterBarProps) {
+  const locale = isEn ? "en-US" : "es-PY";
+
   return (
-    <div className="flex flex-wrap items-center justify-between gap-4 rounded-full border border-border/40 bg-card/40 p-1.5 pl-4 shadow-sm backdrop-blur-md">
-      <div className="relative min-w-[20rem] flex-1">
-        <Icon
-          className="pointer-events-none absolute top-1/2 left-3.5 -translate-y-1/2 text-muted-foreground"
-          icon={Search01Icon}
-          size={15}
-        />
-        <Input
-          className="h-10 border-0 bg-transparent pl-10 shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
-          onChange={(event) => onQueryChange(event.target.value)}
-          placeholder={
-            isEn
-              ? "Search by name, address or code..."
-              : "Buscar por nombre, dirección o código..."
-          }
-          value={query}
-        />
+    <div className="space-y-4 rounded-2xl border border-border/60 bg-card/70 p-4 shadow-sm">
+      <div className="flex flex-wrap gap-2">
+        {savedViews.map((savedView) => (
+          <Button
+            className={cn(
+              "rounded-full",
+              view === savedView.id && "border-primary/20 bg-primary/10 text-primary"
+            )}
+            key={savedView.id}
+            onClick={() => onViewChange(savedView.id)}
+            size="sm"
+            type="button"
+            variant="outline"
+          >
+            {VIEW_LABELS[savedView.id]?.[locale] ?? savedView.id}
+            <span className="ml-1 text-muted-foreground">
+              {savedView.count}
+            </span>
+          </Button>
+        ))}
       </div>
 
-      <div className="flex items-center gap-2">
-        <DropdownMenu>
-          <DropdownMenuTrigger
-            render={
-              <Button
-                className="h-10 rounded-full border border-border/40 bg-background/50 text-muted-foreground shadow-sm transition-all hover:bg-background/80"
-                size="sm"
-                variant="outline"
-              />
-            }
+      <FieldGroup className="xl:grid-cols-[minmax(0,2fr)_repeat(3,minmax(0,1fr))]">
+        <Field htmlFor="properties-search" label={isEn ? "Search" : "Buscar"}>
+          <div className="relative">
+            <Icon
+              className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-muted-foreground"
+              icon={Search01Icon}
+              size={15}
+            />
+            <Input
+              id="properties-search"
+              onChange={(event) => onQueryChange(event.target.value)}
+              placeholder={
+                isEn
+                  ? "Property name, code, address, city"
+                  : "Nombre, código, dirección, ciudad"
+              }
+              value={query}
+              className="pl-9"
+            />
+          </div>
+        </Field>
+        <Field htmlFor="properties-status" label={isEn ? "Status" : "Estado"}>
+          <Select
+            id="properties-status"
+            onChange={(event) => onStatusChange(event.target.value)}
+            value={status}
           >
-            <Icon icon={FilterIcon} size={15} />
-            {isEn ? "Filters" : "Filtros"}
-            {statusFilter !== "all" || healthFilter !== "all" ? (
-              <div className="flex h-4 w-4 items-center justify-center rounded-full bg-primary font-bold text-[10px] text-primary-foreground">
-                {(statusFilter !== "all" ? 1 : 0) +
-                  (healthFilter !== "all" ? 1 : 0)}
-              </div>
-            ) : null}
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="min-w-[12rem] rounded-xl">
-            <DropdownMenuLabel className="text-[10px] text-muted-foreground/60 uppercase tracking-widest">
-              {isEn ? "Status" : "Estado"}
-            </DropdownMenuLabel>
-            <DropdownMenuItem
-              className={cn(
-                "m-1 rounded-lg",
-                statusFilter === "all" && "bg-muted"
-              )}
-              onClick={() => onStatusFilterChange("all")}
-            >
-              {isEn ? "All statuses" : "Todos los estados"}
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              className={cn(
-                "m-1 rounded-lg",
-                statusFilter === "active" && "bg-muted"
-              )}
-              onClick={() => onStatusFilterChange("active")}
-            >
-              {isEn ? "Active" : "Activas"}
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              className={cn(
-                "m-1 rounded-lg",
-                statusFilter === "inactive" && "bg-muted"
-              )}
-              onClick={() => onStatusFilterChange("inactive")}
-            >
-              {isEn ? "Inactive" : "Inactivas"}
-            </DropdownMenuItem>
-
-            <DropdownMenuSeparator />
-
-            <DropdownMenuLabel className="text-[10px] text-muted-foreground/60 uppercase tracking-widest">
-              {isEn ? "Health" : "Riesgo"}
-            </DropdownMenuLabel>
-            <DropdownMenuItem
-              className={cn(
-                "m-1 rounded-lg",
-                healthFilter === "all" && "bg-muted"
-              )}
-              onClick={() => onHealthFilterChange("all")}
-            >
-              {isEn ? "All health states" : "Todos los estados"}
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              className={cn(
-                "m-1 rounded-lg",
-                healthFilter === "stable" && "bg-muted"
-              )}
-              onClick={() => onHealthFilterChange("stable")}
-            >
-              {isEn ? "Stable" : "Estable"}
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              className={cn(
-                "m-1 rounded-lg",
-                healthFilter === "watch" && "bg-muted"
-              )}
-              onClick={() => onHealthFilterChange("watch")}
-            >
-              {isEn ? "Watch" : "Seguimiento"}
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              className={cn(
-                "m-1 rounded-lg",
-                healthFilter === "critical" && "bg-muted"
-              )}
-              onClick={() => onHealthFilterChange("critical")}
-            >
-              {isEn ? "Critical" : "Crítico"}
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-
-        <div className="mx-1 hidden h-6 w-px bg-border/40 sm:block" />
-
-        <div className="inline-flex items-center gap-1 rounded-full border border-border/40 bg-background/50 p-1 shadow-sm">
-          <Button
-            className="h-8 w-8 rounded-full p-0 transition-all"
-            onClick={() => onViewModeChange("grid")}
-            size="sm"
-            variant={viewMode === "grid" ? "secondary" : "ghost"}
+            <option value="">{isEn ? "All statuses" : "Todos los estados"}</option>
+            <option value="active">{isEn ? "Active" : "Activas"}</option>
+            <option value="inactive">{isEn ? "Inactive" : "Inactivas"}</option>
+          </Select>
+        </Field>
+        <Field htmlFor="properties-health" label={isEn ? "Health" : "Salud"}>
+          <Select
+            id="properties-health"
+            onChange={(event) => onHealthChange(event.target.value)}
+            value={health}
           >
-            <Icon icon={GridViewIcon} size={14} />
-          </Button>
-          <Button
-            className="h-8 w-8 rounded-full p-0 transition-all"
-            onClick={() => onViewModeChange("table")}
-            size="sm"
-            variant={viewMode === "table" ? "secondary" : "ghost"}
-          >
-            <Icon icon={ChartIcon} size={14} />
-          </Button>
-          <Button
-            className="h-8 w-8 rounded-full p-0 transition-all"
-            onClick={() => onViewModeChange("map")}
-            size="sm"
-            variant={viewMode === "map" ? "secondary" : "ghost"}
-          >
-            <Icon icon={MapsLocation01Icon} size={14} />
-          </Button>
-        </div>
-
-        <Button
-          className={cn(
-            "h-10 w-10 rounded-full p-0 transition-all",
-            isSidebarOpen
-              ? "bg-muted text-foreground"
-              : "text-muted-foreground hover:bg-muted"
-          )}
-          onClick={onToggleSidebar}
-          size="sm"
-          variant="ghost"
+            <option value="">{isEn ? "All health" : "Toda la salud"}</option>
+            <option value="good">{isEn ? "Good" : "Buena"}</option>
+            <option value="watch">{isEn ? "Watch" : "Seguimiento"}</option>
+            <option value="critical">{isEn ? "Critical" : "Crítica"}</option>
+          </Select>
+        </Field>
+        <Field
+          htmlFor="properties-type"
+          label={isEn ? "Property type" : "Tipo de propiedad"}
         >
-          <Icon icon={SidebarRight01Icon} size={16} />
-        </Button>
-      </div>
+          <Select
+            id="properties-type"
+            onChange={(event) => onPropertyTypeChange(event.target.value)}
+            value={propertyType}
+          >
+            <option value="">{isEn ? "All types" : "Todos los tipos"}</option>
+            <option value="apartment_building">
+              {isEn ? "Apartment building" : "Edificio de apartamentos"}
+            </option>
+            <option value="co_living_house">
+              {isEn ? "Co-living house" : "Casa co-living"}
+            </option>
+            <option value="hotel">{isEn ? "Hotel" : "Hotel"}</option>
+            <option value="single_family">
+              {isEn ? "Single family" : "Vivienda unifamiliar"}
+            </option>
+            <option value="multi_family">
+              {isEn ? "Multi family" : "Vivienda multifamiliar"}
+            </option>
+            <option value="hostel">{isEn ? "Hostel" : "Hostal"}</option>
+            <option value="mixed_use">{isEn ? "Mixed use" : "Uso mixto"}</option>
+          </Select>
+        </Field>
+      </FieldGroup>
     </div>
   );
 }

@@ -157,6 +157,16 @@ export const MODULES: ModuleDef[] = [
       "Orchestrate monthly collections without in-platform fund custody.",
   },
   {
+    slug: "action-center",
+    label: "Centro de acción",
+    label_en: "Action Center",
+    endpoint: "/notifications",
+    description:
+      "Cola operativa unificada para aprobaciones, conversaciones, notificaciones y anomalías.",
+    description_en:
+      "Unified operational queue for approvals, conversations, notifications, and anomalies.",
+  },
+  {
     slug: "messaging",
     label: "Mensajería",
     label_en: "Messaging",

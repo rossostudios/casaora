@@ -1,280 +1,337 @@
 "use client";
 
-import { ArrowRight01Icon } from "@hugeicons/core-free-icons";
-import { useQuery } from "@tanstack/react-query";
-import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
-import { SectionLabel } from "@/components/agent/briefing/helpers";
-import { normalizeAgents } from "@/components/agent/chat-thread-types";
-import { PropertyCard } from "@/components/properties/property-card";
-import { Icon } from "@/components/ui/icon";
-import type { AgentDefinition } from "@/lib/api";
+import Link from "next/link";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useMemo, useState, useTransition } from "react";
+import { ActionRail } from "@/components/ui/action-rail";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { ListDetailLayout } from "@/components/ui/list-detail-layout";
+import { PageScaffold } from "@/components/ui/page-scaffold";
+import { buildAgentContextHref } from "@/lib/ai-context";
+import { useActiveLocale } from "@/lib/i18n/client";
 import type {
-  PropertyRecord,
-  PropertyRelationRow,
-} from "@/lib/features/properties/types";
-import { useActiveLocale, useDictionary } from "@/lib/i18n/client";
-import { cn } from "@/lib/utils";
-import { PortfolioChips } from "./components/portfolio-chips";
-import { PortfolioMetricsBar } from "./components/portfolio-metrics-bar";
-import { PropertiesFeedback } from "./components/properties-feedback";
-import { usePropertyAgentStatus } from "./hooks/use-property-agent-status";
-import { usePropertyPortfolio } from "./hooks/use-property-portfolio";
+  PortfolioPropertyRow,
+  PropertiesOverviewResponse,
+} from "@/lib/portfolio-overview";
+import { CsvImportDialog } from "@/components/properties/csv-import-dialog";
+import { CreatePropertySheet } from "./components/create-property-sheet";
+import { PropertiesFilterBar } from "./components/properties-filter-bar";
+import { PropertiesList } from "./components/properties-list";
 
 type PropertiesManagerProps = {
   orgId: string;
-  properties: PropertyRecord[];
-  units: PropertyRelationRow[];
-  leases: PropertyRelationRow[];
-  tasks: PropertyRelationRow[];
-  collections: PropertyRelationRow[];
-  dictionary?: { title: string; description: string };
+  overview: PropertiesOverviewResponse;
+  initialFilters: {
+    q: string;
+    status: string;
+    health: string;
+    propertyType: string;
+    neighborhood: string;
+    view: string;
+    sort: string;
+    create: boolean;
+  };
   error?: string;
   success?: string;
 };
 
+function buildReturnPath(pathname: string, searchParams: URLSearchParams): string {
+  const suffix = searchParams.toString();
+  return suffix ? `${pathname}?${suffix}` : pathname;
+}
+
+function SummaryCard({
+  label,
+  value,
+  detail,
+}: {
+  label: string;
+  value: string;
+  detail: string;
+}) {
+  return (
+    <Card className="border border-border/60 bg-card/80 shadow-sm">
+      <CardContent className="space-y-1 p-5">
+        <p className="font-medium text-[11px] text-muted-foreground uppercase tracking-[0.14em]">
+          {label}
+        </p>
+        <p className="font-semibold text-3xl tracking-tight">{value}</p>
+        <p className="text-muted-foreground text-sm">{detail}</p>
+      </CardContent>
+    </Card>
+  );
+}
+
 export function PropertiesManager({
   orgId,
-  properties,
-  units,
-  leases,
-  tasks,
-  collections,
-  error: errorLabel,
-  success: successMessage,
+  overview,
+  initialFilters,
+  error,
+  success,
 }: PropertiesManagerProps) {
-  const { common } = useDictionary();
   const locale = useActiveLocale();
   const isEn = locale === "en-US";
-  const formatLocale = isEn ? "en-US" : "es-PY";
-
-  const { rows, summary } = usePropertyPortfolio({
-    locale,
-    properties,
-    units,
-    leases,
-    tasks,
-    collections,
-  });
-
-  // Agent status
-  const agentsQuery = useQuery<AgentDefinition[], Error>({
-    queryKey: ["agents-property-status", orgId],
-    queryFn: async () => {
-      const res = await fetch(
-        `/api/agent/agents?org_id=${encodeURIComponent(orgId)}`,
-        {
-          method: "GET",
-          cache: "no-store",
-          headers: { Accept: "application/json" },
-        }
-      );
-      if (!res.ok) return [];
-      const payload = (await res.json()) as unknown;
-      return normalizeAgents(payload);
-    },
-    staleTime: 60_000,
-    enabled: !!orgId,
-    retry: false,
-  });
-
-  const agentStatus: "active" | "offline" | "loading" = agentsQuery.isPending
-    ? "loading"
-    : (agentsQuery.data ?? []).some((a) => a.is_active !== false)
-      ? "active"
-      : "offline";
-
-  const propertyIds = useMemo(() => rows.map((r) => r.id), [rows]);
-  const { propertyAgentStatusMap } = usePropertyAgentStatus({
-    orgId,
-    propertyIds,
-    agentOnline: agentStatus === "active",
-  });
-
-  const attentionCount =
-    summary.totalOpenTasks + summary.totalOverdueCollections;
-
-  return (
-    <div className="mx-auto flex min-h-[calc(100vh-7rem)] max-w-5xl flex-col px-4 py-8 sm:px-6">
-      <div className="space-y-8">
-        {/* STOA overview */}
-        <PortfolioOverview
-          attentionCount={attentionCount}
-          isEn={isEn}
-          propertyCount={rows.length}
-          unitCount={summary.totalUnits}
-        />
-
-        {/* Metric Cards */}
-        <PortfolioMetricsBar
-          formatLocale={formatLocale}
-          isEn={isEn}
-          summary={summary}
-        />
-
-        {/* Feedback toasts */}
-        <PropertiesFeedback
-          error={errorLabel ?? ""}
-          errorLabel={common.error}
-          success={successMessage ?? ""}
-          successLabel={common.success}
-        />
-
-        {/* Section label */}
-        <SectionLabel>
-          {isEn ? "YOUR PROPERTIES" : "TUS PROPIEDADES"}
-        </SectionLabel>
-
-        {/* Property cards grid */}
-        {rows.length > 0 ? (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {rows.map((row) => (
-              <PropertyCard
-                agentContext={propertyAgentStatusMap.get(row.id)}
-                key={row.id}
-                row={row}
-              />
-            ))}
-          </div>
-        ) : (
-          <div className="py-12 text-center text-muted-foreground/60 text-sm">
-            {isEn
-              ? "No properties yet. Ask the agent to add your first property."
-              : "Sin propiedades. Pide al agente que agregue tu primera propiedad."}
-          </div>
-        )}
-      </div>
-
-      {/* Push chat to bottom */}
-      <div className="mt-auto space-y-4 pt-12">
-        <PropertyChatInput isEn={isEn} />
-        <PortfolioChips isEn={isEn} />
-      </div>
-    </div>
-  );
-}
-
-/* ------------------------------------------------------------------ */
-/* PortfolioOverview — one-line STOA summary (no greeting)            */
-/* ------------------------------------------------------------------ */
-
-function PortfolioOverview({
-  propertyCount,
-  unitCount,
-  attentionCount,
-  isEn,
-}: {
-  propertyCount: number;
-  unitCount: number;
-  attentionCount: number;
-  isEn: boolean;
-}) {
-  const overview = isEn
-    ? buildOverviewEn(propertyCount, unitCount, attentionCount)
-    : buildOverviewEs(propertyCount, unitCount, attentionCount);
-
-  return (
-    <div className="space-y-1">
-      <p className="font-semibold text-foreground text-sm">Alex</p>
-      <p className="text-muted-foreground text-sm leading-relaxed">{overview}</p>
-    </div>
-  );
-}
-
-function buildOverviewEn(props: number, units: number, attention: number) {
-  if (props === 0) return "No properties yet. Ask me to add your first one.";
-  const parts: string[] = [
-    `Here\u2019s your portfolio \u2014 `,
-  ];
-  parts.push(
-    `**${props} ${props === 1 ? "property" : "properties"}**, **${units} ${units === 1 ? "unit" : "units"}**.`
-  );
-  if (attention > 0) {
-    parts.push(
-      ` ${attention} ${attention === 1 ? "needs" : "need"} attention.`
-    );
-  }
-  parts.push(" Tap any property to expand.");
-  return formatBold(parts.join(""));
-}
-
-function buildOverviewEs(props: number, units: number, attention: number) {
-  if (props === 0) return "Sin propiedades a\u00fan. P\u00eddeme agregar la primera.";
-  const parts: string[] = [
-    `Tu portafolio \u2014 `,
-  ];
-  parts.push(
-    `**${props} ${props === 1 ? "propiedad" : "propiedades"}**, **${units} ${units === 1 ? "unidad" : "unidades"}**.`
-  );
-  if (attention > 0) {
-    parts.push(
-      ` ${attention} ${attention === 1 ? "requiere" : "requieren"} atenci\u00f3n.`
-    );
-  }
-  parts.push(" Toca cualquier propiedad para expandir.");
-  return formatBold(parts.join(""));
-}
-
-/** Render **bold** markers as <strong> inline */
-function formatBold(text: string) {
-  const parts = text.split(/\*\*(.+?)\*\*/g);
-  return (
-    <>
-      {parts.map((segment, i) =>
-        i % 2 === 1 ? (
-          <strong key={i} className="font-semibold text-foreground">
-            {segment}
-          </strong>
-        ) : (
-          segment
-        )
-      )}
-    </>
-  );
-}
-
-/* ------------------------------------------------------------------ */
-/* PropertyChatInput — pill-shaped input that navigates to /app/agents */
-/* ------------------------------------------------------------------ */
-
-function PropertyChatInput({ isEn }: { isEn: boolean }) {
   const router = useRouter();
-  const [value, setValue] = useState("");
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const [, startTransition] = useTransition();
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const trimmed = value.trim();
-    if (!trimmed) return;
-    router.push(`/app/agents?prompt=${encodeURIComponent(trimmed)}`);
-  };
+  const [query, setQuery] = useState(initialFilters.q);
+  const [createOpen, setCreateOpen] = useState(initialFilters.create);
+
+  useEffect(() => {
+    setQuery(initialFilters.q);
+  }, [initialFilters.q]);
+
+  useEffect(() => {
+    setCreateOpen(initialFilters.create);
+  }, [initialFilters.create]);
+
+  function updateParams(
+    updates: Record<string, string | null | undefined>,
+    options?: { replace?: boolean }
+  ) {
+    const params = new URLSearchParams(searchParams.toString());
+    for (const [key, value] of Object.entries(updates)) {
+      if (!value) params.delete(key);
+      else params.set(key, value);
+    }
+    const next = params.toString();
+    startTransition(() => {
+      const href = next ? `${pathname}?${next}` : pathname;
+      if (options?.replace) router.replace(href);
+      else router.push(href);
+    });
+  }
+
+  useEffect(() => {
+    const handle = window.setTimeout(() => {
+      if (query !== initialFilters.q) {
+        updateParams({ q: query || null }, { replace: true });
+      }
+    }, 250);
+    return () => window.clearTimeout(handle);
+  }, [query, initialFilters.q]);
+
+  const returnPath = useMemo(
+    () => buildReturnPath(pathname, new URLSearchParams(searchParams.toString())),
+    [pathname, searchParams]
+  );
+  const createReturnPath = useMemo(() => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("create", "1");
+    return buildReturnPath(pathname, params);
+  }, [pathname, searchParams]);
+
+  const currentFilters = useMemo(
+    () =>
+      Object.fromEntries(
+        [
+          ["q", initialFilters.q],
+          ["status", initialFilters.status],
+          ["health", initialFilters.health],
+          ["property_type", initialFilters.propertyType],
+          ["view", initialFilters.view],
+        ].filter((entry): entry is [string, string] => Boolean(entry[1]))
+      ),
+    [
+      initialFilters.health,
+      initialFilters.propertyType,
+      initialFilters.q,
+      initialFilters.status,
+      initialFilters.view,
+    ]
+  );
+
+  function buildAiHref(row?: PortfolioPropertyRow): string {
+    const entityIds = row ? [row.id] : overview.rows.map((item) => item.id);
+    const summary = row
+      ? isEn
+        ? `Review property ${row.name}. ${row.occupiedUnits}/${row.totalUnits} units occupied, ${row.openTasks} open tasks, collections risk ${row.collectionsRisk}.`
+        : `Revisa la propiedad ${row.name}. ${row.occupiedUnits}/${row.totalUnits} unidades ocupadas, ${row.openTasks} tareas abiertas y riesgo de cobros ${row.collectionsRisk}.`
+      : isEn
+        ? `Review the current properties workspace with ${overview.rows.length} properties in view.`
+        : `Revisa el espacio actual de propiedades con ${overview.rows.length} propiedades en vista.`;
+
+    return buildAgentContextHref({
+      prompt: row
+        ? isEn
+          ? `What should I do next for ${row.name}?`
+          : `¿Qué debería hacer ahora con ${row.name}?`
+        : isEn
+          ? "What needs attention in this properties view?"
+          : "¿Qué necesita atención en esta vista de propiedades?",
+      context: {
+        source: "properties",
+        entityIds,
+        filters: currentFilters,
+        summary,
+        returnPath,
+      },
+    });
+  }
+
+  const attentionRows = overview.rows.filter(
+    (row) => row.health !== "good" || row.collectionsRisk !== "none"
+  );
 
   return (
-    <form className="relative" onSubmit={handleSubmit}>
-      <input
-        className={cn(
-          "h-12 w-full rounded-full border border-border/50 bg-background pr-12 pl-5 text-sm",
-          "placeholder:text-muted-foreground/40",
-          "focus:border-primary/50 focus:outline-none focus:ring-1 focus:ring-primary/20",
-          "transition-colors"
-        )}
-        onChange={(e) => setValue(e.target.value)}
-        placeholder={
-          isEn ? "Ask about your properties..." : "Pregunta sobre tus propiedades..."
+    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
+      <PageScaffold
+        description={
+          isEn
+            ? "Work property records and unit links from one clear portfolio surface instead of bouncing between chat-first tools."
+            : "Gestiona propiedades y enlaces a unidades desde una sola superficie clara del portafolio."
         }
-        type="text"
-        value={value}
-      />
-      <button
-        className={cn(
-          "absolute top-1/2 right-1.5 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full",
-          "bg-foreground text-background transition-opacity",
-          value.trim() ? "opacity-100" : "opacity-30"
-        )}
-        disabled={!value.trim()}
-        type="submit"
+        eyebrow={isEn ? "Portfolio" : "Portafolio"}
+        title={isEn ? "Properties" : "Propiedades"}
+        actions={
+          <>
+            <Button asChild variant="outline">
+              <Link href={buildAiHref()}>{isEn ? "Ask AI" : "Preguntar a IA"}</Link>
+            </Button>
+            <CsvImportDialog
+              onComplete={() => router.refresh()}
+              orgId={orgId}
+            />
+            <Button onClick={() => setCreateOpen(true)} type="button">
+              {isEn ? "Create property" : "Crear propiedad"}
+            </Button>
+          </>
+        }
       >
-        <Icon icon={ArrowRight01Icon} size={16} />
-      </button>
-    </form>
+        <div className="grid gap-4 md:grid-cols-4">
+          <SummaryCard
+            detail={isEn ? "records in current view" : "registros en vista"}
+            label={isEn ? "Properties" : "Propiedades"}
+            value={String(overview.summary.totalProperties)}
+          />
+          <SummaryCard
+            detail={isEn ? "occupied / total units" : "ocupadas / total"}
+            label={isEn ? "Occupancy" : "Ocupación"}
+            value={`${overview.summary.occupiedUnits}/${overview.summary.totalUnits}`}
+          />
+          <SummaryCard
+            detail={isEn ? "open work items" : "pendientes abiertos"}
+            label={isEn ? "Tasks" : "Tareas"}
+            value={String(overview.summary.openTasks)}
+          />
+          <SummaryCard
+            detail={isEn ? "collections past due" : "cobros vencidos"}
+            label={isEn ? "Overdue" : "Vencidos"}
+            value={String(overview.summary.overdueCollections)}
+          />
+        </div>
+
+        {error ? (
+          <div className="rounded-2xl border border-red-500/20 bg-red-500/5 px-4 py-3 text-red-600 text-sm">
+            {error}
+          </div>
+        ) : null}
+        {success ? (
+          <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/5 px-4 py-3 text-emerald-600 text-sm">
+            {success}
+          </div>
+        ) : null}
+
+        <div className="sticky top-16 z-20 bg-background py-1">
+          <PropertiesFilterBar
+            health={initialFilters.health}
+            isEn={isEn}
+            onHealthChange={(value) => updateParams({ health: value || null })}
+            onPropertyTypeChange={(value) =>
+              updateParams({ property_type: value || null })
+            }
+            onQueryChange={setQuery}
+            onStatusChange={(value) => updateParams({ status: value || null })}
+            onViewChange={(value) =>
+              updateParams({ view: value === "all" ? null : value })
+            }
+            propertyType={initialFilters.propertyType}
+            query={query}
+            savedViews={overview.savedViews}
+            status={initialFilters.status}
+            view={initialFilters.view}
+          />
+        </div>
+
+        <ListDetailLayout
+          aside={
+            <ActionRail
+              description={
+                isEn
+                  ? "Prioritize the portfolio issues that connect directly to unit workflows."
+                  : "Prioriza los problemas del portafolio que conectan directo con el trabajo de unidades."
+              }
+              title={isEn ? "Next actions" : "Próximas acciones"}
+            >
+              <Button asChild className="w-full justify-start" variant="outline">
+                <Link href={buildAiHref()}>
+                  {isEn ? "Review this portfolio view with AI" : "Revisar esta vista con IA"}
+                </Link>
+              </Button>
+              <Button
+                className="w-full justify-start"
+                onClick={() => setCreateOpen(true)}
+                type="button"
+                variant="outline"
+              >
+                {isEn ? "Create another property" : "Crear otra propiedad"}
+              </Button>
+              {attentionRows.slice(0, 4).map((row) => (
+                <div
+                  className="rounded-xl border border-border/60 bg-muted/20 p-3"
+                  key={row.id}
+                >
+                  <p className="font-medium text-sm">{row.name}</p>
+                  <p className="mt-1 text-muted-foreground text-xs">
+                    {row.collectionsRisk === "high"
+                      ? isEn
+                        ? "Collections risk is high."
+                        : "El riesgo de cobros es alto."
+                      : row.health === "critical"
+                        ? isEn
+                          ? "Health is critical."
+                          : "La salud es crítica."
+                        : isEn
+                          ? "Vacancy or open work needs review."
+                          : "La vacancia o el trabajo abierto necesita revisión."}
+                  </p>
+                  <div className="mt-3 flex gap-2">
+                    <Button asChild size="sm" variant="outline">
+                      <Link href={row.unitsHref}>
+                        {isEn ? "View units" : "Ver unidades"}
+                      </Link>
+                    </Button>
+                    <Button asChild size="sm">
+                      <Link href={row.primaryHref}>{isEn ? "Open" : "Abrir"}</Link>
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </ActionRail>
+          }
+          primary={
+            <PropertiesList
+              askAiHref={buildAiHref}
+              isEn={isEn}
+              rows={overview.rows}
+            />
+          }
+        />
+      </PageScaffold>
+
+      <CreatePropertySheet
+        isEn={isEn}
+        onOpenChange={(next) => {
+          setCreateOpen(next);
+          updateParams({ create: next ? "1" : null }, { replace: true });
+        }}
+        open={createOpen}
+        orgId={orgId}
+        returnTo={createReturnPath}
+      />
+    </div>
   );
 }

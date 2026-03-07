@@ -74,6 +74,19 @@ export function toRelativeTimeIntl(
   return rtf.format(Math.round(deltaSeconds / 86_400), "day");
 }
 
+export function formatDateTime(
+  value: string | null | undefined,
+  locale = "es-PY"
+): string {
+  if (!value) return "\u2014";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.valueOf())) return "\u2014";
+  return new Intl.DateTimeFormat(locale, {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(parsed);
+}
+
 export function humanizeKey(key: string): string {
   return key
     .replaceAll("_", " ")

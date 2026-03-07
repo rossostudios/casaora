@@ -54,6 +54,7 @@ export function fetchPublicListings(params?: {
   maxMoveIn?: number;
   minBedrooms?: number;
   minBathrooms?: number;
+  maxLeaseMonths?: number;
   orgId?: string;
   limit?: number;
 }): Promise<{ data?: Record<string, unknown>[] }> {
@@ -73,6 +74,7 @@ export function fetchPublicListings(params?: {
       max_move_in: params?.maxMoveIn,
       min_bedrooms: params?.minBedrooms,
       min_bathrooms: params?.minBathrooms,
+      max_lease_months: params?.maxLeaseMonths,
       org_id: params?.orgId,
       limit: params?.limit ?? 60,
     },

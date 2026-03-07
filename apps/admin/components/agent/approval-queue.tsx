@@ -15,21 +15,12 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Textarea } from "@/components/ui/textarea";
+import { ApprovalOriginLinks } from "@/components/agent/approval-origin-links";
+import { ApprovalRunSummary } from "@/components/agent/approval-run-summary";
 import { useVisibilityPollingInterval } from "@/lib/hooks/use-visibility-polling";
 import type { Locale } from "@/lib/i18n";
+import type { AgentApproval } from "@/lib/api";
 import { cn } from "@/lib/utils";
-
-type Approval = {
-  id: string;
-  agent_slug: string;
-  tool_name: string;
-  tool_args: Record<string, unknown>;
-  reason?: string | null;
-  estimated_impact?: Record<string, unknown> | null;
-  delivery_status?: string | null;
-  status: string;
-  created_at: string;
-};
 
 type ApprovalQueueProps = {
   orgId: string;
@@ -58,10 +49,12 @@ export function ApprovalQueue({ orgId, locale }: ApprovalQueueProps) {
   const [expandedArgs, setExpandedArgs] = useState<Set<string>>(new Set());
   const deliveryStatusByIdRef = useRef<Map<string, string | null>>(new Map());
   const deliveryStatusSeededRef = useRef(false);
+  // Reduced polling interval — SSE provides instant updates via useOrgEventStream;
+  // polling serves as a fallback for reconnection gaps.
   const approvalPollInterval = useVisibilityPollingInterval({
     enabled: !!orgId,
-    foregroundMs: 15_000,
-    backgroundMs: 60_000,
+    foregroundMs: 60_000,
+    backgroundMs: 120_000,
   });
 
   useEffect(() => {
@@ -77,7 +70,7 @@ export function ApprovalQueue({ orgId, locale }: ApprovalQueueProps) {
         { cache: "no-store", headers: { Accept: "application/json" } }
       );
       if (!response.ok) return [];
-      const payload = (await response.json()) as { data?: Approval[] };
+      const payload = (await response.json()) as { data?: AgentApproval[] };
       return payload.data ?? [];
     },
     refetchInterval: approvalPollInterval,
@@ -134,7 +127,7 @@ export function ApprovalQueue({ orgId, locale }: ApprovalQueueProps) {
   const handleReview = async (
     id: string,
     action: "approve" | "reject",
-    approval?: Approval
+    approval?: AgentApproval
   ) => {
     setBusy((prev) => ({ ...prev, [id]: true }));
     const note = reviewNotes[id] || null;
@@ -171,7 +164,7 @@ export function ApprovalQueue({ orgId, locale }: ApprovalQueueProps) {
 
       queryClient.setQueryData(
         ["agent-approvals", orgId],
-        (prev: Approval[] | undefined) =>
+        (prev: AgentApproval[] | undefined) =>
           prev ? prev.filter((a) => a.id !== id) : []
       );
       setSelected((prev) => {
@@ -205,7 +198,7 @@ export function ApprovalQueue({ orgId, locale }: ApprovalQueueProps) {
       );
       queryClient.setQueryData(
         ["agent-approvals", orgId],
-        (prev: Approval[] | undefined) =>
+        (prev: AgentApproval[] | undefined) =>
           prev ? prev.filter((a) => !selected.has(a.id)) : []
       );
       setSelected(new Set());
@@ -388,6 +381,14 @@ export function ApprovalQueue({ orgId, locale }: ApprovalQueueProps) {
                   {approval.reason}
                 </p>
               )}
+
+              <ApprovalRunSummary
+                approval={approval}
+                isEn={isEn}
+                locale={locale}
+              />
+
+              <ApprovalOriginLinks approval={approval} isEn={isEn} />
 
               {/* Item 1: "Why this reply?" collapsible card */}
               {hasWhyData ? (

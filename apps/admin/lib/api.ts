@@ -1,8 +1,15 @@
-import { getServerAccessToken } from "#server-auth";
+import {
+  getServerAccessTokenResult,
+  shouldThrowAdminAuthConfigurationError,
+} from "#server-auth";
 import {
   hasConfiguredServerApiBaseUrl,
   SERVER_API_BASE_URL,
 } from "@/lib/server-api-base";
+import {
+  createAdminAuthConfigurationError,
+  isAdminAuthConfigurationError,
+} from "@/lib/errors";
 
 const API_BASE_URL = SERVER_API_BASE_URL;
 const DEFAULT_API_TIMEOUT_MS = 15_000;
@@ -210,8 +217,18 @@ function buildUrl(path: string, query?: Record<string, QueryValue>): string {
 
 async function getAccessToken(): Promise<string | null> {
   try {
-    return await getServerAccessToken();
-  } catch {
+    const result = await getServerAccessTokenResult();
+    if (shouldThrowAdminAuthConfigurationError(result)) {
+      throw createAdminAuthConfigurationError();
+    }
+    return result.token;
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      isAdminAuthConfigurationError(error.message)
+    ) {
+      throw error;
+    }
     return null;
   }
 }
@@ -354,6 +371,12 @@ async function doFetchInner(
       clearTimeout(timeoutHandle);
     }
   } catch (err) {
+    if (
+      err instanceof Error &&
+      isAdminAuthConfigurationError(err.message)
+    ) {
+      throw err;
+    }
     if (err instanceof Error && err.name === "AbortError") {
       throw new Error(
         `API request timed out for ${path} after ${API_TIMEOUT_MS}ms.`
@@ -790,6 +813,7 @@ export function fetchPublicListings(params?: {
   maxMoveIn?: number;
   minBedrooms?: number;
   minBathrooms?: number;
+  maxLeaseMonths?: number;
   orgId?: string;
   limit?: number;
 }): Promise<{ data?: Record<string, unknown>[] }> {
@@ -809,6 +833,7 @@ export function fetchPublicListings(params?: {
       max_move_in: params?.maxMoveIn,
       min_bedrooms: params?.minBedrooms,
       min_bathrooms: params?.minBathrooms,
+      max_lease_months: params?.maxLeaseMonths,
       org_id: params?.orgId,
       limit: params?.limit ?? 60,
     },
@@ -889,6 +914,7 @@ export type AgentChatMessage = {
   id: string;
   chat_id: string;
   org_id: string;
+  agent_run_id?: string | null;
   role: "user" | "assistant";
   content: string;
   tool_trace?: Array<{
@@ -908,19 +934,37 @@ export type AgentModelOption = {
   is_primary: boolean;
 };
 
+export type AgentApprovalRunSummary = {
+  id: string;
+  status: AgentRunStatus;
+  mode: AgentRunMode;
+  task: string;
+  provider?: AgentProvider | null;
+  model?: string | null;
+  chat_id?: string | null;
+  created_at: string;
+};
+
 export type AgentApproval = {
   id: string;
   organization_id: string;
   chat_id: string | null;
+  agent_run_id?: string | null;
   agent_slug: string;
   tool_name: string;
   tool_args: Record<string, unknown>;
+  kind?: string | null;
+  priority?: string | null;
+  reason?: string | null;
+  estimated_impact?: Record<string, unknown> | null;
+  delivery_status?: string | null;
   status: "pending" | "approved" | "rejected" | "executed" | "execution_failed";
   review_note: string | null;
   execution_result: Record<string, unknown> | null;
   created_at: string;
   reviewed_at: string | null;
   executed_at: string | null;
+  run?: AgentApprovalRunSummary | null;
 };
 
 export type AgentApprovalPolicy = {
@@ -940,6 +984,73 @@ export type AgentInboxItem = {
   body: string;
   link_path: string | null;
   created_at: string;
+};
+
+export type AgentRunMode = "copilot" | "autonomous";
+
+export type AgentProvider = "openai" | "anthropic";
+
+export type AgentRunStatus =
+  | "queued"
+  | "running"
+  | "waiting_for_approval"
+  | "failed"
+  | "completed"
+  | "cancelled";
+
+export type AgentRun = {
+  id: string;
+  organization_id: string;
+  chat_id?: string | null;
+  agent_slug: string;
+  mode: AgentRunMode;
+  status: AgentRunStatus;
+  task: string;
+  context?: Record<string, unknown> | null;
+  preferred_provider?: string | null;
+  preferred_model?: string | null;
+  allow_mutations: boolean;
+  provider?: AgentProvider | null;
+  model?: string | null;
+  token_usage?: Record<string, unknown> | null;
+  cost_estimate_usd?: number | string | null;
+  result?: Record<string, unknown> | null;
+  error_message?: string | null;
+  runtime_trace_id?: string | null;
+  created_by_user_id?: string | null;
+  cancelled_by_user_id?: string | null;
+  started_at?: string | null;
+  completed_at?: string | null;
+  cancelled_at?: string | null;
+  created_at: string;
+  updated_at?: string | null;
+  pending_approvals?: number;
+};
+
+export type AgentRunEvent = {
+  id: string;
+  run_id: string;
+  organization_id: string;
+  event_type:
+    | "status"
+    | "text_delta"
+    | "tool_call"
+    | "tool_result"
+    | "approval_required"
+    | "error";
+  data: Record<string, unknown>;
+  created_at: string;
+};
+
+export type AgentRunRequest = {
+  org_id: string;
+  mode: AgentRunMode;
+  agent_slug?: string;
+  task: string;
+  context: Record<string, unknown>;
+  preferred_provider?: AgentProvider;
+  preferred_model?: string;
+  allow_mutations?: boolean;
 };
 
 export function fetchAgentDefinitions(orgId: string): Promise<{
@@ -1109,12 +1220,26 @@ export function deleteAgentChat(
   );
 }
 
-export function fetchAgentApprovals(orgId: string): Promise<{
+export function fetchAgentApprovals(
+  orgId: string,
+  params?: {
+    status?: AgentApproval["status"] | "all";
+    kind?: string;
+    priority?: string;
+    runId?: string;
+  }
+): Promise<{
   organization_id?: string;
   data?: AgentApproval[];
   count?: number;
 }> {
-  return fetchJson("/agent/approvals", { org_id: orgId });
+  return fetchJson("/agent/approvals", {
+    org_id: orgId,
+    status: params?.status,
+    kind: params?.kind,
+    priority: params?.priority,
+    run_id: params?.runId,
+  });
 }
 
 export function reviewAgentApproval(
@@ -1170,6 +1295,90 @@ export function fetchAgentInbox(
   count?: number;
 }> {
   return fetchJson("/agent/inbox", { org_id: orgId, limit });
+}
+
+export function fetchAgentRuns(
+  orgId: string,
+  params?: {
+    status?: AgentRunStatus;
+    mode?: AgentRunMode;
+    limit?: number;
+  }
+): Promise<{
+  organization_id?: string;
+  data?: AgentRun[];
+}> {
+  return fetchJson("/agent/runs", {
+    org_id: orgId,
+    status: params?.status,
+    mode: params?.mode,
+    limit: params?.limit ?? 30,
+  });
+}
+
+export function createAgentRun(
+  payload: AgentRunRequest
+): Promise<AgentRun> {
+  return fetchJson("/agent/runs", undefined, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
+export function fetchAgentRun(
+  orgId: string,
+  runId: string
+): Promise<AgentRun> {
+  return fetchJson(`/agent/runs/${encodeURIComponent(runId)}`, {
+    org_id: orgId,
+  });
+}
+
+export function fetchAgentRunEvents(
+  orgId: string,
+  runId: string
+): Promise<{
+  organization_id?: string;
+  run_id?: string;
+  data?: AgentRunEvent[];
+}> {
+  return fetchJson(`/agent/runs/${encodeURIComponent(runId)}/events`, {
+    org_id: orgId,
+  });
+}
+
+export function cancelAgentRun(
+  orgId: string,
+  runId: string
+): Promise<AgentRun> {
+  return fetchJson(
+    `/agent/runs/${encodeURIComponent(runId)}/cancel`,
+    { org_id: orgId },
+    {
+      method: "POST",
+    }
+  );
+}
+
+export function approveAgentRun(
+  orgId: string,
+  runId: string,
+  note?: string | null
+): Promise<AgentRun> {
+  return fetchJson(
+    `/agent/runs/${encodeURIComponent(runId)}/approve`,
+    { org_id: orgId },
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ note: typeof note === "string" ? note : null }),
+    }
+  );
 }
 
 // ── Portfolio API ──

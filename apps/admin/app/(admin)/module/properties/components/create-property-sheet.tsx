@@ -1,9 +1,10 @@
 import { createPropertyFromPropertiesModuleAction } from "@/app/(admin)/module/properties/actions";
 import { Button } from "@/components/ui/button";
+import { Drawer } from "@/components/ui/drawer";
+import { Field, FieldGroup } from "@/components/ui/field";
 import { Form } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
-import { Sheet } from "@/components/ui/sheet";
 import { Textarea } from "@/components/ui/textarea";
 
 type CreatePropertySheetProps = {
@@ -11,12 +12,7 @@ type CreatePropertySheetProps = {
   onOpenChange: (next: boolean) => void;
   orgId: string;
   isEn: boolean;
-  title: string;
-  description: string;
-  nameLabel: string;
-  codeLabel: string;
-  cancelLabel: string;
-  createLabel: string;
+  returnTo: string;
 };
 
 export function CreatePropertySheet({
@@ -24,92 +20,77 @@ export function CreatePropertySheet({
   onOpenChange,
   orgId,
   isEn,
-  title,
-  description,
-  nameLabel,
-  codeLabel,
-  cancelLabel,
-  createLabel,
+  returnTo,
 }: CreatePropertySheetProps) {
-  const copy = {
-    basics: isEn ? "Basic details" : "Datos básicos",
-    location: isEn ? "Location" : "Ubicación",
-    operations: isEn ? "Operations" : "Operaciones",
-    ownership: isEn ? "Ownership" : "Propiedad",
-    status: isEn ? "Status" : "Estado",
-    propertyType: isEn ? "Property type" : "Tipo de propiedad",
-    addressLine1: isEn ? "Address line 1" : "Dirección línea 1",
-    addressLine2: isEn ? "Address line 2" : "Dirección línea 2",
-    neighborhood: isEn ? "Neighborhood" : "Barrio",
-    city: isEn ? "City" : "Ciudad",
-    region: isEn ? "Region / State" : "Región / Departamento",
-    postalCode: isEn ? "Postal code" : "Código postal",
-    countryCode: isEn ? "Country code" : "Código país",
-    latitude: isEn ? "Latitude" : "Latitud",
-    longitude: isEn ? "Longitude" : "Longitud",
-    amenities: isEn ? "Building amenities" : "Amenidades del edificio",
-    amenitiesHint: isEn
-      ? "Separate values with commas (e.g., pool, gym, elevator)."
-      : "Separa valores con comas (ej: piscina, gimnasio, ascensor).",
-    accessInstructions: isEn
-      ? "Access instructions"
-      : "Instrucciones de acceso",
-    wifiName: isEn ? "Shared WiFi name" : "Nombre WiFi compartido",
-    wifiPassword: isEn ? "Shared WiFi password" : "Clave WiFi compartida",
-    assetOwnerName: isEn ? "Asset owner name" : "Nombre del titular del activo",
-    assetOwnerOrgId: isEn
-      ? "Asset owner organization ID"
-      : "ID de organización titular",
-  };
-
   return (
-    <Sheet
-      description={description}
+    <Drawer
+      closeLabel={isEn ? "Close property form" : "Cerrar formulario"}
+      description={
+        isEn
+          ? "Add the core portfolio record first. You can refine operations and integrations after save."
+          : "Crea primero el registro base del portafolio. Luego puedes completar operaciones e integraciones."
+      }
       onOpenChange={onOpenChange}
       open={open}
-      title={title}
+      side="right"
+      title={isEn ? "Create property" : "Crear propiedad"}
+      className="w-[min(94vw,38rem)]"
     >
       <Form
         action={createPropertyFromPropertiesModuleAction}
-        className="space-y-6"
+        className="space-y-6 px-4 py-5 sm:px-6"
       >
         <input name="organization_id" type="hidden" value={orgId} />
+        <input name="return_to" type="hidden" value={returnTo} />
 
-        <section className="space-y-3 rounded-2xl border border-border/50 bg-card/40 p-4">
-          <h3 className="font-medium text-sm">{copy.basics}</h3>
-          <div className="grid gap-3 md:grid-cols-2">
-            <label className="grid gap-1">
-              <span className="font-medium text-muted-foreground text-xs">
-                {nameLabel}
-              </span>
-              <Input name="name" placeholder="Edificio Centro" required />
-            </label>
-            <label className="grid gap-1">
-              <span className="font-medium text-muted-foreground text-xs">
-                {codeLabel}
-              </span>
-              <Input name="code" placeholder="CEN-01" />
-            </label>
-            <label className="grid gap-1">
-              <span className="font-medium text-muted-foreground text-xs">
-                {copy.status}
-              </span>
-              <Select defaultValue="active" name="status">
+        <section className="space-y-4">
+          <div className="space-y-1">
+            <h2 className="font-semibold text-base">
+              {isEn ? "Property basics" : "Datos básicos"}
+            </h2>
+            <p className="text-muted-foreground text-sm">
+              {isEn
+                ? "Set the portfolio identity and the operational status operators will recognize."
+                : "Define la identidad del activo y el estado operativo que verá el equipo."}
+            </p>
+          </div>
+
+          <FieldGroup>
+            <Field
+              htmlFor="property-name"
+              label={isEn ? "Property name" : "Nombre de la propiedad"}
+              required
+            >
+              <Input
+                id="property-name"
+                name="name"
+                placeholder={isEn ? "Casaora Centro" : "Casaora Centro"}
+                required
+              />
+            </Field>
+            <Field
+              htmlFor="property-code"
+              label={isEn ? "Internal code" : "Código interno"}
+            >
+              <Input
+                id="property-code"
+                name="code"
+                placeholder={isEn ? "CTR-01" : "CTR-01"}
+              />
+            </Field>
+            <Field htmlFor="property-status" label={isEn ? "Status" : "Estado"}>
+              <Select defaultValue="active" id="property-status" name="status">
                 <option value="active">{isEn ? "Active" : "Activa"}</option>
-                <option value="inactive">
-                  {isEn ? "Inactive" : "Inactiva"}
-                </option>
+                <option value="inactive">{isEn ? "Inactive" : "Inactiva"}</option>
               </Select>
-            </label>
-            <label className="grid gap-1">
-              <span className="font-medium text-muted-foreground text-xs">
-                {copy.propertyType}
-              </span>
-              <Select defaultValue="" name="property_type">
+            </Field>
+            <Field
+              htmlFor="property-type"
+              label={isEn ? "Property type" : "Tipo de propiedad"}
+            >
+              <Select defaultValue="" id="property-type" name="property_type">
                 <option value="">
-                  {isEn
-                    ? "Select type (optional)"
-                    : "Seleccionar tipo (opcional)"}
+                  {isEn ? "Select type" : "Seleccionar tipo"}
                 </option>
                 <option value="apartment_building">
                   {isEn ? "Apartment building" : "Edificio de apartamentos"}
@@ -129,178 +110,130 @@ export function CreatePropertySheet({
                   {isEn ? "Mixed use" : "Uso mixto"}
                 </option>
               </Select>
-            </label>
-          </div>
+            </Field>
+          </FieldGroup>
         </section>
 
-        <section className="space-y-3 rounded-2xl border border-border/50 bg-card/40 p-4">
-          <h3 className="font-medium text-sm">{copy.location}</h3>
-          <div className="grid gap-3 md:grid-cols-2">
-            <label className="grid gap-1 md:col-span-2">
-              <span className="font-medium text-muted-foreground text-xs">
-                {copy.addressLine1}
-              </span>
-              <Input name="address_line1" placeholder="Av. España 1234" />
-            </label>
-            <label className="grid gap-1 md:col-span-2">
-              <span className="font-medium text-muted-foreground text-xs">
-                {copy.addressLine2}
-              </span>
+        <section className="space-y-4">
+          <div className="space-y-1">
+            <h2 className="font-semibold text-base">
+              {isEn ? "Location" : "Ubicación"}
+            </h2>
+            <p className="text-muted-foreground text-sm">
+              {isEn
+                ? "This powers Portfolio search, hierarchy, and unit navigation."
+                : "Esto alimenta la búsqueda del portafolio, la jerarquía y la navegación entre unidades."}
+            </p>
+          </div>
+
+          <FieldGroup className="md:grid-cols-1">
+            <Field
+              htmlFor="property-address-1"
+              label={isEn ? "Address line 1" : "Dirección línea 1"}
+            >
               <Input
-                name="address_line2"
-                placeholder="Depto 4B / Torre Norte"
+                id="property-address-1"
+                name="address_line1"
+                placeholder={isEn ? "Av. España 1234" : "Av. España 1234"}
               />
-            </label>
-            <label className="grid gap-1">
-              <span className="font-medium text-muted-foreground text-xs">
-                {copy.neighborhood}
-              </span>
-              <Input name="neighborhood" placeholder="Villa Morra" />
-            </label>
-            <label className="grid gap-1">
-              <span className="font-medium text-muted-foreground text-xs">
-                {copy.city}
-              </span>
-              <Input name="city" placeholder="Asuncion" />
-            </label>
-            <label className="grid gap-1">
-              <span className="font-medium text-muted-foreground text-xs">
-                {copy.region}
-              </span>
-              <Input name="region" placeholder="Asunción" />
-            </label>
-            <label className="grid gap-1">
-              <span className="font-medium text-muted-foreground text-xs">
-                {copy.postalCode}
-              </span>
-              <Input name="postal_code" placeholder="1234" />
-            </label>
-            <label className="grid gap-1">
-              <span className="font-medium text-muted-foreground text-xs">
-                {copy.countryCode}
-              </span>
+            </Field>
+            <Field
+              htmlFor="property-address-2"
+              label={isEn ? "Address line 2" : "Dirección línea 2"}
+            >
+              <Input
+                id="property-address-2"
+                name="address_line2"
+                placeholder={isEn ? "Tower B, floor 4" : "Torre B, piso 4"}
+              />
+            </Field>
+          </FieldGroup>
+
+          <FieldGroup>
+            <Field htmlFor="property-neighborhood" label={isEn ? "Neighborhood" : "Barrio"}>
+              <Input id="property-neighborhood" name="neighborhood" />
+            </Field>
+            <Field htmlFor="property-city" label={isEn ? "City" : "Ciudad"}>
+              <Input id="property-city" name="city" placeholder="Asuncion" />
+            </Field>
+            <Field htmlFor="property-region" label={isEn ? "Region / State" : "Región / Departamento"}>
+              <Input id="property-region" name="region" />
+            </Field>
+            <Field htmlFor="property-country" label={isEn ? "Country code" : "Código país"}>
               <Input
                 autoCapitalize="characters"
                 defaultValue="PY"
+                id="property-country"
                 maxLength={2}
                 name="country_code"
                 placeholder="PY"
               />
-            </label>
-            <label className="grid gap-1">
-              <span className="font-medium text-muted-foreground text-xs">
-                {copy.latitude}
-              </span>
-              <Input
-                name="latitude"
-                placeholder="-25.2854"
-                step="any"
-                type="number"
-              />
-            </label>
-            <label className="grid gap-1">
-              <span className="font-medium text-muted-foreground text-xs">
-                {copy.longitude}
-              </span>
-              <Input
-                name="longitude"
-                placeholder="-57.5780"
-                step="any"
-                type="number"
-              />
-            </label>
-          </div>
+            </Field>
+          </FieldGroup>
         </section>
 
-        <section className="space-y-3 rounded-2xl border border-border/50 bg-card/40 p-4">
-          <h3 className="font-medium text-sm">{copy.operations}</h3>
-          <div className="grid gap-3">
-            <label className="grid gap-1">
-              <span className="font-medium text-muted-foreground text-xs">
-                {copy.amenities}
-              </span>
+        <section className="space-y-4">
+          <div className="space-y-1">
+            <h2 className="font-semibold text-base">
+              {isEn ? "Operator notes" : "Notas operativas"}
+            </h2>
+            <p className="text-muted-foreground text-sm">
+              {isEn
+                ? "Optional details that help the team complete setup faster."
+                : "Detalles opcionales para acelerar la configuración operativa."}
+            </p>
+          </div>
+
+          <FieldGroup className="md:grid-cols-1">
+            <Field
+              htmlFor="property-amenities"
+              description={
+                isEn
+                  ? "Separate values with commas."
+                  : "Separa los valores con comas."
+              }
+              label={isEn ? "Building amenities" : "Amenidades del edificio"}
+            >
               <Textarea
-                className="min-h-[80px]"
+                id="property-amenities"
                 name="building_amenities"
                 placeholder={
                   isEn
-                    ? "pool, gym, coworking, shared kitchen, rooftop"
-                    : "piscina, gimnasio, coworking, cocina compartida, terraza"
+                    ? "pool, coworking, elevator"
+                    : "piscina, coworking, ascensor"
                 }
               />
-              <span className="text-[11px] text-muted-foreground">
-                {copy.amenitiesHint}
-              </span>
-            </label>
-            <label className="grid gap-1">
-              <span className="font-medium text-muted-foreground text-xs">
-                {copy.accessInstructions}
-              </span>
+            </Field>
+            <Field
+              htmlFor="property-access"
+              label={isEn ? "Access instructions" : "Instrucciones de acceso"}
+            >
               <Textarea
-                className="min-h-[96px]"
+                id="property-access"
                 name="access_instructions"
                 placeholder={
                   isEn
-                    ? "Gate code, concierge hours, check-in directions..."
-                    : "Código de acceso, horario de portería, instrucciones de ingreso..."
+                    ? "Gate code, concierge hours, arrival notes"
+                    : "Código de acceso, horario de portería, notas de ingreso"
                 }
               />
-            </label>
-            <div className="grid gap-3 md:grid-cols-2">
-              <label className="grid gap-1">
-                <span className="font-medium text-muted-foreground text-xs">
-                  {copy.wifiName}
-                </span>
-                <Input name="shared_wifi_name" placeholder="Casaora-Guest" />
-              </label>
-              <label className="grid gap-1">
-                <span className="font-medium text-muted-foreground text-xs">
-                  {copy.wifiPassword}
-                </span>
-                <Input name="shared_wifi_password" placeholder="********" />
-              </label>
-            </div>
-          </div>
+            </Field>
+          </FieldGroup>
         </section>
 
-        <section className="space-y-3 rounded-2xl border border-border/50 bg-card/40 p-4">
-          <h3 className="font-medium text-sm">{copy.ownership}</h3>
-          <div className="grid gap-3 md:grid-cols-2">
-            <label className="grid gap-1">
-              <span className="font-medium text-muted-foreground text-xs">
-                {copy.assetOwnerName}
-              </span>
-              <Input name="asset_owner_name" placeholder="Acme Holdings LLC" />
-            </label>
-            <label className="grid gap-1">
-              <span className="font-medium text-muted-foreground text-xs">
-                {copy.assetOwnerOrgId}
-              </span>
-              <Input
-                name="asset_owner_organization_id"
-                placeholder="00000000-0000-0000-0000-000000000000"
-              />
-            </label>
-          </div>
-        </section>
-
-        <div className="flex justify-end gap-2 pt-4">
+        <div className="flex items-center justify-end gap-2 border-t border-border/60 pt-4">
           <Button
             onClick={() => onOpenChange(false)}
             type="button"
-            variant="outline"
+            variant="ghost"
           >
-            {cancelLabel}
+            {isEn ? "Cancel" : "Cancelar"}
           </Button>
-          <Button
-            className="bg-[#1e2b61] font-semibold text-white hover:bg-[#1e2b61]/90"
-            type="submit"
-            variant="secondary"
-          >
-            {createLabel}
+          <Button type="submit">
+            {isEn ? "Create property" : "Crear propiedad"}
           </Button>
         </div>
       </Form>
-    </Sheet>
+    </Drawer>
   );
 }

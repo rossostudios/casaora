@@ -20,7 +20,7 @@ export const SHORTCUTS: ShortcutEntry[] = [
   {
     id: "go-inbox",
     keys: ["G", "I"],
-    label: { en: "Go to Inbox", es: "Ir a Mensajes" },
+    label: { en: "Go to Action Center", es: "Ir al Centro de acción" },
     category: "navigation",
   },
   {
@@ -66,12 +66,6 @@ export const SHORTCUTS: ShortcutEntry[] = [
     category: "navigation",
   },
   {
-    id: "go-calendar",
-    keys: ["G", "A"],
-    label: { en: "Go to Calendar", es: "Ir a Calendario" },
-    category: "navigation",
-  },
-  {
     id: "go-settings",
     keys: ["G", "S"],
     label: { en: "Go to Settings", es: "Ir a Configuración" },
@@ -95,6 +89,12 @@ export const SHORTCUTS: ShortcutEntry[] = [
     id: "new-property",
     keys: ["Mod", "P"],
     label: { en: "New property", es: "Nueva propiedad" },
+    category: "global",
+  },
+  {
+    id: "ai-chat-panel",
+    keys: ["Mod", "J"],
+    label: { en: "Toggle AI chat", es: "Abrir/cerrar chat IA" },
     category: "global",
   },
   {
@@ -175,15 +175,15 @@ export const SHORTCUTS: ShortcutEntry[] = [
  */
 export const SHORTCUT_BY_HREF: Record<string, string[]> = {
   "/app": ["G", "H"],
-  "/module/messaging": ["G", "I"],
+  "/module/action-center": ["G", "I"],
   "/app/agents": ["G", "C"],
   "/module/properties": ["G", "P"],
   "/module/units": ["G", "U"],
   "/module/reservations": ["G", "R"],
+  "/module/operations": ["G", "T"],
   "/module/operations?tab=tasks": ["G", "T"],
   "/module/expenses": ["G", "E"],
   "/module/leases": ["G", "L"],
-  "/module/calendar": ["G", "A"],
   "/settings": ["G", "S"],
 };
 

@@ -59,8 +59,12 @@ pub async fn list_agents(state: &AppState, org_id: &str) -> AppResult<Vec<Value>
 }
 
 pub fn list_models(state: &AppState) -> Vec<Value> {
-    let model_chain = state.config.openai_model_chain();
-    let primary = model_chain.first().cloned().unwrap_or_default();
+    let model_chain = state.config.configured_agent_models();
+    let primary = if let Some(model) = state.config.openai_model_chain().first() {
+        format!("openai:{model}")
+    } else {
+        model_chain.first().cloned().unwrap_or_default()
+    };
 
     model_chain
         .into_iter()
@@ -68,6 +72,10 @@ pub fn list_models(state: &AppState) -> Vec<Value> {
             json!({
                 "model": model,
                 "is_primary": model == primary,
+                "provider": model
+                    .split_once(':')
+                    .map(|(provider, _)| provider)
+                    .unwrap_or("openai"),
             })
         })
         .collect()
@@ -294,6 +302,7 @@ pub async fn send_chat_message(
     allow_mutations: bool,
     confirm_write: bool,
     runtime_ids: Option<&RuntimeExecutionIds>,
+    agent_run_id: Option<&str>,
 ) -> AppResult<Map<String, Value>> {
     let chat = ensure_chat_owner(state, chat_id, org_id, user_id).await?;
     let agent_id = value_str(&chat, "agent_id").unwrap_or_default();
@@ -309,12 +318,20 @@ pub async fn send_chat_message(
     let pool = db_pool(state)?;
 
     let user_row = sqlx::query(
-        "INSERT INTO ai_chat_messages (chat_id, organization_id, role, content, created_by_user_id)
-         VALUES ($1::uuid, $2::uuid, 'user', $3, $4::uuid)
+        "INSERT INTO ai_chat_messages (
+            chat_id,
+            organization_id,
+            agent_run_id,
+            role,
+            content,
+            created_by_user_id
+         )
+         VALUES ($1::uuid, $2::uuid, $3::uuid, 'user', $4, $5::uuid)
          RETURNING row_to_json(ai_chat_messages.*) AS row",
     )
     .bind(chat_id)
     .bind(org_id)
+    .bind(agent_run_id)
     .bind(trimmed_message)
     .bind(user_id)
     .fetch_optional(pool)
@@ -365,7 +382,8 @@ pub async fn send_chat_message(
                 runtime_override
                     .as_ref()
                     .and_then(|override_row| override_row.model_override.clone())
-            });
+            })
+            .or_else(|| agent_model_policy_default(&agent));
     let max_steps_override = runtime_override
         .as_ref()
         .and_then(|override_row| override_row.max_steps_override)
@@ -393,6 +411,7 @@ pub async fn send_chat_message(
             allowed_tools: allowed_tools.as_deref(),
             agent_slug: agent_slug.as_deref(),
             chat_id: Some(chat_id),
+            agent_run_id,
             requested_by_user_id: Some(user_id),
             preferred_model: effective_preferred_model.as_deref(),
             max_steps_override,
@@ -428,17 +447,19 @@ pub async fn send_chat_message(
         "INSERT INTO ai_chat_messages (
             chat_id,
             organization_id,
+            agent_run_id,
             role,
             content,
             created_by_user_id,
             fallback_used,
             tool_trace,
             model_used
-         ) VALUES ($1::uuid, $2::uuid, 'assistant', $3, $4::uuid, $5, $6, $7)
+         ) VALUES ($1::uuid, $2::uuid, $3::uuid, 'assistant', $4, $5::uuid, $6, $7, $8)
          RETURNING row_to_json(ai_chat_messages.*) AS row",
     )
     .bind(chat_id)
     .bind(org_id)
+    .bind(agent_run_id)
     .bind(&reply)
     .bind(user_id)
     .bind(fallback_used)
@@ -530,8 +551,9 @@ pub async fn send_chat_message_streaming(
     allow_mutations: bool,
     confirm_write: bool,
     runtime_ids: Option<&RuntimeExecutionIds>,
+    agent_run_id: Option<&str>,
     stream_tx: tokio::sync::mpsc::Sender<AgentStreamEvent>,
-) -> AppResult<()> {
+) -> AppResult<Map<String, Value>> {
     let chat = ensure_chat_owner(state, chat_id, org_id, user_id).await?;
     let agent_id = value_str(&chat, "agent_id").unwrap_or_default();
     let agent = get_agent_by_id(state, &agent_id).await?;
@@ -547,11 +569,19 @@ pub async fn send_chat_message_streaming(
 
     // Save user message
     sqlx::query(
-        "INSERT INTO ai_chat_messages (chat_id, organization_id, role, content, created_by_user_id)
-         VALUES ($1::uuid, $2::uuid, 'user', $3, $4::uuid)",
+        "INSERT INTO ai_chat_messages (
+            chat_id,
+            organization_id,
+            agent_run_id,
+            role,
+            content,
+            created_by_user_id
+         )
+         VALUES ($1::uuid, $2::uuid, $3::uuid, 'user', $4, $5::uuid)",
     )
     .bind(chat_id)
     .bind(org_id)
+    .bind(agent_run_id)
     .bind(trimmed_message)
     .bind(user_id)
     .execute(pool)
@@ -603,7 +633,8 @@ pub async fn send_chat_message_streaming(
                 runtime_override
                     .as_ref()
                     .and_then(|override_row| override_row.model_override.clone())
-            });
+            })
+            .or_else(|| agent_model_policy_default(&agent));
     let max_steps_override = runtime_override
         .as_ref()
         .and_then(|override_row| override_row.max_steps_override)
@@ -631,6 +662,7 @@ pub async fn send_chat_message_streaming(
             allowed_tools: allowed_tools.as_deref(),
             agent_slug: agent_slug.as_deref(),
             chat_id: Some(chat_id),
+            agent_run_id,
             requested_by_user_id: Some(user_id),
             preferred_model: effective_preferred_model.as_deref(),
             max_steps_override,
@@ -666,18 +698,19 @@ pub async fn send_chat_message_streaming(
 
     let assistant_row = sqlx::query(
         "INSERT INTO ai_chat_messages (
-            chat_id, organization_id, role, content, created_by_user_id,
+            chat_id, organization_id, agent_run_id, role, content, created_by_user_id,
             fallback_used, tool_trace, model_used
-         ) VALUES ($1::uuid, $2::uuid, 'assistant', $3, $4::uuid, $5, $6, $7)
+         ) VALUES ($1::uuid, $2::uuid, $3::uuid, 'assistant', $4, $5::uuid, $6, $7, $8)
          RETURNING created_at",
     )
     .bind(chat_id)
     .bind(org_id)
+    .bind(agent_run_id)
     .bind(&reply)
     .bind(user_id)
     .bind(fallback_used)
-    .bind(tool_trace.map(Value::Array))
-    .bind(model_used)
+    .bind(tool_trace.clone().map(Value::Array))
+    .bind(model_used.clone())
     .fetch_optional(pool)
     .await
     .map_err(|error| {
@@ -698,7 +731,31 @@ pub async fn send_chat_message_streaming(
         }
     }
 
-    Ok(())
+    let mut payload = Map::new();
+    payload.insert("reply".to_string(), Value::String(reply));
+    payload.insert(
+        "tool_trace".to_string(),
+        Value::Array(tool_trace.unwrap_or_default()),
+    );
+    payload.insert(
+        "mutations_enabled".to_string(),
+        Value::Bool(
+            agent_result
+                .get("mutations_enabled")
+                .and_then(Value::as_bool)
+                .unwrap_or(false),
+        ),
+    );
+    payload.insert(
+        "model_used".to_string(),
+        agent_result
+            .get("model_used")
+            .cloned()
+            .unwrap_or(Value::Null),
+    );
+    payload.insert("fallback_used".to_string(), Value::Bool(fallback_used));
+
+    Ok(payload)
 }
 
 /// Get agent performance statistics for the last 30 days.
@@ -1101,6 +1158,7 @@ fn serialize_chat_message(row: &Value) -> Value {
         "content": row.as_object().and_then(|obj| obj.get("content")).cloned().unwrap_or(Value::Null),
         "tool_trace": row.as_object().and_then(|obj| obj.get("tool_trace")).cloned().unwrap_or(Value::Null),
         "model_used": row.as_object().and_then(|obj| obj.get("model_used")).cloned().unwrap_or(Value::Null),
+        "agent_run_id": row.as_object().and_then(|obj| obj.get("agent_run_id")).cloned().unwrap_or(Value::Null),
         "fallback_used": row.as_object().and_then(|obj| obj.get("fallback_used")).and_then(Value::as_bool).unwrap_or(false),
         "created_at": row.as_object().and_then(|obj| obj.get("created_at")).cloned().unwrap_or(Value::Null),
     })
@@ -1149,14 +1207,45 @@ fn validate_preferred_model(
         return Ok(None);
     }
 
-    let configured = state.config.openai_model_chain();
+    let configured = state.config.configured_agent_models();
     if configured.iter().any(|model| model == candidate) {
+        return Ok(Some(candidate.to_string()));
+    }
+
+    let legacy_openai = state.config.openai_model_chain();
+    if legacy_openai.iter().any(|model| model == candidate) {
+        return Ok(Some(candidate.to_string()));
+    }
+
+    let legacy_anthropic = state.config.anthropic_model_chain();
+    if legacy_anthropic.iter().any(|model| model == candidate) {
         return Ok(Some(candidate.to_string()));
     }
 
     Err(AppError::BadRequest(format!(
         "preferred_model '{candidate}' is not configured for this environment."
     )))
+}
+
+fn agent_model_policy_default(agent: &Value) -> Option<String> {
+    let policy = agent.get("model_policy")?.as_object()?;
+    let default_model = policy
+        .get("defaultModel")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())?;
+
+    if default_model.contains(':') {
+        return Some(default_model.to_string());
+    }
+
+    let default_provider = policy
+        .get("defaultProvider")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())?;
+
+    Some(format!("{default_provider}:{default_model}"))
 }
 
 fn coerce_limit(value: i64, default: i64, minimum: i64, maximum: i64) -> i64 {

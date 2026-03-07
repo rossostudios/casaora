@@ -2,7 +2,9 @@
 
 import { AnimatePresence, motion } from "motion/react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useState } from "react";
+import { buildAgentContextHref } from "@/lib/ai-context";
 import { EASING } from "@/lib/module-helpers";
 import { cn } from "@/lib/utils";
 import type { OperationsItem } from "../hooks/use-operations-portfolio";
@@ -364,10 +366,21 @@ function DetailItem({
 }
 
 function ActionChip({ label, prompt }: { label: string; prompt: string }) {
+  const pathname = usePathname();
+
   return (
     <Link
       className="rounded-full border border-border/50 px-3 py-1.5 text-muted-foreground text-xs transition-colors hover:border-foreground/20 hover:text-foreground"
-      href={`/app/agents?prompt=${encodeURIComponent(prompt)}`}
+      href={buildAgentContextHref({
+        prompt,
+        context: {
+          source: "operations",
+          entityIds: [],
+          filters: { workspace: "operations" },
+          summary: "Operations workspace with active tasks and maintenance.",
+          returnPath: pathname,
+        },
+      })}
     >
       {label}
     </Link>

@@ -1,30 +1,57 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
-
+import { useMemo, useState } from "react";
 import {
   createLeaseAction,
   updateLeaseAction,
 } from "@/app/(admin)/module/leases/actions";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { DatePicker } from "@/components/ui/date-picker";
+import { Drawer } from "@/components/ui/drawer";
+import { Field, FieldGroup } from "@/components/ui/field";
 import { Form } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
-import { Sheet } from "@/components/ui/sheet";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
-import { authedFetch } from "@/lib/api-client";
-import type { Locale } from "@/lib/i18n";
 
-import {
-  type GuestResult,
-  type LeaseRow,
-  type PropertyOption,
-  PY_RESIDENTIAL_IVA_RATE,
-  type UnitOption,
-} from "./lease-types";
+type LeaseFormEditing = {
+  id: string;
+  applicationId?: string | null;
+  propertyId?: string | null;
+  propertyName?: string | null;
+  unitId?: string | null;
+  unitName?: string | null;
+  spaceId?: string | null;
+  spaceName?: string | null;
+  bedId?: string | null;
+  bedCode?: string | null;
+  tenantName: string;
+  tenantEmail?: string | null;
+  tenantPhoneE164?: string | null;
+  leaseStatus: string;
+  startsOn: string;
+  endsOn?: string | null;
+  currency: string;
+  monthlyRent: number;
+  serviceFeeFlat: number;
+  securityDeposit: number;
+  guaranteeOptionFee: number;
+  taxIva: number;
+  platformFee: number;
+  notes?: string | null;
+};
+
+type LeaseFormSheetProps = {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  editing: LeaseFormEditing | null;
+  orgId: string;
+  nextPath: string;
+  isEn: boolean;
+  propertyOptions: Array<{ id: string; label: string }>;
+  unitOptions: Array<{ id: string; label: string; propertyId?: string | null }>;
+  defaultPropertyId?: string | null;
+};
 
 export function LeaseFormSheet({
   open,
@@ -33,565 +60,426 @@ export function LeaseFormSheet({
   orgId,
   nextPath,
   isEn,
-  locale,
-  today,
   propertyOptions,
   unitOptions,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  editing: LeaseRow | null;
-  orgId: string;
-  nextPath: string;
-  isEn: boolean;
-  locale: Locale;
-  today: string;
-  propertyOptions: PropertyOption[];
-  unitOptions: UnitOption[];
-}) {
-  const [tenantName, setTenantName] = useState(
-    () => editing?.tenant_full_name ?? ""
+  defaultPropertyId,
+}: LeaseFormSheetProps) {
+  const [selectedPropertyId, setSelectedPropertyId] = useState(
+    editing?.propertyId ?? defaultPropertyId ?? "",
   );
-  const [tenantEmail, setTenantEmail] = useState(
-    () => editing?.tenant_email ?? ""
-  );
-  const [tenantPhone, setTenantPhone] = useState(
-    () => editing?.tenant_phone_e164 ?? ""
-  );
-  const [guestResults, setGuestResults] = useState<GuestResult[]>([]);
-  const [showGuestDropdown, setShowGuestDropdown] = useState(false);
+  const [selectedUnitId, setSelectedUnitId] = useState(editing?.unitId ?? "");
   const [saveAsGuest, setSaveAsGuest] = useState(false);
-  const guestSearchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const dropdownRef = useRef<HTMLDivElement | null>(null);
 
-  const resetTenantFields = useCallback((row: LeaseRow | null) => {
-    setTenantName(row?.tenant_full_name ?? "");
-    setTenantEmail(row?.tenant_email ?? "");
-    setTenantPhone(row?.tenant_phone_e164 ?? "");
-    setSaveAsGuest(false);
-    setGuestResults([]);
-    setShowGuestDropdown(false);
-  }, []);
-
-  const handleSheetOpenChange = useCallback(
-    (nextOpen: boolean) => {
-      if (nextOpen) {
-        resetTenantFields(editing);
-      } else {
-        setShowGuestDropdown(false);
-      }
-      onOpenChange(nextOpen);
-    },
-    [editing, onOpenChange, resetTenantFields]
+  const availableUnits = useMemo(
+    () =>
+      unitOptions.filter((unit) =>
+        selectedPropertyId ? unit.propertyId === selectedPropertyId : true,
+      ),
+    [selectedPropertyId, unitOptions],
   );
 
-  const searchGuests = useCallback(
-    (query: string) => {
-      if (guestSearchTimer.current) clearTimeout(guestSearchTimer.current);
-      if (query.length < 2) {
-        setGuestResults([]);
-        setShowGuestDropdown(false);
-        return;
-      }
-      guestSearchTimer.current = setTimeout(async () => {
-        try {
-          const params = new URLSearchParams({
-            organization_id: orgId,
-            q: query,
-          });
-          const data = await authedFetch<GuestResult[]>(
-            `/guests?${params.toString()}`
-          );
-          let results: GuestResult[];
-          if (data != null) {
-            results = data;
-          } else {
-            results = [];
-          }
-          setGuestResults(results);
-          setShowGuestDropdown(results.length > 0);
-        } catch {
-          setGuestResults([]);
-          setShowGuestDropdown(false);
-        }
-      }, 300);
-    },
-    [orgId]
-  );
-
-  const selectGuest = useCallback((guest: GuestResult) => {
-    setTenantName(guest.full_name);
-    setTenantEmail(guest.email ?? "");
-    setTenantPhone(guest.phone_e164 ?? "");
-    setShowGuestDropdown(false);
-    setSaveAsGuest(false);
-  }, []);
-
-  useEffect(() => {
-    function handleClickOutside(e: MouseEvent) {
-      if (
-        dropdownRef.current &&
-        !dropdownRef.current.contains(e.target as Node)
-      ) {
-        setShowGuestDropdown(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
-
-  const rentInputRef = useRef<HTMLInputElement | null>(null);
-  const ivaInputRef = useRef<HTMLInputElement | null>(null);
-
-  const autoCalcIva = useCallback(() => {
-    const rentValue = rentInputRef.current?.value;
-    const rent = Number(rentValue);
-    if (Number.isFinite(rent) && rent > 0 && ivaInputRef.current) {
-      const iva = Math.round(rent * PY_RESIDENTIAL_IVA_RATE * 100) / 100;
-      ivaInputRef.current.value = String(iva);
-      const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
-        HTMLInputElement.prototype,
-        "value"
-      )?.set;
-      nativeInputValueSetter?.call(ivaInputRef.current, String(iva));
-      ivaInputRef.current.dispatchEvent(new Event("input", { bubbles: true }));
-    }
-  }, []);
+  const defaultUnitId =
+    selectedUnitId ||
+    (editing?.propertyId === selectedPropertyId ? editing?.unitId : "") ||
+    (selectedPropertyId
+      ? availableUnits.find((unit) => unit.propertyId === selectedPropertyId)
+          ?.id
+      : "");
 
   return (
-    <Sheet
-      contentClassName="w-[95vw] sm:max-w-3xl flex flex-col h-full"
+    <Drawer
+      className="w-[min(94vw,42rem)]"
+      closeLabel={isEn ? "Close lease form" : "Cerrar formulario"}
       description={
         editing
           ? isEn
-            ? "Edit lease details. Status changes use the separate action buttons."
-            : `Edita los detalles del contrato. Los cambios de estado usan los botones de acci${"\u00F3"}n.`
+            ? "Update the core lease record. Collections, documents, and renewals stay in the workbench."
+            : "Actualiza el contrato base. Cobros, documentos y renovaciones quedan en el workbench."
           : isEn
-            ? "Create a lease and optionally generate the first collection record."
-            : "Crea un contrato y opcionalmente genera el primer registro de cobro."
+            ? "Create a unit-backed lease first so collections, renewals, and documents all stay linked."
+            : "Crea primero un contrato ligado a una unidad para mantener conectados cobros, renovaciones y documentos."
       }
-      onOpenChange={handleSheetOpenChange}
+      onOpenChange={(next) => {
+        if (next) {
+          setSelectedPropertyId(editing?.propertyId ?? defaultPropertyId ?? "");
+          setSelectedUnitId(editing?.unitId ?? "");
+          setSaveAsGuest(false);
+        }
+        onOpenChange(next);
+      }}
       open={open}
+      side="right"
       title={
         editing
           ? isEn
             ? "Edit lease"
             : "Editar contrato"
           : isEn
-            ? "New lease"
-            : "Nuevo contrato"
+            ? "Create lease"
+            : "Crear contrato"
       }
     >
       <Form
         action={editing ? updateLeaseAction : createLeaseAction}
-        className="flex min-h-0 flex-1 flex-col"
+        className="space-y-6 px-4 py-5 sm:px-6"
         key={editing?.id ?? "create"}
       >
-        <div className="flex-1 overflow-y-auto pr-2 pb-6">
-          {editing ? (
-            <input name="lease_id" type="hidden" value={editing.id} />
-          ) : (
-            <input name="organization_id" type="hidden" value={orgId} />
-          )}
-          <input name="next" type="hidden" value={nextPath} />
+        {editing ? (
+          <input name="lease_id" type="hidden" value={editing.id} />
+        ) : (
+          <input name="organization_id" type="hidden" value={orgId} />
+        )}
+        <input name="next" type="hidden" value={nextPath} />
+        {editing?.applicationId ? (
+          <input
+            name="application_id"
+            type="hidden"
+            value={editing.applicationId}
+          />
+        ) : null}
+        {editing?.spaceId && editing.unitId === selectedUnitId ? (
+          <input name="space_id" type="hidden" value={editing.spaceId} />
+        ) : null}
+        {editing?.bedId && editing.unitId === selectedUnitId ? (
+          <input name="bed_id" type="hidden" value={editing.bedId} />
+        ) : null}
 
-          <Tabs className="w-full" defaultValue="tenant">
-            <TabsList className="mb-6 grid h-9 w-full grid-cols-3 rounded-lg bg-muted/50 p-1">
-              <TabsTrigger
-                className="text-xs data-[state=active]:shadow-sm"
-                value="tenant"
+        <section className="space-y-4">
+          <div className="space-y-1">
+            <h2 className="font-semibold text-base">
+              {isEn ? "Occupancy target" : "Destino de ocupación"}
+            </h2>
+            <p className="text-muted-foreground text-sm">
+              {isEn
+                ? "Choose the property and unit first. Advanced space or bed targets are preserved automatically when this lease already has them."
+                : "Elige primero propiedad y unidad. Los destinos avanzados de espacio o cama se conservan automáticamente cuando el contrato ya los tiene."}
+            </p>
+          </div>
+
+          <FieldGroup>
+            <Field
+              htmlFor="lease-property"
+              label={isEn ? "Property" : "Propiedad"}
+              required
+            >
+              <Select
+                defaultValue={editing?.propertyId ?? defaultPropertyId ?? ""}
+                id="lease-property"
+                name="property_id"
+                onChange={(event) => {
+                  const nextPropertyId = event.target.value;
+                  setSelectedPropertyId(nextPropertyId);
+                  if (editing?.propertyId !== nextPropertyId) {
+                    setSelectedUnitId("");
+                  }
+                }}
+                required
               >
-                {isEn ? "Tenant & Dates" : "Inquilino y Fechas"}
-              </TabsTrigger>
-              <TabsTrigger
-                className="text-xs data-[state=active]:shadow-sm"
-                value="financials"
+                <option value="">
+                  {isEn ? "Select property" : "Seleccionar propiedad"}
+                </option>
+                {propertyOptions.map((property) => (
+                  <option key={property.id} value={property.id}>
+                    {property.label}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+            <Field
+              htmlFor="lease-unit"
+              label={isEn ? "Unit" : "Unidad"}
+              required
+            >
+              <Select
+                key={`${editing?.id ?? "create"}:${selectedPropertyId}`}
+                defaultValue={defaultUnitId}
+                id="lease-unit"
+                name="unit_id"
+                onChange={(event) => setSelectedUnitId(event.target.value)}
+                required
               >
-                {isEn ? "Financials" : "Finanzas"}
-              </TabsTrigger>
-              <TabsTrigger
-                className="text-xs data-[state=active]:shadow-sm"
-                value="details"
+                <option value="">
+                  {isEn ? "Select unit" : "Seleccionar unidad"}
+                </option>
+                {availableUnits.map((unit) => (
+                  <option key={unit.id} value={unit.id}>
+                    {unit.label}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+          </FieldGroup>
+
+          {editing?.spaceName || editing?.bedCode ? (
+            <div className="rounded-2xl border border-border/60 bg-background/70 p-4 text-sm">
+              <p className="font-medium">
+                {isEn ? "Advanced occupancy target" : "Destino avanzado"}
+              </p>
+              <p className="mt-1 text-muted-foreground">
+                {[editing.spaceName, editing.bedCode]
+                  .filter(Boolean)
+                  .join(" · ")}
+              </p>
+            </div>
+          ) : null}
+        </section>
+
+        <section className="space-y-4">
+          <div className="space-y-1">
+            <h2 className="font-semibold text-base">
+              {isEn ? "Tenant and term" : "Inquilino y vigencia"}
+            </h2>
+            <p className="text-muted-foreground text-sm">
+              {isEn
+                ? "Capture the tenant identity and the dates that should drive collections and renewal timing."
+                : "Captura la identidad del inquilino y las fechas que deben gobernar cobros y renovaciones."}
+            </p>
+          </div>
+
+          <FieldGroup>
+            <Field
+              htmlFor="lease-tenant-name"
+              label={isEn ? "Tenant full name" : "Nombre completo"}
+              required
+            >
+              <Input
+                defaultValue={editing?.tenantName ?? ""}
+                id="lease-tenant-name"
+                name="tenant_full_name"
+                placeholder={isEn ? "John Doe" : "Juan Pérez"}
+                required
+              />
+            </Field>
+            <Field
+              htmlFor="lease-status"
+              label={isEn ? "Lease status" : "Estado"}
+            >
+              <Select
+                defaultValue={editing?.leaseStatus ?? "draft"}
+                id="lease-status"
+                name="lease_status"
               >
-                {isEn ? "Details" : "Detalles"}
-              </TabsTrigger>
-            </TabsList>
+                <option value="draft">{isEn ? "Draft" : "Borrador"}</option>
+                <option value="active">{isEn ? "Active" : "Activo"}</option>
+                <option value="delinquent">
+                  {isEn ? "Delinquent" : "Moroso"}
+                </option>
+                <option value="terminated">
+                  {isEn ? "Terminated" : "Terminado"}
+                </option>
+                <option value="completed">
+                  {isEn ? "Completed" : "Completado"}
+                </option>
+              </Select>
+            </Field>
+            <Field
+              htmlFor="lease-tenant-email"
+              label={isEn ? "Email" : "Correo"}
+            >
+              <Input
+                defaultValue={editing?.tenantEmail ?? ""}
+                id="lease-tenant-email"
+                name="tenant_email"
+                type="email"
+              />
+            </Field>
+            <Field
+              htmlFor="lease-tenant-phone"
+              label={isEn ? "Phone" : "Teléfono"}
+            >
+              <Input
+                defaultValue={editing?.tenantPhoneE164 ?? ""}
+                id="lease-tenant-phone"
+                name="tenant_phone_e164"
+                placeholder="+595..."
+              />
+            </Field>
+            <Field
+              htmlFor="lease-starts-on"
+              label={isEn ? "Starts on" : "Inicio"}
+              required
+            >
+              <Input
+                defaultValue={editing?.startsOn ?? ""}
+                id="lease-starts-on"
+                name="starts_on"
+                required
+                type="date"
+              />
+            </Field>
+            <Field htmlFor="lease-ends-on" label={isEn ? "Ends on" : "Fin"}>
+              <Input
+                defaultValue={editing?.endsOn ?? ""}
+                id="lease-ends-on"
+                name="ends_on"
+                type="date"
+              />
+            </Field>
+          </FieldGroup>
 
-            <TabsContent className="m-0 space-y-6" value="tenant">
-              <div className="grid gap-4 md:grid-cols-2">
-                <div
-                  className="relative space-y-1.5 text-sm md:col-span-2"
-                  ref={dropdownRef}
-                >
-                  <span className="font-medium text-foreground">
-                    {isEn ? "Tenant full name" : "Nombre completo"}
-                  </span>
-                  <Input
-                    autoComplete="off"
-                    name="tenant_full_name"
-                    onChange={(e) => {
-                      setTenantName(e.target.value);
-                      searchGuests(e.target.value);
-                    }}
-                    onFocus={() => {
-                      if (guestResults.length > 0) setShowGuestDropdown(true);
-                    }}
-                    placeholder={isEn ? "e.g., John Doe" : "Ej: Juan Pérez"}
-                    required
-                    value={tenantName}
-                  />
-                  {showGuestDropdown && guestResults.length > 0 && (
-                    <div className="absolute top-full right-0 left-0 z-50 mt-1 max-h-48 overflow-y-auto rounded-md border bg-popover shadow-md">
-                      {guestResults.map((guest) => (
-                        <button
-                          className="flex w-full flex-col gap-0.5 px-3 py-2 text-left text-sm hover:bg-accent"
-                          key={guest.id}
-                          onClick={() => selectGuest(guest)}
-                          type="button"
-                        >
-                          <span className="font-medium">{guest.full_name}</span>
-                          {(guest.email || guest.phone_e164) && (
-                            <span className="text-muted-foreground text-xs">
-                              {[guest.email, guest.phone_e164]
-                                .filter(Boolean)
-                                .join(" \u00B7 ")}
-                            </span>
-                          )}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                <label className="space-y-1.5 text-sm">
-                  <span className="font-medium text-foreground">
-                    {isEn ? "Email" : "Correo"}
-                  </span>
-                  <Input
-                    name="tenant_email"
-                    onChange={(e) => setTenantEmail(e.target.value)}
-                    placeholder="tenant@example.com"
-                    type="email"
-                    value={tenantEmail}
-                  />
-                </label>
-
-                <label className="space-y-1.5 text-sm">
-                  <span className="font-medium text-foreground">
-                    {isEn ? "Phone" : `Tel${"\u00E9"}fono`}
-                  </span>
-                  <Input
-                    name="tenant_phone_e164"
-                    onChange={(e) => setTenantPhone(e.target.value)}
-                    placeholder="+595..."
-                    value={tenantPhone}
-                  />
-                </label>
-
-                {!editing && (
-                  <label className="flex cursor-pointer items-start gap-3 rounded-lg border p-3 shadow-sm transition-colors hover:bg-muted/50 md:col-span-2">
-                    <Checkbox
-                      checked={saveAsGuest}
-                      className="mt-1"
-                      onCheckedChange={(checked) =>
-                        setSaveAsGuest(checked === true)
-                      }
-                    />
-                    <div className="space-y-1">
-                      <p className="font-medium text-sm leading-none">
-                        {isEn ? "Save as guest" : "Guardar como huésped"}
-                      </p>
-                      <p className="text-muted-foreground text-xs">
-                        {isEn
-                          ? "Also save tenant as a guest in the database for future reference."
-                          : `Tambi${"\u00E9"}n guardar inquilino como hu${"\u00E9"}sped en la base de datos para futura referencia.`}
-                      </p>
-                    </div>
-                    <input
-                      name="save_as_guest"
-                      type="hidden"
-                      value={saveAsGuest ? "1" : "0"}
-                    />
-                  </label>
-                )}
+          {!editing ? (
+            <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-border/60 bg-background/70 p-4">
+              <Checkbox
+                checked={saveAsGuest}
+                className="mt-0.5"
+                onCheckedChange={(checked) => setSaveAsGuest(checked === true)}
+              />
+              <div className="space-y-1 text-sm">
+                <p className="font-medium">
+                  {isEn ? "Also save as guest" : "También guardar como huésped"}
+                </p>
+                <p className="text-muted-foreground">
+                  {isEn
+                    ? "Useful when the tenant may later move through reservations, guest messaging, or portal verification."
+                    : "Útil cuando el inquilino pueda pasar luego por reservas, mensajería o verificación de portal."}
+                </p>
               </div>
+              <input
+                name="save_as_guest"
+                type="hidden"
+                value={saveAsGuest ? "1" : "0"}
+              />
+            </label>
+          ) : null}
+        </section>
 
-              <div className="border-t pt-4">
-                <h4 className="mb-3 font-semibold text-sm">
-                  {isEn ? "Lease Term" : "Plazo del Contrato"}
-                </h4>
-                <div className="grid gap-4 md:grid-cols-2">
-                  <label className="space-y-1.5 text-sm">
-                    <span className="font-medium text-foreground">
-                      {isEn ? "Start date" : "Fecha de inicio"}
-                    </span>
-                    <DatePicker
-                      defaultValue={editing?.starts_on ?? today}
-                      locale={locale}
-                      name="starts_on"
-                    />
-                  </label>
+        <section className="space-y-4">
+          <div className="space-y-1">
+            <h2 className="font-semibold text-base">
+              {isEn ? "Financial terms" : "Términos financieros"}
+            </h2>
+            <p className="text-muted-foreground text-sm">
+              {isEn
+                ? "Set the recurring amount and move-in totals that should flow into collections and contract export."
+                : "Define el monto recurrente y los importes de ingreso que deben fluir a cobros y exportación del contrato."}
+            </p>
+          </div>
 
-                  <label className="space-y-1.5 text-sm">
-                    <span className="font-medium text-foreground">
-                      {isEn ? "End date" : `Fecha de t${"\u00E9"}rmino`}
-                    </span>
-                    <DatePicker
-                      defaultValue={editing?.ends_on ?? ""}
-                      locale={locale}
-                      name="ends_on"
-                    />
-                  </label>
-                </div>
-              </div>
-            </TabsContent>
+          <FieldGroup>
+            <Field
+              htmlFor="lease-currency"
+              label={isEn ? "Currency" : "Moneda"}
+            >
+              <Select
+                defaultValue={editing?.currency ?? "PYG"}
+                id="lease-currency"
+                name="currency"
+              >
+                <option value="PYG">PYG</option>
+                <option value="USD">USD</option>
+              </Select>
+            </Field>
+            <Field
+              htmlFor="lease-monthly-rent"
+              label={isEn ? "Monthly rent" : "Renta mensual"}
+              required
+            >
+              <Input
+                defaultValue={editing?.monthlyRent ?? 0}
+                id="lease-monthly-rent"
+                min="0"
+                name="monthly_rent"
+                required
+                step="0.01"
+                type="number"
+              />
+            </Field>
+            <Field
+              htmlFor="lease-service-fee"
+              label={isEn ? "Service fee" : "Cuota de servicio"}
+            >
+              <Input
+                defaultValue={editing?.serviceFeeFlat ?? 0}
+                id="lease-service-fee"
+                min="0"
+                name="service_fee_flat"
+                step="0.01"
+                type="number"
+              />
+            </Field>
+            <Field
+              htmlFor="lease-security-deposit"
+              label={isEn ? "Security deposit" : "Depósito"}
+            >
+              <Input
+                defaultValue={editing?.securityDeposit ?? 0}
+                id="lease-security-deposit"
+                min="0"
+                name="security_deposit"
+                step="0.01"
+                type="number"
+              />
+            </Field>
+            <Field
+              htmlFor="lease-guarantee-fee"
+              label={isEn ? "Guarantee fee" : "Cuota de garantía"}
+            >
+              <Input
+                defaultValue={editing?.guaranteeOptionFee ?? 0}
+                id="lease-guarantee-fee"
+                min="0"
+                name="guarantee_option_fee"
+                step="0.01"
+                type="number"
+              />
+            </Field>
+            <Field htmlFor="lease-tax-iva" label="IVA">
+              <Input
+                defaultValue={editing?.taxIva ?? 0}
+                id="lease-tax-iva"
+                min="0"
+                name="tax_iva"
+                step="0.01"
+                type="number"
+              />
+            </Field>
+            <Field
+              htmlFor="lease-platform-fee"
+              label={isEn ? "Platform fee" : "Cuota de plataforma"}
+            >
+              <Input
+                defaultValue={editing?.platformFee ?? 0}
+                id="lease-platform-fee"
+                min="0"
+                name="platform_fee"
+                step="0.01"
+                type="number"
+              />
+            </Field>
+          </FieldGroup>
+        </section>
 
-            <TabsContent className="m-0 space-y-6" value="financials">
-              <div className="grid gap-4 md:grid-cols-2">
-                <label className="space-y-1.5 text-sm">
-                  <span className="font-medium text-foreground">
-                    {isEn ? "Currency" : "Moneda"}
-                  </span>
-                  <Select
-                    defaultValue={editing?.currency ?? "PYG"}
-                    name="currency"
-                  >
-                    <option value="PYG">PYG</option>
-                    <option value="USD">USD</option>
-                  </Select>
-                </label>
-              </div>
+        <section className="space-y-4">
+          <div className="space-y-1">
+            <h2 className="font-semibold text-base">
+              {isEn ? "Notes" : "Notas"}
+            </h2>
+            <p className="text-muted-foreground text-sm">
+              {isEn
+                ? "Optional context for operators or for the generated contract PDF."
+                : "Contexto opcional para operadores o para el PDF del contrato."}
+            </p>
+          </div>
+          <Field
+            htmlFor="lease-notes"
+            label={isEn ? "Internal notes" : "Notas internas"}
+          >
+            <Textarea
+              defaultValue={editing?.notes ?? ""}
+              id="lease-notes"
+              name="notes"
+            />
+          </Field>
+        </section>
 
-              <div className="border-t pt-4">
-                <h4 className="mb-3 font-semibold text-sm">
-                  {isEn ? "Monthly Charges" : "Cargos Mensuales"}
-                </h4>
-                <div className="grid gap-4 md:grid-cols-3">
-                  <label className="space-y-1.5 text-sm">
-                    <span className="font-medium text-foreground">
-                      {isEn ? "Monthly rent" : "Alquiler mensual"}
-                    </span>
-                    <Input
-                      defaultValue={editing?.monthly_rent ?? ""}
-                      min={0}
-                      name="monthly_rent"
-                      placeholder="0.00"
-                      ref={rentInputRef}
-                      required
-                      step="0.01"
-                      type="number"
-                    />
-                  </label>
-
-                  <div className="space-y-1.5 text-sm">
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium text-foreground">IVA</span>
-                      <button
-                        className="rounded border border-input px-1.5 py-0.5 font-medium text-[10px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-                        onClick={autoCalcIva}
-                        title={
-                          isEn
-                            ? "Auto-calculate 5% IVA (residential rental rate)"
-                            : "Auto-calcular IVA 5% (tasa alquiler residencial)"
-                        }
-                        type="button"
-                      >
-                        5%
-                      </button>
-                    </div>
-                    <Input
-                      defaultValue={editing?.tax_iva ?? ""}
-                      min={0}
-                      name="tax_iva"
-                      placeholder="0.00"
-                      ref={ivaInputRef}
-                      step="0.01"
-                      type="number"
-                    />
-                  </div>
-
-                  <label className="space-y-1.5 text-sm">
-                    <span className="font-medium text-foreground">
-                      {isEn ? "Service fee" : "Tarifa de servicio"}
-                    </span>
-                    <Input
-                      defaultValue={editing?.service_fee_flat ?? ""}
-                      min={0}
-                      name="service_fee_flat"
-                      placeholder="0.00"
-                      step="0.01"
-                      type="number"
-                    />
-                  </label>
-                </div>
-              </div>
-
-              <div className="border-t pt-4">
-                <h4 className="mb-3 font-semibold text-sm">
-                  {isEn ? "Setup & Fees" : "Configuración y Tarifas"}
-                </h4>
-                <div className="grid gap-4 md:grid-cols-2">
-                  <label className="space-y-1.5 text-sm">
-                    <span className="font-medium text-foreground">
-                      {isEn
-                        ? "Security deposit"
-                        : `Dep${"\u00F3"}sito de garant${"\u00ED"}a`}
-                    </span>
-                    <Input
-                      defaultValue={editing?.security_deposit ?? ""}
-                      min={0}
-                      name="security_deposit"
-                      placeholder="0.00"
-                      step="0.01"
-                      type="number"
-                    />
-                  </label>
-
-                  <label className="space-y-1.5 text-sm">
-                    <span className="font-medium text-foreground">
-                      {isEn
-                        ? "Guarantee option fee"
-                        : `Costo de garant${"\u00ED"}a`}
-                    </span>
-                    <Input
-                      defaultValue={editing?.guarantee_option_fee ?? ""}
-                      min={0}
-                      name="guarantee_option_fee"
-                      placeholder="0.00"
-                      step="0.01"
-                      type="number"
-                    />
-                  </label>
-
-                  <label className="space-y-1.5 text-sm">
-                    <span className="font-medium text-foreground">
-                      {isEn ? "Platform fee" : "Tarifa plataforma"}
-                    </span>
-                    <Input
-                      defaultValue={editing?.platform_fee ?? ""}
-                      min={0}
-                      name="platform_fee"
-                      placeholder="0.00"
-                      step="0.01"
-                      type="number"
-                    />
-                  </label>
-                </div>
-              </div>
-
-              {editing ? null : (
-                <div className="border-t pt-4">
-                  <h4 className="mb-3 font-semibold text-sm">
-                    {isEn ? "Initial Collection" : "Cobro Inicial"}
-                  </h4>
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <label className="space-y-1.5 text-sm">
-                      <span className="font-medium text-foreground">
-                        {isEn
-                          ? "Generate first collection"
-                          : "Generar primer cobro"}
-                      </span>
-                      <Select defaultValue="1" name="generate_first_collection">
-                        <option value="1">
-                          {isEn ? "Yes" : `S${"\u00ED"}`}
-                        </option>
-                        <option value="0">{isEn ? "No" : "No"}</option>
-                      </Select>
-                    </label>
-
-                    <label className="space-y-1.5 text-sm">
-                      <span className="font-medium text-foreground">
-                        {isEn
-                          ? "First collection due"
-                          : "Vencimiento primer cobro"}
-                      </span>
-                      <DatePicker
-                        defaultValue={today}
-                        locale={locale}
-                        name="first_collection_due_date"
-                      />
-                    </label>
-                  </div>
-                </div>
-              )}
-            </TabsContent>
-
-            <TabsContent className="m-0 space-y-6" value="details">
-              <div className="grid gap-4 md:grid-cols-2">
-                <label className="space-y-1.5 text-sm">
-                  <span className="font-medium text-foreground">
-                    {isEn ? "Property" : "Propiedad"}
-                  </span>
-                  <Select
-                    defaultValue={editing?.property_id ?? ""}
-                    name="property_id"
-                  >
-                    <option value="">
-                      {isEn ? "Select property" : "Seleccionar"}
-                    </option>
-                    {propertyOptions.map((item) => (
-                      <option key={item.id} value={item.id}>
-                        {item.label}
-                      </option>
-                    ))}
-                  </Select>
-                </label>
-
-                <label className="space-y-1.5 text-sm">
-                  <span className="font-medium text-foreground">
-                    {isEn ? "Unit" : "Unidad"}
-                  </span>
-                  <Select defaultValue={editing?.unit_id ?? ""} name="unit_id">
-                    <option value="">
-                      {isEn ? "Select unit" : "Seleccionar"}
-                    </option>
-                    {unitOptions.map((item) => (
-                      <option key={item.id} value={item.id}>
-                        {item.label}
-                      </option>
-                    ))}
-                  </Select>
-                </label>
-
-                {editing ? null : (
-                  <label className="space-y-1.5 text-sm">
-                    <span className="font-medium text-foreground">
-                      {isEn ? "Lease status" : "Estado del contrato"}
-                    </span>
-                    <Select defaultValue="active" name="lease_status">
-                      <option value="draft">
-                        {isEn ? "Draft" : "Borrador"}
-                      </option>
-                      <option value="active">
-                        {isEn ? "Active" : "Activo"}
-                      </option>
-                    </Select>
-                  </label>
-                )}
-              </div>
-
-              <div className="border-t pt-4">
-                <label className="space-y-1.5 text-sm">
-                  <span className="font-medium text-foreground">
-                    {isEn ? "Notes" : "Notas"}
-                  </span>
-                  <Textarea
-                    defaultValue={editing?.notes ?? ""}
-                    name="notes"
-                    placeholder={
-                      isEn
-                        ? "Additional lease details, special stipulations..."
-                        : "Detalles adicionales, estipulaciones especiales..."
-                    }
-                    rows={4}
-                  />
-                </label>
-              </div>
-            </TabsContent>
-          </Tabs>
-        </div>
-
-        <div className="mt-auto flex shrink-0 justify-end border-t pt-4">
+        <div className="flex items-center justify-end gap-2 border-t border-border/60 pt-4">
+          <Button
+            onClick={() => onOpenChange(false)}
+            type="button"
+            variant="ghost"
+          >
+            {isEn ? "Cancel" : "Cancelar"}
+          </Button>
           <Button type="submit">
             {editing
               ? isEn
@@ -603,6 +491,6 @@ export function LeaseFormSheet({
           </Button>
         </div>
       </Form>
-    </Sheet>
+    </Drawer>
   );
 }

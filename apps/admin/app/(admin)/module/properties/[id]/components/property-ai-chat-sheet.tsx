@@ -28,6 +28,7 @@ type PropertyAiChatSheetProps = {
   occupancyRate?: number | null;
   unitCount?: number;
   isEn: boolean;
+  initialPrompt?: string;
 };
 
 export function PropertyAiChatSheet({
@@ -41,6 +42,7 @@ export function PropertyAiChatSheet({
   occupancyRate,
   unitCount,
   isEn,
+  initialPrompt,
 }: PropertyAiChatSheetProps) {
   const [messages, setMessages] = useState<DisplayMessage[]>([]);
   const [draft, setDraft] = useState("");
@@ -61,6 +63,8 @@ export function PropertyAiChatSheet({
       setIsSending(false);
     }
   }, [open]);
+
+  const initialPromptSentRef = useRef(false);
 
   const buildContextPrefix = useCallback(() => {
     const parts = [`Property context: ${propertyName}`];
@@ -221,6 +225,20 @@ export function PropertyAiChatSheet({
     },
     [draft, isSending, isEn, orgId, buildContextPrefix, ensureChatId]
   );
+
+  // Auto-send initial prompt when provided
+  useEffect(() => {
+    if (open && initialPrompt && !initialPromptSentRef.current) {
+      initialPromptSentRef.current = true;
+      const timer = setTimeout(() => {
+        handleSend(initialPrompt).catch(() => undefined);
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+    if (!open) {
+      initialPromptSentRef.current = false;
+    }
+  }, [open, initialPrompt, handleSend]);
 
   const handleCopy = useCallback(async (content: string) => {
     try {

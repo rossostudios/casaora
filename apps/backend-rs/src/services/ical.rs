@@ -7,6 +7,7 @@ use sqlx::PgPool;
 use crate::{
     error::{AppError, AppResult},
     repository::table_service::{create_row, list_rows, update_row},
+    services::json_helpers::json_map,
 };
 
 const ACTIVE_RESERVATION_STATUSES: &[&str] = &["pending", "confirmed", "checked_in"];
@@ -180,13 +181,6 @@ fn string_value(value: Option<&Value>) -> Option<String> {
         .map(ToOwned::to_owned)
 }
 
-fn json_map(entries: &[(&str, Value)]) -> Map<String, Value> {
-    let mut map = Map::new();
-    for (key, value) in entries {
-        map.insert((*key).to_string(), value.clone());
-    }
-    map
-}
 
 // ---------------------------------------------------------------------------
 // iCal sync all integrations

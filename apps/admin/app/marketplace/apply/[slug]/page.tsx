@@ -80,14 +80,22 @@ export default async function MarketplaceApplyPage({
             {listing.neighborhood ? (
               <Badge variant="outline">{listing.neighborhood}</Badge>
             ) : null}
+            <Badge variant="outline">
+              {isEn ? "Transparent pricing" : "Precio transparente"}
+            </Badge>
           </div>
           <h1 className="font-semibold text-3xl tracking-tight">
             {isEn ? "Application" : "Aplicación"}
           </h1>
+          <p className="max-w-2xl text-muted-foreground text-sm">
+            {isEn
+              ? "Move through contact, qualification, and review without losing progress."
+              : "Avanza por contacto, calificación y revisión sin perder tu progreso."}
+          </p>
         </header>
 
         <section className="grid min-w-0 gap-6 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
-          <Card className="min-w-0">
+          <Card className="min-w-0 self-start lg:sticky lg:top-24">
             <CardHeader>
               <CardTitle>{listing.title}</CardTitle>
             </CardHeader>
@@ -129,10 +137,20 @@ export default async function MarketplaceApplyPage({
                 <p className="font-semibold text-2xl">
                   {listing.totalMoveInLabel}
                 </p>
+                {listing.totalMoveInUsdApprox ? (
+                  <p className="text-muted-foreground text-xs">
+                    {listing.totalMoveInUsdApprox}
+                  </p>
+                ) : null}
                 <p className="text-muted-foreground text-xs">
                   {isEn ? "Monthly recurring" : "Mensual recurrente"}:{" "}
                   {listing.monthlyRecurringLabel}
                 </p>
+                {listing.monthlyRecurringUsdApprox ? (
+                  <p className="text-muted-foreground text-xs">
+                    {listing.monthlyRecurringUsdApprox}
+                  </p>
+                ) : null}
                 <p className="text-muted-foreground text-xs">
                   {isEn ? "Available from" : "Disponible desde"}:{" "}
                   {listing.availableFrom || (isEn ? "Not set" : "Sin definir")}
@@ -143,9 +161,32 @@ export default async function MarketplaceApplyPage({
                     ? `${listing.minimumLeaseMonths} ${isEn ? "months" : "meses"}`
                     : isEn
                       ? "Not set"
-                      : "Sin definir"}
+                    : "Sin definir"}
                 </p>
               </div>
+              {listing.feeLines.length > 0 ? (
+                <div className="rounded-xl border border-border/70 bg-background/70 p-3">
+                  <p className="font-medium text-sm">
+                    {isEn ? "Included in your pricing" : "Incluido en tu precio"}
+                  </p>
+                  <div className="mt-3 space-y-2">
+                    {listing.feeLines.slice(0, 4).map((line) => (
+                      <div
+                        className="flex items-center justify-between gap-3 text-sm"
+                        key={line.key}
+                      >
+                        <div>
+                          <p>{line.label}</p>
+                          <p className="text-muted-foreground text-xs">
+                            {line.feeTypeLabel}
+                          </p>
+                        </div>
+                        <span className="font-medium">{line.amountLabel}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
               <p className="text-muted-foreground text-xs">
                 {isEn
                   ? "SLA target: first response within 2 hours."

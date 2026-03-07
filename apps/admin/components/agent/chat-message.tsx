@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import {
   Copy01Icon,
   Edit02Icon,
@@ -34,6 +35,7 @@ export type DisplayMessage = {
   id: string;
   role: "user" | "assistant";
   content: string;
+  agent_run_id?: string | null;
   model_used?: string | null;
   tool_trace?: ToolTraceEntry[] | null;
   feedback_rating?: "positive" | "negative" | null;
@@ -163,11 +165,20 @@ export function ChatMessage({
           />
         ) : null}
 
-        {!isUser && message.model_used ? (
-          <div className="mt-2.5">
+        {!isUser && (message.model_used || message.agent_run_id) ? (
+          <div className="mt-2.5 flex flex-wrap items-center gap-2">
+            {message.model_used ? (
             <span className="inline-flex items-center rounded-md border border-border/40 bg-muted/40 px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground/70">
               {getModelDisplayName(message.model_used)}
             </span>
+            ) : null}
+            {message.agent_run_id ? (
+              <Button asChild size="xs" variant="outline">
+                <Link href={`/module/agent-dashboard/runs/${message.agent_run_id}`}>
+                  {isEn ? "View run" : "Ver ejecucion"}
+                </Link>
+              </Button>
+            ) : null}
           </div>
         ) : null}
 

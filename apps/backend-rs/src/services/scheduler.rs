@@ -1,9 +1,22 @@
 use std::time::Duration;
 
 use chrono::{Datelike, Timelike, Utc};
+use serde_json::{json, Value};
+use sqlx::Row;
 use tokio::time::sleep;
 
-use crate::state::AppState;
+use crate::{config::WorkflowEngineMode, state::AppState};
+
+/// Tables that agent watchers are allowed to scan. Used to prevent SQL injection
+/// since `watch_table` is interpolated into queries.
+const WATCHABLE_TABLES: &[&str] = &[
+    "maintenance_requests",
+    "reservations",
+    "application_submissions",
+    "expenses",
+    "payments",
+    "leases",
+];
 
 /// Spawn the background scheduler that runs periodic jobs.
 ///
@@ -29,6 +42,10 @@ pub async fn run_background_scheduler(state: AppState) {
     let mut last_ical_run = tokio::time::Instant::now();
     let mut last_message_run = tokio::time::Instant::now();
     let mut last_rate_limit_cleanup = tokio::time::Instant::now();
+    let mut last_iot_health_check = tokio::time::Instant::now();
+    let mut last_event_bus_run = tokio::time::Instant::now();
+    let mut last_watcher_run = tokio::time::Instant::now();
+    let mut last_twin_refresh = tokio::time::Instant::now();
     let mut last_daily_run: Option<u32> = None;
 
     loop {
@@ -112,6 +129,44 @@ pub async fn run_background_scheduler(state: AppState) {
             });
         }
 
+        // --- IoT device health check (every 5 minutes) ---
+        if now_instant.duration_since(last_iot_health_check) >= Duration::from_secs(300) {
+            last_iot_health_check = now_instant;
+            let pool = pool.clone();
+            let engine_mode = state.config.workflow_engine_mode;
+            tokio::spawn(async move {
+                run_iot_device_health_check(&pool, engine_mode).await;
+            });
+        }
+
+        // --- Agent event bus processing (every 30 seconds) ---
+        if now_instant.duration_since(last_event_bus_run) >= Duration::from_secs(30) {
+            last_event_bus_run = now_instant;
+            let st = state.clone();
+            tokio::spawn(async move {
+                crate::services::event_bus::process_pending_events(&st).await;
+            });
+        }
+
+        // --- Agent watcher scan (every 60 seconds) ---
+        if now_instant.duration_since(last_watcher_run) >= Duration::from_secs(60) {
+            last_watcher_run = now_instant;
+            let pool = pool.clone();
+            let engine_mode = state.config.workflow_engine_mode;
+            tokio::spawn(async move {
+                run_agent_watchers(&pool, engine_mode).await;
+            });
+        }
+
+        // --- Digital twin refresh (every 5 minutes) ---
+        if now_instant.duration_since(last_twin_refresh) >= Duration::from_secs(300) {
+            last_twin_refresh = now_instant;
+            let pool = pool.clone();
+            tokio::spawn(async move {
+                crate::services::digital_twin::refresh_all_twins(&pool).await;
+            });
+        }
+
         // --- Daily jobs (run once per calendar day) ---
         let today_ordinal = today.ordinal();
         if last_daily_run == Some(today_ordinal) {
@@ -140,6 +195,14 @@ pub async fn run_background_scheduler(state: AppState) {
             let st = state.clone();
             tokio::spawn(async move {
                 crate::services::dynamic_pricing::run_daily_pricing_recommendations(&st).await;
+            });
+        }
+
+        // 06:10 — Auto-apply pricing within org-configured thresholds
+        {
+            let st = state.clone();
+            tokio::spawn(async move {
+                crate::services::dynamic_pricing::run_daily_pricing_auto_apply(&st).await;
             });
         }
 
@@ -285,6 +348,23 @@ pub async fn run_background_scheduler(state: AppState) {
             tokio::spawn(async move {
                 crate::services::ml_pipeline::compute_all_features(&st2).await;
             });
+
+            // ML prediction reactor — fire triggers for actionable predictions
+            let pool2 = pool.clone();
+            let engine_mode = state.config.workflow_engine_mode;
+            tokio::spawn(async move {
+                // Small delay to let feature computation finish
+                sleep(Duration::from_secs(120)).await;
+                run_ml_prediction_reactor(&pool2, engine_mode).await;
+            });
+
+            // Phase 3: Weekly agent learning digest
+            let st3 = state.clone();
+            tokio::spawn(async move {
+                // Delay to let ML pipeline finish first
+                sleep(Duration::from_secs(180)).await;
+                crate::services::ai_agent::compute_weekly_learning_digest(&st3).await;
+            });
         }
 
         // 11:30 — Daily agent health metrics collection
@@ -361,6 +441,7 @@ async fn run_cron_agent_playbooks(state: &AppState) {
             role: "operator",
             message: &format!("Execute playbook: {name}"),
             conversation: &[],
+            agent_run_id: None,
             allow_mutations: true,
             confirm_write: true,
             agent_name: "Operations Copilot",
@@ -497,11 +578,14 @@ async fn run_sla_breach_scan(pool: &sqlx::PgPool, engine_mode: crate::config::Wo
 }
 
 /// Run anomaly scan for all active organizations.
+/// Fires `anomaly_detected` workflow triggers for warning/critical anomalies.
 async fn run_anomaly_scan_all_orgs(state: &AppState) {
     let pool = match state.db_pool.as_ref() {
         Some(p) => p,
         None => return,
     };
+
+    let engine_mode = state.config.workflow_engine_mode;
 
     let org_ids: Vec<(String,)> =
         sqlx::query_as("SELECT id::text FROM organizations WHERE is_active = true LIMIT 100")
@@ -510,6 +594,7 @@ async fn run_anomaly_scan_all_orgs(state: &AppState) {
             .unwrap_or_default();
 
     let mut scanned = 0u32;
+    let mut triggers_fired = 0u32;
     for (org_id,) in &org_ids {
         match crate::services::anomaly_detection::run_anomaly_scan(state, org_id).await {
             Ok(anomalies) => {
@@ -520,6 +605,32 @@ async fn run_anomaly_scan_all_orgs(state: &AppState) {
                         "Scheduler: anomalies detected"
                     );
                 }
+                // Fire workflow trigger for each warning/critical anomaly
+                for anomaly in &anomalies {
+                    let severity = anomaly
+                        .get("severity")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("info");
+                    if severity == "warning" || severity == "critical" {
+                        let mut ctx = serde_json::Map::new();
+                        // Copy all anomaly fields into context
+                        if let Some(obj) = anomaly.as_object() {
+                            for (k, v) in obj {
+                                ctx.insert(k.clone(), v.clone());
+                            }
+                        }
+                        ctx.insert("org_id".to_string(), serde_json::json!(org_id));
+                        crate::services::workflows::fire_trigger(
+                            pool,
+                            org_id,
+                            "anomaly_detected",
+                            &ctx,
+                            engine_mode,
+                        )
+                        .await;
+                        triggers_fired += 1;
+                    }
+                }
                 scanned += 1;
             }
             Err(e) => {
@@ -529,7 +640,11 @@ async fn run_anomaly_scan_all_orgs(state: &AppState) {
     }
 
     if scanned > 0 {
-        tracing::info!(orgs = scanned, "Scheduler: anomaly scans completed");
+        tracing::info!(
+            orgs = scanned,
+            triggers = triggers_fired,
+            "Scheduler: anomaly scans completed"
+        );
     }
 }
 
@@ -577,6 +692,7 @@ async fn run_scheduled_agent_playbooks(state: &AppState) {
             role: "operator",
             message,
             conversation: &[],
+            agent_run_id: None,
             allow_mutations: true,
             confirm_write: true,
             agent_name: &agent_name,
@@ -695,5 +811,260 @@ async fn run_stalled_application_scan(
 
     if count > 0 {
         tracing::info!(count, "Scheduler: stalled application scan completed");
+    }
+}
+
+/// Check for IoT devices that haven't reported in >10 minutes.
+/// Fires `device_offline` workflow trigger and updates device status.
+async fn run_iot_device_health_check(
+    pool: &sqlx::PgPool,
+    engine_mode: crate::config::WorkflowEngineMode,
+) {
+    let stale_devices = sqlx::query_as::<_, (String, String, String, String)>(
+        "UPDATE iot_devices
+         SET status = 'offline', updated_at = now()
+         WHERE is_active = true
+           AND status = 'online'
+           AND last_seen_at IS NOT NULL
+           AND last_seen_at < now() - interval '10 minutes'
+         RETURNING id::text, organization_id::text, device_name, device_type",
+    )
+    .fetch_all(pool)
+    .await
+    .unwrap_or_default();
+
+    for (device_id, org_id, device_name, device_type) in &stale_devices {
+        let mut ctx = serde_json::Map::new();
+        ctx.insert("device_id".to_string(), serde_json::json!(device_id));
+        ctx.insert("device_name".to_string(), serde_json::json!(device_name));
+        ctx.insert("device_type".to_string(), serde_json::json!(device_type));
+        ctx.insert(
+            "trigger_reason".to_string(),
+            serde_json::json!("Device went offline (no heartbeat for >10 minutes)"),
+        );
+        crate::services::workflows::fire_trigger(pool, org_id, "device_offline", &ctx, engine_mode)
+            .await;
+    }
+
+    if !stale_devices.is_empty() {
+        tracing::info!(
+            count = stale_devices.len(),
+            "Scheduler: IoT devices marked offline"
+        );
+    }
+}
+
+/// Process active agent watchers — scan watched tables for new rows
+/// and invoke the configured agent when new records match the watch filter.
+async fn run_agent_watchers(pool: &sqlx::PgPool, engine_mode: WorkflowEngineMode) {
+    // Fetch all active watchers
+    let watchers = sqlx::query(
+        "SELECT id::text, organization_id::text, watch_table, watch_filter, agent_slug,
+                message_template, last_seen_id::text
+         FROM agent_watchers
+         WHERE is_active = true",
+    )
+    .fetch_all(pool)
+    .await
+    .unwrap_or_default();
+
+    if watchers.is_empty() {
+        return;
+    }
+
+    let mut invoked = 0u32;
+    for watcher in &watchers {
+        let watcher_id = watcher.try_get::<String, _>("id").unwrap_or_default();
+        let org_id = watcher
+            .try_get::<String, _>("organization_id")
+            .unwrap_or_default();
+        let watch_table = watcher
+            .try_get::<String, _>("watch_table")
+            .unwrap_or_default();
+        let watch_filter = watcher
+            .try_get::<Value, _>("watch_filter")
+            .unwrap_or(json!({}));
+        let agent_slug = watcher
+            .try_get::<String, _>("agent_slug")
+            .unwrap_or_default();
+        let message_template = watcher
+            .try_get::<String, _>("message_template")
+            .unwrap_or_default();
+        let last_seen_id = watcher
+            .try_get::<Option<String>, _>("last_seen_id")
+            .ok()
+            .flatten();
+
+        // Validate table name to prevent SQL injection
+        if !WATCHABLE_TABLES.contains(&watch_table.as_str()) {
+            tracing::warn!(watch_table, watcher_id, "Watcher: unsupported table");
+            continue;
+        }
+
+        // Build a safe query for new rows in the watched table
+        let query = if last_seen_id.is_some() {
+            format!(
+                "SELECT id::text, created_at FROM {watch_table}
+                 WHERE organization_id = $1::uuid AND id > $2::uuid
+                 ORDER BY created_at ASC LIMIT 10"
+            )
+        } else {
+            format!(
+                "SELECT id::text, created_at FROM {watch_table}
+                 WHERE organization_id = $1::uuid
+                 ORDER BY created_at DESC LIMIT 1"
+            )
+        };
+
+        let new_rows = if let Some(ref seen_id) = last_seen_id {
+            sqlx::query(&query)
+                .bind(&org_id)
+                .bind(seen_id)
+                .fetch_all(pool)
+                .await
+                .unwrap_or_default()
+        } else {
+            sqlx::query(&query)
+                .bind(&org_id)
+                .fetch_all(pool)
+                .await
+                .unwrap_or_default()
+        };
+
+        if new_rows.is_empty() {
+            // Update last_checked_at even if no new rows
+            let _ = sqlx::query(
+                "UPDATE agent_watchers SET last_checked_at = now() WHERE id = $1::uuid",
+            )
+            .bind(&watcher_id)
+            .execute(pool)
+            .await;
+            continue;
+        }
+
+        // Get the latest row ID for bookmark
+        let latest_id = new_rows
+            .last()
+            .and_then(|r| r.try_get::<String, _>("id").ok())
+            .unwrap_or_default();
+
+        // Fire trigger for each new row
+        for row in &new_rows {
+            let row_id = row.try_get::<String, _>("id").unwrap_or_default();
+
+            let mut ctx = serde_json::Map::new();
+            ctx.insert("watcher_id".to_string(), json!(watcher_id));
+            ctx.insert("watch_table".to_string(), json!(watch_table));
+            ctx.insert("row_id".to_string(), json!(row_id));
+            ctx.insert("agent_slug".to_string(), json!(agent_slug));
+            ctx.insert("message_template".to_string(), json!(message_template));
+            if let Some(filter_obj) = watch_filter.as_object() {
+                ctx.insert("watch_filter".to_string(), json!(filter_obj));
+            }
+
+            crate::services::workflows::fire_trigger(
+                pool,
+                &org_id,
+                "chain_step_completed",
+                &ctx,
+                engine_mode,
+            )
+            .await;
+
+            invoked += 1;
+        }
+
+        // Update bookmark
+        let _ = sqlx::query(
+            "UPDATE agent_watchers SET last_seen_id = $1::uuid, last_checked_at = now()
+             WHERE id = $2::uuid",
+        )
+        .bind(&latest_id)
+        .bind(&watcher_id)
+        .execute(pool)
+        .await;
+    }
+
+    if invoked > 0 {
+        tracing::info!(invoked, "Scheduler: agent watchers triggered");
+    }
+}
+
+/// Run ML prediction reactor — check for actionable predictions and fire workflow triggers.
+/// Called after weekly ML compute in daily jobs.
+async fn run_ml_prediction_reactor(pool: &sqlx::PgPool, engine_mode: WorkflowEngineMode) {
+    // Look for recent ML predictions that are actionable
+    // (features with high-confidence predictions computed in the last 24h)
+    let predictions = sqlx::query(
+        "SELECT f.id::text, f.organization_id::text, f.feature_set, f.entity_id::text, f.features
+         FROM ml_features f
+         WHERE f.computed_at > now() - interval '24 hours'
+           AND f.feature_set IN ('price_elasticity', 'occupancy_forecast', 'churn_risk')
+         ORDER BY f.computed_at DESC
+         LIMIT 50",
+    )
+    .fetch_all(pool)
+    .await
+    .unwrap_or_default();
+
+    if predictions.is_empty() {
+        return;
+    }
+
+    let mut fired = 0u32;
+
+    for prediction in &predictions {
+        let org_id = prediction
+            .try_get::<String, _>("organization_id")
+            .unwrap_or_default();
+        let feature_set = prediction
+            .try_get::<String, _>("feature_set")
+            .unwrap_or_default();
+        let entity_id = prediction
+            .try_get::<Option<String>, _>("entity_id")
+            .ok()
+            .flatten();
+        let features = prediction
+            .try_get::<Value, _>("features")
+            .unwrap_or(json!({}));
+
+        // Check if the prediction is "actionable" based on confidence or threshold
+        let confidence = features
+            .get("confidence")
+            .and_then(Value::as_f64)
+            .unwrap_or(0.0);
+        let is_actionable = features
+            .get("actionable")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+
+        if confidence < 0.7 && !is_actionable {
+            continue;
+        }
+
+        let mut ctx = serde_json::Map::new();
+        ctx.insert("feature_set".to_string(), json!(feature_set));
+        ctx.insert("confidence".to_string(), json!(confidence));
+        if let Some(eid) = &entity_id {
+            ctx.insert("entity_id".to_string(), json!(eid));
+        }
+        if let Some(obj) = features.as_object() {
+            ctx.insert("prediction".to_string(), Value::Object(obj.clone()));
+        }
+
+        crate::services::workflows::fire_trigger(
+            pool,
+            &org_id,
+            "ml_prediction_actionable",
+            &ctx,
+            engine_mode,
+        )
+        .await;
+
+        fired += 1;
+    }
+
+    if fired > 0 {
+        tracing::info!(fired, "Scheduler: ML prediction reactor triggered");
     }
 }

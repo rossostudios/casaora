@@ -8,7 +8,6 @@ import type {
 } from "@/lib/features/properties/types";
 
 type PortfolioStatsProps = {
-  totalValuePyg: number;
   occupancyRate: number;
   avgRentPyg: number;
   totalRevenueMtdPyg: number;
@@ -25,7 +24,6 @@ type PortfolioStatsProps = {
 };
 
 export function PortfolioSidebar({
-  totalValuePyg,
   occupancyRate,
   avgRentPyg,
   totalRevenueMtdPyg,
@@ -54,7 +52,6 @@ export function PortfolioSidebar({
       totalOverdueCollections={totalOverdueCollections}
       totalRevenueMtdPyg={totalRevenueMtdPyg}
       totalVacantUnits={totalVacantUnits}
-      totalValuePyg={totalValuePyg}
       vacancyCostPyg={vacancyCostPyg}
     />
   );

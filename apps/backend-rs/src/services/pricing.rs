@@ -2,6 +2,8 @@
 
 use serde_json::Value;
 
+use crate::services::json_helpers::round2;
+
 const REQUIRED_FEE_TYPES: &[&str] = &["monthly_rent", "advance_rent", "service_fee_flat"];
 const GUARANTEE_FEE_TYPES: &[&str] = &["security_deposit", "guarantee_option_fee"];
 
@@ -221,9 +223,6 @@ fn non_negative_f64(value: Option<f64>) -> f64 {
     value.unwrap_or(0.0).max(0.0)
 }
 
-fn round2(value: f64) -> f64 {
-    (value * 100.0).round() / 100.0
-}
 
 fn to_title_case(value: &str) -> String {
     value

@@ -1,1036 +1,804 @@
 "use client";
 
-import { ArrowRight01Icon } from "@hugeicons/core-free-icons";
-import { AnimatePresence, motion } from "motion/react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
-import { SectionLabel } from "@/components/agent/briefing/helpers";
-import { Icon } from "@/components/ui/icon";
-import { useActiveLocale } from "@/lib/i18n/client";
-import { EASING, bold, fmtPyg, initials, isoToday } from "@/lib/module-helpers";
-import { cn } from "@/lib/utils";
-import {
-  asNumber,
-  asString,
-  daysBetween,
-  humanizeStatus,
-  isIsoDate,
-  type ReservationRow,
-  type UnitRow,
-} from "./reservations-types";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useMemo, useState, useTransition } from "react";
+import { transitionReservationStatusAction } from "@/app/(admin)/module/reservations/actions";
+import { ReservationFormSheet } from "@/app/(admin)/module/reservations/reservation-form-sheet";
+import { SendGuestPortalLink } from "@/components/reservations/send-guest-portal-link";
+import { ActionRail } from "@/components/ui/action-rail";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Field } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import { ListDetailLayout } from "@/components/ui/list-detail-layout";
+import { PageScaffold } from "@/components/ui/page-scaffold";
+import { Select } from "@/components/ui/select";
+import { StatusBadge } from "@/components/ui/status-badge";
+import { buildAgentContextHref } from "@/lib/ai-context";
+import { formatCurrency } from "@/lib/format";
+import type {
+  ReservationOverviewRow,
+  ReservationsOverviewResponse,
+} from "@/lib/reservations-overview";
+import { ManualBlockDrawer } from "./components/manual-block-drawer";
 
-/* Normalized internal row */
-type NormalizedRow = {
-  id: string;
-  status: string;
-  check_in_date: string | null;
-  check_out_date: string | null;
-  unit_id: string | null;
-  unit_name: string | null;
-  property_name: string | null;
-  guest_name: string | null;
-  guest_id: string | null;
-  channel_name: string | null;
-  source: string | null;
-  total_amount: number;
-  currency: string;
-  adults: number;
-  children: number;
-  nights: number;
-  nightly_rate: number;
-};
-
-function toNormalized(r: ReservationRow): NormalizedRow {
-  const checkIn = isIsoDate(r.check_in_date) ? r.check_in_date : null;
-  const checkOut = isIsoDate(r.check_out_date) ? r.check_out_date : null;
-  const nights = daysBetween(checkIn, checkOut) ?? 0;
-  const total = asNumber(r.total_amount) ?? 0;
-  return {
-    id: asString(r.id).trim(),
-    status: asString(r.status).trim().toLowerCase(),
-    check_in_date: checkIn,
-    check_out_date: checkOut,
-    unit_id: asString(r.unit_id).trim() || null,
-    unit_name: asString(r.unit_name).trim() || null,
-    property_name: asString(r.property_name).trim() || null,
-    guest_name: asString(r.guest_name).trim() || null,
-    guest_id: asString(r.guest_id).trim() || null,
-    channel_name: asString(r.channel_name).trim() || null,
-    source: asString(r.source).trim() || null,
-    total_amount: total,
-    currency: asString(r.currency).trim().toUpperCase() || "PYG",
-    adults: asNumber(r.adults) ?? 0,
-    children: asNumber(r.children) ?? 0,
-    nights,
-    nightly_rate: nights > 0 ? Math.round(total / nights) : 0,
-  };
-}
-
-type NormalizedUnit = {
-  id: string;
-  name: string;
-  property_name: string;
-};
-
-function toNormalizedUnit(u: UnitRow): NormalizedUnit {
-  return {
-    id: asString(u.id).trim(),
-    name: asString(u.name).trim() || asString(u.code).trim() || "Unit",
-    property_name: asString(u.property_name).trim() || "",
-  };
-}
-
-const STATUS_BADGE: Record<string, string> = {
-  pending: "bg-amber-500/15 text-amber-700 dark:text-amber-400",
-  confirmed: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400",
-  checked_in: "bg-blue-500/15 text-blue-700 dark:text-blue-400",
-  checked_out: "bg-muted text-muted-foreground",
-  cancelled: "bg-red-500/15 text-red-700 dark:text-red-400",
-  no_show: "bg-red-500/15 text-red-700 dark:text-red-400",
-};
-
-const CHANNEL_COLORS: Record<string, string> = {
-  airbnb: "text-rose-500",
-  "booking.com": "text-blue-500",
-  casaora: "text-emerald-500",
-  direct_booking: "text-emerald-500",
-  manual: "text-muted-foreground",
-};
-
-function channelLabel(row: NormalizedRow): string {
-  const ch = row.channel_name?.toLowerCase();
-  if (ch) {
-    if (ch.includes("airbnb")) return "Airbnb";
-    if (ch.includes("booking")) return "Booking.com";
-    if (ch.includes("casaora") || ch.includes("marketplace")) return "Casaora";
-  }
-  const src = row.source?.toLowerCase();
-  if (src === "direct_booking") return "Casaora";
-  if (src === "manual") return "Manual";
-  return row.channel_name || "Direct";
-}
-
-function channelColor(row: NormalizedRow): string {
-  const label = channelLabel(row).toLowerCase();
-  return CHANNEL_COLORS[label] ?? CHANNEL_COLORS.manual ?? "text-muted-foreground";
-}
-
-/* ------------------------------------------------------------------ */
-/* ReservationsManager                                                 */
-/* ------------------------------------------------------------------ */
-
-export function ReservationsManager({
-  orgId,
-  reservations,
-  units,
-  error: errorLabel,
-  success: successMessage,
-}: {
+type ReservationsManagerProps = {
   orgId: string;
-  reservations: Record<string, unknown>[];
+  locale: string;
+  overview: ReservationsOverviewResponse;
+  properties: Record<string, unknown>[];
   units: Record<string, unknown>[];
+  guests: Record<string, unknown>[];
+  initialFilters: {
+    q: string;
+    status: string;
+    source: string;
+    propertyId: string;
+    unitId: string;
+    stayPhase: string;
+    from: string;
+    to: string;
+    view: string;
+    sort: string;
+    limit: number;
+    offset: number;
+  };
   error?: string;
   success?: string;
-}) {
-  const locale = useActiveLocale();
-  const isEn = locale === "en-US";
-  const fmtLocale = isEn ? "en-US" : "es-PY";
+};
 
-  const today = useMemo(isoToday, []);
+type Option = {
+  id: string;
+  label: string;
+};
 
-  const rows = useMemo<NormalizedRow[]>(
-    () => (reservations as ReservationRow[]).map(toNormalized),
-    [reservations],
-  );
+type BlockTarget = {
+  unitId: string;
+  label: string;
+  startsOn?: string;
+  endsOn?: string;
+};
 
-  const unitList = useMemo<NormalizedUnit[]>(
-    () => (units as UnitRow[]).map(toNormalizedUnit).filter((u) => u.id),
-    [units],
-  );
-
-  /* ------- Stats ------- */
-  const totalRevenue = rows.reduce((s, r) => s + r.total_amount, 0);
-  const activeStatuses = new Set(["confirmed", "checked_in", "pending"]);
-  const activeRows = rows.filter((r) => activeStatuses.has(r.status));
-  const totalNights = rows.reduce((s, r) => s + r.nights, 0);
-  const avgNights = rows.length > 0 ? +(totalNights / rows.length).toFixed(1) : 0;
-
-  // Occupancy: days with at least one guest checked in / total unit-days this month
-  const daysInMonth = new Date(
-    new Date().getFullYear(),
-    new Date().getMonth() + 1,
-    0,
-  ).getDate();
-  const totalUnitDays = Math.max(unitList.length, 1) * daysInMonth;
-  const occupiedDays = rows.reduce((s, r) => {
-    if (r.status === "cancelled" || r.status === "no_show") return s;
-    return s + r.nights;
-  }, 0);
-  const occupancyPct = totalUnitDays > 0 ? Math.min(100, Math.round((occupiedDays / totalUnitDays) * 100)) : 0;
-
-  // Channel distribution
-  const channelCounts = new Map<string, number>();
-  for (const r of rows) {
-    if (r.status === "cancelled" || r.status === "no_show") continue;
-    const ch = channelLabel(r);
-    channelCounts.set(ch, (channelCounts.get(ch) ?? 0) + 1);
-  }
-  const validBookings = rows.filter((r) => r.status !== "cancelled" && r.status !== "no_show").length;
-  const channelSegments = [...channelCounts.entries()]
-    .sort((a, b) => b[1] - a[1])
-    .map(([name, count]) => ({
-      name,
-      pct: validBookings > 0 ? Math.round((count / validBookings) * 100) : 0,
-      color:
-        name.toLowerCase().includes("airbnb") ? "bg-rose-500" :
-        name.toLowerCase().includes("booking") ? "bg-blue-500" :
-        name.toLowerCase().includes("casaora") || name.toLowerCase() === "direct" ? "bg-emerald-500" :
-        "bg-muted-foreground/50",
-    }));
-
-  /* ------- Today's activity ------- */
-  const todayActivity = useMemo(() => {
-    const items: { time: string; label: string; sub: string; status: "done" | "live" | "upcoming" }[] = [];
-
-    // Check-outs today
-    for (const r of rows) {
-      if (r.check_out_date === today && r.status === "checked_out") {
-        items.push({
-          time: "11:00 AM",
-          label: `${r.guest_name ?? "Guest"} ${isEn ? "checks out" : "check-out"}`,
-          sub: r.unit_name ?? r.property_name ?? "",
-          status: "done",
-        });
-      }
-    }
-
-    // Currently checked-in with check-out today (departures pending)
-    for (const r of rows) {
-      if (r.check_out_date === today && r.status === "checked_in") {
-        items.push({
-          time: "11:00 AM",
-          label: `${r.guest_name ?? "Guest"} ${isEn ? "checks out" : "check-out"}`,
-          sub: r.unit_name ?? r.property_name ?? "",
-          status: "upcoming",
-        });
-      }
-    }
-
-    // Check-ins today
-    for (const r of rows) {
-      if (r.check_in_date === today && (r.status === "confirmed" || r.status === "pending")) {
-        items.push({
-          time: "4:00 PM",
-          label: `${r.guest_name ?? "Guest"} ${isEn ? "checks in" : "check-in"}`,
-          sub: r.unit_name ?? r.property_name ?? "",
-          status: "upcoming",
-        });
-      }
-      if (r.check_in_date === today && r.status === "checked_in") {
-        items.push({
-          time: "4:00 PM",
-          label: `${r.guest_name ?? "Guest"} ${isEn ? "checked in" : "ya ingresó"}`,
-          sub: r.unit_name ?? r.property_name ?? "",
-          status: "done",
-        });
-      }
-    }
-
-    // Mid-stays (checked in, spans today)
-    for (const r of rows) {
-      if (
-        r.status === "checked_in" &&
-        r.check_in_date &&
-        r.check_out_date &&
-        r.check_in_date < today &&
-        r.check_out_date > today
-      ) {
-        const totalNightsStay = daysBetween(r.check_in_date, r.check_out_date) ?? 0;
-        const dayNum = (daysBetween(r.check_in_date, today) ?? 0) + 1;
-        items.push({
-          time: "\u2014",
-          label: `${r.guest_name ?? "Guest"} \u2014 ${isEn ? "mid-stay" : "estad\u00EDa"} (${isEn ? `day ${dayNum} of ${totalNightsStay}` : `d\u00EDa ${dayNum} de ${totalNightsStay}`})`,
-          sub: r.unit_name ?? r.property_name ?? "",
-          status: "live",
-        });
-      }
-    }
-
-    return items;
-  }, [rows, today, isEn]);
-
-  /* ------- Occupancy grid (next 14 days) ------- */
-  const gridDays = useMemo(() => {
-    const days: string[] = [];
-    const d = new Date();
-    for (let i = 0; i < 14; i++) {
-      const day = new Date(d);
-      day.setDate(d.getDate() + i);
-      days.push(day.toISOString().slice(0, 10));
-    }
-    return days;
-  }, []);
-
-  // Map: unitId → array of reservations touching next 14 days
-  const unitReservations = useMemo(() => {
-    const map = new Map<string, NormalizedRow[]>();
-    for (const r of rows) {
-      if (!r.unit_id || !r.check_in_date || !r.check_out_date) continue;
-      if (r.status === "cancelled" || r.status === "no_show") continue;
-      const first = gridDays[0];
-      const last = gridDays[gridDays.length - 1];
-      if (r.check_out_date <= first || r.check_in_date > last) continue;
-      const arr = map.get(r.unit_id) ?? [];
-      arr.push(r);
-      map.set(r.unit_id, arr);
-    }
-    return map;
-  }, [rows, gridDays]);
-
-  // Only show units that have reservations in the window (or all if few)
-  const gridUnits = useMemo(() => {
-    if (unitList.length <= 6) return unitList;
-    return unitList.filter((u) => unitReservations.has(u.id));
-  }, [unitList, unitReservations]);
-
-  /* ------- Filter tabs ------- */
-  const [activeTab, setActiveTab] = useState<"all" | "active" | "upcoming" | "past">("all");
-
-  const filteredRows = useMemo(() => {
-    if (activeTab === "all") return rows;
-    if (activeTab === "active") return rows.filter((r) => r.status === "checked_in");
-    if (activeTab === "upcoming") return rows.filter((r) => r.status === "confirmed" || r.status === "pending");
-    if (activeTab === "past") return rows.filter((r) => r.status === "checked_out" || r.status === "cancelled" || r.status === "no_show");
-    return rows;
-  }, [rows, activeTab]);
-
-  const tabCounts = useMemo(() => ({
-    all: rows.length,
-    active: rows.filter((r) => r.status === "checked_in").length,
-    upcoming: rows.filter((r) => r.status === "confirmed" || r.status === "pending").length,
-    past: rows.filter((r) => r.status === "checked_out" || r.status === "cancelled" || r.status === "no_show").length,
-  }), [rows]);
-
-  // Month name
-  const monthName = new Date().toLocaleString(isEn ? "en-US" : "es-PY", { month: "long" }).toUpperCase();
-
-  // Chips — contextual
-  const firstGuest = rows.find((r) => r.status === "confirmed" && r.check_in_date === today)?.guest_name;
-  const chips = isEn
-    ? [
-        "Who's checking in today?",
-        "Show me upcoming gaps",
-        "How are my guests doing?",
-        "What's my booking pipeline?",
-        ...(firstGuest ? [`Draft a welcome message for ${firstGuest.split(" ")[0]}`] : []),
-        "Compare Airbnb vs direct bookings",
-      ]
-    : [
-        "¿Quién hace check-in hoy?",
-        "Mostrar espacios disponibles próximos",
-        "¿Cómo están mis huéspedes?",
-        "¿Cuál es mi pipeline de reservas?",
-        ...(firstGuest ? [`Redactar mensaje de bienvenida para ${firstGuest.split(" ")[0]}`] : []),
-        "Comparar Airbnb vs reservas directas",
-      ];
-
-  return (
-    <div className="mx-auto flex min-h-[calc(100vh-7rem)] max-w-5xl flex-col px-4 py-8 sm:px-6">
-      <div className="space-y-8">
-        {/* Alex overview */}
-        <AlexOverview
-          activeRows={activeRows}
-          fmtLocale={fmtLocale}
-          isEn={isEn}
-          rows={rows}
-          today={today}
-          totalRevenue={totalRevenue}
-        />
-
-        {/* Monthly bookings metrics */}
-        <SectionLabel>{monthName} {isEn ? "BOOKINGS" : "RESERVAS"}</SectionLabel>
-
-        <motion.div
-          animate={{ opacity: 1, y: 0 }}
-          className="glass-inner overflow-hidden rounded-2xl"
-          initial={{ opacity: 0, y: 8 }}
-          transition={{ delay: 0.1, duration: 0.35, ease: EASING }}
-        >
-          <div className="grid grid-cols-2 gap-px sm:grid-cols-4">
-            <MetricCell
-              change={null}
-              isFirst
-              label={isEn ? "BOOKING REVENUE" : "INGRESOS POR RESERVAS"}
-              value={fmtPyg(totalRevenue, fmtLocale)}
-            />
-            <MetricCell
-              label={isEn ? "OCCUPANCY" : "OCUPACIÓN"}
-              value={`${occupancyPct}%`}
-            />
-            <MetricCell
-              label={isEn ? "AVG NIGHTS" : "NOCHES PROM."}
-              value={String(avgNights)}
-            />
-            <MetricCell
-              label={isEn ? "BOOKINGS" : "RESERVAS"}
-              value={String(validBookings)}
-            />
-          </div>
-
-          {/* Channel distribution bar */}
-          {channelSegments.length > 0 && (
-            <div className="border-border/20 border-t px-5 py-3">
-              <div className="flex h-2 w-full overflow-hidden rounded-full">
-                {channelSegments.map((seg) => (
-                  <motion.div
-                    animate={{ width: `${seg.pct}%` }}
-                    className={cn("h-full first:rounded-l-full last:rounded-r-full", seg.color)}
-                    initial={{ width: 0 }}
-                    key={seg.name}
-                    transition={{ delay: 0.4, duration: 0.5, ease: EASING }}
-                  />
-                ))}
-              </div>
-              <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
-                {channelSegments.map((seg) => (
-                  <span className="flex items-center gap-1.5 text-muted-foreground/70 text-xs" key={seg.name}>
-                    <span className={cn("inline-block h-2 w-2 rounded-sm", seg.color)} />
-                    {seg.name} {seg.pct}%
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-        </motion.div>
-
-        {/* Feedback */}
-        {errorLabel ? (
-          <div className="rounded-xl border border-red-500/30 bg-red-500/5 px-4 py-3 text-red-600 text-sm dark:text-red-400">
-            {errorLabel}
-          </div>
-        ) : null}
-        {successMessage ? (
-          <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 px-4 py-3 text-emerald-600 text-sm dark:text-emerald-400">
-            {successMessage}
-          </div>
-        ) : null}
-
-        {/* Today's Activity */}
-        {todayActivity.length > 0 && (
-          <>
-            <SectionLabel>{isEn ? "TODAY\u2019S ACTIVITY" : "ACTIVIDAD DE HOY"}</SectionLabel>
-            <motion.div
-              animate={{ opacity: 1, y: 0 }}
-              className="glass-inner overflow-hidden rounded-2xl"
-              initial={{ opacity: 0, y: 8 }}
-              transition={{ delay: 0.15, duration: 0.35, ease: EASING }}
-            >
-              <div className="divide-y divide-border/20">
-                {todayActivity.map((item, idx) => (
-                  <ActivityRow item={item} key={`${item.label}-${idx}`} />
-                ))}
-              </div>
-            </motion.div>
-          </>
-        )}
-
-        {/* Occupancy Grid — Next 14 Days */}
-        {gridUnits.length > 0 && (
-          <>
-            <SectionLabel>{isEn ? "OCCUPANCY \u2014 NEXT 14 DAYS" : "OCUPACI\u00D3N \u2014 PR\u00D3XIMOS 14 D\u00CDAS"}</SectionLabel>
-            <OccupancyGrid
-              gridDays={gridDays}
-              isEn={isEn}
-              today={today}
-              unitReservations={unitReservations}
-              units={gridUnits}
-            />
-          </>
-        )}
-
-        {/* Reservations */}
-        <SectionLabel>{isEn ? "RESERVATIONS" : "RESERVAS"}</SectionLabel>
-
-        {/* Filter tabs */}
-        <div className="flex flex-wrap gap-2">
-          {(
-            [
-              { key: "all", label: isEn ? "All" : "Todas" },
-              { key: "active", label: isEn ? "Active stays" : "Activas" },
-              { key: "upcoming", label: isEn ? "Upcoming" : "Próximas" },
-              { key: "past", label: isEn ? "Past" : "Pasadas" },
-            ] as const
-          ).map((tab) => (
-            <button
-              className={cn(
-                "rounded-full border px-3.5 py-1.5 text-xs font-medium transition-colors",
-                activeTab === tab.key
-                  ? "border-foreground/20 bg-foreground/10 text-foreground"
-                  : "border-border/40 text-muted-foreground/60 hover:text-muted-foreground",
-              )}
-              key={tab.key}
-              onClick={() => setActiveTab(tab.key)}
-              type="button"
-            >
-              {tab.label}{tab.key === "all" ? ` (${tabCounts.all})` : ""}
-            </button>
-          ))}
-        </div>
-
-        {/* Reservation cards */}
-        {filteredRows.length > 0 ? (
-          <div className="space-y-3">
-            {filteredRows.map((row) => (
-              <ReservationCard
-                fmtLocale={fmtLocale}
-                isEn={isEn}
-                key={row.id}
-                row={row}
-              />
-            ))}
-          </div>
-        ) : (
-          <div className="py-12 text-center text-muted-foreground/60 text-sm">
-            {isEn ? "No reservations in this category." : "Sin reservas en esta categor\u00EDa."}
-          </div>
-        )}
-      </div>
-
-      {/* Chat + chips pinned to bottom */}
-      <div className="mt-auto space-y-4 pt-12">
-        <ChatInput isEn={isEn} placeholder={isEn ? "Ask about your reservations..." : "Pregunta sobre tus reservas..."} />
-        <Chips chips={chips} />
-      </div>
-    </div>
-  );
+function asString(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
 }
 
-/* ------------------------------------------------------------------ */
-/* AlexOverview                                                        */
-/* ------------------------------------------------------------------ */
-
-function AlexOverview({
-  rows,
-  activeRows,
-  today,
-  totalRevenue,
-  fmtLocale,
-  isEn,
-}: {
-  rows: NormalizedRow[];
-  activeRows: NormalizedRow[];
-  today: string;
-  totalRevenue: number;
-  fmtLocale: string;
-  isEn: boolean;
-}) {
-  if (rows.length === 0) {
-    const text = isEn
-      ? "No reservations yet. Tell me about an incoming booking and I\u2019ll set it up."
-      : "Sin reservas a\u00FAn. Cu\u00E9ntame sobre una reserva y te ayudo a crearla.";
-    return (
-      <div className="space-y-1">
-        <p className="font-semibold text-foreground text-sm">Alex</p>
-        <p className="text-muted-foreground text-sm leading-relaxed">{text}</p>
-      </div>
-    );
-  }
-
-  const parts: string[] = [];
-
-  // Next check-in today
-  const nextCheckIn = rows.find(
-    (r) => r.check_in_date === today && (r.status === "confirmed" || r.status === "pending"),
-  );
-  // Mid-stays
-  const midStays = rows.filter(
-    (r) =>
-      r.status === "checked_in" &&
-      r.check_in_date &&
-      r.check_out_date &&
-      r.check_in_date < today &&
-      r.check_out_date > today,
-  );
-
-  if (isEn) {
-    if (nextCheckIn) {
-      parts.push(`**${nextCheckIn.guest_name ?? "A guest"} checks in today**`);
-      if (nextCheckIn.unit_name) parts.push(` at ${nextCheckIn.unit_name}`);
-      parts.push(". ");
-    }
-    if (midStays.length > 0) {
-      const ms = midStays[0];
-      const totalN = daysBetween(ms.check_in_date, ms.check_out_date) ?? 0;
-      const dayNum = (daysBetween(ms.check_in_date, today) ?? 0) + 1;
-      parts.push(
-        `${ms.guest_name ?? "A guest"} is on day ${dayNum} of ${totalN} at ${ms.unit_name ?? ms.property_name ?? "a property"}. `,
-      );
-    }
-    parts.push(
-      `You have **${activeRows.length} ${activeRows.length === 1 ? "booking" : "bookings"}** generating **${fmtPyg(totalRevenue, fmtLocale)} in revenue**.`,
-    );
-  } else {
-    if (nextCheckIn) {
-      parts.push(`**${nextCheckIn.guest_name ?? "Un hu\u00E9sped"} hace check-in hoy**`);
-      if (nextCheckIn.unit_name) parts.push(` en ${nextCheckIn.unit_name}`);
-      parts.push(". ");
-    }
-    if (midStays.length > 0) {
-      const ms = midStays[0];
-      const totalN = daysBetween(ms.check_in_date, ms.check_out_date) ?? 0;
-      const dayNum = (daysBetween(ms.check_in_date, today) ?? 0) + 1;
-      parts.push(
-        `${ms.guest_name ?? "Un hu\u00E9sped"} est\u00E1 en el d\u00EDa ${dayNum} de ${totalN} en ${ms.unit_name ?? ms.property_name ?? "una propiedad"}. `,
-      );
-    }
-    parts.push(
-      `Tienes **${activeRows.length} ${activeRows.length === 1 ? "reserva" : "reservas"}** generando **${fmtPyg(totalRevenue, fmtLocale)} en ingresos**.`,
-    );
-  }
-
-  return (
-    <div className="space-y-1">
-      <p className="font-semibold text-foreground text-sm">Alex</p>
-      <p className="text-muted-foreground text-sm leading-relaxed">{bold(parts.join(""))}</p>
-    </div>
-  );
+function buildReturnPath(pathname: string, searchParams: URLSearchParams): string {
+  const suffix = searchParams.toString();
+  return suffix ? `${pathname}?${suffix}` : pathname;
 }
 
-/* ------------------------------------------------------------------ */
-/* MetricCell                                                          */
-/* ------------------------------------------------------------------ */
+function nextStatusAction(
+  row: ReservationOverviewRow,
+  isEn: boolean
+): { status: string; label: string } | null {
+  switch (row.status) {
+    case "pending":
+      return { status: "confirmed", label: isEn ? "Confirm" : "Confirmar" };
+    case "confirmed":
+      return { status: "checked_in", label: isEn ? "Check in" : "Check in" };
+    case "checked_in":
+      return { status: "checked_out", label: isEn ? "Check out" : "Check out" };
+    default:
+      return null;
+  }
+}
 
-function MetricCell({
+function stayPhaseLabel(value: string, isEn: boolean): string {
+  switch (value) {
+    case "arriving_today":
+      return isEn ? "Arriving today" : "Llegan hoy";
+    case "departing_today":
+      return isEn ? "Departing today" : "Salen hoy";
+    case "in_house":
+      return isEn ? "In house" : "En estadia";
+    case "upcoming":
+      return isEn ? "Upcoming" : "Próxima";
+    case "cancelled":
+      return isEn ? "Cancelled" : "Cancelada";
+    default:
+      return isEn ? "Completed" : "Completada";
+  }
+}
+
+function SummaryCard({
   label,
   value,
-  change,
-  isFirst,
+  detail,
 }: {
   label: string;
   value: string;
-  change?: { pct: number; positive: boolean } | null;
-  isFirst?: boolean;
+  detail: string;
 }) {
   return (
-    <div className={cn("p-5", isFirst && "border-border/20 sm:border-r")}>
-      <p className="text-center font-semibold text-2xl tabular-nums tracking-tight text-foreground">
-        {value}
-      </p>
-      <p className="mt-1 text-center text-muted-foreground/50 text-[10px] font-medium tracking-wider uppercase">
-        {label}
-      </p>
-      {change && (
-        <p className={cn("mt-1 text-center text-xs", change.positive ? "text-emerald-500" : "text-red-500")}>
-          {change.positive ? "\u2191" : "\u2193"} {change.pct}% vs last month
+    <Card className="border border-border/60 bg-card/80 shadow-sm">
+      <CardContent className="space-y-1 p-5">
+        <p className="font-medium text-[11px] text-muted-foreground uppercase tracking-[0.14em]">
+          {label}
         </p>
-      )}
-    </div>
+        <p className="font-semibold text-3xl tracking-tight">{value}</p>
+        <p className="text-muted-foreground text-sm">{detail}</p>
+      </CardContent>
+    </Card>
   );
 }
 
-/* ------------------------------------------------------------------ */
-/* ActivityRow                                                         */
-/* ------------------------------------------------------------------ */
-
-function ActivityRow({
-  item,
-}: {
-  item: { time: string; label: string; sub: string; status: "done" | "live" | "upcoming" };
-}) {
-  return (
-    <div className="flex items-center gap-4 px-5 py-3">
-      <span className="w-16 shrink-0 text-right font-mono text-muted-foreground/50 text-xs tabular-nums">
-        {item.time}
-      </span>
-      <span
-        className={cn(
-          "h-2.5 w-2.5 shrink-0 rounded-full",
-          item.status === "done" && "bg-emerald-500",
-          item.status === "live" && "bg-blue-500",
-          item.status === "upcoming" && "border-2 border-muted-foreground/30 bg-transparent",
-        )}
-      />
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-foreground text-sm">{item.label}</p>
-        <p className="truncate text-muted-foreground/50 text-xs">{item.sub}</p>
-      </div>
-      <span
-        className={cn(
-          "shrink-0 text-xs font-medium tracking-wide",
-          item.status === "done" && "text-emerald-500",
-          item.status === "live" && "text-blue-500",
-          item.status === "upcoming" && "text-muted-foreground/40",
-        )}
-      >
-        {item.status === "done" && "\u2713 DONE"}
-        {item.status === "live" && "\u25CF LIVE"}
-        {item.status === "upcoming" && "\u25CB UPCOMING"}
-      </span>
-    </div>
-  );
-}
-
-/* ------------------------------------------------------------------ */
-/* OccupancyGrid                                                       */
-/* ------------------------------------------------------------------ */
-
-function OccupancyGrid({
+export function ReservationsManager({
+  orgId,
+  locale,
+  overview,
+  properties,
   units,
-  gridDays,
-  unitReservations,
-  today,
-  isEn,
-}: {
-  units: NormalizedUnit[];
-  gridDays: string[];
-  unitReservations: Map<string, NormalizedRow[]>;
-  today: string;
-  isEn: boolean;
-}) {
-  const dayLabels = gridDays.map((d) => {
-    const dt = new Date(`${d}T12:00:00`);
-    return {
-      iso: d,
-      dayOfWeek: dt.toLocaleDateString(isEn ? "en-US" : "es-PY", { weekday: "short" }).toUpperCase().slice(0, 3),
-      dayNum: dt.getDate(),
-      isToday: d === today,
-    };
+  guests,
+  initialFilters,
+  error,
+  success,
+}: ReservationsManagerProps) {
+  const isEn = locale === "en-US";
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const [, startTransition] = useTransition();
+
+  const [query, setQuery] = useState(initialFilters.q);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [blockTarget, setBlockTarget] = useState<BlockTarget | null>(null);
+
+  useEffect(() => {
+    setQuery(initialFilters.q);
+  }, [initialFilters.q]);
+
+  function updateParams(
+    updates: Record<string, string | null | undefined>,
+    options?: { replace?: boolean }
+  ) {
+    const params = new URLSearchParams(searchParams.toString());
+    for (const [key, value] of Object.entries(updates)) {
+      if (!value) params.delete(key);
+      else params.set(key, value);
+    }
+    if (!("offset" in updates)) params.delete("offset");
+    const next = params.toString();
+    startTransition(() => {
+      const href = next ? `${pathname}?${next}` : pathname;
+      if (options?.replace) router.replace(href);
+      else router.push(href);
+    });
+  }
+
+  useEffect(() => {
+    const handle = window.setTimeout(() => {
+      if (query !== initialFilters.q) {
+        updateParams({ q: query || null }, { replace: true });
+      }
+    }, 250);
+    return () => window.clearTimeout(handle);
+  }, [initialFilters.q, query]);
+
+  const propertyOptions = useMemo<Option[]>(
+    () =>
+      properties
+        .map((property) => ({
+          id: asString(property.id),
+          label: asString(property.name),
+        }))
+        .filter((property) => property.id && property.label)
+        .sort((left, right) => left.label.localeCompare(right.label)),
+    [properties]
+  );
+
+  const propertyNameById = useMemo(
+    () => new Map(propertyOptions.map((property) => [property.id, property.label] as const)),
+    [propertyOptions]
+  );
+
+  const allUnitOptions = useMemo<
+    Array<Option & { propertyId: string }>
+  >(
+    () =>
+      units
+        .map((unit) => {
+          const id = asString(unit.id);
+          const propertyId = asString(unit.property_id);
+          const unitName = asString(unit.name) || asString(unit.code);
+          const propertyName = propertyNameById.get(propertyId);
+          return {
+            id,
+            label: propertyName ? `${propertyName} · ${unitName}` : unitName,
+            propertyId,
+          };
+        })
+        .filter((unit) => unit.id && unit.label)
+        .sort((left, right) => left.label.localeCompare(right.label)),
+    [propertyNameById, units]
+  );
+
+  const filteredUnitOptions = useMemo(
+    () =>
+      initialFilters.propertyId
+        ? allUnitOptions.filter((unit) => unit.propertyId === initialFilters.propertyId)
+        : allUnitOptions,
+    [allUnitOptions, initialFilters.propertyId]
+  );
+
+  const guestOptions = useMemo<Option[]>(
+    () =>
+      guests
+        .map((guest) => {
+          const id = asString(guest.id);
+          const name = asString(guest.full_name) || asString(guest.name);
+          const email = asString(guest.email);
+          return {
+            id,
+            label: email ? `${name} · ${email}` : name,
+          };
+        })
+        .filter((guest) => guest.id && guest.label)
+        .sort((left, right) => left.label.localeCompare(right.label)),
+    [guests]
+  );
+
+  const currentFilters = useMemo(
+    () =>
+      Object.fromEntries(
+        [
+          ["q", initialFilters.q],
+          ["status", initialFilters.status],
+          ["source", initialFilters.source],
+          ["property_id", initialFilters.propertyId],
+          ["unit_id", initialFilters.unitId],
+          ["stay_phase", initialFilters.stayPhase],
+          ["from", initialFilters.from],
+          ["to", initialFilters.to],
+          ["view", initialFilters.view],
+        ].filter((entry): entry is [string, string] => Boolean(entry[1]))
+      ),
+    [
+      initialFilters.from,
+      initialFilters.propertyId,
+      initialFilters.q,
+      initialFilters.source,
+      initialFilters.stayPhase,
+      initialFilters.status,
+      initialFilters.to,
+      initialFilters.unitId,
+      initialFilters.view,
+    ]
+  );
+
+  const returnPath = useMemo(
+    () => buildReturnPath(pathname, new URLSearchParams(searchParams.toString())),
+    [pathname, searchParams]
+  );
+
+  const askAiHref = buildAgentContextHref({
+    prompt: isEn
+      ? "What needs attention in this reservations queue?"
+      : "¿Qué necesita atención en esta cola de reservas?",
+    context: {
+      source: "reservations",
+      entityIds: overview.rows.map((row) => row.id),
+      filters: currentFilters,
+      summary: isEn
+        ? `${overview.summary.arrivalsToday} arrivals today, ${overview.summary.departuresToday} departures today, ${overview.summary.inHouse} in house, ${overview.summary.needsAttention} need attention.`
+        : `${overview.summary.arrivalsToday} llegadas hoy, ${overview.summary.departuresToday} salidas hoy, ${overview.summary.inHouse} en estadia, ${overview.summary.needsAttention} necesitan atención.`,
+      returnPath,
+    },
   });
 
-  return (
-    <motion.div
-      animate={{ opacity: 1, y: 0 }}
-      className="glass-inner overflow-hidden rounded-2xl"
-      initial={{ opacity: 0, y: 8 }}
-      transition={{ delay: 0.2, duration: 0.35, ease: EASING }}
-    >
-      <div className="overflow-x-auto">
-        <div className="min-w-[640px] px-5 py-4">
-          {/* Day headers */}
-          <div className="mb-3 grid" style={{ gridTemplateColumns: `140px repeat(${gridDays.length}, 1fr)` }}>
-            <div />
-            {dayLabels.map((d) => (
-              <div className="text-center" key={d.iso}>
-                <p className="text-muted-foreground/40 text-[9px] font-medium">{d.dayOfWeek}</p>
-                <p
-                  className={cn(
-                    "mx-auto mt-0.5 flex h-6 w-6 items-center justify-center rounded-full text-xs tabular-nums",
-                    d.isToday
-                      ? "bg-foreground text-background font-semibold"
-                      : "text-muted-foreground/60",
-                  )}
-                >
-                  {d.dayNum}
-                </p>
-              </div>
-            ))}
-          </div>
-
-          {/* Unit rows */}
-          {units.map((unit) => {
-            const resForUnit = unitReservations.get(unit.id) ?? [];
-            return (
-              <div
-                className="grid items-center border-border/10 border-t py-2"
-                key={unit.id}
-                style={{ gridTemplateColumns: `140px repeat(${gridDays.length}, 1fr)` }}
-              >
-                <p className="truncate pr-3 text-muted-foreground text-xs">
-                  {unit.property_name || unit.name}
-                </p>
-                {gridDays.map((day) => {
-                  const res = resForUnit.find(
-                    (r) =>
-                      r.check_in_date &&
-                      r.check_out_date &&
-                      day >= r.check_in_date &&
-                      day < r.check_out_date,
-                  );
-                  if (!res) {
-                    return <div className="h-7 px-0.5" key={day}><div className="h-full rounded-sm" /></div>;
-                  }
-                  const isStart = day === res.check_in_date;
-                  const isEndPrev = (() => {
-                    const nextDay = new Date(`${day}T12:00:00`);
-                    nextDay.setDate(nextDay.getDate() + 1);
-                    return nextDay.toISOString().slice(0, 10) === res.check_out_date;
-                  })();
-                  const color =
-                    res.status === "checked_in" ? "bg-blue-500/80" :
-                    res.status === "confirmed" ? "bg-emerald-500/80" :
-                    res.status === "pending" ? "bg-amber-500/80" :
-                    "bg-muted-foreground/30";
-                  const guestInitial = res.guest_name ? res.guest_name.split(" ").map((w) => w[0]).join("").slice(0, 2) : "";
-                  return (
-                    <div className="h-7 px-0.5" key={day}>
-                      <div
-                        className={cn(
-                          "flex h-full items-center justify-center text-[9px] font-medium text-white",
-                          color,
-                          isStart && "rounded-l-md",
-                          isEndPrev && "rounded-r-md",
-                        )}
-                      >
-                        {isStart ? guestInitial : ""}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    </motion.div>
+  const attentionRows = overview.rows.filter(
+    (row) =>
+      row.status === "pending" ||
+      row.status === "no_show" ||
+      !row.guestId ||
+      row.openTasks > 0
   );
-}
 
-/* ------------------------------------------------------------------ */
-/* ReservationCard                                                     */
-/* ------------------------------------------------------------------ */
-
-function ReservationCard({
-  row,
-  isEn,
-  fmtLocale,
-}: {
-  row: NormalizedRow;
-  isEn: boolean;
-  fmtLocale: string;
-}) {
-  const [expanded, setExpanded] = useState(false);
-  const router = useRouter();
-  const statusBadge = STATUS_BADGE[row.status] ?? STATUS_BADGE.pending;
-  const chLabel = channelLabel(row);
-  const chColor = channelColor(row);
-  const isCheckedIn = row.status === "checked_in";
-
-  const dateRange = [row.check_in_date, row.check_out_date].filter(Boolean).join(" \u2192 ");
-  const nightsLabel = row.nights > 0
-    ? `${row.nights} ${isEn ? (row.nights === 1 ? "night" : "nights") : (row.nights === 1 ? "noche" : "noches")}`
-    : "";
-  const rateLabel = row.nightly_rate > 0 ? `${fmtPyg(row.nightly_rate, fmtLocale)}/${isEn ? "night" : "noche"}` : "";
-  const detail = [dateRange, nightsLabel, rateLabel].filter(Boolean).join(" \u00B7 ");
+  const offset = Math.max(initialFilters.offset, 0);
+  const limit = Math.max(initialFilters.limit, 1);
+  const hasMore = overview.rows.length >= limit;
 
   return (
-    <motion.div
-      animate={{ opacity: 1, y: 0 }}
-      className={cn(
-        "glass-inner overflow-hidden rounded-2xl transition-shadow hover:shadow-[var(--shadow-soft)]",
-        isCheckedIn && "ring-1 ring-blue-500/30",
-      )}
-      initial={{ opacity: 0, y: 6 }}
-      transition={{ duration: 0.3, ease: EASING }}
-    >
-      <button
-        className="flex w-full items-center gap-4 p-4 text-left sm:p-5"
-        onClick={() => setExpanded((p) => !p)}
-        type="button"
+    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
+      <PageScaffold
+        actions={
+          <>
+            <Button asChild variant="outline">
+              <Link href={askAiHref}>{isEn ? "Ask AI" : "Preguntar a IA"}</Link>
+            </Button>
+            <Button onClick={() => setCreateOpen(true)} type="button">
+              {isEn ? "Create reservation" : "Crear reserva"}
+            </Button>
+          </>
+        }
+        description={
+          isEn
+            ? "Track arrivals, departures, in-house stays, and reservation exceptions from one operational queue."
+            : "Controla llegadas, salidas, estadias activas y excepciones desde una sola cola operativa."
+        }
+        eyebrow={isEn ? "Operations" : "Operaciones"}
+        title={isEn ? "Reservations" : "Reservas"}
       >
-        {/* Initials avatar */}
-        <span
-          className={cn(
-            "flex h-10 w-10 shrink-0 items-center justify-center rounded-full font-medium text-xs",
-            isCheckedIn ? "bg-blue-500/15 text-blue-600 dark:text-blue-400" : "bg-muted/60 text-foreground/70",
-          )}
-        >
-          {initials(row.guest_name ?? "?")}
-        </span>
-
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <h3 className="truncate font-medium text-foreground text-sm tracking-tight">
-              {row.guest_name ?? (isEn ? "Guest" : "Hu\u00E9sped")}
-            </h3>
-            <span className={cn("shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide", statusBadge)}>
-              {humanizeStatus(row.status, isEn)}
-            </span>
-            <span className={cn("shrink-0 text-xs font-medium", chColor)}>
-              via {chLabel}
-            </span>
+        {error ? (
+          <div className="rounded-2xl border border-red-500/20 bg-red-500/5 px-4 py-3 text-red-600 text-sm">
+            {error}
           </div>
+        ) : null}
+        {success ? (
+          <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/5 px-4 py-3 text-emerald-600 text-sm">
+            {success}
+          </div>
+        ) : null}
 
-          <p className="mt-0.5 truncate text-muted-foreground/60 text-xs">
-            {row.unit_name ?? row.property_name ?? ""}
-          </p>
-
-          <p className="mt-1.5 text-muted-foreground text-xs tabular-nums">
-            {detail}
-          </p>
+        <div
+          className="grid gap-4 md:grid-cols-4"
+          data-testid="reservations-summary-band"
+        >
+          <SummaryCard
+            detail={isEn ? "scheduled to arrive" : "programadas para llegar"}
+            label={isEn ? "Arrivals today" : "Llegadas hoy"}
+            value={String(overview.summary.arrivalsToday)}
+          />
+          <SummaryCard
+            detail={isEn ? "scheduled to depart" : "programadas para salir"}
+            label={isEn ? "Departures today" : "Salidas hoy"}
+            value={String(overview.summary.departuresToday)}
+          />
+          <SummaryCard
+            detail={isEn ? "currently checked in" : "actualmente hospedados"}
+            label={isEn ? "In house" : "En estadia"}
+            value={String(overview.summary.inHouse)}
+          />
+          <SummaryCard
+            detail={isEn ? "need follow-up" : "requieren seguimiento"}
+            label={isEn ? "Needs attention" : "Necesitan atención"}
+            value={String(overview.summary.needsAttention)}
+          />
         </div>
 
-        {/* Payout + expand */}
-        <div className="shrink-0 text-right">
-          <p className="font-semibold text-lg tabular-nums tracking-tight text-foreground">
-            {fmtPyg(row.total_amount, fmtLocale)}
-          </p>
-          <p className="text-muted-foreground/40 text-[10px] font-medium uppercase tracking-wider">
-            {isEn ? "HOST PAYOUT" : "PAGO AL HOST"}
-          </p>
-        </div>
+        <ListDetailLayout
+          aside={
+            <ActionRail
+              description={
+                isEn
+                  ? "Keep the queue focused on real operations: arrivals, departures, guest comms, and manual blocks."
+                  : "Mantén la cola enfocada en operación real: llegadas, salidas, comunicación y bloqueos manuales."
+              }
+              title={isEn ? "Next actions" : "Próximas acciones"}
+            >
+              <Button asChild className="w-full justify-start" variant="outline">
+                <Link href="/module/calendar">
+                  {isEn ? "Open calendar" : "Abrir calendario"}
+                </Link>
+              </Button>
+              <Button asChild className="w-full justify-start" variant="outline">
+                <Link href="/module/tasks">
+                  {isEn ? "Open tasks" : "Abrir tareas"}
+                </Link>
+              </Button>
+              <Button asChild className="w-full justify-start" variant="outline">
+                <Link href={askAiHref}>{isEn ? "Ask AI with this queue" : "Preguntar a IA con esta cola"}</Link>
+              </Button>
 
-        <span className="ml-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-border/40 text-muted-foreground/40 transition-colors hover:text-foreground">
-          <motion.span
-            animate={{ rotate: expanded ? 45 : 0 }}
-            transition={{ duration: 0.2 }}
-          >
-            +
-          </motion.span>
-        </span>
-      </button>
-
-      <AnimatePresence initial={false}>
-        {expanded && (
-          <motion.div
-            animate={{ height: "auto", opacity: 1 }}
-            className="overflow-hidden"
-            exit={{ height: 0, opacity: 0 }}
-            initial={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.25, ease: EASING }}
-          >
-            <div className="border-border/40 border-t px-4 py-4 sm:px-5">
-              {/* Details grid */}
-              <div className="grid grid-cols-2 gap-3 text-xs sm:grid-cols-4">
-                <Stat label={isEn ? "Check-in" : "Check-in"} value={row.check_in_date ?? "\u2014"} />
-                <Stat label={isEn ? "Check-out" : "Check-out"} value={row.check_out_date ?? "\u2014"} />
-                <Stat label={isEn ? "Guests" : "Hu\u00E9spedes"} value={`${row.adults}${row.children > 0 ? ` + ${row.children} ${isEn ? "children" : "ni\u00F1os"}` : ""}`} />
-                <Stat label={isEn ? "Source" : "Fuente"} value={chLabel} />
+              <div className="space-y-2 pt-2">
+                <p className="font-medium text-sm">
+                  {isEn ? "Attention items" : "Items con atención"}
+                </p>
+                {attentionRows.length === 0 ? (
+                  <p className="text-muted-foreground text-sm">
+                    {isEn
+                      ? "No urgent reservation issues in the current view."
+                      : "No hay incidencias urgentes en esta vista."}
+                  </p>
+                ) : (
+                  attentionRows.slice(0, 5).map((row) => (
+                    <Link
+                      className="block rounded-xl border border-border/60 px-3 py-2 transition hover:border-foreground/20 hover:bg-muted/40"
+                      href={`${row.primaryHref}?return_to=${encodeURIComponent(returnPath)}`}
+                      key={row.id}
+                    >
+                      <p className="font-medium text-sm">{row.guestName || (isEn ? "Unassigned guest" : "Huésped sin asignar")}</p>
+                      <p className="text-muted-foreground text-xs">
+                        {[row.propertyName, row.unitName, stayPhaseLabel(row.stayPhase, isEn)]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </p>
+                    </Link>
+                  ))
+                )}
               </div>
+            </ActionRail>
+          }
+          primary={
+            <div className="space-y-5">
+              <Card className="border border-border/60 bg-card/80 shadow-sm">
+                <CardContent className="space-y-4 p-5">
+                  <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+                    <Field
+                      htmlFor="reservations-search"
+                      label={isEn ? "Search reservations" : "Buscar reservas"}
+                    >
+                      <Input
+                        aria-label={isEn ? "Search reservations" : "Buscar reservas"}
+                        id="reservations-search"
+                        onChange={(event) => setQuery(event.target.value)}
+                        placeholder={isEn ? "Guest, property, unit" : "Huésped, propiedad, unidad"}
+                        value={query}
+                      />
+                    </Field>
 
-              {/* Action buttons */}
-              <div className="mt-4 flex flex-wrap gap-2">
-                <ActionChip
-                  label={isEn ? "Message guest" : "Mensaje al hu\u00E9sped"}
-                  prompt={isEn ? `Send a message to ${row.guest_name ?? "the guest"}` : `Enviar mensaje a ${row.guest_name ?? "el hu\u00E9sped"}`}
-                />
-                {row.status === "confirmed" && (
-                  <ActionChip
-                    label={isEn ? "Send welcome" : "Enviar bienvenida"}
-                    prompt={isEn ? `Draft a welcome message for ${row.guest_name ?? "the guest"}` : `Redactar mensaje de bienvenida para ${row.guest_name ?? "el hu\u00E9sped"}`}
-                  />
-                )}
-                {row.status === "checked_in" && (
-                  <ActionChip
-                    label={isEn ? "Check satisfaction" : "Verificar satisfacci\u00F3n"}
-                    prompt={isEn ? `Check how ${row.guest_name ?? "the guest"} is doing at ${row.property_name ?? "the property"}` : `Verificar c\u00F3mo est\u00E1 ${row.guest_name ?? "el hu\u00E9sped"} en ${row.property_name ?? "la propiedad"}`}
-                  />
-                )}
-                <button
-                  className="rounded-full border border-border/50 px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:border-foreground/20 hover:text-foreground"
-                  onClick={() => router.push(`/module/reservations/${row.id}`)}
-                  type="button"
+                    <Field htmlFor="reservations-view" label={isEn ? "Saved view" : "Vista"}>
+                      <Select
+                        id="reservations-view"
+                        onChange={(event) =>
+                          updateParams({ view: event.target.value || null })
+                        }
+                        value={initialFilters.view}
+                      >
+                        <option value="all">{isEn ? "All" : "Todas"}</option>
+                        <option value="arrivals_today">
+                          {isEn ? "Arrivals today" : "Llegadas hoy"}
+                        </option>
+                        <option value="departures_today">
+                          {isEn ? "Departures today" : "Salidas hoy"}
+                        </option>
+                        <option value="in_house">{isEn ? "In house" : "En estadia"}</option>
+                        <option value="needs_attention">
+                          {isEn ? "Needs attention" : "Necesitan atención"}
+                        </option>
+                      </Select>
+                    </Field>
+
+                    <Field htmlFor="reservations-status" label={isEn ? "Status" : "Estado"}>
+                      <Select
+                        id="reservations-status"
+                        onChange={(event) =>
+                          updateParams({ status: event.target.value || null })
+                        }
+                        value={initialFilters.status}
+                      >
+                        <option value="">{isEn ? "All statuses" : "Todos los estados"}</option>
+                        <option value="pending">{isEn ? "Pending" : "Pendiente"}</option>
+                        <option value="confirmed">{isEn ? "Confirmed" : "Confirmada"}</option>
+                        <option value="checked_in">{isEn ? "Checked in" : "Check in"}</option>
+                        <option value="checked_out">{isEn ? "Checked out" : "Check out"}</option>
+                        <option value="cancelled">{isEn ? "Cancelled" : "Cancelada"}</option>
+                        <option value="no_show">{isEn ? "No show" : "No show"}</option>
+                      </Select>
+                    </Field>
+
+                    <Field htmlFor="reservations-property" label={isEn ? "Property" : "Propiedad"}>
+                      <Select
+                        id="reservations-property"
+                        onChange={(event) =>
+                          updateParams({
+                            property_id: event.target.value || null,
+                            unit_id: null,
+                          })
+                        }
+                        value={initialFilters.propertyId}
+                      >
+                        <option value="">{isEn ? "All properties" : "Todas las propiedades"}</option>
+                        {propertyOptions.map((property) => (
+                          <option key={property.id} value={property.id}>
+                            {property.label}
+                          </option>
+                        ))}
+                      </Select>
+                    </Field>
+
+                    <Field htmlFor="reservations-unit" label={isEn ? "Unit" : "Unidad"}>
+                      <Select
+                        id="reservations-unit"
+                        onChange={(event) =>
+                          updateParams({ unit_id: event.target.value || null })
+                        }
+                        value={initialFilters.unitId}
+                      >
+                        <option value="">{isEn ? "All units" : "Todas las unidades"}</option>
+                        {filteredUnitOptions.map((unit) => (
+                          <option key={unit.id} value={unit.id}>
+                            {unit.label}
+                          </option>
+                        ))}
+                      </Select>
+                    </Field>
+                  </div>
+
+                  <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+                    <Field htmlFor="reservations-source" label={isEn ? "Source" : "Origen"}>
+                      <Select
+                        id="reservations-source"
+                        onChange={(event) =>
+                          updateParams({ source: event.target.value || null })
+                        }
+                        value={initialFilters.source}
+                      >
+                        <option value="">{isEn ? "All sources" : "Todos los orígenes"}</option>
+                        <option value="manual">{isEn ? "Manual" : "Manual"}</option>
+                        <option value="marketplace">
+                          {isEn ? "Casaora Marketplace" : "Marketplace Casaora"}
+                        </option>
+                        <option value="direct_booking">{isEn ? "Casaora direct" : "Directo Casaora"}</option>
+                      </Select>
+                    </Field>
+
+                    <Field htmlFor="reservations-stay-phase" label={isEn ? "Stay phase" : "Fase"}>
+                      <Select
+                        id="reservations-stay-phase"
+                        onChange={(event) =>
+                          updateParams({ stay_phase: event.target.value || null })
+                        }
+                        value={initialFilters.stayPhase}
+                      >
+                        <option value="">{isEn ? "All phases" : "Todas las fases"}</option>
+                        <option value="arriving_today">{isEn ? "Arriving today" : "Llegan hoy"}</option>
+                        <option value="departing_today">{isEn ? "Departing today" : "Salen hoy"}</option>
+                        <option value="in_house">{isEn ? "In house" : "En estadia"}</option>
+                        <option value="upcoming">{isEn ? "Upcoming" : "Próximas"}</option>
+                        <option value="completed">{isEn ? "Completed" : "Completadas"}</option>
+                        <option value="cancelled">{isEn ? "Cancelled" : "Canceladas"}</option>
+                      </Select>
+                    </Field>
+
+                    <Field htmlFor="reservations-from" label={isEn ? "From" : "Desde"}>
+                      <Input
+                        id="reservations-from"
+                        onChange={(event) =>
+                          updateParams({ from: event.target.value || null })
+                        }
+                        type="date"
+                        value={initialFilters.from}
+                      />
+                    </Field>
+
+                    <Field htmlFor="reservations-to" label={isEn ? "To" : "Hasta"}>
+                      <Input
+                        id="reservations-to"
+                        onChange={(event) =>
+                          updateParams({ to: event.target.value || null })
+                        }
+                        type="date"
+                        value={initialFilters.to}
+                      />
+                    </Field>
+
+                    <Field htmlFor="reservations-sort" label={isEn ? "Sort" : "Orden"}>
+                      <Select
+                        id="reservations-sort"
+                        onChange={(event) =>
+                          updateParams({ sort: event.target.value || null })
+                        }
+                        value={initialFilters.sort}
+                      >
+                        <option value="check_in_asc">{isEn ? "Check-in" : "Check-in"}</option>
+                        <option value="check_out_asc">{isEn ? "Check-out" : "Check-out"}</option>
+                        <option value="guest_asc">{isEn ? "Guest A-Z" : "Huésped A-Z"}</option>
+                        <option value="total_desc">{isEn ? "Total high to low" : "Total mayor a menor"}</option>
+                      </Select>
+                    </Field>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {overview.rows.length === 0 ? (
+                <Card
+                  className="border border-dashed border-border/70 bg-card/60"
+                  data-testid="reservations-empty-state"
                 >
-                  {isEn ? "View full details" : "Ver detalles completos"}
-                </button>
+                  <CardContent className="space-y-4 p-8">
+                    <div className="space-y-2">
+                      <h2 className="font-semibold text-xl">
+                        {isEn ? "No reservations in this view" : "No hay reservas en esta vista"}
+                      </h2>
+                      <p className="max-w-2xl text-muted-foreground text-sm">
+                        {isEn
+                          ? "Create a reservation, adjust the filters, or open Calendar if you need a specialist scheduling view."
+                          : "Crea una reserva, ajusta los filtros u abre Calendario si necesitas la vista especializada de agenda."}
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <Button onClick={() => setCreateOpen(true)} type="button">
+                        {isEn ? "Create reservation" : "Crear reserva"}
+                      </Button>
+                      <Button asChild variant="outline">
+                        <Link href="/module/calendar">
+                          {isEn ? "Open calendar" : "Abrir calendario"}
+                        </Link>
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              ) : (
+                <Card className="border border-border/60 bg-card/80 shadow-sm">
+                  <CardContent className="overflow-x-auto p-0">
+                    <table
+                      className="min-w-full divide-y divide-border/60 text-sm"
+                      data-testid="reservations-queue-table"
+                    >
+                      <thead className="bg-muted/30">
+                        <tr className="text-left text-muted-foreground">
+                          <th className="px-4 py-3 font-medium">{isEn ? "Guest" : "Huésped"}</th>
+                          <th className="px-4 py-3 font-medium">{isEn ? "Property / unit" : "Propiedad / unidad"}</th>
+                          <th className="px-4 py-3 font-medium">{isEn ? "Stay dates" : "Fechas"}</th>
+                          <th className="px-4 py-3 font-medium">{isEn ? "Status" : "Estado"}</th>
+                          <th className="px-4 py-3 font-medium">{isEn ? "Source" : "Origen"}</th>
+                          <th className="px-4 py-3 font-medium">{isEn ? "Total / paid" : "Total / pagado"}</th>
+                          <th className="px-4 py-3 font-medium">{isEn ? "Open tasks" : "Tareas abiertas"}</th>
+                          <th className="px-4 py-3 font-medium">{isEn ? "Actions" : "Acciones"}</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-border/50">
+                        {overview.rows.map((row) => {
+                          const nextAction = nextStatusAction(row, isEn);
+                          const detailHref = `${row.primaryHref}?return_to=${encodeURIComponent(returnPath)}`;
+                          return (
+                            <tr className="align-top" key={row.id}>
+                              <td className="space-y-1 px-4 py-4">
+                                <Link
+                                  className="font-medium transition hover:text-primary"
+                                  href={detailHref}
+                                >
+                                  {row.guestName || (isEn ? "Guest not linked" : "Sin huésped")}
+                                </Link>
+                                <p className="text-muted-foreground text-xs">
+                                  {stayPhaseLabel(row.stayPhase, isEn)}
+                                </p>
+                              </td>
+                              <td className="space-y-1 px-4 py-4">
+                                <p>{[row.propertyName, row.unitName].filter(Boolean).join(" · ") || "—"}</p>
+                                {row.listingSlug ? (
+                                  <Link
+                                    className="text-muted-foreground text-xs underline-offset-4 hover:underline"
+                                    href={`/marketplace/${row.listingSlug}`}
+                                    target="_blank"
+                                  >
+                                    {isEn ? "Marketplace preview" : "Vista marketplace"}
+                                  </Link>
+                                ) : null}
+                              </td>
+                              <td className="space-y-1 px-4 py-4">
+                                <p>
+                                  {row.checkInDate} → {row.checkOutDate}
+                                </p>
+                                <p className="text-muted-foreground text-xs">
+                                  {row.nights} {isEn ? "nights" : "noches"}
+                                </p>
+                              </td>
+                              <td className="space-y-2 px-4 py-4">
+                                <StatusBadge label={row.statusLabel} value={row.status} />
+                                <StatusBadge
+                                  label={stayPhaseLabel(row.stayPhase, isEn)}
+                                  value={row.stayPhase}
+                                />
+                              </td>
+                              <td className="space-y-1 px-4 py-4">
+                                <p>{row.sourceLabel}</p>
+                                <p className="text-muted-foreground text-xs">{row.source}</p>
+                              </td>
+                              <td className="space-y-1 px-4 py-4">
+                                <p>{formatCurrency(row.totalAmount, row.currency, locale)}</p>
+                                <p className="text-muted-foreground text-xs">
+                                  {isEn ? "Paid" : "Pagado"}:{" "}
+                                  {formatCurrency(row.amountPaid, row.currency, locale)}
+                                </p>
+                              </td>
+                              <td className="px-4 py-4">
+                                <span className="font-medium">{row.openTasks}</span>
+                              </td>
+                              <td className="px-4 py-4">
+                                <div className="flex min-w-[12rem] flex-col gap-2">
+                                  <Button asChild size="sm" variant="outline">
+                                    <Link href={detailHref}>
+                                      {isEn ? "Open" : "Abrir"}
+                                    </Link>
+                                  </Button>
+                                  {nextAction ? (
+                                    <form action={transitionReservationStatusAction}>
+                                      <input name="next" type="hidden" value={returnPath} />
+                                      <input name="reservation_id" type="hidden" value={row.id} />
+                                      <input name="status" type="hidden" value={nextAction.status} />
+                                      <Button className="w-full" size="sm" type="submit" variant="outline">
+                                        {nextAction.label}
+                                      </Button>
+                                    </form>
+                                  ) : null}
+                                  {row.guestPortalEligible ? (
+                                    <SendGuestPortalLink
+                                      buttonClassName="w-full justify-center"
+                                      buttonLabel={isEn ? "Send portal link" : "Enviar portal"}
+                                      isEn={isEn}
+                                      reservationId={row.id}
+                                      size="sm"
+                                      successLabel={isEn ? "Portal link sent" : "Portal enviado"}
+                                      variant="outline"
+                                    />
+                                  ) : null}
+                                  {row.unitId ? (
+                                    <Button
+                                      onClick={() =>
+                                        setBlockTarget({
+                                          unitId: row.unitId!,
+                                          label:
+                                            [row.propertyName, row.unitName]
+                                              .filter(Boolean)
+                                              .join(" · ") || (isEn ? "Unit" : "Unidad"),
+                                          startsOn: row.checkInDate,
+                                          endsOn: row.checkOutDate,
+                                        })
+                                      }
+                                      size="sm"
+                                      type="button"
+                                      variant="outline"
+                                    >
+                                      {isEn ? "Create block" : "Crear bloqueo"}
+                                    </Button>
+                                  ) : null}
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </CardContent>
+                </Card>
+              )}
+
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-muted-foreground text-sm">
+                  {isEn
+                    ? `Showing ${offset + 1}-${offset + overview.rows.length}`
+                    : `Mostrando ${offset + 1}-${offset + overview.rows.length}`}
+                </p>
+                <div className="flex gap-2">
+                  <Button
+                    disabled={offset <= 0}
+                    onClick={() =>
+                      updateParams({ offset: String(Math.max(offset - limit, 0)) })
+                    }
+                    type="button"
+                    variant="outline"
+                  >
+                    {isEn ? "Previous" : "Anterior"}
+                  </Button>
+                  <Button
+                    disabled={!hasMore}
+                    onClick={() => updateParams({ offset: String(offset + limit) })}
+                    type="button"
+                    variant="outline"
+                  >
+                    {isEn ? "Next" : "Siguiente"}
+                  </Button>
+                </div>
               </div>
             </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </motion.div>
-  );
-}
+          }
+        />
+      </PageScaffold>
 
-/* ------------------------------------------------------------------ */
-/* Stat                                                                */
-/* ------------------------------------------------------------------ */
-
-function Stat({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <p className="text-muted-foreground/60">{label}</p>
-      <p className="font-medium tabular-nums text-foreground">{value}</p>
-    </div>
-  );
-}
-
-/* ------------------------------------------------------------------ */
-/* ActionChip                                                          */
-/* ------------------------------------------------------------------ */
-
-function ActionChip({ label, prompt }: { label: string; prompt: string }) {
-  return (
-    <Link
-      className="rounded-full border border-border/50 px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:border-foreground/20 hover:text-foreground"
-      href={`/app/agents?prompt=${encodeURIComponent(prompt)}`}
-    >
-      {label}
-    </Link>
-  );
-}
-
-/* ------------------------------------------------------------------ */
-/* ChatInput                                                           */
-/* ------------------------------------------------------------------ */
-
-function ChatInput({ isEn, placeholder }: { isEn: boolean; placeholder: string }) {
-  const router = useRouter();
-  const [value, setValue] = useState("");
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const trimmed = value.trim();
-    if (!trimmed) return;
-    router.push(`/app/agents?prompt=${encodeURIComponent(trimmed)}`);
-  };
-
-  return (
-    <form className="relative" onSubmit={handleSubmit}>
-      <input
-        className={cn(
-          "h-12 w-full rounded-full border border-border/50 bg-background pr-12 pl-5 text-sm",
-          "placeholder:text-muted-foreground/40",
-          "focus:border-primary/50 focus:outline-none focus:ring-1 focus:ring-primary/20",
-          "transition-colors",
-        )}
-        onChange={(e) => setValue(e.target.value)}
-        placeholder={placeholder}
-        type="text"
-        value={value}
+      <ReservationFormSheet
+        guestOptions={guestOptions}
+        isEn={isEn}
+        locale={locale}
+        onOpenChange={setCreateOpen}
+        open={createOpen}
+        orgId={orgId}
+        propertyOptions={propertyOptions}
+        returnTo={returnPath}
+        unitOptions={allUnitOptions}
       />
-      <button
-        className={cn(
-          "absolute top-1/2 right-1.5 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full",
-          "bg-foreground text-background transition-opacity",
-          value.trim() ? "opacity-100" : "opacity-30",
-        )}
-        disabled={!value.trim()}
-        type="submit"
-      >
-        <Icon icon={ArrowRight01Icon} size={16} />
-      </button>
-    </form>
-  );
-}
 
-/* ------------------------------------------------------------------ */
-/* Chips                                                               */
-/* ------------------------------------------------------------------ */
-
-function Chips({ chips }: { chips: string[] }) {
-  return (
-    <motion.div
-      animate={{ opacity: 1, y: 0 }}
-      className="flex flex-wrap gap-2"
-      initial={{ opacity: 0, y: 8 }}
-      transition={{ delay: 0.3, duration: 0.4, ease: EASING }}
-    >
-      {chips.map((chip, i) => (
-        <motion.div
-          animate={{ opacity: 1, scale: 1 }}
-          initial={{ opacity: 0, scale: 0.95 }}
-          key={chip}
-          transition={{ delay: 0.35 + i * 0.04, duration: 0.25, ease: EASING }}
-        >
-          <Link
-            className="glass-inner inline-block rounded-full px-3.5 py-2 text-[12.5px] text-muted-foreground/70 transition-all hover:text-foreground hover:shadow-sm"
-            href={`/app/agents?prompt=${encodeURIComponent(chip)}`}
-          >
-            {chip}
-          </Link>
-        </motion.div>
-      ))}
-    </motion.div>
+      <ManualBlockDrawer
+        isEn={isEn}
+        onOpenChange={(open) => {
+          if (!open) setBlockTarget(null);
+        }}
+        open={Boolean(blockTarget)}
+        orgId={orgId}
+        preset={blockTarget}
+      />
+    </div>
   );
 }

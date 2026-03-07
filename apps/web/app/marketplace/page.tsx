@@ -16,12 +16,14 @@ import {
   toMarketplaceListingViewModel,
 } from "@/lib/features/marketplace/view-model";
 import { getActiveLocale } from "@/lib/i18n/server";
+import { AiMatchingPanel } from "./components/ai-matching-panel";
 import { CategoryPills } from "./components/category-pills";
-import { FeaturedListings } from "./components/featured-listings";
+import { DiscoverySections } from "./components/discovery-sections";
+import { MarketInsightsBar } from "./components/market-insights-bar";
 import { MarketplaceFiltersForm } from "./components/marketplace-filters-form";
-import { MarketplaceHero } from "./components/marketplace-hero";
 import { MarketplaceResultsLayout } from "./components/marketplace-results-layout";
 import { RecentlyViewedSection } from "./components/recently-viewed-section";
+import { SmartHero } from "./components/smart-hero";
 
 type MarketplacePageProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
@@ -110,50 +112,65 @@ export default async function MarketplacePage({
     <div className="pa-marketplace-root min-h-dvh bg-background">
       <SiteHeader />
 
-      <main className="mx-auto w-full max-w-[1560px] space-y-10 px-4 py-8 sm:px-6 sm:py-10 lg:space-y-14 lg:px-8 lg:py-12">
-        <MarketplaceHero
+      <main className="mx-auto w-full max-w-[1440px] px-4 sm:px-6 lg:px-8">
+        {/* 1. Smart Hero with NLP search */}
+        <SmartHero
           defaultCity={filters.city || undefined}
           defaultMaxBudget={filters.maxMonthly?.toString()}
           isEn={isEn}
+          listingCount={listings.length}
         />
 
-        <Suspense
-          fallback={
-            <div className="flex gap-2 overflow-hidden">
-              {Array.from({ length: 6 }, (_, index) => `pill-${index}`).map(
-                (pillKey) => (
-                  <div
-                    className="h-9 w-24 shrink-0 animate-pulse rounded-full bg-muted"
-                    key={pillKey}
-                  />
-                )
-              )}
-            </div>
-          }
-        >
-          <CategoryPills locale={locale} />
-        </Suspense>
+        {/* 2. Filter chips */}
+        <div className="mt-10 border-[var(--marketplace-text)]/6 border-b pb-1">
+          <Suspense
+            fallback={
+              <div className="flex gap-2 overflow-hidden">
+                {Array.from({ length: 6 }, (_, index) => `pill-${index}`).map(
+                  (pillKey) => (
+                    <div
+                      className="h-9 w-24 shrink-0 animate-pulse rounded-full bg-muted"
+                      key={pillKey}
+                    />
+                  )
+                )}
+              </div>
+            }
+          >
+            <CategoryPills locale={locale} />
+          </Suspense>
+        </div>
 
+        {/* 3. Discovery sections (only when no active filters) */}
         {hasActiveFilters ? null : (
-          <FeaturedListings isEn={isEn} listings={listings} locale={locale} />
+          <div className="mt-16">
+            <DiscoverySections
+              isEn={isEn}
+              listings={listings}
+              locale={locale}
+            />
+          </div>
         )}
 
+        {/* 4. Saved searches */}
         <Suspense
           fallback={
-            <div className="h-10 w-48 animate-pulse rounded-lg bg-muted" />
+            <div className="mt-8 h-10 w-48 animate-pulse rounded-lg bg-muted" />
           }
         >
-          <SavedSearches isEn={isEn} />
+          <div className="mt-8">
+            <SavedSearches isEn={isEn} />
+          </div>
         </Suspense>
 
-        <section className="overflow-hidden rounded-2xl bg-white shadow-[var(--marketplace-card-shadow)]">
+        {/* 5. Results area — no heavy container */}
+        <div className="mt-12">
           <MarketplaceFiltersForm
             activeFilters={activeFilters}
             filters={filters}
             isEn={isEn}
           />
-
-          <div className="p-4 sm:p-5 lg:p-6">
+          <div className="mt-4">
             <MarketplaceResultsLayout
               apiError={apiError}
               isEn={isEn}
@@ -162,13 +179,26 @@ export default async function MarketplacePage({
               sortValue={filters.sort}
             />
           </div>
-        </section>
+        </div>
 
-        <RecentlyViewedSection
-          isEn={isEn}
-          listings={listings}
-          locale={locale}
-        />
+        {/* 6. AI matching panel */}
+        <div className="mt-20">
+          <AiMatchingPanel isEn={isEn} />
+        </div>
+
+        {/* 7. Market insights */}
+        <div className="mt-20">
+          <MarketInsightsBar isEn={isEn} listings={listings} />
+        </div>
+
+        {/* 8. Recently viewed */}
+        <div className="mt-16 pb-16">
+          <RecentlyViewedSection
+            isEn={isEn}
+            listings={listings}
+            locale={locale}
+          />
+        </div>
       </main>
 
       <SiteFooter />

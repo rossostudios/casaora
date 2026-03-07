@@ -1,11 +1,17 @@
+use std::convert::Infallible;
+
 use axum::{
     extract::{Path, Query, State},
     http::HeaderMap,
-    response::IntoResponse,
+    response::{
+        sse::{Event, Sse},
+        IntoResponse,
+    },
     Json,
 };
 use serde::Deserialize;
 use serde_json::{json, Value};
+use tokio_stream::wrappers::ReceiverStream;
 use uuid::Uuid;
 
 use crate::{
@@ -38,6 +44,10 @@ pub fn router() -> axum::Router<AppState> {
         .route(
             "/notifications/unread-count",
             axum::routing::get(get_unread_count),
+        )
+        .route(
+            "/notifications/stream",
+            axum::routing::get(stream_notifications),
         )
         .route(
             "/notifications/{notification_id}/read",
@@ -218,6 +228,81 @@ async fn deactivate_push_token_handler(
     deactivate_push_token(pool, &user_id, &payload.token).await?;
 
     Ok(Json(json!({ "ok": true })))
+}
+
+/// SSE endpoint for real-time operational events.
+/// Listens on `org_events:{org_id}` PG NOTIFY channel and streams events to the client.
+async fn stream_notifications(
+    State(state): State<AppState>,
+    Query(query): Query<UnreadCountQuery>,
+    headers: HeaderMap,
+) -> AppResult<Sse<impl futures_core::Stream<Item = Result<Event, Infallible>>>> {
+    let org_id = query.org_id.to_string();
+    let user_id = require_user_id(&state, &headers).await?;
+    assert_org_member(&state, &user_id, &org_id).await?;
+
+    let pool = db_pool(&state)?;
+    let (tx, rx) = tokio::sync::mpsc::channel::<Result<Event, Infallible>>(64);
+
+    // Send initial keepalive
+    let _ = tx
+        .send(Ok(Event::default()
+            .event("connected")
+            .data(json!({"org_id": &org_id}).to_string())))
+        .await;
+
+    let channel = format!("org_events:{}", org_id);
+    let pool_clone = pool.clone();
+
+    tokio::spawn(async move {
+        let mut listener = match sqlx::postgres::PgListener::connect_with(&pool_clone).await {
+            Ok(l) => l,
+            Err(e) => {
+                tracing::warn!(error = %e, "SSE: failed to create PgListener");
+                return;
+            }
+        };
+
+        if let Err(e) = listener.listen(&channel).await {
+            tracing::warn!(error = %e, channel = %channel, "SSE: failed to LISTEN");
+            return;
+        }
+
+        // Send keepalive every 30s to prevent proxy/browser timeouts
+        let keepalive_interval = tokio::time::Duration::from_secs(30);
+        let mut keepalive = tokio::time::interval(keepalive_interval);
+        keepalive.tick().await; // skip first immediate tick
+
+        loop {
+            tokio::select! {
+                notification = listener.recv() => {
+                    match notification {
+                        Ok(n) => {
+                            let sse_event = Event::default()
+                                .event("notification")
+                                .data(n.payload());
+                            if tx.send(Ok(sse_event)).await.is_err() {
+                                break; // Client disconnected
+                            }
+                        }
+                        Err(e) => {
+                            tracing::warn!(error = %e, "SSE: PgListener error");
+                            break;
+                        }
+                    }
+                }
+                _ = keepalive.tick() => {
+                    let ping = Event::default().event("ping").data("{}");
+                    if tx.send(Ok(ping)).await.is_err() {
+                        break; // Client disconnected
+                    }
+                }
+            }
+        }
+    });
+
+    let stream = ReceiverStream::new(rx);
+    Ok(Sse::new(stream))
 }
 
 fn db_pool(state: &AppState) -> AppResult<&sqlx::PgPool> {

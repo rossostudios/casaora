@@ -1,64 +1,75 @@
 import { PortfolioDashboard } from "@/components/portfolio/portfolio-dashboard";
-import {
-  fetchPortfolioComparison,
-  fetchPortfolioKpis,
-  fetchPortfolioSnapshots,
-  type PortfolioKpis,
-  type PortfolioPropertyComparison,
-  type PortfolioSnapshot,
-} from "@/lib/api";
+import { OrgAccessChanged } from "@/components/shell/org-access-changed";
+import { PageScaffold } from "@/components/ui/page-scaffold";
+import { fetchJson } from "@/lib/api";
+import { errorMessage, isOrgMembershipError } from "@/lib/errors";
 import { getActiveLocale } from "@/lib/i18n/server";
-import { NoOrgCard } from "@/lib/page-helpers";
+import {
+  fetchPortfolioOverview,
+  normalizePortfolioOverviewPeriod,
+} from "@/lib/portfolio-analytics";
+import { ApiErrorCard, NoOrgCard } from "@/lib/page-helpers";
 import { getActiveOrgId } from "@/lib/org";
 
-export default async function PortfolioPage() {
-  const locale = await getActiveLocale();
-  const orgId = await getActiveOrgId();
+type PageProps = {
+  searchParams: Promise<{
+    period?: string;
+  }>;
+};
+
+export default async function PortfolioPage({ searchParams }: PageProps) {
+  const [locale, orgId, params] = await Promise.all([
+    getActiveLocale(),
+    getActiveOrgId(),
+    searchParams,
+  ]);
   const isEn = locale === "en-US";
 
   if (!orgId) {
     return (
-      <NoOrgCard isEn={isEn} resource={["portfolio", "el portafolio"]} />
+      <NoOrgCard isEn={isEn} resource={["portfolio analytics", "analítica de portafolio"]} />
     );
   }
 
-  let kpis: PortfolioKpis | null = null;
-  let properties: PortfolioPropertyComparison[] = [];
-  let snapshots: PortfolioSnapshot[] = [];
+  const period = normalizePortfolioOverviewPeriod(params.period);
 
   try {
-    const [kpiData, compData, snapData] = await Promise.all([
-      fetchPortfolioKpis(orgId).catch(() => null),
-      fetchPortfolioComparison(orgId).catch(() => ({ properties: [] })),
-      fetchPortfolioSnapshots(orgId, 30).catch(() => ({ snapshots: [] })),
+    const [overview, org] = await Promise.all([
+      fetchPortfolioOverview(orgId, period),
+      fetchJson<Record<string, unknown>>(`/organizations/${encodeURIComponent(orgId)}`).catch(
+        () => null
+      ),
     ]);
+    const rawCurrency =
+      typeof org?.default_currency === "string"
+        ? org.default_currency.trim().toUpperCase()
+        : "";
+    const defaultCurrency = rawCurrency || "PYG";
 
-    kpis = kpiData;
-    properties = compData.properties ?? [];
-    snapshots = snapData.snapshots ?? [];
-  } catch {
-    // graceful degradation — empty state will render
+    return (
+      <PageScaffold
+        description={
+          isEn
+            ? "Scan portfolio health, spot issues quickly, and jump into properties or units with the right context."
+            : "Revisa la salud del portafolio, detecta problemas rápido y entra a propiedades o unidades con el contexto correcto."
+        }
+        eyebrow={isEn ? "Portfolio" : "Portafolio"}
+        title={isEn ? "Portfolio analytics" : "Analítica de portafolio"}
+      >
+        <PortfolioDashboard
+          currency={defaultCurrency}
+          initialOverview={overview}
+          initialPeriod={period}
+          locale={locale}
+          orgId={orgId}
+        />
+      </PageScaffold>
+    );
+  } catch (err) {
+    const message = errorMessage(err);
+    if (isOrgMembershipError(message)) {
+      return <OrgAccessChanged orgId={orgId} />;
+    }
+    return <ApiErrorCard isEn={isEn} message={message} />;
   }
-
-  return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="font-semibold text-2xl tracking-tight">
-          {isEn ? "Portfolio" : "Portafolio"}
-        </h1>
-        <p className="text-muted-foreground text-sm">
-          {isEn
-            ? "Cross-property performance and analytics"
-            : "Rendimiento y análisis entre propiedades"}
-        </p>
-      </div>
-
-      <PortfolioDashboard
-        kpis={kpis}
-        locale={locale}
-        properties={properties}
-        snapshots={snapshots}
-      />
-    </div>
-  );
 }
