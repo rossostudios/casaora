@@ -66,7 +66,14 @@ run_smoke_request() {
   local output_file="$3"
   shift 3
 
-  curl -sS -o "${output_file}" -w '%{http_code}' "$@" "${base_url}${path}"
+  : > "${output_file}"
+
+  local http_code
+  if ! http_code="$(curl -sS -o "${output_file}" -w '%{http_code}' "$@" "${base_url}${path}" 2>/dev/null)"; then
+    http_code="000"
+  fi
+
+  printf '%s' "${http_code}"
 }
 
 resolve_existing_secret_ref() {
