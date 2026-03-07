@@ -5,6 +5,7 @@
       "name": "casaora-admin",
       "dependencies": {
         "@base-ui/react": "^1.1.0",
+        "@casaora/marketplace-shared": "file:../../packages/marketplace-shared",
         "@casaora/shared-api": "file:../../packages/shared-api",
         "@clerk/nextjs": "^6.38.2",
         "@hookform/resolvers": "^5.2.2",
@@ -123,6 +124,8 @@
     "@biomejs/cli-win32-arm64": ["@biomejs/cli-win32-arm64@2.3.14", "", { "os": "win32", "cpu": "arm64" }, "sha512-+IKYkj/pUBbnRf1G1+RlyA3LWiDgra1xpS7H2g4BuOzzRbRB+hmlw0yFsLprHhbbt7jUzbzAbAjK/Pn0FDnh1A=="],
 
     "@biomejs/cli-win32-x64": ["@biomejs/cli-win32-x64@2.3.14", "", { "os": "win32", "cpu": "x64" }, "sha512-oizCjdyQ3WJEswpb3Chdngeat56rIdSYK12JI3iI11Mt5T5EXcZ7WLuowzEaFPNJ3zmOQFliMN8QY1Pi+qsfdQ=="],
+
+    "@casaora/marketplace-shared": ["@casaora/marketplace-shared@file:../../packages/marketplace-shared", {}],
 
     "@casaora/shared-api": ["@casaora/shared-api@file:../../packages/shared-api", { "devDependencies": { "openapi-typescript": "^7.13.0" } }],
 
