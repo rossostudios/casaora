@@ -8,6 +8,7 @@ WORKDIR /repo/apps/web
 
 COPY apps/web/package.json apps/web/bun.lock ./
 COPY packages/shared-api /repo/packages/shared-api
+COPY packages/marketplace-shared /repo/packages/marketplace-shared
 
 RUN bun install --frozen-lockfile
 
@@ -33,6 +34,7 @@ WORKDIR /repo
 COPY --from=deps /repo /repo
 COPY apps/web /repo/apps/web
 COPY packages/shared-api /repo/packages/shared-api
+COPY packages/marketplace-shared /repo/packages/marketplace-shared
 
 RUN cd /repo/apps/web && npm run build
 
