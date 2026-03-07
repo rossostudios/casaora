@@ -1,4 +1,6 @@
 name: Backend Quality Gate
+# Keep this workflow pull-request addressable for deploy-hotfix branches that
+# otherwise would not trigger the required backend-quality check.
 
 on:
   workflow_dispatch:
