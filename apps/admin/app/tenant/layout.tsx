@@ -1,8 +1,6 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
-
-import { PublicFooter } from "@/components/marketplace/public-footer";
-import { PublicHeader } from "@/components/marketplace/public-header";
+import { PortalScaffold } from "@/components/ui/portal-scaffold";
 import { getActiveLocale } from "@/lib/i18n/server";
 
 export const metadata: Metadata = {
@@ -20,14 +18,38 @@ export default async function TenantLayout({
   children: ReactNode;
 }) {
   const locale = await getActiveLocale();
+  const isEn = locale === "en-US";
 
   return (
-    <div className="flex min-h-dvh flex-col bg-background">
-      <PublicHeader locale={locale} />
-      <main className="mx-auto w-full max-w-2xl flex-1 px-4 py-8">
-        {children}
-      </main>
-      <PublicFooter locale={locale} />
-    </div>
+    <PortalScaffold
+      hideNavOnPrefixes={["/tenant/login"]}
+      locale={locale}
+      maxWidthClassName="max-w-4xl"
+      navItems={[
+        {
+          href: "/tenant/dashboard",
+          label: isEn ? "Home" : "Inicio",
+        },
+        {
+          href: "/tenant/payments",
+          label: isEn ? "Payments" : "Pagos",
+        },
+        {
+          href: "/tenant/maintenance",
+          label: isEn ? "Maintenance" : "Mantenimiento",
+        },
+        {
+          href: "/tenant/documents",
+          label: isEn ? "Documents" : "Documentos",
+        },
+        {
+          href: "/tenant/messages",
+          label: isEn ? "Messages" : "Mensajes",
+        },
+      ]}
+      title={isEn ? "Tenant portal" : "Portal de inquilino"}
+    >
+      {children}
+    </PortalScaffold>
   );
 }

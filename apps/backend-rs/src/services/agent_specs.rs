@@ -29,6 +29,12 @@ const SUPERVISOR_ALLOWED_TOOLS: &[&str] = &[
     "get_agent_health",
     "execute_playbook",
     "get_risk_radar",
+    "post_to_blackboard",
+    "read_blackboard",
+    "publish_agent_event",
+    // Phase 3
+    "request_deliberation",
+    "get_agent_learning_summary",
 ];
 
 const LEASING_ALLOWED_TOOLS: &[&str] = &[
@@ -59,6 +65,9 @@ const LEASING_ALLOWED_TOOLS: &[&str] = &[
     "auto_populate_lease_charges",
     "get_risk_radar",
     "forecast_demand",
+    "post_to_blackboard",
+    "read_blackboard",
+    "publish_agent_event",
 ];
 
 const MAINTENANCE_ALLOWED_TOOLS: &[&str] = &[
@@ -88,6 +97,9 @@ const MAINTENANCE_ALLOWED_TOOLS: &[&str] = &[
     "store_memory",
     "create_execution_plan",
     "search_knowledge",
+    "post_to_blackboard",
+    "read_blackboard",
+    "publish_agent_event",
 ];
 
 const FINANCE_ALLOWED_TOOLS: &[&str] = &[
@@ -129,6 +141,14 @@ const FINANCE_ALLOWED_TOOLS: &[&str] = &[
     "store_memory",
     "create_execution_plan",
     "search_knowledge",
+    "post_to_blackboard",
+    "read_blackboard",
+    "publish_agent_event",
+    // Phase 3
+    "get_property_twin",
+    "simulate_on_twin",
+    "optimize_channel_rates",
+    "get_channel_performance",
 ];
 
 pub const SUPERVISOR_SPEC: AgentSpec = AgentSpec {
@@ -308,12 +328,90 @@ Decision rules:
     allowed_tools: Some(FINANCE_ALLOWED_TOOLS),
 };
 
+const PORTFOLIO_MANAGER_ALLOWED_TOOLS: &[&str] = &[
+    // Core data
+    "list_tables",
+    "get_org_snapshot",
+    "list_rows",
+    "get_row",
+    "create_row",
+    "update_row",
+    "delete_row",
+    // Portfolio tools
+    "get_portfolio_kpis",
+    "get_property_comparison",
+    "simulate_investment_scenario",
+    "get_portfolio_trends",
+    "get_property_heatmap",
+    "generate_performance_digest",
+    "simulate_renovation_roi",
+    "simulate_stress_test",
+    // Digital twin
+    "get_property_twin",
+    "simulate_on_twin",
+    // Channel optimizer
+    "optimize_channel_rates",
+    "get_channel_performance",
+    // Intelligence
+    "get_agent_learning_summary",
+    "request_deliberation",
+    // Event bus
+    "publish_agent_event",
+    // Blackboard
+    "post_to_blackboard",
+    "read_blackboard",
+    // Memory
+    "recall_memory",
+    "store_memory",
+    "summarize_conversation",
+    // System
+    "evaluate_agent_response",
+    "get_agent_health",
+    "get_risk_radar",
+    "forecast_demand",
+    "create_execution_plan",
+    "search_knowledge",
+];
+
+pub const PORTFOLIO_MANAGER_SPEC: AgentSpec = AgentSpec {
+    slug: "portfolio-manager",
+    name: "Portfolio Strategy Agent",
+    description: "Portfolio-level reasoning, cross-property optimization, investment strategy, and channel management.",
+    system_prompt: r#"You are the Portfolio Strategy Agent for Casaora, a property-management platform in Paraguay. You think at the portfolio level — across all properties — to optimize overall returns.
+
+Your capabilities:
+1. PORTFOLIO ANALYSIS: Compare properties, identify underperformers, surface portfolio-wide trends.
+2. DIGITAL TWINS: Access live property state (health score, occupancy, ADR, risk flags) and run what-if simulations.
+3. CHANNEL OPTIMIZATION: Analyze per-channel performance and recommend rate allocations across OTAs.
+4. INVESTMENT STRATEGY: Model renovation ROI, stress-test portfolios, simulate investment scenarios.
+5. CROSS-PROPERTY REASONING: Recommend rebalancing (e.g., convert STR to mid-term), block dates for renovation, reallocate marketing spend.
+6. DELIBERATION: Initiate multi-agent deliberations when portfolio decisions affect multiple domains.
+
+Decision rules:
+- Recommendations only for actions with > $10K impact — these require human approval.
+- Always use digital twin data for current property state rather than querying raw tables.
+- Compare against market data and ML forecasts before recommending rate changes.
+- When a recommendation affects guest experience or maintenance, request a deliberation.
+- Format financial figures as PYG integers (no decimals).
+- Include confidence levels and supporting data for all recommendations."#,
+    max_steps: 10,
+    mutation_tools: &[
+        "create_row",
+        "update_row",
+        "publish_agent_event",
+        "store_memory",
+        "post_to_blackboard",
+    ],
+    allowed_tools: Some(PORTFOLIO_MANAGER_ALLOWED_TOOLS),
+};
+
 const AGENT_SPECS: &[AgentSpec] = &[
     SUPERVISOR_SPEC,
     GUEST_CONCIERGE_SPEC,
     LEASING_SPEC,
     MAINTENANCE_SPEC,
     FINANCE_SPEC,
+    PORTFOLIO_MANAGER_SPEC,
 ];
 
 pub fn get_agent_spec(slug: &str) -> Option<&'static AgentSpec> {

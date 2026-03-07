@@ -94,7 +94,7 @@ export function ChatsWorkspace({
             {/* Mobile back button */}
             <div className="absolute top-3 left-3 z-10 lg:hidden">
               <button
-                className="flex h-8 items-center gap-1.5 rounded-lg bg-background/80 px-2.5 font-medium text-[13px] text-muted-foreground backdrop-blur-sm transition-colors hover:text-foreground"
+                className="flex h-8 items-center gap-1.5 rounded-lg bg-background px-2.5 font-medium text-[13px] text-muted-foreground transition-colors hover:text-foreground"
                 onClick={() => setSelectedChatId(null)}
                 type="button"
               >

@@ -42,7 +42,13 @@ export function isRouteActive(
 
   if (pathname === href || pathname.startsWith(`${href}/`)) {
     const currentParams = new URLSearchParams(search);
-    return !(currentParams.has("status") || currentParams.has("segment"));
+    return !(
+      currentParams.has("status") ||
+      currentParams.has("segment") ||
+      currentParams.has("source") ||
+      currentParams.has("priority") ||
+      currentParams.has("q")
+    );
   }
   return false;
 }
@@ -52,12 +58,56 @@ export function resolvePrimaryTab(pathname: string): PrimaryTabKey {
     pathname.startsWith("/app/agent") ||
     pathname.startsWith("/app/agents") ||
     pathname.startsWith("/app/chats") ||
-    pathname.startsWith("/module/governance")
+    pathname.startsWith("/module/governance") ||
+    pathname.startsWith("/module/agent-dashboard") ||
+    pathname.startsWith("/module/knowledge")
   ) {
-    return "chat";
+    return "ai";
   }
-  if (pathname.startsWith("/module/messaging")) return "inbox";
-  return "home";
+  if (
+    pathname.startsWith("/module/action-center") ||
+    pathname.startsWith("/module/messaging") ||
+    pathname.startsWith("/module/notifications") ||
+    pathname.startsWith("/module/notification-rules")
+  ) {
+    return "conversations";
+  }
+  if (
+    pathname.startsWith("/module/applications") ||
+    pathname.startsWith("/module/listings") ||
+    pathname.startsWith("/module/leases") ||
+    pathname.startsWith("/module/reservations") ||
+    pathname.startsWith("/module/calendar") ||
+    pathname.startsWith("/module/reviews")
+  ) {
+    return "leasing";
+  }
+  if (
+    pathname.startsWith("/module/operations") ||
+    pathname.startsWith("/module/maintenance") ||
+    pathname.startsWith("/module/tasks") ||
+    pathname.startsWith("/module/guests")
+  ) {
+    return "operations";
+  }
+  if (
+    pathname.startsWith("/module/reports") ||
+    pathname.startsWith("/module/expenses") ||
+    pathname.startsWith("/module/collections") ||
+    pathname.startsWith("/module/owner-statements") ||
+    pathname.startsWith("/module/billing")
+  ) {
+    return "finance";
+  }
+  if (
+    pathname.startsWith("/app/portfolio") ||
+    pathname.startsWith("/module/properties") ||
+    pathname.startsWith("/module/units") ||
+    pathname.startsWith("/module/integrations")
+  ) {
+    return "portfolio";
+  }
+  return "today";
 }
 
 function resolveModuleLink(slug: string, locale: Locale): ResolvedLink | null {
@@ -73,13 +123,18 @@ function resolveModuleLink(slug: string, locale: Locale): ResolvedLink | null {
 
 export function resolveSections(
   locale: Locale,
-  role?: MemberRole | null
+  role?: MemberRole | null,
+  sectionKeys?: SectionKey[]
 ): ResolvedSection[] {
   const visibleSections = role
     ? SECTIONS.filter((s) => !s.roles || s.roles.includes(role))
     : SECTIONS;
+  const filteredSections =
+    sectionKeys && sectionKeys.length > 0
+      ? visibleSections.filter((section) => sectionKeys.includes(section.key))
+      : visibleSections;
 
-  const resolved = visibleSections
+  const resolved = filteredSections
     .map((section) => {
       const routeLinks = (section.routeLinks ?? [])
         .filter((link) =>
@@ -111,7 +166,7 @@ export function resolveSections(
   }
   const extras = MODULES.filter((module) => !knownSlugs.has(module.slug));
 
-  if (extras.length && (!role || role === "owner_admin")) {
+  if (!sectionKeys && extras.length && (!role || role === "owner_admin")) {
     resolved.push({
       key: "other",
       label: locale === "en-US" ? "Other" : "Otros",

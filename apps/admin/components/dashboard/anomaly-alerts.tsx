@@ -10,6 +10,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { buildAgentContextHref } from "@/lib/ai-context";
 import { useMounted } from "@/lib/hooks/use-mounted";
 import type { Locale } from "@/lib/i18n";
 import { useActiveLocale } from "@/lib/i18n/client";
@@ -174,7 +175,20 @@ export function AnomalyAlerts({
                       key={sa.label}
                       onClick={() => {
                         if (sa.agent_action) {
-                          window.location.href = `/app/agents?q=${encodeURIComponent(sa.agent_action)}`;
+                          window.location.href = buildAgentContextHref({
+                            prompt: sa.agent_action,
+                            context: {
+                              source: "operations",
+                              entityIds: [],
+                              filters: { workspace: "dashboard-anomalies" },
+                              summary:
+                                "Dashboard anomaly alert requiring operational review.",
+                              returnPath:
+                                typeof window !== "undefined"
+                                  ? window.location.pathname
+                                  : "/app",
+                            },
+                          });
                         }
                       }}
                       size="sm"

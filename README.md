@@ -122,7 +122,11 @@ Notes:
 
 ### Migrations
 
-- Apply SQL migrations from `db/migrations/*.sql`
+- Local/direct DB apply: `DATABASE_URL=... ./scripts/apply-prod-migration.sh`
+- AWS RDS apply via ECS: `./scripts/aws/apply-rds-migrations.sh`
+- One-time ledger baseline for an existing environment already at head:
+  `./scripts/aws/apply-rds-migrations.sh --baseline-existing`
+- Applied migration history is recorded in `schema_migrations`
 - Schema snapshot is maintained in `db/schema.sql`
 
 ## Local Development
@@ -171,6 +175,7 @@ Common local environment:
 - `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=...`
 - `NEXT_PUBLIC_CLERK_DOMAIN=clerk.casaora.co` (optional in local dev)
 - `NEXT_PUBLIC_CLERK_JS_URL=...` (optional in local dev)
+- `CLERK_SECRET_KEY=...` (required for protected SSR routes in production-like admin environments)
 
 ## Web App (`apps/web`)
 

@@ -2,6 +2,8 @@
 
 import { motion } from "motion/react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { buildAgentContextHref } from "@/lib/ai-context";
 import { EASING } from "@/lib/module-helpers";
 
 const CHIPS_EN = [
@@ -23,6 +25,7 @@ type OperationsChipsProps = {
 };
 
 export function OperationsChips({ isEn }: OperationsChipsProps) {
+  const pathname = usePathname();
   const chips = isEn ? CHIPS_EN : CHIPS_ES;
 
   return (
@@ -45,7 +48,18 @@ export function OperationsChips({ isEn }: OperationsChipsProps) {
         >
           <Link
             className="glass-inner inline-block rounded-full px-3.5 py-2 text-[12.5px] text-muted-foreground/70 transition-all hover:text-foreground hover:shadow-sm"
-            href={`/app/agents?prompt=${encodeURIComponent(chip)}`}
+            href={buildAgentContextHref({
+              prompt: chip,
+              context: {
+                source: "operations",
+                entityIds: [],
+                filters: { workspace: "operations" },
+                summary: isEn
+                  ? "Operations workspace with active tasks and maintenance."
+                  : "Espacio operativo con tareas y mantenimientos activos.",
+                returnPath: pathname,
+              },
+            })}
           >
             {chip}
           </Link>

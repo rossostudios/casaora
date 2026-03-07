@@ -1,186 +1,281 @@
-import { ArrowLeft01Icon } from "@hugeicons/core-free-icons";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-
 import { OrgAccessChanged } from "@/components/shell/org-access-changed";
-import { RecordRecent } from "@/components/shell/record-recent";
+import { ActionRail } from "@/components/ui/action-rail";
 import { Badge } from "@/components/ui/badge";
-import { buttonVariants } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Icon } from "@/components/ui/icon";
-import { loadRecordDetailData } from "@/lib/features/module-record/fetch-detail";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ListDetailLayout } from "@/components/ui/list-detail-layout";
+import { PageScaffold } from "@/components/ui/page-scaffold";
+import { buildAgentContextHref } from "@/lib/ai-context";
+import { errorMessage, isOrgMembershipError } from "@/lib/errors";
 import { getActiveLocale } from "@/lib/i18n/server";
-import {
-  getModuleDescription,
-  getModuleLabel,
-  MODULE_BY_SLUG,
-} from "@/lib/modules";
 import { getActiveOrgId } from "@/lib/org";
-import { cn } from "@/lib/utils";
-import { UnitAboutSection } from "./components/unit-about-section";
-import { UnitCapacityBento } from "./components/unit-capacity-bento";
-import { UnitRelationsSection } from "./components/unit-relations-section";
+import { fetchPortfolioUnitOverview } from "@/lib/portfolio-overview";
 
 type UnitRecordPageProps = {
   params: Promise<{ id: string }>;
 };
+
+function UnitSummaryCard({
+  label,
+  value,
+  detail,
+}: {
+  label: string;
+  value: string;
+  detail: string;
+}) {
+  return (
+    <Card className="border border-border/60 bg-card/80 shadow-sm">
+      <CardContent className="space-y-1 p-5">
+        <p className="font-medium text-[11px] text-muted-foreground uppercase tracking-[0.14em]">
+          {label}
+        </p>
+        <p className="font-semibold text-3xl tracking-tight">{value}</p>
+        <p className="text-muted-foreground text-sm">{detail}</p>
+      </CardContent>
+    </Card>
+  );
+}
 
 export default async function UnitRecordPage({ params }: UnitRecordPageProps) {
   const locale = await getActiveLocale();
   const isEn = locale === "en-US";
   const { id } = await params;
 
-  // We reuse loadRecordDetailData but specify slug="units"
-  const result = await loadRecordDetailData({ slug: "units", id, locale });
-
-  if (result.kind === "not_found") {
-    notFound();
-  }
-
-  if (result.kind === "error") {
-    if (result.membershipError) {
-      const activeOrgId = await getActiveOrgId();
-      return (
-        <OrgAccessChanged
-          description={
-            isEn
-              ? "This unit belongs to an organization you no longer have access to. Clear your current selection and switch to an organization where you are a member."
-              : "Esta unidad pertenece a una organización a la que no tienes acceso. Borra la selección actual y cámbiate a una organización de la que seas miembro."
-          }
-          orgId={activeOrgId}
-          title={isEn ? "No access to this unit" : "Sin acceso a esta unidad"}
-        />
-      );
+  let data;
+  try {
+    data = await fetchPortfolioUnitOverview(id);
+  } catch (err) {
+    const message = errorMessage(err);
+    if (message.includes("404")) {
+      notFound();
     }
-
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle>
-            {isEn ? "API request failed" : "Falló la solicitud a la API"}
-          </CardTitle>
-          <CardDescription>
-            {isEn
-              ? "Could not load unit details from the backend."
-              : "No se pudieron cargar los detalles de la unidad desde el backend."}
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-2 text-muted-foreground text-sm">
-          <p>
-            {isEn ? "Backend base URL" : "URL base del backend"}:{" "}
-            <code className="rounded bg-muted px-1 py-0.5">
-              {result.baseUrl}
-            </code>
-          </p>
-          {result.requestStatus ? (
-            <p className="break-words">
-              HTTP {result.requestStatus} for{" "}
-              <code className="rounded bg-muted px-1 py-0.5">/units</code>
-            </p>
-          ) : null}
-          <p className="break-words">{result.message}</p>
-        </CardContent>
-      </Card>
-    );
+    if (isOrgMembershipError(message)) {
+      const activeOrgId = await getActiveOrgId();
+      return <OrgAccessChanged orgId={activeOrgId} />;
+    }
+    throw err;
   }
 
-  const moduleDef = MODULE_BY_SLUG.get("units");
-  const moduleLabel = moduleDef
-    ? getModuleLabel(moduleDef, locale)
-    : isEn
-      ? "Units"
-      : "Unidades";
-  const moduleDescription = moduleDef
-    ? getModuleDescription(moduleDef, locale)
-    : isEn
-      ? "Rentable spaces, rooms, or aparments."
-      : "Espacios, habitaciones o apartamentos rentables.";
-
-  const { data } = result;
-  const href = `/module/units/${data.recordId}`;
-
-  // Use the specific API data returned. Note: `title` is generated inside loadRecordDetailData
-  const unitCode = String(data.record.code || data.record.id || "");
-  const propertyName = String(data.record.property_name || "");
+  const unitLabel = [data.unit.code, data.unit.name].filter(Boolean).join(" · ");
+  const askAiHref = buildAgentContextHref({
+    prompt: isEn
+      ? `What should I do next for unit ${String(data.unit.code ?? id)}?`
+      : `¿Qué debería hacer ahora con la unidad ${String(data.unit.code ?? id)}?`,
+    context: {
+      source: "units",
+      entityIds: [id],
+      filters: {},
+      summary: isEn
+        ? `${String(data.unit.code ?? id)} is in ${data.parentProperty.name}. Lease state ${data.summary.leaseState}, maintenance risk ${data.summary.maintenanceRisk}.`
+        : `${String(data.unit.code ?? id)} está en ${data.parentProperty.name}. Estado ${data.summary.leaseState}, riesgo ${data.summary.maintenanceRisk}.`,
+      returnPath: `/module/units/${id}`,
+    },
+  });
 
   return (
-    <div>
-      <div className="space-y-6">
-        <RecordRecent href={href} label={data.title} meta={moduleLabel} />
+    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
+      <PageScaffold
+        description={data.parentProperty.name}
+        eyebrow={isEn ? "Portfolio Unit" : "Unidad del portafolio"}
+        title={unitLabel || (isEn ? "Unit" : "Unidad")}
+        actions={
+          <>
+            <Button asChild variant="outline">
+              <Link href={data.parentProperty.unitsHref}>
+                {isEn ? "Back to units" : "Volver a unidades"}
+              </Link>
+            </Button>
+            <Button asChild variant="outline">
+              <Link href={askAiHref}>{isEn ? "Ask AI" : "Preguntar a IA"}</Link>
+            </Button>
+            <Button asChild>
+              <Link href={`${data.parentProperty.unitsHref}&create=1`}>
+                {isEn ? "Create sibling unit" : "Crear unidad hermana"}
+              </Link>
+            </Button>
+          </>
+        }
+      >
+        <div className="flex flex-wrap gap-2">
+          <Badge variant="outline">{String(data.unit.code ?? id)}</Badge>
+          {data.unit.condition_status ? (
+            <Badge variant="outline">{String(data.unit.condition_status)}</Badge>
+          ) : null}
+          <Badge variant="outline">{data.summary.leaseState}</Badge>
+        </div>
 
-        <div className="relative rounded-3xl pt-2 pb-4">
-          <div className="relative grid gap-8 px-2 md:px-4">
-            <div className="flex flex-col justify-between space-y-8">
-              <div className="flex flex-wrap items-start justify-between gap-4">
-                <div className="space-y-3">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Link
-                      className={cn(
-                        buttonVariants({ variant: "ghost", size: "sm" }),
-                        "h-7 rounded-full px-3 font-semibold text-[10px] text-muted-foreground uppercase tracking-widest transition-all hover:bg-muted/50 hover:text-foreground"
-                      )}
-                      href="/module/units"
-                    >
-                      <Icon className="mr-1" icon={ArrowLeft01Icon} size={12} />
-                      {isEn ? "Back" : "Volver"}
+        <div className="grid gap-4 md:grid-cols-4">
+          <UnitSummaryCard
+            detail={isEn ? "lease state" : "estado del contrato"}
+            label={isEn ? "Lease" : "Contrato"}
+            value={data.summary.leaseState}
+          />
+          <UnitSummaryCard
+            detail={isEn ? "maintenance and turn risk" : "riesgo operativo"}
+            label={isEn ? "Risk" : "Riesgo"}
+            value={data.summary.maintenanceRisk}
+          />
+          <UnitSummaryCard
+            detail={isEn ? "open work items" : "pendientes abiertos"}
+            label={isEn ? "Tasks" : "Tareas"}
+            value={String(data.summary.openTasks)}
+          />
+          <UnitSummaryCard
+            detail={isEn ? "collections past due" : "cobros vencidos"}
+            label={isEn ? "Overdue" : "Vencidos"}
+            value={String(data.summary.overdueCollections)}
+          />
+        </div>
+
+        <ListDetailLayout
+          aside={
+            <ActionRail
+              description={
+                isEn
+                  ? "Keep the unit workflow tied to its parent property and sibling inventory."
+                  : "Mantén el flujo de la unidad ligado a la propiedad madre y a las unidades hermanas."
+              }
+              title={isEn ? "Unit context" : "Contexto"}
+            >
+              <div className="rounded-xl border border-border/60 bg-muted/20 p-3">
+                <p className="font-medium text-sm">{data.parentProperty.name}</p>
+                <p className="mt-1 text-muted-foreground text-xs">
+                  {data.parentProperty.occupiedUnits}/{data.parentProperty.totalUnits}{" "}
+                  {isEn ? "units occupied" : "unidades ocupadas"}
+                </p>
+                <div className="mt-3 flex gap-2">
+                  <Button asChild size="sm" variant="outline">
+                    <Link href={data.parentProperty.href}>
+                      {isEn ? "Open property" : "Abrir propiedad"}
                     </Link>
-                    <Badge
-                      className="h-7 rounded-full border-border/30 bg-muted/30 px-3 font-semibold text-[10px] text-muted-foreground uppercase tracking-widest backdrop-blur-sm"
-                      variant="outline"
-                    >
-                      {moduleLabel}
-                    </Badge>
-                    <Badge className="h-7 rounded-full border-primary/20 bg-primary/10 px-3 font-semibold text-[10px] text-primary uppercase tracking-widest backdrop-blur-sm">
-                      {unitCode}
-                    </Badge>
-                  </div>
-
-                  <div className="space-y-1">
-                    <h2 className="font-bold text-3xl text-foreground tracking-tight sm:text-4xl">
-                      {data.title}
-                    </h2>
-                    <p className="max-w-2xl font-medium text-muted-foreground text-sm leading-relaxed">
-                      {propertyName ? (
-                        <>
-                          <Link
-                            className="font-semibold text-primary/80 underline-offset-4 transition-colors hover:text-primary hover:underline"
-                            href={`/module/properties/${data.record.property_id}`}
-                          >
-                            {propertyName}
-                          </Link>
-                          {" · "}
-                        </>
-                      ) : null}
-                      {moduleDescription}
-                    </p>
-                  </div>
+                  </Button>
+                  <Button asChild size="sm">
+                    <Link href={data.parentProperty.unitsHref}>
+                      {isEn ? "View all units" : "Ver unidades"}
+                    </Link>
+                  </Button>
                 </div>
               </div>
+
+              {data.siblings.slice(0, 5).map((sibling) => (
+                <div
+                  className="rounded-xl border border-border/60 bg-muted/20 p-3"
+                  key={sibling.id}
+                >
+                  <p className="font-medium text-sm">
+                    {[sibling.code, sibling.name].filter(Boolean).join(" · ")}
+                  </p>
+                  <p className="mt-1 text-muted-foreground text-xs">
+                    {sibling.leaseState}
+                    {sibling.conditionStatus ? ` · ${sibling.conditionStatus}` : ""}
+                  </p>
+                  <Button asChild className="mt-3 w-full justify-start" size="sm" variant="outline">
+                    <Link href={sibling.primaryHref}>
+                      {isEn ? "Open sibling" : "Abrir unidad"}
+                    </Link>
+                  </Button>
+                </div>
+              ))}
+            </ActionRail>
+          }
+          primary={
+            <div className="space-y-6">
+              <Card className="border border-border/60 bg-card/80 shadow-sm">
+                <CardHeader>
+                  <CardTitle>{isEn ? "Active lease" : "Contrato activo"}</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {data.activeLease ? (
+                    <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border/60 p-3">
+                      <div>
+                        <p className="font-medium text-sm">{data.activeLease.tenantName}</p>
+                        <p className="text-muted-foreground text-xs">
+                          {data.activeLease.currency} {data.activeLease.monthlyRent}
+                          {data.activeLease.endsOn ? ` · ${data.activeLease.endsOn}` : ""}
+                        </p>
+                      </div>
+                      <Button asChild size="sm" variant="outline">
+                        <Link href={data.activeLease.href}>{isEn ? "Open lease" : "Abrir contrato"}</Link>
+                      </Button>
+                    </div>
+                  ) : (
+                    <p className="text-muted-foreground text-sm">
+                      {isEn ? "No active lease is linked to this unit." : "No hay un contrato activo vinculado a esta unidad."}
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card className="border border-border/60 bg-card/80 shadow-sm">
+                <CardHeader>
+                  <CardTitle>{isEn ? "Upcoming reservations" : "Reservas próximas"}</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {data.upcomingReservations.length === 0 ? (
+                    <p className="text-muted-foreground text-sm">
+                      {isEn ? "No upcoming reservations." : "No hay reservas próximas."}
+                    </p>
+                  ) : (
+                    data.upcomingReservations.map((reservation) => (
+                      <div
+                        className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border/60 p-3"
+                        key={reservation.id}
+                      >
+                        <div>
+                          <p className="font-medium text-sm">{reservation.status}</p>
+                          <p className="text-muted-foreground text-xs">
+                            {[reservation.checkInDate, reservation.checkOutDate]
+                              .filter(Boolean)
+                              .join(" → ")}
+                          </p>
+                        </div>
+                        <Button asChild size="sm" variant="outline">
+                          <Link href={reservation.href}>{isEn ? "Open" : "Abrir"}</Link>
+                        </Button>
+                      </div>
+                    ))
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card className="border border-border/60 bg-card/80 shadow-sm">
+                <CardHeader>
+                  <CardTitle>{isEn ? "Open tasks" : "Tareas abiertas"}</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {data.openTasks.length === 0 ? (
+                    <p className="text-muted-foreground text-sm">
+                      {isEn ? "No open tasks on this unit." : "No hay tareas abiertas en esta unidad."}
+                    </p>
+                  ) : (
+                    data.openTasks.map((task) => (
+                      <div
+                        className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border/60 p-3"
+                        key={task.id}
+                      >
+                        <div>
+                          <p className="font-medium text-sm">
+                            {task.title || (isEn ? "Task" : "Tarea")}
+                          </p>
+                          <p className="text-muted-foreground text-xs">
+                            {[task.status, task.priority].filter(Boolean).join(" · ")}
+                          </p>
+                        </div>
+                        <Button asChild size="sm" variant="outline">
+                          <Link href={task.href}>{isEn ? "Open" : "Abrir"}</Link>
+                        </Button>
+                      </div>
+                    ))
+                  )}
+                </CardContent>
+              </Card>
             </div>
-          </div>
-        </div>
-
-        <UnitCapacityBento isEn={isEn} locale={locale} record={data.record} />
-
-        <div className="mt-4 grid grid-cols-1 gap-8 lg:grid-cols-3">
-          <div className="lg:col-span-2">
-            <UnitAboutSection
-              isEn={isEn}
-              locale={locale}
-              record={data.record}
-            />
-          </div>
-          <div className="lg:col-span-1">
-            <UnitRelationsSection isEn={isEn} links={data.relatedLinks} />
-          </div>
-        </div>
-      </div>
+          }
+        />
+      </PageScaffold>
     </div>
   );
 }

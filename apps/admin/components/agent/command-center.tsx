@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import {
   ArrowUp02Icon,
   Building01Icon,
@@ -11,6 +11,8 @@ import {
   Clock01Icon,
   Globe02Icon,
   InformationCircleIcon,
+  Mic01Icon,
+  MicOff01Icon,
   Money01Icon,
   PlusSignIcon,
   Settings02Icon,
@@ -31,6 +33,8 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
+import { useOrgEventStream } from "@/lib/hooks/use-org-event-stream";
+import { useVoiceChat } from "./use-voice-chat";
 import {
   type AgentStatus,
   type ArrivalDeparture,
@@ -102,6 +106,16 @@ function SpotlightInput({
   const inputRef = useRef<HTMLInputElement>(null);
   const chips = isEn ? PROMPT_CHIPS_EN : PROMPT_CHIPS_ES;
 
+  const handleVoiceSend = useCallback(
+    (text: string) => {
+      const trimmed = text.trim();
+      if (trimmed) onSend(trimmed);
+    },
+    [onSend],
+  );
+
+  const voice = useVoiceChat(handleVoiceSend);
+
   function handleSubmit() {
     const trimmed = value.trim();
     if (!trimmed) return;
@@ -118,27 +132,52 @@ function SpotlightInput({
         )}
       >
         <Icon className="shrink-0 text-muted-foreground/60" icon={SparklesIcon} size={18} />
-        <input
-          className="min-w-0 flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground/50 outline-none"
-          onChange={(e) => setValue(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey) {
-              e.preventDefault();
-              handleSubmit();
+        {voice.isListening ? (
+          <div className="min-w-0 flex-1 flex items-center gap-2">
+            <span className="relative flex h-2 w-2">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-400 opacity-75" />
+              <span className="relative inline-flex h-2 w-2 rounded-full bg-red-500" />
+            </span>
+            <span className="text-sm text-muted-foreground/70 truncate">
+              {voice.transcript || (isEn ? "Listening..." : "Escuchando...")}
+            </span>
+          </div>
+        ) : (
+          <input
+            className="min-w-0 flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground/50 outline-none"
+            onChange={(e) => setValue(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                handleSubmit();
+              }
+            }}
+            placeholder={
+              isEn
+                ? "What would you like Casaora AI to handle today?"
+                : "¿Qué te gustaría que Casaora IA maneje hoy?"
             }
-          }}
-          placeholder={
-            isEn
-              ? "What would you like Casaora AI to handle today?"
-              : "¿Qué te gustaría que Casaora IA maneje hoy?"
-          }
-          ref={inputRef}
-          type="text"
-          value={value}
-        />
+            ref={inputRef}
+            type="text"
+            value={value}
+          />
+        )}
+        {voice.isSupported && (
+          <Button
+            className={cn(
+              "h-8 w-8 shrink-0 rounded-lg transition-colors",
+              voice.voiceModeActive && "bg-red-500/10 text-red-500 hover:bg-red-500/20",
+            )}
+            onClick={voice.toggleVoiceMode}
+            size="icon-xs"
+            variant="ghost"
+          >
+            <Icon icon={voice.voiceModeActive ? MicOff01Icon : Mic01Icon} size={16} />
+          </Button>
+        )}
         <Button
           className="h-8 w-8 shrink-0 rounded-lg"
-          disabled={!value.trim()}
+          disabled={!value.trim() && !voice.isListening}
           onClick={handleSubmit}
           size="icon-xs"
         >
@@ -307,6 +346,9 @@ export function CommandCenter({
 }: CommandCenterProps) {
   const isEn = locale === "en-US";
   const stats = initialStats as unknown as Stats;
+
+  // Real-time event stream — invalidates query caches on new events
+  useOrgEventStream({ orgId: orgId ?? null });
 
   const agents = stats.agents ?? { total: 0, active: 0 };
   const approvals = stats.approvals_24h ?? {};

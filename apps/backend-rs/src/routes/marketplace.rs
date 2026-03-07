@@ -7,14 +7,13 @@ use axum::{
 use chrono::{NaiveDate, Utc};
 use serde::Deserialize;
 use serde_json::{json, Map, Value};
-use sqlx::{Postgres, QueryBuilder, Row};
 
 use crate::{
     auth::require_user_id,
     error::{AppError, AppResult},
     repository::table_service::{count_rows, create_row, get_row, list_rows, update_row},
     schemas::{
-        clamp_limit_in_range, validate_input, CreateListingInput, ListingPath, ListingsQuery,
+        validate_input, CreateListingInput, ListingPath, ListingsOverviewQuery, ListingsQuery,
         MarketplaceInquiryInput, PublicListingApplicationInput, PublicListingSlugPath,
         PublicListingsQuery, SlugAvailableQuery, UpdateListingInput,
     },
@@ -22,6 +21,11 @@ use crate::{
         alerting::write_alert_event,
         analytics::write_analytics_event,
         audit::write_audit_log,
+        listings::{
+            attach_listing_fee_lines, build_listing_detail_overview, build_listing_preview,
+            build_listings_overview, get_listing_row_with_context, get_public_listing_row_by_slug,
+            list_public_listing_rows, public_listing_shape,
+        },
         pricing::{compute_pricing_totals, missing_required_fee_types, normalize_fee_lines},
         readiness::{compute_readiness_report, readiness_summary},
     },
@@ -40,6 +44,7 @@ pub fn router() -> axum::Router<AppState> {
             "/listings",
             axum::routing::get(list_listings).post(create_listing),
         )
+        .route("/listings/overview", axum::routing::get(listings_overview))
         .route(
             "/listings/slug-available",
             axum::routing::get(slug_available),
@@ -47,6 +52,14 @@ pub fn router() -> axum::Router<AppState> {
         .route(
             "/listings/{listing_id}",
             axum::routing::get(get_listing).patch(update_listing),
+        )
+        .route(
+            "/listings/{listing_id}/overview",
+            axum::routing::get(get_listing_overview),
+        )
+        .route(
+            "/listings/{listing_id}/preview",
+            axum::routing::get(get_listing_preview),
         )
         .route(
             "/listings/{listing_id}/readiness",
@@ -87,6 +100,17 @@ pub fn router() -> axum::Router<AppState> {
                 .post(create_saved_search)
                 .delete(delete_saved_search),
         )
+}
+
+async fn listings_overview(
+    State(state): State<AppState>,
+    Query(query): Query<ListingsOverviewQuery>,
+    headers: HeaderMap,
+) -> AppResult<Json<Value>> {
+    let user_id = require_user_id(&state, &headers).await?;
+    assert_org_member(&state, &user_id, &query.org_id).await?;
+    let pool = db_pool(&state)?;
+    Ok(Json(build_listings_overview(&state, pool, &query).await?))
 }
 
 async fn list_listings(
@@ -170,7 +194,7 @@ async fn list_listings(
         });
     }
 
-    let mut attached = attach_fee_lines(pool, rows).await?;
+    let mut attached = attach_listing_fee_lines(pool, rows).await?;
 
     // Inject readiness into each row
     for row in &mut attached {
@@ -190,6 +214,23 @@ async fn list_listings(
         "page": page,
         "per_page": per_page,
     })))
+}
+
+async fn get_listing_overview(
+    State(state): State<AppState>,
+    Path(path): Path<ListingPath>,
+    headers: HeaderMap,
+) -> AppResult<Json<Value>> {
+    let user_id = require_user_id(&state, &headers).await?;
+    let pool = db_pool(&state)?;
+
+    let record = get_listing_row_with_context(pool, &path.listing_id).await?;
+    let org_id = value_str(&record, "organization_id");
+    assert_org_member(&state, &user_id, &org_id).await?;
+
+    Ok(Json(
+        build_listing_detail_overview(&state, pool, &path.listing_id).await?,
+    ))
 }
 
 async fn create_listing(
@@ -335,7 +376,7 @@ async fn create_listing(
     .await;
     state.public_listings_cache.clear().await;
 
-    let mut rows = attach_fee_lines(pool, vec![created]).await?;
+    let mut rows = attach_listing_fee_lines(pool, vec![created]).await?;
     let item = rows.pop().unwrap_or_else(|| Value::Object(Map::new()));
     Ok((axum::http::StatusCode::CREATED, Json(item)))
 }
@@ -352,9 +393,26 @@ async fn get_listing(
     let org_id = value_str(&record, "organization_id");
     assert_org_member(&state, &user_id, &org_id).await?;
 
-    let mut rows = attach_fee_lines(pool, vec![record]).await?;
+    let mut rows = attach_listing_fee_lines(pool, vec![record]).await?;
     Ok(Json(
         rows.pop().unwrap_or_else(|| Value::Object(Map::new())),
+    ))
+}
+
+async fn get_listing_preview(
+    State(state): State<AppState>,
+    Path(path): Path<ListingPath>,
+    headers: HeaderMap,
+) -> AppResult<Json<Value>> {
+    let user_id = require_user_id(&state, &headers).await?;
+    let pool = db_pool(&state)?;
+
+    let record = get_row(pool, "listings", &path.listing_id, "id").await?;
+    let org_id = value_str(&record, "organization_id");
+    assert_org_member(&state, &user_id, &org_id).await?;
+
+    Ok(Json(
+        build_listing_preview(&state, pool, &path.listing_id).await?,
     ))
 }
 
@@ -490,7 +548,7 @@ async fn update_listing(
         sync_linked_listing(pool, &updated, true).await;
     }
 
-    let mut rows = attach_fee_lines(pool, vec![updated]).await?;
+    let mut rows = attach_listing_fee_lines(pool, vec![updated]).await?;
     Ok(Json(
         rows.pop().unwrap_or_else(|| Value::Object(Map::new())),
     ))
@@ -531,7 +589,7 @@ async fn publish_listing(
     .await;
     state.public_listings_cache.clear().await;
 
-    let mut rows = attach_fee_lines(pool, vec![updated]).await?;
+    let mut rows = attach_listing_fee_lines(pool, vec![updated]).await?;
     Ok(Json(
         rows.pop().unwrap_or_else(|| Value::Object(Map::new())),
     ))
@@ -551,7 +609,7 @@ async fn list_public_listings(
             let rows = list_public_listing_rows(pool, &query).await?;
             let shaped = rows
                 .iter()
-                .map(|row| public_shape(&state, row))
+                .map(|row| public_listing_shape(&state, row))
                 .collect::<Vec<_>>();
             Ok(json!({ "data": shaped }))
         })
@@ -560,159 +618,15 @@ async fn list_public_listings(
     Ok(Json(response))
 }
 
-async fn list_public_listing_rows(
-    pool: &sqlx::PgPool,
-    query: &PublicListingsQuery,
-) -> AppResult<Vec<Value>> {
-    let mut builder = QueryBuilder::<Postgres>::new(
-        "SELECT row_to_json(t) AS row FROM (
-            SELECT l.*, o.name AS organization_name, o.logo_url AS organization_logo_url, o.brand_color AS organization_brand_color, u.full_name AS host_name
-            FROM listings l
-            LEFT JOIN organizations o ON l.organization_id = o.id
-            LEFT JOIN app_users u ON o.owner_user_id = u.id
-            WHERE l.is_published = true",
-    );
-
-    if let Some(org_id) = non_empty_opt(query.org_id.as_deref()) {
-        let parsed = uuid::Uuid::parse_str(&org_id)
-            .map_err(|_| AppError::BadRequest("Invalid org_id format.".to_string()))?;
-        builder.push(" AND l.organization_id = ").push_bind(parsed);
-    }
-    if let Some(city) = non_empty_opt(query.city.as_deref()) {
-        builder
-            .push(" AND lower(l.city) = ")
-            .push_bind(city.to_ascii_lowercase());
-    }
-    if let Some(neighborhood) = non_empty_opt(query.neighborhood.as_deref()) {
-        builder
-            .push(" AND lower(coalesce(l.neighborhood, '')) LIKE ")
-            .push_bind(format!("%{}%", neighborhood.to_ascii_lowercase()));
-    }
-    if let Some(q) = non_empty_opt(query.q.as_deref()) {
-        let needle = format!("%{}%", q.to_ascii_lowercase());
-        builder
-            .push(" AND (lower(coalesce(l.title, '')) LIKE ")
-            .push_bind(needle.clone())
-            .push(" OR lower(coalesce(l.summary, '')) LIKE ")
-            .push_bind(needle.clone())
-            .push(" OR lower(coalesce(l.neighborhood, '')) LIKE ")
-            .push_bind(needle.clone())
-            .push(" OR lower(coalesce(l.description, '')) LIKE ")
-            .push_bind(needle)
-            .push(")");
-    }
-    if let Some(property_type) = non_empty_opt(query.property_type.as_deref()) {
-        builder
-            .push(" AND lower(coalesce(l.property_type, '')) = ")
-            .push_bind(property_type.to_ascii_lowercase());
-    }
-    if let Some(furnished) = query.furnished {
-        builder.push(" AND l.furnished = ").push_bind(furnished);
-    }
-    if let Some(pet_policy) = non_empty_opt(query.pet_policy.as_deref()) {
-        builder
-            .push(" AND lower(coalesce(l.pet_policy, '')) LIKE ")
-            .push_bind(format!("%{}%", pet_policy.to_ascii_lowercase()));
-    }
-    if let Some(min_parking) = query.min_parking {
-        builder
-            .push(" AND coalesce(l.parking_spaces, 0) >= ")
-            .push_bind(min_parking);
-    }
-    if let Some(min_bedrooms) = query.min_bedrooms {
-        builder
-            .push(" AND coalesce(l.bedrooms, 0) >= ")
-            .push_bind(min_bedrooms);
-    }
-    if let Some(min_bathrooms) = query.min_bathrooms {
-        builder
-            .push(" AND coalesce(l.bathrooms, 0) >= ")
-            .push_bind(min_bathrooms);
-    }
-    if let Some(max_lease_months) = query.max_lease_months {
-        builder
-            .push(" AND coalesce(l.minimum_lease_months, 0) <= ")
-            .push_bind(max_lease_months);
-    }
-    if let Some(min_monthly) = query.min_monthly {
-        builder
-            .push(" AND coalesce(l.monthly_recurring_total, 0) >= ")
-            .push_bind(min_monthly);
-    }
-    if let Some(max_monthly) = query.max_monthly {
-        builder
-            .push(" AND coalesce(l.monthly_recurring_total, 0) <= ")
-            .push_bind(max_monthly);
-    }
-    if let Some(min_move_in) = query.min_move_in {
-        builder
-            .push(" AND coalesce(l.total_move_in, 0) >= ")
-            .push_bind(min_move_in);
-    }
-    if let Some(max_move_in) = query.max_move_in {
-        builder
-            .push(" AND coalesce(l.total_move_in, 0) <= ")
-            .push_bind(max_move_in);
-    }
-
-    builder
-        .push(" ORDER BY l.published_at DESC NULLS LAST, l.created_at DESC LIMIT ")
-        .push_bind(clamp_limit_in_range(query.limit, 1, 200));
-
-    builder.push(") t");
-
-    let rows = builder.build().fetch_all(pool).await.map_err(|err| {
-        tracing::error!(db_error = %err, "Failed listing query");
-        AppError::from_database_error(&err, "Database operation failed.")
-    })?;
-
-    Ok(rows
-        .into_iter()
-        .filter_map(|row| row.try_get::<Option<Value>, _>("row").ok().flatten())
-        .collect())
-}
-
 async fn get_public_listing(
     State(state): State<AppState>,
     Path(path): Path<PublicListingSlugPath>,
 ) -> AppResult<Json<Value>> {
     ensure_marketplace_public_enabled(&state)?;
     let pool = db_pool(&state)?;
-
-    let query = "SELECT row_to_json(t) AS row FROM (
-        SELECT l.*, o.name AS organization_name, o.logo_url AS organization_logo_url, o.brand_color AS organization_brand_color, o.org_slug AS organization_slug, o.booking_enabled AS booking_enabled, u.full_name AS host_name
-        FROM listings l
-        LEFT JOIN organizations o ON l.organization_id = o.id
-        LEFT JOIN app_users u ON o.owner_user_id = u.id
-        WHERE l.public_slug = $1 AND l.is_published = true
-    ) t LIMIT 1";
-
-    let db_row = sqlx::query(query)
-        .bind(path.slug.clone())
-        .fetch_optional(pool)
-        .await
-        .map_err(|err| {
-            tracing::error!(db_error = %err, "Failed listing query");
-            AppError::from_database_error(&err, "Database operation failed.")
-        })?;
-
-    let rows = match db_row {
-        Some(row) => {
-            if let Some(json_val) = row.try_get::<Option<Value>, _>("row").ok().flatten() {
-                vec![json_val]
-            } else {
-                vec![]
-            }
-        }
-        None => vec![],
-    };
-
-    if rows.is_empty() {
-        return Err(AppError::NotFound("Public listing not found.".to_string()));
-    }
-
-    let mut attached = attach_fee_lines(pool, rows).await?;
-    let shaped = public_shape(
+    let row = get_public_listing_row_by_slug(pool, &path.slug, false).await?;
+    let mut attached = attach_listing_fee_lines(pool, vec![row]).await?;
+    let shaped = public_listing_shape(
         &state,
         &attached.pop().unwrap_or_else(|| Value::Object(Map::new())),
     );
@@ -1370,7 +1284,7 @@ async fn listing_readiness(
     let org_id = value_str(&record, "organization_id");
     assert_org_member(&state, &user_id, &org_id).await?;
 
-    let mut rows = attach_fee_lines(pool, vec![record]).await?;
+    let mut rows = attach_listing_fee_lines(pool, vec![record]).await?;
     let row = rows.pop().unwrap_or_else(|| Value::Object(Map::new()));
     let obj = row.as_object().cloned().unwrap_or_default();
     let report = compute_readiness_report(&obj);
@@ -1493,220 +1407,6 @@ async fn sync_linked_listing(pool: &sqlx::PgPool, row: &Value, is_publish_state:
     let _ = update_row(pool, "integrations", &integration_id, &patch, "id").await;
 }
 
-async fn attach_fee_lines(pool: &sqlx::PgPool, rows: Vec<Value>) -> AppResult<Vec<Value>> {
-    if rows.is_empty() {
-        return Ok(rows);
-    }
-
-    let row_ids = rows
-        .iter()
-        .filter_map(Value::as_object)
-        .filter_map(|row| row.get("id"))
-        .filter_map(Value::as_str)
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .map(ToOwned::to_owned)
-        .collect::<std::collections::HashSet<_>>()
-        .into_iter()
-        .collect::<Vec<_>>();
-    if row_ids.is_empty() {
-        return Ok(rows);
-    }
-
-    let unit_ids = rows
-        .iter()
-        .filter_map(Value::as_object)
-        .filter_map(|row| row.get("unit_id"))
-        .filter_map(Value::as_str)
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .map(ToOwned::to_owned)
-        .collect::<std::collections::HashSet<_>>()
-        .into_iter()
-        .collect::<Vec<_>>();
-    let property_ids = rows
-        .iter()
-        .filter_map(Value::as_object)
-        .filter_map(|row| row.get("property_id"))
-        .filter_map(Value::as_str)
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .map(ToOwned::to_owned)
-        .collect::<std::collections::HashSet<_>>()
-        .into_iter()
-        .collect::<Vec<_>>();
-
-    let row_ids_for_query = row_ids.clone();
-    let unit_ids_for_query = unit_ids.clone();
-    let property_ids_for_query = property_ids.clone();
-    let (fee_lines, units, properties) = tokio::try_join!(
-        async move {
-            list_rows(
-                pool,
-                "listing_fee_lines",
-                Some(&json_map(&[(
-                    "listing_id",
-                    Value::Array(
-                        row_ids_for_query
-                            .iter()
-                            .cloned()
-                            .map(Value::String)
-                            .collect(),
-                    ),
-                )])),
-                std::cmp::max(200, (row_ids_for_query.len() as i64) * 20),
-                0,
-                "sort_order",
-                true,
-            )
-            .await
-        },
-        async move {
-            if unit_ids_for_query.is_empty() {
-                Ok(Vec::new())
-            } else {
-                list_rows(
-                    pool,
-                    "units",
-                    Some(&json_map(&[(
-                        "id",
-                        Value::Array(
-                            unit_ids_for_query
-                                .iter()
-                                .cloned()
-                                .map(Value::String)
-                                .collect(),
-                        ),
-                    )])),
-                    std::cmp::max(200, unit_ids_for_query.len() as i64),
-                    0,
-                    "created_at",
-                    false,
-                )
-                .await
-            }
-        },
-        async move {
-            if property_ids_for_query.is_empty() {
-                Ok(Vec::new())
-            } else {
-                list_rows(
-                    pool,
-                    "properties",
-                    Some(&json_map(&[(
-                        "id",
-                        Value::Array(
-                            property_ids_for_query
-                                .iter()
-                                .cloned()
-                                .map(Value::String)
-                                .collect(),
-                        ),
-                    )])),
-                    std::cmp::max(200, property_ids_for_query.len() as i64),
-                    0,
-                    "created_at",
-                    false,
-                )
-                .await
-            }
-        }
-    )?;
-
-    let mut grouped: std::collections::HashMap<String, Vec<Value>> =
-        std::collections::HashMap::new();
-    for line in fee_lines {
-        let key = value_str(&line, "listing_id");
-        if key.is_empty() {
-            continue;
-        }
-        grouped.entry(key).or_default().push(line);
-    }
-
-    let mut unit_name: std::collections::HashMap<String, String> = std::collections::HashMap::new();
-    for unit in units {
-        let id = value_str(&unit, "id");
-        if id.is_empty() {
-            continue;
-        }
-        unit_name.insert(id, value_str(&unit, "name"));
-    }
-
-    let mut property_name: std::collections::HashMap<String, String> =
-        std::collections::HashMap::new();
-    for property in properties {
-        let id = value_str(&property, "id");
-        if id.is_empty() {
-            continue;
-        }
-        property_name.insert(id, value_str(&property, "name"));
-    }
-
-    let mut attached = Vec::with_capacity(rows.len());
-    for mut row in rows {
-        if let Some(obj) = row.as_object_mut() {
-            let listing_id = obj
-                .get("id")
-                .and_then(Value::as_str)
-                .map(str::trim)
-                .filter(|value| !value.is_empty())
-                .map(ToOwned::to_owned)
-                .unwrap_or_default();
-            let lines = grouped.get(&listing_id).cloned().unwrap_or_default();
-            let totals = compute_pricing_totals(&lines);
-            let missing = missing_required_fee_types(&lines);
-
-            obj.insert("fee_lines".to_string(), Value::Array(lines));
-            obj.insert("total_move_in".to_string(), json!(totals.total_move_in));
-            obj.insert(
-                "monthly_recurring_total".to_string(),
-                json!(totals.monthly_recurring_total),
-            );
-            obj.insert(
-                "fee_breakdown_complete".to_string(),
-                Value::Bool(missing.is_empty()),
-            );
-            obj.insert(
-                "missing_required_fee_lines".to_string(),
-                Value::Array(missing.into_iter().map(Value::String).collect()),
-            );
-
-            if let Some(property_id) = obj
-                .get("property_id")
-                .and_then(Value::as_str)
-                .map(str::trim)
-                .filter(|value| !value.is_empty())
-            {
-                obj.insert(
-                    "property_name".to_string(),
-                    property_name
-                        .get(property_id)
-                        .cloned()
-                        .map(Value::String)
-                        .unwrap_or(Value::Null),
-                );
-            }
-            if let Some(unit_id) = obj
-                .get("unit_id")
-                .and_then(Value::as_str)
-                .map(str::trim)
-                .filter(|value| !value.is_empty())
-            {
-                obj.insert(
-                    "unit_name".to_string(),
-                    unit_name
-                        .get(unit_id)
-                        .cloned()
-                        .map(Value::String)
-                        .unwrap_or(Value::Null),
-                );
-            }
-        }
-        attached.push(row);
-    }
-    Ok(attached)
-}
-
 async fn assert_publishable(state: &AppState, pool: &sqlx::PgPool, row: &Value) -> AppResult<()> {
     let row_id = value_str(row, "id");
     if row_id.is_empty() {
@@ -1769,58 +1469,6 @@ fn ensure_publish_prereqs(row: &Value) -> AppResult<()> {
     }
 
     Ok(())
-}
-
-fn public_shape(state: &AppState, row: &Value) -> Value {
-    let fee_lines = row
-        .get("fee_lines")
-        .and_then(Value::as_array)
-        .cloned()
-        .unwrap_or_default();
-    json!({
-        "id": row.get("id").cloned().unwrap_or(Value::Null),
-        "organization_id": row.get("organization_id").cloned().unwrap_or(Value::Null),
-        "organization_name": row.get("organization_name").cloned().unwrap_or(Value::Null),
-        "organization_logo_url": row.get("organization_logo_url").cloned().unwrap_or(Value::Null),
-        "organization_brand_color": row.get("organization_brand_color").cloned().unwrap_or(Value::Null),
-        "host_name": row.get("host_name").cloned().unwrap_or(Value::Null),
-        "public_slug": row.get("public_slug").cloned().unwrap_or(Value::Null),
-        "title": row.get("title").cloned().unwrap_or(Value::Null),
-        "summary": row.get("summary").cloned().unwrap_or(Value::Null),
-        "description": row.get("description").cloned().unwrap_or(Value::Null),
-        "city": row.get("city").cloned().unwrap_or(Value::Null),
-        "neighborhood": row.get("neighborhood").cloned().unwrap_or(Value::Null),
-        "country_code": row.get("country_code").cloned().unwrap_or(Value::Null),
-        "currency": row.get("currency").cloned().unwrap_or(Value::Null),
-        "application_url": row.get("application_url").cloned().unwrap_or(Value::Null),
-        "cover_image_url": row.get("cover_image_url").cloned().unwrap_or(Value::Null),
-        "gallery_image_urls": normalize_gallery_urls(row.get("gallery_image_urls"), false).unwrap_or_default(),
-        "floor_plans": normalize_spatial_assets(row.get("floor_plans"), "floor_plans", false).unwrap_or_default(),
-        "virtual_tours": normalize_spatial_assets(row.get("virtual_tours"), "virtual_tours", false).unwrap_or_default(),
-        "bedrooms": row.get("bedrooms").cloned().unwrap_or(Value::Null),
-        "bathrooms": row.get("bathrooms").cloned().unwrap_or(Value::Null),
-        "square_meters": row.get("square_meters").cloned().unwrap_or(Value::Null),
-        "property_type": row.get("property_type").cloned().unwrap_or(Value::Null),
-        "furnished": bool_value(row.get("furnished")),
-        "pet_policy": row.get("pet_policy").cloned().unwrap_or(Value::Null),
-        "parking_spaces": row.get("parking_spaces").cloned().unwrap_or(Value::Null),
-        "minimum_lease_months": row.get("minimum_lease_months").cloned().unwrap_or(Value::Null),
-        "available_from": row.get("available_from").cloned().unwrap_or(Value::Null),
-        "amenities": normalize_amenities(row.get("amenities"), false).unwrap_or_default(),
-        "poi_context": normalize_poi_context(row.get("poi_context"), false).unwrap_or_else(|_| json!({})),
-        "walkability_score": row.get("walkability_score").cloned().unwrap_or(Value::Null),
-        "transit_score": row.get("transit_score").cloned().unwrap_or(Value::Null),
-        "private_space_summary": row.get("private_space_summary").cloned().unwrap_or(Value::Null),
-        "shared_space_summary": row.get("shared_space_summary").cloned().unwrap_or(Value::Null),
-        "maintenance_fee": row.get("maintenance_fee").cloned().unwrap_or(Value::Null),
-        "whatsapp_contact_url": whatsapp_contact_url(state),
-        "published_at": row.get("published_at").cloned().unwrap_or(Value::Null),
-        "total_move_in": row.get("total_move_in").cloned().unwrap_or(Value::Null),
-        "monthly_recurring_total": row.get("monthly_recurring_total").cloned().unwrap_or(Value::Null),
-        "fee_lines": fee_lines,
-        "fee_breakdown_complete": bool_value(row.get("fee_breakdown_complete")),
-        "missing_required_fee_lines": row.get("missing_required_fee_lines").cloned().unwrap_or_else(|| Value::Array(Vec::new())),
-    })
 }
 
 fn public_listings_cache_key(query: &PublicListingsQuery) -> String {

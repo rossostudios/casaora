@@ -42,6 +42,11 @@ if [[ ! -f "${SQL_FILE}" ]]; then
   exit 1
 fi
 
+if [[ ! -f "${BASE_TASKDEF_TEMPLATE}" ]]; then
+  echo "Task definition template not found: ${BASE_TASKDEF_TEMPLATE}" >&2
+  exit 1
+fi
+
 require_bin "${AWS_BIN}"
 require_bin jq
 require_bin base64

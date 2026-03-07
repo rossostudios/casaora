@@ -5,6 +5,7 @@ use sqlx::Row;
 use crate::{
     error::{AppError, AppResult},
     repository::table_service::list_rows,
+    services::json_helpers::value_str,
     state::AppState,
 };
 
@@ -377,16 +378,6 @@ async fn insert_alert_if_new(
     .ok()?;
 
     row.and_then(|item| item.try_get::<Option<Value>, _>("row").ok().flatten())
-}
-
-fn value_str(row: &Value, key: &str) -> String {
-    row.as_object()
-        .and_then(|obj| obj.get(key))
-        .and_then(Value::as_str)
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .map(ToOwned::to_owned)
-        .unwrap_or_default()
 }
 
 fn number_from_value(value: Option<&Value>) -> f64 {

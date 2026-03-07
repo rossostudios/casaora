@@ -7,9 +7,20 @@ use sqlx::Row;
 use crate::{
     error::{AppError, AppResult},
     repository::table_service::{create_row, list_rows},
+    services::json_helpers::value_str,
 };
 
 const DEFAULT_RECIPIENT_ROLES: &[&str] = &["owner_admin", "operator"];
+
+/// Send a real-time SSE notification via PostgreSQL NOTIFY on the org_events channel.
+pub async fn notify_org_event(pool: &sqlx::PgPool, org_id: &str, payload: &Value) {
+    let channel = format!("org_events:{org_id}");
+    let _ = sqlx::query("SELECT pg_notify($1, $2)")
+        .bind(&channel)
+        .bind(payload.to_string())
+        .execute(pool)
+        .await;
+}
 
 #[derive(Debug, Clone)]
 pub struct EmitNotificationEventInput {
@@ -129,6 +140,16 @@ pub async fn emit_event(
         .await
         .map_err(map_sqlx_error)?;
     }
+
+    // Push real-time event via PG NOTIFY for SSE listeners
+    let notify_payload = serde_json::json!({
+        "event_id": &event_id,
+        "event_type": event_type,
+        "category": category,
+        "severity": severity,
+        "title": title,
+    });
+    notify_org_event(pool, organization_id, &notify_payload).await;
 
     Ok(Some(event_row))
 }
@@ -581,16 +602,6 @@ async fn resolve_recipients(
 fn map_sqlx_error(error: sqlx::Error) -> AppError {
     tracing::error!(db_error = %error, "Database query failed");
     AppError::from_database_error(&error, "Database operation failed.")
-}
-
-fn value_str(row: &Value, key: &str) -> String {
-    row.as_object()
-        .and_then(|obj| obj.get(key))
-        .and_then(Value::as_str)
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .map(ToOwned::to_owned)
-        .unwrap_or_default()
 }
 
 // ---------------------------------------------------------------------------

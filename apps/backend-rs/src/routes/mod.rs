@@ -7,6 +7,7 @@ pub mod agent_chats;
 pub mod agent_inbox;
 pub mod agent_management;
 pub mod agent_playbooks;
+pub mod agent_runs;
 pub mod agent_tools;
 pub mod ai_agent;
 pub mod applications;
@@ -31,6 +32,7 @@ pub mod marketplace;
 pub mod messaging;
 pub mod notification_center;
 pub mod notifications;
+pub mod operations;
 pub mod organizations;
 pub mod owner_portal;
 pub mod owner_statements;
@@ -70,6 +72,7 @@ pub fn v1_router() -> Router<AppState> {
         .merge(agent_inbox::router())
         .merge(agent_management::router())
         .merge(agent_playbooks::router())
+        .merge(agent_runs::router())
         .merge(agent_tools::router())
         .merge(ai_agent::router())
         .merge(organizations::router())
@@ -88,6 +91,7 @@ pub fn v1_router() -> Router<AppState> {
         .merge(notification_center::router())
         .merge(payments::router())
         .merge(notifications::router())
+        .merge(operations::router())
         .merge(maintenance::router())
         .merge(tenant::router())
         .merge(integrations::router())

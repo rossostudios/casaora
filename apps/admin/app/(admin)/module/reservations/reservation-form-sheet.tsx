@@ -1,235 +1,300 @@
 "use client";
 
-import React from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createReservationAction } from "@/app/(admin)/module/reservations/actions";
-import {
-  humanizeStatus,
-  type UnitOption,
-} from "@/app/(admin)/module/reservations/reservations-types";
 import { Button } from "@/components/ui/button";
-import { DatePicker } from "@/components/ui/date-picker";
-import { Form } from "@/components/ui/form";
+import { Drawer } from "@/components/ui/drawer";
+import { Field, FieldGroup } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
-import { Sheet } from "@/components/ui/sheet";
-import { useFormSubmitHotkey } from "@/lib/hotkeys/use-form-hotkeys";
-import type { Locale } from "@/lib/i18n";
+
+type Option = {
+  id: string;
+  label: string;
+};
+
+type UnitOption = Option & {
+  propertyId?: string;
+};
+
+type ReservationFormSheetProps = {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  orgId: string;
+  isEn: boolean;
+  locale?: string;
+  returnTo?: string;
+  propertyOptions: Option[];
+  unitOptions: UnitOption[];
+  guestOptions: Option[];
+};
 
 export function ReservationFormSheet({
-  isEn,
-  locale,
-  onOpenChange,
   open,
+  onOpenChange,
   orgId,
+  isEn,
+  returnTo,
+  propertyOptions,
   unitOptions,
-}: {
-  isEn: boolean;
-  locale: Locale;
-  onOpenChange: (open: boolean) => void;
-  open: boolean;
-  orgId: string;
-  unitOptions: UnitOption[];
-}) {
-  const formRef = React.useRef<HTMLFormElement>(null);
-  useFormSubmitHotkey(formRef);
+  guestOptions,
+}: ReservationFormSheetProps) {
+  const [propertyId, setPropertyId] = useState("");
+  const [guestMode, setGuestMode] = useState<"existing" | "new">(
+    guestOptions.length > 0 ? "existing" : "new"
+  );
+
+  useEffect(() => {
+    if (!open) {
+      setPropertyId("");
+      setGuestMode(guestOptions.length > 0 ? "existing" : "new");
+    }
+  }, [guestOptions.length, open]);
+
+  const availableUnits = useMemo(
+    () =>
+      propertyId
+        ? unitOptions.filter((unit) => unit.propertyId === propertyId)
+        : unitOptions,
+    [propertyId, unitOptions]
+  );
 
   return (
-    <Sheet
+    <Drawer
+      className="w-[min(94vw,44rem)]"
+      closeLabel={isEn ? "Close reservation form" : "Cerrar formulario"}
       description={
         isEn
-          ? "Create a manual reservation and manage overlaps."
-          : "Crea una reserva manual y gestiona solapamientos."
+          ? "Create a real reservation with unit, guest, dates, and financial terms connected from the start."
+          : "Crea una reserva real con unidad, huésped, fechas y términos financieros conectados desde el inicio."
       }
       onOpenChange={onOpenChange}
       open={open}
-      title={isEn ? "New reservation" : "Nueva reserva"}
+      side="right"
+      title={isEn ? "Create reservation" : "Crear reserva"}
     >
-      <Form
-        action={createReservationAction}
-        className="space-y-4"
-        ref={formRef}
-      >
+      <form action={createReservationAction} className="space-y-5 px-4 py-5 sm:px-6">
         <input name="organization_id" type="hidden" value={orgId} />
+        <input name="next" type="hidden" value={returnTo ?? "/module/reservations"} />
 
-        <label className="block space-y-1" htmlFor="new-res-unit">
-          <span className="block font-medium text-muted-foreground text-xs">
-            {isEn ? "Unit" : "Unidad"}
-          </span>
-          <Select defaultValue="" id="new-res-unit" name="unit_id" required>
-            <option disabled value="">
-              {isEn ? "Select a unit" : "Selecciona una unidad"}
-            </option>
-            {unitOptions.map((unit) => (
-              <option key={unit.id} value={unit.id}>
-                {unit.label}
+        <FieldGroup>
+          <Field htmlFor="reservation-property" label={isEn ? "Property" : "Propiedad"} required>
+            <Select
+              id="reservation-property"
+              onChange={(event) => setPropertyId(event.target.value)}
+              value={propertyId}
+            >
+              <option value="">{isEn ? "Select property" : "Selecciona propiedad"}</option>
+              {propertyOptions.map((property) => (
+                <option key={property.id} value={property.id}>
+                  {property.label}
+                </option>
+              ))}
+            </Select>
+          </Field>
+
+          <Field htmlFor="reservation-unit" label={isEn ? "Unit" : "Unidad"} required>
+            <Select defaultValue="" id="reservation-unit" name="unit_id" required>
+              <option disabled value="">
+                {isEn ? "Select unit" : "Selecciona unidad"}
               </option>
-            ))}
-          </Select>
-        </label>
+              {availableUnits.map((unit) => (
+                <option key={unit.id} value={unit.id}>
+                  {unit.label}
+                </option>
+              ))}
+            </Select>
+          </Field>
+        </FieldGroup>
 
-        <label className="block space-y-1" htmlFor="new-res-guest-name">
-          <span className="block font-medium text-muted-foreground text-xs">
-            {isEn ? "Guest name" : "Nombre del hu\u00e9sped"}
-          </span>
-          <Input
-            id="new-res-guest-name"
-            name="guest_name"
-            placeholder={isEn ? "Guest full name" : "Nombre completo"}
-          />
-        </label>
+        <div className="space-y-3 rounded-2xl border border-border/60 bg-muted/20 p-4">
+          <div className="flex flex-wrap gap-2">
+            <Button
+              onClick={() => setGuestMode("existing")}
+              type="button"
+              variant={guestMode === "existing" ? "secondary" : "outline"}
+            >
+              {isEn ? "Use existing guest" : "Usar huésped existente"}
+            </Button>
+            <Button
+              onClick={() => setGuestMode("new")}
+              type="button"
+              variant={guestMode === "new" ? "secondary" : "outline"}
+            >
+              {isEn ? "Create guest inline" : "Crear huésped inline"}
+            </Button>
+          </div>
 
-        <div className="grid gap-3 md:grid-cols-2">
-          <label className="block space-y-1" htmlFor="new-res-check-in">
-            <span className="block font-medium text-muted-foreground text-xs">
-              Check-in
-            </span>
-            <DatePicker
-              id="new-res-check-in"
-              locale={locale}
-              name="check_in_date"
-            />
-          </label>
-          <label className="block space-y-1" htmlFor="new-res-check-out">
-            <span className="block font-medium text-muted-foreground text-xs">
-              Check-out
-            </span>
-            <DatePicker
-              id="new-res-check-out"
-              locale={locale}
-              name="check_out_date"
-            />
-          </label>
+          {guestMode === "existing" && guestOptions.length > 0 ? (
+            <Field htmlFor="reservation-guest" label={isEn ? "Guest" : "Huésped"}>
+              <Select defaultValue="" id="reservation-guest" name="guest_id">
+                <option value="">{isEn ? "Select guest" : "Selecciona huésped"}</option>
+                {guestOptions.map((guest) => (
+                  <option key={guest.id} value={guest.id}>
+                    {guest.label}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+          ) : (
+            <div className="space-y-4">
+              <FieldGroup>
+                <Field htmlFor="reservation-guest-full-name" label={isEn ? "Guest full name" : "Nombre completo"} required>
+                  <Input
+                    id="reservation-guest-full-name"
+                    name="guest_full_name"
+                    placeholder={isEn ? "Jane Doe" : "Nombre y apellido"}
+                    required={guestMode === "new"}
+                  />
+                </Field>
+                <Field htmlFor="reservation-guest-email" label={isEn ? "Email" : "Email"}>
+                  <Input
+                    id="reservation-guest-email"
+                    name="guest_email"
+                    placeholder="guest@example.com"
+                    type="email"
+                  />
+                </Field>
+              </FieldGroup>
+
+              <FieldGroup>
+                <Field htmlFor="reservation-guest-phone" label={isEn ? "Phone" : "Teléfono"}>
+                  <Input
+                    id="reservation-guest-phone"
+                    name="guest_phone_e164"
+                    placeholder="+595981123456"
+                  />
+                </Field>
+                <Field htmlFor="reservation-guest-country" label={isEn ? "Country code" : "Código país"}>
+                  <Input
+                    defaultValue="PY"
+                    id="reservation-guest-country"
+                    name="guest_country_code"
+                    placeholder="PY"
+                  />
+                </Field>
+              </FieldGroup>
+            </div>
+          )}
         </div>
 
-        <div className="grid grid-cols-4 gap-2">
-          <label className="block space-y-1" htmlFor="new-res-adults">
-            <span className="block font-medium text-muted-foreground text-xs">
-              {isEn ? "Adults" : "Adultos"}
-            </span>
-            <Input
-              defaultValue={1}
-              id="new-res-adults"
-              min={0}
-              name="adults"
-              type="number"
-            />
-          </label>
-          <label className="block space-y-1" htmlFor="new-res-children">
-            <span className="block font-medium text-muted-foreground text-xs">
-              {isEn ? "Children" : "Ni\u00f1os"}
-            </span>
-            <Input
-              defaultValue={0}
-              id="new-res-children"
-              min={0}
-              name="children"
-              type="number"
-            />
-          </label>
-          <label className="block space-y-1" htmlFor="new-res-infants">
-            <span className="block font-medium text-muted-foreground text-xs">
-              {isEn ? "Infants" : "Infantes"}
-            </span>
-            <Input
-              defaultValue={0}
-              id="new-res-infants"
-              min={0}
-              name="infants"
-              type="number"
-            />
-          </label>
-          <label className="block space-y-1" htmlFor="new-res-pets">
-            <span className="block font-medium text-muted-foreground text-xs">
-              {isEn ? "Pets" : "Mascotas"}
-            </span>
-            <Input
-              defaultValue={0}
-              id="new-res-pets"
-              min={0}
-              name="pets"
-              type="number"
-            />
-          </label>
-        </div>
+        <FieldGroup>
+          <Field htmlFor="reservation-check-in" label="Check-in" required>
+            <Input id="reservation-check-in" name="check_in_date" required type="date" />
+          </Field>
+          <Field htmlFor="reservation-check-out" label="Check-out" required>
+            <Input id="reservation-check-out" name="check_out_date" required type="date" />
+          </Field>
+        </FieldGroup>
 
-        <div className="grid gap-3 md:grid-cols-3">
-          <label className="block space-y-1" htmlFor="new-res-nightly-rate">
-            <span className="block font-medium text-muted-foreground text-xs">
-              {isEn ? "Nightly rate" : "Tarifa/noche"}
-            </span>
-            <Input
-              id="new-res-nightly-rate"
-              min={0}
-              name="nightly_rate"
-              step="0.01"
-              type="number"
-            />
-          </label>
+        <FieldGroup className="md:grid-cols-4">
+          <Field htmlFor="reservation-adults" label={isEn ? "Adults" : "Adultos"}>
+            <Input defaultValue="1" id="reservation-adults" min="0" name="adults" type="number" />
+          </Field>
+          <Field htmlFor="reservation-children" label={isEn ? "Children" : "Niños"}>
+            <Input defaultValue="0" id="reservation-children" min="0" name="children" type="number" />
+          </Field>
+          <Field htmlFor="reservation-infants" label={isEn ? "Infants" : "Infantes"}>
+            <Input defaultValue="0" id="reservation-infants" min="0" name="infants" type="number" />
+          </Field>
+          <Field htmlFor="reservation-pets" label={isEn ? "Pets" : "Mascotas"}>
+            <Input defaultValue="0" id="reservation-pets" min="0" name="pets" type="number" />
+          </Field>
+        </FieldGroup>
 
-          <label className="block space-y-1" htmlFor="new-res-total-amount">
-            <span className="block font-medium text-muted-foreground text-xs">
-              {isEn ? "Total amount" : "Monto total"}
-            </span>
+        <FieldGroup>
+          <Field htmlFor="reservation-total-amount" label={isEn ? "Total amount" : "Monto total"} required>
             <Input
-              id="new-res-total-amount"
-              min={0}
+              id="reservation-total-amount"
+              min="0"
               name="total_amount"
               required
               step="0.01"
               type="number"
             />
-          </label>
+          </Field>
+          <Field htmlFor="reservation-amount-paid" label={isEn ? "Amount paid" : "Monto pagado"}>
+            <Input
+              defaultValue="0"
+              id="reservation-amount-paid"
+              min="0"
+              name="amount_paid"
+              step="0.01"
+              type="number"
+            />
+          </Field>
+        </FieldGroup>
 
-          <label className="block space-y-1" htmlFor="new-res-currency">
-            <span className="block font-medium text-muted-foreground text-xs">
-              {isEn ? "Currency" : "Moneda"}
-            </span>
-            <Select defaultValue="PYG" id="new-res-currency" name="currency">
+        <FieldGroup>
+          <Field htmlFor="reservation-nightly-rate" label={isEn ? "Nightly rate" : "Tarifa por noche"}>
+            <Input id="reservation-nightly-rate" min="0" name="nightly_rate" step="0.01" type="number" />
+          </Field>
+          <Field htmlFor="reservation-cleaning-fee" label={isEn ? "Cleaning fee" : "Limpieza"}>
+            <Input id="reservation-cleaning-fee" min="0" name="cleaning_fee" step="0.01" type="number" />
+          </Field>
+        </FieldGroup>
+
+        <FieldGroup className="md:grid-cols-4">
+          <Field htmlFor="reservation-tax" label={isEn ? "Tax" : "Impuesto"}>
+            <Input id="reservation-tax" min="0" name="tax_amount" step="0.01" type="number" />
+          </Field>
+          <Field htmlFor="reservation-extra-fees" label={isEn ? "Extra fees" : "Extras"}>
+            <Input id="reservation-extra-fees" min="0" name="extra_fees" step="0.01" type="number" />
+          </Field>
+          <Field htmlFor="reservation-discount" label={isEn ? "Discount" : "Descuento"}>
+            <Input id="reservation-discount" min="0" name="discount_amount" step="0.01" type="number" />
+          </Field>
+          <Field htmlFor="reservation-currency" label={isEn ? "Currency" : "Moneda"}>
+            <Select defaultValue="PYG" id="reservation-currency" name="currency">
               <option value="PYG">PYG</option>
               <option value="USD">USD</option>
             </Select>
-          </label>
-        </div>
+          </Field>
+        </FieldGroup>
 
-        <label className="block space-y-1" htmlFor="new-res-status">
-          <span className="block font-medium text-muted-foreground text-xs">
-            {isEn ? "Initial status" : "Estado inicial"}
-          </span>
-          <Select defaultValue="pending" id="new-res-status" name="status">
-            <option value="pending">{humanizeStatus("pending", isEn)}</option>
-            <option value="confirmed">
-              {humanizeStatus("confirmed", isEn)}
-            </option>
-            <option value="checked_in">
-              {humanizeStatus("checked_in", isEn)}
-            </option>
-          </Select>
-        </label>
+        <FieldGroup>
+          <Field htmlFor="reservation-status" label={isEn ? "Initial status" : "Estado inicial"}>
+            <Select defaultValue="pending" id="reservation-status" name="status">
+              <option value="pending">{isEn ? "Pending" : "Pendiente"}</option>
+              <option value="confirmed">{isEn ? "Confirmed" : "Confirmada"}</option>
+              <option value="checked_in">{isEn ? "Checked in" : "Check in"}</option>
+            </Select>
+          </Field>
+          <Field htmlFor="reservation-source" label={isEn ? "Source" : "Origen"}>
+            <Select defaultValue="manual" id="reservation-source" name="source">
+              <option value="manual">{isEn ? "Manual" : "Manual"}</option>
+              <option value="marketplace">
+                {isEn ? "Casaora Marketplace" : "Marketplace Casaora"}
+              </option>
+              <option value="direct_booking">{isEn ? "Casaora direct" : "Directo Casaora"}</option>
+            </Select>
+          </Field>
+        </FieldGroup>
 
-        <label className="block space-y-1" htmlFor="new-res-notes">
-          <span className="block font-medium text-muted-foreground text-xs">
-            {isEn ? "Notes" : "Notas"}
-          </span>
+        <Field htmlFor="reservation-payment-method" label={isEn ? "Payment method" : "Método de pago"}>
           <Input
-            id="new-res-notes"
-            name="notes"
-            placeholder={isEn ? "Optional" : "Opcional"}
+            id="reservation-payment-method"
+            name="payment_method"
+            placeholder={isEn ? "cash, bank_transfer..." : "cash, bank_transfer..."}
           />
-        </label>
+        </Field>
 
-        <div className="flex flex-wrap justify-end gap-2">
-          <Button
-            onClick={() => onOpenChange(false)}
-            type="button"
-            variant="outline"
-          >
+        <Field htmlFor="reservation-notes" label={isEn ? "Notes" : "Notas"}>
+          <textarea
+            className="min-h-24 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm shadow-xs outline-none transition focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/20"
+            id="reservation-notes"
+            name="notes"
+            placeholder={isEn ? "Arrival notes, special requests, ops context..." : "Notas de llegada, pedidos especiales, contexto operativo..."}
+          />
+        </Field>
+
+        <div className="flex justify-end gap-2">
+          <Button onClick={() => onOpenChange(false)} type="button" variant="outline">
             {isEn ? "Cancel" : "Cancelar"}
           </Button>
-          <Button type="submit" variant="secondary">
-            {isEn ? "Create" : "Crear"}
-          </Button>
+          <Button type="submit">{isEn ? "Create reservation" : "Crear reserva"}</Button>
         </div>
-      </Form>
-    </Sheet>
+      </form>
+    </Drawer>
   );
 }

@@ -11,6 +11,7 @@ use crate::{
     config::WorkflowEngineMode,
     repository::table_service::{create_row, get_row, list_rows, update_row},
     services::agent_specs::{allowed_tools_for_slug, get_agent_spec},
+    services::json_helpers::non_empty_opt,
     services::notification_center::{emit_event, EmitNotificationEventInput},
 };
 
@@ -566,9 +567,29 @@ async fn execute_action(
             execute_request_agent_approval(pool, org_id, action_config, context).await
         }
         "invoke_agent" => execute_invoke_agent(pool, org_id, action_config, context).await,
+        "chain" => execute_chain(pool, org_id, action_config, context).await,
         other => Ok(ExecutionOutcome::Skipped(format!(
             "unsupported action_type '{other}'"
         ))),
+    }
+}
+
+/// Public wrapper for direct action execution (used by event bus).
+pub async fn execute_action_direct(
+    pool: &sqlx::PgPool,
+    org_id: &str,
+    action_type: &str,
+    action_config: &Map<String, Value>,
+    context: &Map<String, Value>,
+) -> Result<(), String> {
+    let config_val = Value::Object(action_config.clone());
+    match execute_action(pool, org_id, None, action_type, &config_val, context).await {
+        Ok(ExecutionOutcome::Succeeded) => Ok(()),
+        Ok(ExecutionOutcome::Skipped(reason)) => {
+            tracing::info!(reason, "Direct action skipped");
+            Ok(())
+        }
+        Err(e) => Err(e),
     }
 }
 
@@ -1324,6 +1345,90 @@ async fn execute_invoke_agent(
     Ok(ExecutionOutcome::Succeeded)
 }
 
+/// Execute a chain of sequential actions with optional delays between steps.
+///
+/// Chain config format:
+/// ```json
+/// {
+///   "steps": [
+///     { "action_type": "invoke_agent", "config": { "agent_slug": "maintenance-triage" }, "delay_minutes": 0 },
+///     { "action_type": "send_notification", "config": { ... }, "delay_minutes": 30 },
+///     { "action_type": "invoke_agent", "config": { "agent_slug": "finance-agent" }, "delay_minutes": 60 }
+///   ]
+/// }
+/// ```
+///
+/// Step 0 executes immediately. Remaining steps are enqueued as workflow jobs
+/// with `scheduled_for` set to `now() + cumulative delay`.
+async fn execute_chain(
+    pool: &sqlx::PgPool,
+    org_id: &str,
+    config: &Value,
+    context: &Map<String, Value>,
+) -> Result<ExecutionOutcome, String> {
+    let steps = config
+        .as_object()
+        .and_then(|obj| obj.get("steps"))
+        .and_then(Value::as_array)
+        .ok_or_else(|| "chain action requires a 'steps' array in config".to_string())?;
+
+    if steps.is_empty() {
+        return Ok(ExecutionOutcome::Skipped("chain has no steps".to_string()));
+    }
+
+    let chain_id = Uuid::new_v4().to_string();
+    let mut cumulative_delay_min: i64 = 0;
+
+    for (i, step) in steps.iter().enumerate() {
+        let step_obj = step
+            .as_object()
+            .ok_or_else(|| format!("chain step {i} is not an object"))?;
+
+        let action_type = step_obj
+            .get("action_type")
+            .and_then(Value::as_str)
+            .unwrap_or_default();
+        if action_type.is_empty() {
+            continue;
+        }
+
+        let step_config = step_obj.get("config").cloned().unwrap_or(json!({}));
+
+        let delay_minutes = step_obj
+            .get("delay_minutes")
+            .and_then(Value::as_i64)
+            .unwrap_or(0);
+        cumulative_delay_min += delay_minutes;
+
+        // Enrich context with chain metadata
+        let mut step_context = context.clone();
+        step_context.insert("chain_id".to_string(), json!(chain_id));
+        step_context.insert("chain_step".to_string(), json!(i));
+        step_context.insert("chain_total_steps".to_string(), json!(steps.len()));
+
+        // Enqueue all steps as workflow jobs. Step 0 with delay=0 runs on
+        // the next scheduler poll (~30s). This avoids async recursion since
+        // execute_chain never calls execute_action directly.
+        let _ = sqlx::query(
+            "INSERT INTO workflow_jobs (organization_id, workflow_rule_id, trigger_event, action_type, action_config, context, scheduled_for, dedupe_key)
+             VALUES ($1::uuid, NULL, 'chain_step_completed', $2, $3, $4, now() + ($5 || ' minutes')::interval, $6)
+             ON CONFLICT (dedupe_key) DO NOTHING",
+        )
+        .bind(org_id)
+        .bind(action_type)
+        .bind(&step_config)
+        .bind(Value::Object(step_context))
+        .bind(cumulative_delay_min.to_string())
+        .bind(format!("chain:{chain_id}:step:{i}"))
+        .execute(pool)
+        .await
+        .map_err(|e| format!("Failed to enqueue chain step {i}: {e}"))?;
+    }
+
+    tracing::info!(chain_id, steps = steps.len(), "Chain: enqueued all steps");
+    Ok(ExecutionOutcome::Succeeded)
+}
+
 async fn resolve_template_id(pool: &sqlx::PgPool, org_id: &str, hint: &str) -> Option<String> {
     if Uuid::parse_str(hint).is_ok() {
         return Some(hint.to_string());
@@ -1711,13 +1816,6 @@ fn val_str(row: &Value, key: &str) -> String {
         .filter(|value| !value.is_empty())
         .map(ToOwned::to_owned)
         .unwrap_or_default()
-}
-
-fn non_empty_opt(value: Option<&str>) -> Option<String> {
-    value
-        .map(str::trim)
-        .filter(|item| !item.is_empty())
-        .map(ToOwned::to_owned)
 }
 
 fn truncate_reason(reason: &str) -> String {

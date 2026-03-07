@@ -5,9 +5,10 @@ import {
   Mic01Icon,
   SparklesIcon,
 } from "@hugeicons/core-free-icons";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useState } from "react";
 import { Icon } from "@/components/ui/icon";
+import { buildAgentContextHref } from "@/lib/ai-context";
 import { cn } from "@/lib/utils";
 
 type DashboardQueryBarProps = {
@@ -15,6 +16,7 @@ type DashboardQueryBarProps = {
 };
 
 export function DashboardQueryBar({ isEn }: DashboardQueryBarProps) {
+  const pathname = usePathname();
   const router = useRouter();
   const [query, setQuery] = useState("");
 
@@ -32,9 +34,22 @@ export function DashboardQueryBar({ isEn }: DashboardQueryBarProps) {
     (nextQuery: string) => {
       const trimmed = nextQuery.trim();
       if (!trimmed) return;
-      router.push(`/app/agents?q=${encodeURIComponent(trimmed)}`);
+      router.push(
+        buildAgentContextHref({
+          prompt: trimmed,
+          context: {
+            source: "properties",
+            entityIds: [],
+            filters: { workspace: "dashboard" },
+            summary: isEn
+              ? "Dashboard query launched from the operational overview."
+              : "Consulta lanzada desde el resumen operativo.",
+            returnPath: pathname,
+          },
+        })
+      );
     },
-    [router]
+    [isEn, pathname, router]
   );
 
   const handleSubmit = useCallback(
@@ -55,8 +70,8 @@ export function DashboardQueryBar({ isEn }: DashboardQueryBarProps) {
         )}
         onSubmit={handleSubmit}
       >
-        <div className="flex min-w-0 flex-1 items-center gap-3 rounded-2xl border border-border/50 bg-background/80 px-3 py-3 backdrop-blur-sm">
-          <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-[var(--sidebar-primary)]/8 text-[var(--sidebar-primary)]">
+        <div className="flex min-w-0 flex-1 items-center gap-3 rounded-2xl border border-border/50 bg-background px-3 py-3">
+          <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-sidebar-primary/8 text-sidebar-primary">
             <Icon className="h-4 w-4" icon={SparklesIcon} />
           </span>
           <input
@@ -75,10 +90,26 @@ export function DashboardQueryBar({ isEn }: DashboardQueryBarProps) {
         <button
           aria-label={isEn ? "Open voice chat" : "Abrir chat de voz"}
           className={cn(
-            "inline-flex h-10 w-10 items-center justify-center rounded-xl border border-border/50 bg-background/80 text-muted-foreground",
+            "inline-flex h-10 w-10 items-center justify-center rounded-xl border border-border/50 bg-background text-muted-foreground",
             "transition-colors hover:text-foreground"
           )}
-          onClick={() => router.push("/app/agents")}
+          onClick={() =>
+            router.push(
+              buildAgentContextHref({
+                prompt: "",
+                context: {
+                  source: "properties",
+                  entityIds: [],
+                  filters: { workspace: "dashboard" },
+                  summary: isEn
+                    ? "Dashboard voice session launched from the operational overview."
+                    : "Sesión de voz lanzada desde el resumen operativo.",
+                  returnPath: pathname,
+                },
+                newChat: true,
+              })
+            )
+          }
           type="button"
         >
           <Icon className="h-4 w-4" icon={Mic01Icon} />

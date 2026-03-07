@@ -11,6 +11,7 @@ import {
   FolderAttachmentIcon,
   GridViewIcon,
   Home01Icon,
+  InboxIcon,
   Invoice01Icon,
   Link01Icon,
   Message01Icon,
@@ -46,6 +47,7 @@ export const MODULE_ICONS: Record<string, IconSvgElement> = {
   leases: File01Icon,
   collections: Invoice01Icon,
   "transparency-summary": ChartIcon,
+  "action-center": InboxIcon,
   messaging: Message01Icon,
   notifications: Notification03Icon,
   "integration-events": WebhookIcon,
@@ -72,7 +74,14 @@ export type SectionKey =
   | "finance"
   | "other";
 
-export type PrimaryTabKey = "home" | "chat" | "inbox";
+export type PrimaryTabKey =
+  | "today"
+  | "portfolio"
+  | "leasing"
+  | "operations"
+  | "finance"
+  | "conversations"
+  | "ai";
 
 export type RouteLinkDef = {
   href: string;

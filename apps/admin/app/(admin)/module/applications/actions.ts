@@ -10,7 +10,7 @@ function toStringValue(value: FormDataEntryValue | null): string {
 }
 
 function toOptionalNumber(
-  value: FormDataEntryValue | null
+  value: FormDataEntryValue | null,
 ): number | undefined {
   if (typeof value !== "string") return undefined;
   const parsed = Number(value.trim());
@@ -25,7 +25,7 @@ function normalizeNext(path: string, fallback: string): string {
 
 function withParams(
   path: string,
-  params: { success?: string; error?: string }
+  params: { success?: string; error?: string },
 ): string {
   const [base, query] = path.split("?", 2);
   const qs = new URLSearchParams(query ?? "");
@@ -50,6 +50,11 @@ function applicationsUrl(params?: {
   return withParams("/module/applications", params ?? {});
 }
 
+function revalidateApplicationPaths(applicationId: string) {
+  revalidatePath("/module/applications");
+  revalidatePath(`/module/applications/${applicationId}`);
+}
+
 export async function setApplicationStatusAction(formData: FormData) {
   const application_id = toStringValue(formData.get("application_id"));
   const status = toStringValue(formData.get("status"));
@@ -65,7 +70,7 @@ export async function setApplicationStatusAction(formData: FormData) {
 
   const next = normalizeNext(
     toStringValue(formData.get("next")),
-    applicationsUrl()
+    applicationsUrl(),
   );
 
   try {
@@ -75,10 +80,10 @@ export async function setApplicationStatusAction(formData: FormData) {
         status,
         ...(note ? { note } : {}),
         ...(rejected_reason ? { rejected_reason } : {}),
-      }
+      },
     );
 
-    revalidatePath("/module/applications");
+    revalidateApplicationPaths(application_id);
     redirect(withParams(next, { success: "application-updated" }));
   } catch (err) {
     unstable_rethrow(err);
@@ -102,12 +107,12 @@ export async function assignApplicationAction(formData: FormData) {
 
   const next = normalizeNext(
     toStringValue(formData.get("next")),
-    applicationsUrl()
+    applicationsUrl(),
   );
 
   const payload: Record<string, unknown> = { status, note };
   if (assignedRaw === "__unassigned__") {
-    payload.assigned_user_id = null;
+    payload.clear_assignee = true;
   } else if (assignedRaw) {
     payload.assigned_user_id = assignedRaw;
   }
@@ -115,10 +120,10 @@ export async function assignApplicationAction(formData: FormData) {
   try {
     await postJson(
       `/applications/${encodeURIComponent(application_id)}/status`,
-      payload
+      payload,
     );
 
-    revalidatePath("/module/applications");
+    revalidateApplicationPaths(application_id);
     redirect(withParams(next, { success: "application-assignment-updated" }));
   } catch (err) {
     unstable_rethrow(err);
@@ -141,24 +146,88 @@ export async function convertApplicationToLeaseAction(formData: FormData) {
 
   const next = normalizeNext(
     toStringValue(formData.get("next")),
-    applicationsUrl()
+    applicationsUrl(),
   );
 
   try {
-    await postJson(
+    const created = (await postJson(
       `/applications/${encodeURIComponent(application_id)}/convert-to-lease`,
       {
         starts_on,
         currency: "PYG",
         platform_fee,
         generate_first_collection: true,
-      }
-    );
+      },
+    )) as { lease?: { id?: string } } | undefined;
 
-    revalidatePath("/module/applications");
+    revalidateApplicationPaths(application_id);
     revalidatePath("/module/leases");
     revalidatePath("/module/collections");
-    redirect(withParams(next, { success: "application-converted-to-lease" }));
+    const leaseId = created?.lease?.id;
+    redirect(
+      withParams(
+        leaseId
+          ? `/module/leases/${leaseId}?return_to=${encodeURIComponent(next)}`
+          : next,
+        { success: "application-converted-to-lease" },
+      ),
+    );
+  } catch (err) {
+    unstable_rethrow(err);
+    const message = err instanceof Error ? err.message : String(err);
+    redirect(withParams(next, { error: message.slice(0, 240) }));
+  }
+}
+
+export async function sendApplicationMessageAction(formData: FormData) {
+  const organization_id = toStringValue(formData.get("organization_id"));
+  const application_id = toStringValue(formData.get("application_id"));
+  const channel = toStringValue(formData.get("channel"));
+  const recipient = toStringValue(formData.get("recipient"));
+  const template_id = toStringValue(formData.get("template_id")) || undefined;
+  const body = toStringValue(formData.get("body"));
+  const subject = toStringValue(formData.get("subject")) || undefined;
+
+  if (!organization_id || !application_id) {
+    redirect(applicationsUrl({ error: "Missing application context." }));
+  }
+
+  const next = normalizeNext(
+    toStringValue(formData.get("next")),
+    applicationsUrl(),
+  );
+
+  if (!channel) {
+    redirect(withParams(next, { error: "Channel is required." }));
+  }
+  if (!recipient) {
+    redirect(withParams(next, { error: "Recipient is required." }));
+  }
+  if (!(body || template_id)) {
+    redirect(
+      withParams(next, { error: "Message body or template is required." }),
+    );
+  }
+  if (channel === "email" && !recipient.includes("@")) {
+    redirect(withParams(next, { error: "Email recipient is invalid." }));
+  }
+  if (channel === "whatsapp" && recipient.replaceAll(/\D/g, "").length < 8) {
+    redirect(withParams(next, { error: "WhatsApp recipient is invalid." }));
+  }
+
+  try {
+    await postJson("/messages/send", {
+      organization_id,
+      application_id,
+      channel,
+      recipient,
+      ...(template_id ? { template_id } : {}),
+      ...(body ? { body } : {}),
+      ...(subject ? { subject } : {}),
+    });
+
+    revalidateApplicationPaths(application_id);
+    redirect(withParams(next, { success: "application-follow-up-sent" }));
   } catch (err) {
     unstable_rethrow(err);
     const message = err instanceof Error ? err.message : String(err);

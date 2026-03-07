@@ -2,24 +2,19 @@
 
 import {
   ArrowLeft02Icon,
+  Cancel01Icon,
   Clock02Icon,
   Delete01Icon,
   PlusSignIcon,
   SparklesIcon,
 } from "@hugeicons/core-free-icons";
 
-import { getModelDisplayName } from "@/components/agent/model-display";
-import { Badge } from "@/components/ui/badge";
+import { ModelSelectorPill } from "@/components/agent/model-selector-pill";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
-import {
-  PopoverContent,
-  PopoverRoot,
-  PopoverTrigger,
-} from "@/components/ui/popover";
 import { Skeleton } from "@/components/ui/skeleton";
-import type { AgentDefinition, AgentModelOption } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import type { AgentModelOption } from "@/lib/api";
 
 export function ChatHeader({
   chatTitle,
@@ -30,22 +25,17 @@ export function ChatHeader({
   isEmbedded,
   isArchived,
   busy,
-  modelOptions,
-  selectedModel,
-  primaryModel,
-  modelBusy,
   deleteArmed,
-  onModelChange,
   onNewThread,
   onHistoryClick,
   onArchiveToggle,
   onDeleteArm,
   onDeleteConfirm,
   onDeleteCancel,
-  agents,
-  selectedAgentSlug,
-  onAgentChange,
-  selectedAgentName,
+  onClose,
+  selectedModel,
+  modelOptions,
+  onModelChange,
 }: {
   chatTitle?: string;
   loading: boolean;
@@ -55,24 +45,75 @@ export function ChatHeader({
   isEmbedded: boolean;
   isArchived?: boolean;
   busy: boolean;
-  modelOptions: AgentModelOption[];
-  selectedModel: string;
-  primaryModel: string;
-  modelBusy: boolean;
   deleteArmed: boolean;
-  onModelChange: (model: string) => void;
   onNewThread: () => void;
   onHistoryClick: () => void;
   onArchiveToggle: () => void;
   onDeleteArm: () => void;
   onDeleteConfirm: () => void;
   onDeleteCancel: () => void;
-  agents?: AgentDefinition[];
-  selectedAgentSlug?: string;
-  onAgentChange?: (slug: string) => void;
-  selectedAgentName?: string;
+  onClose?: () => void;
+  selectedModel?: string;
+  modelOptions?: AgentModelOption[];
+  onModelChange?: (model: string) => void;
 }) {
-  const activeAgents = agents?.filter((a) => a.is_active !== false) ?? [];
+  const showEmbeddedLayout = !!onClose && !isChatDetailRoute;
+
+  if (showEmbeddedLayout) {
+    return (
+      <div className="sticky top-0 z-10 shrink-0 bg-background">
+        <div className="flex items-center justify-between px-4 pt-3 pb-2 sm:px-5">
+          {/* Left: close button */}
+          <Button
+            className="h-7 w-7 rounded-lg text-muted-foreground/60 hover:bg-muted/40 hover:text-foreground"
+            onClick={onClose}
+            size="icon"
+            variant="ghost"
+          >
+            <Icon className="h-3.5 w-3.5" icon={Cancel01Icon} />
+            <span className="sr-only">{isEn ? "Close" : "Cerrar"}</span>
+          </Button>
+
+          {/* Right: controls */}
+          <div className="flex items-center gap-1">
+            <Button
+              className="h-7 w-7 rounded-lg text-muted-foreground/60 hover:bg-muted/40 hover:text-foreground"
+              disabled={isSending}
+              onClick={onNewThread}
+              size="icon"
+              variant="ghost"
+            >
+              <Icon className="h-3.5 w-3.5" icon={PlusSignIcon} />
+              <span className="sr-only">
+                {isEn ? "New thread" : "Nuevo hilo"}
+              </span>
+            </Button>
+
+            <Button
+              className="h-7 w-7 rounded-lg text-muted-foreground/60 hover:bg-muted/40 hover:text-foreground"
+              onClick={onHistoryClick}
+              size="icon"
+              variant="ghost"
+            >
+              <Icon className="h-3.5 w-3.5" icon={Clock02Icon} />
+              <span className="sr-only">
+                {isEn ? "History" : "Historial"}
+              </span>
+            </Button>
+
+            {modelOptions && modelOptions.length > 0 && onModelChange ? (
+              <ModelSelectorPill
+                isEn={isEn}
+                modelOptions={modelOptions}
+                onModelChange={onModelChange}
+                selectedModel={selectedModel ?? ""}
+              />
+            ) : null}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -91,125 +132,10 @@ export function ChatHeader({
                 <div className="flex h-6 w-6 items-center justify-center rounded-[8px] bg-casaora-gradient text-white shadow-casaora">
                   <Icon className="h-3 w-3" icon={SparklesIcon} />
                 </div>
-
-                {/* Agent selector dropdown (only in non-detail routes with multiple agents) */}
-                {!isChatDetailRoute &&
-                activeAgents.length > 1 &&
-                onAgentChange ? (
-                  <PopoverRoot>
-                    <PopoverTrigger
-                      className="flex items-center gap-1.5 rounded-lg px-1 py-0.5 transition-colors hover:bg-muted/40"
-                      disabled={isSending}
-                    >
-                      <h2 className="truncate font-semibold text-[13.5px] tracking-tight">
-                        {chatTitle ||
-                          selectedAgentName ||
-                          (isEn ? "New Chat" : "Nuevo Chat")}
-                      </h2>
-                      <svg
-                        aria-label="Expand chevron"
-                        className="h-3 w-3 text-muted-foreground/50 transition-transform"
-                        fill="none"
-                        role="img"
-                        stroke="currentColor"
-                        strokeWidth={2}
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          d="M6 9l6 6 6-6"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        />
-                      </svg>
-                    </PopoverTrigger>
-                    <PopoverContent align="start" className="w-64 p-1.5">
-                      <div className="px-2 py-1.5 font-medium text-[10px] text-muted-foreground/60 uppercase tracking-widest">
-                        {isEn ? "Agent" : "Agente"}
-                      </div>
-                      {activeAgents.map((agent) => (
-                        <button
-                          className={cn(
-                            "flex w-full flex-col gap-0.5 rounded-xl px-2.5 py-2 text-left transition-all duration-150 hover:bg-muted/50",
-                            agent.slug === selectedAgentSlug &&
-                              "bg-[var(--sidebar-primary)]/[0.06] text-[var(--sidebar-primary)]"
-                          )}
-                          key={agent.slug}
-                          onClick={() => onAgentChange(agent.slug)}
-                          type="button"
-                        >
-                          <span className="truncate font-medium text-[13px]">
-                            {agent.name}
-                          </span>
-                          {agent.description ? (
-                            <span className="truncate text-[11px] text-muted-foreground">
-                              {agent.description}
-                            </span>
-                          ) : null}
-                        </button>
-                      ))}
-                    </PopoverContent>
-                  </PopoverRoot>
-                ) : (
-                  <h2 className="truncate font-semibold text-[13.5px] tracking-tight">
-                    {chatTitle ||
-                      selectedAgentName ||
-                      (isEn ? "New Chat" : "Nuevo Chat")}
-                  </h2>
-                )}
+                <h2 className="truncate font-semibold text-[13.5px] tracking-tight">
+                  {chatTitle || (isEn ? "Casaora AI" : "IA Casaora")}
+                </h2>
               </div>
-
-              {!isChatDetailRoute && modelOptions.length > 0 ? (
-                <PopoverRoot>
-                  <PopoverTrigger
-                    className="flex items-center"
-                    disabled={isSending || modelBusy}
-                  >
-                    <Badge
-                      className="cursor-pointer border-border/30 bg-transparent font-mono font-normal text-[10px] text-muted-foreground/70 transition-all hover:border-border/60 hover:bg-muted/30 hover:text-muted-foreground"
-                      variant="outline"
-                    >
-                      {getModelDisplayName(selectedModel || primaryModel) ||
-                        (isEn ? "Model" : "Modelo")}
-                    </Badge>
-                  </PopoverTrigger>
-                  <PopoverContent align="start" className="w-52 p-1.5">
-                    <div className="px-2 py-1.5 font-medium text-[10px] text-muted-foreground/60 uppercase tracking-widest">
-                      {isEn ? "Model" : "Modelo"}
-                    </div>
-                    {modelOptions.map((model) => (
-                      <button
-                        className={cn(
-                          "flex w-full items-center justify-between rounded-xl px-2.5 py-2 text-left text-sm transition-all duration-150 hover:bg-muted/50",
-                          model.model === (selectedModel || primaryModel) &&
-                            "bg-[var(--sidebar-primary)]/[0.06] text-[var(--sidebar-primary)]"
-                        )}
-                        key={model.model}
-                        onClick={() => onModelChange(model.model)}
-                        type="button"
-                      >
-                        <span className="truncate font-mono text-[11px]">
-                          {getModelDisplayName(model.model)}
-                        </span>
-                        {model.is_primary ? (
-                          <Badge
-                            className="ml-1.5 text-[9px]"
-                            variant="secondary"
-                          >
-                            {isEn ? "primary" : "primario"}
-                          </Badge>
-                        ) : null}
-                      </button>
-                    ))}
-                    <div className="mt-1 border-border/30 border-t px-2.5 py-2">
-                      <span className="text-[10px] text-muted-foreground/50">
-                        {isEn
-                          ? "More models coming soon"
-                          : "Más modelos próximamente"}
-                      </span>
-                    </div>
-                  </PopoverContent>
-                </PopoverRoot>
-              ) : null}
             </>
           )}
         </div>

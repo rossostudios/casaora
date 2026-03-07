@@ -17,7 +17,11 @@ import type { Locale } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import { AnimatedNavItem, AnimatedNavList } from "./sidebar-animated-list";
 import { NavLinkRow } from "./sidebar-nav-link";
-import type { MemberRole, OnboardingProgress } from "./sidebar-types";
+import type {
+  MemberRole,
+  OnboardingProgress,
+  SectionKey,
+} from "./sidebar-types";
 import {
   isRouteActive,
   resolveSections,
@@ -29,20 +33,25 @@ export function SidebarHomeTab({
   orgId,
   onboardingProgress,
   role,
+  sectionKeys,
 }: {
   locale: Locale;
   orgId: string | null;
   onboardingProgress?: OnboardingProgress;
   role?: MemberRole | null;
+  sectionKeys?: SectionKey[];
 }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const search = searchParams.toString();
   const isEn = locale === "en-US";
-  const sections = useMemo(() => resolveSections(locale, role), [locale, role]);
+  const sections = useMemo(
+    () => resolveSections(locale, role, sectionKeys),
+    [locale, role, sectionKeys]
+  );
   const [collapsedSections, toggleSection] = useCollapsedSections();
   const [onboardingHubClosed, setOnboardingHubClosed] = useState(false);
-  const showOnboardingHub = !onboardingHubClosed;
+  const showOnboardingHub = !onboardingHubClosed && !sectionKeys;
   const completionPercent = Math.round(
     Math.max(0, Math.min(100, onboardingProgress?.percent ?? 0))
   );
@@ -113,7 +122,7 @@ export function SidebarHomeTab({
     <nav className="space-y-3">
       {showOnboardingHub && !onboardingCompleted ? (
         <Link
-          className="glass-inner group block rounded-xl p-3 transition-all hover:bg-white/70 hover:shadow-[inset_0_0.5px_0_0_rgba(255,255,255,0.9)] dark:hover:bg-mauve-400/12"
+          className="glass-inner group block rounded-xl p-3 transition-all hover:bg-sidebar-accent hover:shadow-sm dark:hover:bg-taupe-400/12"
           href="/setup"
         >
           <div className="flex items-center justify-between gap-2">
@@ -131,7 +140,7 @@ export function SidebarHomeTab({
               aria-label={
                 isEn ? "Dismiss setup widget" : "Cerrar widget de configuración"
               }
-              className="inline-flex h-6 w-6 items-center justify-center rounded-md text-sidebar-foreground/40 transition-colors hover:bg-white/50 hover:text-sidebar-foreground dark:hover:bg-mauve-400/12"
+              className="inline-flex h-6 w-6 items-center justify-center rounded-md text-sidebar-foreground/40 transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground dark:hover:bg-taupe-400/12"
               onClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
@@ -144,7 +153,7 @@ export function SidebarHomeTab({
           </div>
           <Progress
             aria-valuetext={`${completionPercent}%`}
-            className="mt-2.5 h-1.5 bg-black/10 dark:bg-mauve-400/15"
+            className="mt-2.5 h-1.5 bg-black/10 dark:bg-taupe-400/15"
             indicatorClassName="bg-sidebar-primary"
             value={completionPercent}
           />
@@ -162,7 +171,7 @@ export function SidebarHomeTab({
         return (
           <div key={section.key}>
             {index > 0 && (
-              <Separator className="mx-2 mb-2 h-px bg-white/30 dark:bg-white/[0.06]" />
+              <Separator className="mx-2 mb-2 h-px bg-sidebar-border dark:bg-white/[0.06]" />
             )}
             <Collapsible
               onOpenChange={() => toggleSection(section.key)}

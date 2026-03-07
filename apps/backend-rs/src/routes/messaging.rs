@@ -83,6 +83,9 @@ async fn list_message_logs(
     if let Some(guest_id) = non_empty_opt(query.guest_id.as_deref()) {
         filters.insert("guest_id".to_string(), Value::String(guest_id));
     }
+    if let Some(application_id) = non_empty_opt(query.application_id.as_deref()) {
+        filters.insert("application_id".to_string(), Value::String(application_id));
+    }
 
     let rows = list_rows(
         pool,
@@ -193,6 +196,16 @@ async fn send_message(
     )
     .await?;
     let pool = db_pool(&state)?;
+
+    if let Some(application_id) = non_empty_opt(payload.application_id.as_deref()) {
+        let application = get_row(pool, "application_submissions", &application_id, "id").await?;
+        let application_org_id = value_str(&application, "organization_id");
+        if application_org_id != payload.organization_id {
+            return Err(AppError::BadRequest(
+                "Application does not belong to this organization.".to_string(),
+            ));
+        }
+    }
 
     let mut log = remove_nulls(serialize_to_map(&payload));
     log.insert("status".to_string(), Value::String("queued".to_string()));

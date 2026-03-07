@@ -65,6 +65,7 @@ async fn run_agent_playbook(
             role: "owner_admin",
             message,
             conversation: &[],
+            agent_run_id: None,
             allow_mutations: payload.allow_mutations.unwrap_or(false),
             confirm_write: false,
             agent_name: &agent_name,

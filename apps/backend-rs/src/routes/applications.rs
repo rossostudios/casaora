@@ -11,8 +11,8 @@ use crate::{
     error::{AppError, AppResult},
     repository::table_service::{create_row, get_row, list_rows, update_row},
     schemas::{
-        clamp_limit_in_range, ApplicationPath, ApplicationStatusInput, ApplicationsQuery,
-        ConvertApplicationToLeaseInput,
+        clamp_limit_in_range, ApplicationPath, ApplicationStatusInput, ApplicationsOverviewQuery,
+        ApplicationsQuery, ConvertApplicationToLeaseInput,
     },
     services::{
         analytics::write_analytics_event,
@@ -32,12 +32,36 @@ const RESPONSE_SLA_WARNING_MINUTES: f64 = 30.0;
 const QUALIFICATION_STRONG_THRESHOLD: i64 = 75;
 const QUALIFICATION_MODERATE_THRESHOLD: i64 = 50;
 
+#[derive(Clone, Default)]
+struct ApplicationLinkContext {
+    listing_id: Option<String>,
+    listing_title: Option<String>,
+    property_id: Option<String>,
+    property_name: Option<String>,
+    unit_id: Option<String>,
+    unit_name: Option<String>,
+}
+
+#[derive(Clone, Default)]
+struct RelatedLeaseInfo {
+    id: String,
+    updated_at: Option<String>,
+}
+
 pub fn router() -> axum::Router<AppState> {
     axum::Router::new()
         .route("/applications", axum::routing::get(list_applications))
         .route(
+            "/applications/overview",
+            axum::routing::get(list_applications_overview),
+        )
+        .route(
             "/applications/{application_id}",
             axum::routing::get(get_application),
+        )
+        .route(
+            "/applications/{application_id}/overview",
+            axum::routing::get(get_application_overview),
         )
         .route(
             "/applications/{application_id}/status",
@@ -129,6 +153,185 @@ async fn get_application(
     Ok(Json(item))
 }
 
+async fn list_applications_overview(
+    State(state): State<AppState>,
+    Query(query): Query<ApplicationsOverviewQuery>,
+    headers: HeaderMap,
+) -> AppResult<Json<Value>> {
+    ensure_applications_pipeline_enabled(&state)?;
+
+    let user_id = require_user_id(&state, &headers).await?;
+    assert_org_member(&state, &user_id, &query.org_id).await?;
+    let pool = db_pool(&state)?;
+
+    let mut filters = Map::new();
+    filters.insert(
+        "organization_id".to_string(),
+        Value::String(query.org_id.clone()),
+    );
+    if let Some(status) = non_empty_opt(query.status.as_deref()) {
+        filters.insert("status".to_string(), Value::String(status));
+    }
+    if let Some(assigned_user_id) = non_empty_opt(query.assigned_user_id.as_deref()) {
+        filters.insert(
+            "assigned_user_id".to_string(),
+            Value::String(assigned_user_id),
+        );
+    }
+    if let Some(listing_id) = non_empty_opt(query.listing_id.as_deref()) {
+        filters.insert("listing_id".to_string(), Value::String(listing_id));
+    }
+    if let Some(source) = non_empty_opt(query.source.as_deref()) {
+        filters.insert("source".to_string(), Value::String(source));
+    }
+
+    let rows = list_rows(
+        pool,
+        "application_submissions",
+        Some(&filters),
+        1000,
+        0,
+        "created_at",
+        false,
+    )
+    .await?;
+
+    let enriched = enrich_applications(pool, rows).await?;
+    let contexts = load_application_link_context(pool, &enriched).await?;
+    let application_ids = enriched
+        .iter()
+        .map(|row| value_str(row, "id"))
+        .filter(|value| !value.is_empty())
+        .collect::<Vec<_>>();
+    let related_leases = load_related_lease_info(pool, &application_ids).await?;
+    let last_touch_index =
+        load_application_last_touch_index(pool, &enriched, &related_leases).await?;
+    let failed_submissions = load_application_submit_failures(pool, &query.org_id, None).await?;
+
+    let filtered_rows = enriched
+        .into_iter()
+        .filter(|row| application_matches_overview_filters(row, &query, &contexts))
+        .collect::<Vec<_>>();
+    let saved_views = build_saved_view_counts(&filtered_rows, &related_leases);
+
+    let mut display_rows = filtered_rows
+        .into_iter()
+        .filter(|row| application_matches_view(row, query.view.as_deref(), &related_leases))
+        .collect::<Vec<_>>();
+    sort_application_overview_rows(
+        &mut display_rows,
+        query.sort.as_deref(),
+        &last_touch_index,
+        &related_leases,
+    );
+
+    let total = display_rows.len() as i64;
+    let limit = clamp_limit_in_range(query.limit, 1, 100);
+    let offset = query.offset.max(0);
+    let paged_rows = display_rows
+        .iter()
+        .skip(offset as usize)
+        .take(limit as usize)
+        .map(|row| {
+            build_overview_row_contract(
+                row,
+                contexts
+                    .get(&value_str(row, "id"))
+                    .cloned()
+                    .unwrap_or_default(),
+                last_touch_index
+                    .get(&value_str(row, "id"))
+                    .cloned()
+                    .unwrap_or_else(|| value_str(row, "updated_at")),
+            )
+        })
+        .collect::<Vec<_>>();
+
+    Ok(Json(json!({
+        "summary": build_applications_summary(&display_rows, &related_leases),
+        "savedViews": saved_views,
+        "rows": paged_rows,
+        "pagination": {
+            "total": total,
+            "limit": limit,
+            "offset": offset,
+            "hasMore": offset + limit < total,
+        },
+        "facets": build_application_facets(&display_rows, &contexts),
+        "intakeHealth": {
+            "failedSubmissions": failed_submissions.len(),
+            "stalledApplications": display_rows.iter().filter(|row| is_stalled_application(row)).count(),
+        }
+    })))
+}
+
+async fn get_application_overview(
+    State(state): State<AppState>,
+    Path(path): Path<ApplicationPath>,
+    headers: HeaderMap,
+) -> AppResult<Json<Value>> {
+    ensure_applications_pipeline_enabled(&state)?;
+
+    let user_id = require_user_id(&state, &headers).await?;
+    let pool = db_pool(&state)?;
+
+    let record = get_row(pool, "application_submissions", &path.application_id, "id").await?;
+    let org_id = value_str(&record, "organization_id");
+    assert_org_member(&state, &user_id, &org_id).await?;
+
+    let mut enriched = enrich_applications(pool, vec![record]).await?;
+    let application = enriched.pop().unwrap_or_else(|| Value::Object(Map::new()));
+    let contexts = load_application_link_context(pool, std::slice::from_ref(&application)).await?;
+    let context = contexts
+        .get(&path.application_id)
+        .cloned()
+        .unwrap_or_default();
+    let related_leases =
+        load_related_lease_info(pool, std::slice::from_ref(&path.application_id)).await?;
+    let related_lease = related_leases.get(&path.application_id).cloned();
+
+    let events = list_rows(
+        pool,
+        "application_events",
+        Some(&json_map(&[(
+            "application_id",
+            Value::String(path.application_id.clone()),
+        )])),
+        300,
+        0,
+        "created_at",
+        false,
+    )
+    .await?;
+    let messages =
+        load_application_messages(pool, &org_id, &path.application_id, &application).await?;
+    let failed_submission_history =
+        load_application_submit_failures(pool, &org_id, context.listing_id.as_deref()).await?;
+
+    Ok(Json(json!({
+        "application": build_application_detail_contract(&application, &context),
+        "qualification": build_application_qualification(&application),
+        "context": {
+            "listingId": context.listing_id,
+            "listingTitle": context.listing_title,
+            "propertyId": context.property_id,
+            "propertyName": context.property_name,
+            "unitId": context.unit_id,
+            "unitName": context.unit_name,
+        },
+        "timeline": build_application_timeline(&application, &events, &messages, related_lease.as_ref()),
+        "messages": build_application_messages_contract(&messages),
+        "conversion": {
+            "canConvert": can_convert_to_lease(&application, related_lease.as_ref()),
+            "relatedLeaseId": related_lease
+                .as_ref()
+                .map(|lease| lease.id.clone())
+                .filter(|value| !value.is_empty()),
+        },
+        "failedSubmissionHistory": failed_submission_history,
+    })))
+}
+
 async fn update_application_status(
     State(state): State<AppState>,
     Path(path): Path<ApplicationPath>,
@@ -164,6 +367,9 @@ async fn update_application_status(
     let mut patch = Map::new();
     patch.insert("status".to_string(), Value::String(next.clone()));
 
+    if payload.clear_assignee.unwrap_or(false) {
+        patch.insert("assigned_user_id".to_string(), Value::Null);
+    }
     if let Some(assigned_user_id) = payload.assigned_user_id.clone() {
         patch.insert(
             "assigned_user_id".to_string(),
@@ -937,6 +1143,1060 @@ async fn enrich_applications(pool: &sqlx::PgPool, rows: Vec<Value>) -> AppResult
     }
 
     Ok(enriched)
+}
+
+async fn load_application_link_context(
+    pool: &sqlx::PgPool,
+    rows: &[Value],
+) -> AppResult<std::collections::HashMap<String, ApplicationLinkContext>> {
+    let listing_ids = rows
+        .iter()
+        .filter_map(Value::as_object)
+        .filter_map(|row| row.get("listing_id"))
+        .filter_map(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(ToOwned::to_owned)
+        .collect::<std::collections::HashSet<_>>()
+        .into_iter()
+        .collect::<Vec<_>>();
+
+    if listing_ids.is_empty() {
+        return Ok(std::collections::HashMap::new());
+    }
+
+    let listings = list_rows(
+        pool,
+        "listings",
+        Some(&json_map(&[(
+            "id",
+            Value::Array(listing_ids.iter().cloned().map(Value::String).collect()),
+        )])),
+        std::cmp::max(200, listing_ids.len() as i64),
+        0,
+        "created_at",
+        false,
+    )
+    .await?;
+
+    let property_ids = listings
+        .iter()
+        .filter_map(Value::as_object)
+        .filter_map(|row| row.get("property_id"))
+        .filter_map(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(ToOwned::to_owned)
+        .collect::<std::collections::HashSet<_>>()
+        .into_iter()
+        .collect::<Vec<_>>();
+    let unit_ids = listings
+        .iter()
+        .filter_map(Value::as_object)
+        .filter_map(|row| row.get("unit_id"))
+        .filter_map(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(ToOwned::to_owned)
+        .collect::<std::collections::HashSet<_>>()
+        .into_iter()
+        .collect::<Vec<_>>();
+
+    let property_ids_for_query = property_ids.clone();
+    let unit_ids_for_query = unit_ids.clone();
+    let (properties, units) = tokio::try_join!(
+        async move {
+            if property_ids_for_query.is_empty() {
+                Ok(Vec::new())
+            } else {
+                list_rows(
+                    pool,
+                    "properties",
+                    Some(&json_map(&[(
+                        "id",
+                        Value::Array(
+                            property_ids_for_query
+                                .iter()
+                                .cloned()
+                                .map(Value::String)
+                                .collect(),
+                        ),
+                    )])),
+                    std::cmp::max(200, property_ids_for_query.len() as i64),
+                    0,
+                    "created_at",
+                    false,
+                )
+                .await
+            }
+        },
+        async move {
+            if unit_ids_for_query.is_empty() {
+                Ok(Vec::new())
+            } else {
+                list_rows(
+                    pool,
+                    "units",
+                    Some(&json_map(&[(
+                        "id",
+                        Value::Array(
+                            unit_ids_for_query
+                                .iter()
+                                .cloned()
+                                .map(Value::String)
+                                .collect(),
+                        ),
+                    )])),
+                    std::cmp::max(200, unit_ids_for_query.len() as i64),
+                    0,
+                    "created_at",
+                    false,
+                )
+                .await
+            }
+        }
+    )?;
+
+    let property_names = properties
+        .into_iter()
+        .map(|row| (value_str(&row, "id"), value_str(&row, "name")))
+        .filter(|(id, name)| !id.is_empty() && !name.is_empty())
+        .collect::<std::collections::HashMap<_, _>>();
+    let unit_names = units
+        .into_iter()
+        .map(|row| {
+            let name = value_str(&row, "name");
+            let code = value_str(&row, "code");
+            (
+                value_str(&row, "id"),
+                if !name.is_empty() { name } else { code },
+            )
+        })
+        .filter(|(id, name)| !id.is_empty() && !name.is_empty())
+        .collect::<std::collections::HashMap<_, _>>();
+
+    let listing_context = listings
+        .into_iter()
+        .map(|row| {
+            let listing_id = value_str(&row, "id");
+            let property_id = non_empty_opt(
+                row.as_object()
+                    .and_then(|obj| obj.get("property_id"))
+                    .and_then(Value::as_str),
+            );
+            let unit_id = non_empty_opt(
+                row.as_object()
+                    .and_then(|obj| obj.get("unit_id"))
+                    .and_then(Value::as_str),
+            );
+            (
+                listing_id,
+                ApplicationLinkContext {
+                    listing_id: non_empty_opt(
+                        row.as_object()
+                            .and_then(|obj| obj.get("id"))
+                            .and_then(Value::as_str),
+                    ),
+                    listing_title: non_empty_opt(
+                        row.as_object()
+                            .and_then(|obj| obj.get("title"))
+                            .and_then(Value::as_str),
+                    ),
+                    property_id: property_id.clone(),
+                    property_name: property_id
+                        .as_ref()
+                        .and_then(|id| property_names.get(id))
+                        .cloned(),
+                    unit_id: unit_id.clone(),
+                    unit_name: unit_id.as_ref().and_then(|id| unit_names.get(id)).cloned(),
+                },
+            )
+        })
+        .filter(|(id, _)| !id.is_empty())
+        .collect::<std::collections::HashMap<_, _>>();
+
+    let mut context_by_application_id = std::collections::HashMap::new();
+    for row in rows {
+        let application_id = value_str(row, "id");
+        let listing_id = value_str(row, "listing_id");
+        if application_id.is_empty() {
+            continue;
+        }
+        if let Some(context) = listing_context.get(&listing_id) {
+            context_by_application_id.insert(application_id, context.clone());
+        } else {
+            context_by_application_id.insert(
+                application_id,
+                ApplicationLinkContext {
+                    listing_id: (!listing_id.is_empty()).then_some(listing_id),
+                    listing_title: non_empty_opt(
+                        row.as_object()
+                            .and_then(|obj| obj.get("listing_title"))
+                            .and_then(Value::as_str),
+                    ),
+                    ..ApplicationLinkContext::default()
+                },
+            );
+        }
+    }
+
+    Ok(context_by_application_id)
+}
+
+async fn load_related_lease_info(
+    pool: &sqlx::PgPool,
+    application_ids: &[String],
+) -> AppResult<std::collections::HashMap<String, RelatedLeaseInfo>> {
+    if application_ids.is_empty() {
+        return Ok(std::collections::HashMap::new());
+    }
+
+    let rows = list_rows(
+        pool,
+        "leases",
+        Some(&json_map(&[(
+            "application_id",
+            Value::Array(application_ids.iter().cloned().map(Value::String).collect()),
+        )])),
+        std::cmp::max(200, application_ids.len() as i64),
+        0,
+        "updated_at",
+        false,
+    )
+    .await?;
+
+    let mut index = std::collections::HashMap::new();
+    for row in rows {
+        let application_id = value_str(&row, "application_id");
+        let lease_id = value_str(&row, "id");
+        if application_id.is_empty() || lease_id.is_empty() || index.contains_key(&application_id) {
+            continue;
+        }
+        index.insert(
+            application_id,
+            RelatedLeaseInfo {
+                id: lease_id,
+                updated_at: non_empty_opt(
+                    row.as_object()
+                        .and_then(|obj| obj.get("updated_at"))
+                        .and_then(Value::as_str),
+                ),
+            },
+        );
+    }
+
+    Ok(index)
+}
+
+async fn load_application_last_touch_index(
+    pool: &sqlx::PgPool,
+    rows: &[Value],
+    related_leases: &std::collections::HashMap<String, RelatedLeaseInfo>,
+) -> AppResult<std::collections::HashMap<String, String>> {
+    let application_ids = rows
+        .iter()
+        .map(|row| value_str(row, "id"))
+        .filter(|value| !value.is_empty())
+        .collect::<Vec<_>>();
+    if application_ids.is_empty() {
+        return Ok(std::collections::HashMap::new());
+    }
+
+    let event_application_ids = application_ids.clone();
+    let message_application_ids = application_ids.clone();
+    let (events, messages) = tokio::try_join!(
+        async move {
+            list_rows(
+                pool,
+                "application_events",
+                Some(&json_map(&[(
+                    "application_id",
+                    Value::Array(
+                        event_application_ids
+                            .iter()
+                            .cloned()
+                            .map(Value::String)
+                            .collect(),
+                    ),
+                )])),
+                1000,
+                0,
+                "created_at",
+                false,
+            )
+            .await
+        },
+        async move {
+            list_rows(
+                pool,
+                "message_logs",
+                Some(&json_map(&[(
+                    "application_id",
+                    Value::Array(
+                        message_application_ids
+                            .iter()
+                            .cloned()
+                            .map(Value::String)
+                            .collect(),
+                    ),
+                )])),
+                1000,
+                0,
+                "created_at",
+                false,
+            )
+            .await
+        }
+    )?;
+
+    let mut index = std::collections::HashMap::new();
+    for row in rows {
+        let application_id = value_str(row, "id");
+        if application_id.is_empty() {
+            continue;
+        }
+        let mut latest = non_empty_opt(
+            row.as_object()
+                .and_then(|obj| obj.get("updated_at"))
+                .and_then(Value::as_str),
+        )
+        .or_else(|| {
+            row.as_object()
+                .and_then(|obj| obj.get("created_at"))
+                .and_then(Value::as_str)
+                .map(ToOwned::to_owned)
+        });
+        latest = max_timestamp(
+            latest,
+            non_empty_opt(
+                row.as_object()
+                    .and_then(|obj| obj.get("first_response_at"))
+                    .and_then(Value::as_str),
+            ),
+        );
+        if let Some(lease) = related_leases.get(&application_id) {
+            latest = max_timestamp(latest, lease.updated_at.clone());
+        }
+        for event in &events {
+            if value_str(event, "application_id") == application_id {
+                latest = max_timestamp(
+                    latest,
+                    non_empty_opt(
+                        event
+                            .as_object()
+                            .and_then(|obj| obj.get("created_at"))
+                            .and_then(Value::as_str),
+                    ),
+                );
+                break;
+            }
+        }
+        for message in &messages {
+            if value_str(message, "application_id") == application_id {
+                latest = max_timestamp(
+                    latest,
+                    non_empty_opt(
+                        message
+                            .as_object()
+                            .and_then(|obj| obj.get("created_at"))
+                            .and_then(Value::as_str),
+                    ),
+                );
+                break;
+            }
+        }
+        if let Some(latest) = latest {
+            index.insert(application_id, latest);
+        }
+    }
+
+    Ok(index)
+}
+
+async fn load_application_messages(
+    pool: &sqlx::PgPool,
+    org_id: &str,
+    application_id: &str,
+    application: &Value,
+) -> AppResult<Vec<Value>> {
+    let mut messages = list_rows(
+        pool,
+        "message_logs",
+        Some(&json_map(&[
+            ("organization_id", Value::String(org_id.to_string())),
+            ("application_id", Value::String(application_id.to_string())),
+        ])),
+        200,
+        0,
+        "created_at",
+        false,
+    )
+    .await?;
+
+    let email = value_str(application, "email");
+    let phone = value_str(application, "phone_e164");
+    for recipient in [email, phone] {
+        if recipient.is_empty() {
+            continue;
+        }
+        let historical = list_rows(
+            pool,
+            "message_logs",
+            Some(&json_map(&[
+                ("organization_id", Value::String(org_id.to_string())),
+                ("recipient", Value::String(recipient.clone())),
+            ])),
+            120,
+            0,
+            "created_at",
+            false,
+        )
+        .await?;
+        messages.extend(historical);
+    }
+
+    let mut deduped = std::collections::HashMap::new();
+    for message in messages {
+        let id = value_str(&message, "id");
+        if id.is_empty() {
+            continue;
+        }
+        deduped.entry(id).or_insert(message);
+    }
+
+    let mut values = deduped.into_values().collect::<Vec<_>>();
+    values.sort_by_key(|right| std::cmp::Reverse(value_str(right, "created_at")));
+    Ok(values)
+}
+
+async fn load_application_submit_failures(
+    pool: &sqlx::PgPool,
+    org_id: &str,
+    listing_id: Option<&str>,
+) -> AppResult<Vec<Value>> {
+    let rows = list_rows(
+        pool,
+        "integration_events",
+        Some(&json_map(&[
+            ("organization_id", Value::String(org_id.to_string())),
+            ("provider", Value::String("alerting".to_string())),
+            (
+                "event_type",
+                Value::String("application_submit_failed".to_string()),
+            ),
+            ("status", Value::String("failed".to_string())),
+        ])),
+        100,
+        0,
+        "created_at",
+        false,
+    )
+    .await?;
+
+    Ok(rows
+        .into_iter()
+        .filter(|row| {
+            if let Some(listing_id) = listing_id {
+                let payload_listing_id = row
+                    .as_object()
+                    .and_then(|obj| obj.get("payload"))
+                    .and_then(Value::as_object)
+                    .and_then(|payload| payload.get("listing_id"))
+                    .and_then(Value::as_str)
+                    .map(str::trim)
+                    .unwrap_or_default();
+                return payload_listing_id == listing_id;
+            }
+            true
+        })
+        .collect())
+}
+
+fn application_matches_overview_filters(
+    row: &Value,
+    query: &ApplicationsOverviewQuery,
+    contexts: &std::collections::HashMap<String, ApplicationLinkContext>,
+) -> bool {
+    let application_id = value_str(row, "id");
+    let context = contexts.get(&application_id).cloned().unwrap_or_default();
+
+    if let Some(property_id) = non_empty_opt(query.property_id.as_deref()) {
+        if context.property_id.as_deref().unwrap_or_default() != property_id {
+            return false;
+        }
+    }
+
+    if let Some(qualification_band) = non_empty_opt(query.qualification_band.as_deref()) {
+        if value_str(row, "qualification_band") != qualification_band {
+            return false;
+        }
+    }
+
+    if let Some(response_sla_status) = non_empty_opt(query.response_sla_status.as_deref()) {
+        if value_str(row, "response_sla_status") != response_sla_status {
+            return false;
+        }
+    }
+
+    if let Some(assigned_user_id) = non_empty_opt(query.assigned_user_id.as_deref()) {
+        let row_assignee = value_str(row, "assigned_user_id");
+        if assigned_user_id == "__unassigned__" || assigned_user_id == "unassigned" {
+            if !row_assignee.is_empty() {
+                return false;
+            }
+        } else if row_assignee != assigned_user_id {
+            return false;
+        }
+    }
+
+    if let Some(q) = non_empty_opt(query.q.as_deref()) {
+        let q = q.to_ascii_lowercase();
+        let haystack = [
+            value_str(row, "full_name"),
+            value_str(row, "email"),
+            value_str(row, "phone_e164"),
+            context.listing_title.unwrap_or_default(),
+            context.property_name.unwrap_or_default(),
+            context.unit_name.unwrap_or_default(),
+        ]
+        .join(" ")
+        .to_ascii_lowercase();
+        if !haystack.contains(&q) {
+            return false;
+        }
+    }
+
+    true
+}
+
+fn application_matches_view(
+    row: &Value,
+    view: Option<&str>,
+    related_leases: &std::collections::HashMap<String, RelatedLeaseInfo>,
+) -> bool {
+    match view.map(str::trim).filter(|value| !value.is_empty()) {
+        None | Some("all") => true,
+        Some("needs_response") => {
+            let status = value_str(row, "response_sla_status");
+            status == "pending" || status == "breached"
+        }
+        Some("unassigned") => value_str(row, "assigned_user_id").is_empty(),
+        Some("qualified_ready") => {
+            can_convert_to_lease(row, related_leases.get(&value_str(row, "id")))
+        }
+        Some("stalled_or_failed") => {
+            is_stalled_application(row)
+                || matches!(value_str(row, "status").as_str(), "rejected" | "lost")
+        }
+        Some(_) => true,
+    }
+}
+
+fn build_saved_view_counts(
+    rows: &[Value],
+    related_leases: &std::collections::HashMap<String, RelatedLeaseInfo>,
+) -> Vec<Value> {
+    [
+        "all",
+        "needs_response",
+        "unassigned",
+        "qualified_ready",
+        "stalled_or_failed",
+    ]
+    .iter()
+    .map(|view| {
+        let count = if *view == "all" {
+            rows.len()
+        } else {
+            rows.iter()
+                .filter(|row| application_matches_view(row, Some(view), related_leases))
+                .count()
+        };
+        json!({
+            "id": view,
+            "count": count,
+        })
+    })
+    .collect()
+}
+
+fn build_applications_summary(
+    rows: &[Value],
+    related_leases: &std::collections::HashMap<String, RelatedLeaseInfo>,
+) -> Value {
+    json!({
+        "totalApplications": rows.len(),
+        "needsResponse": rows
+            .iter()
+            .filter(|row| application_matches_view(row, Some("needs_response"), related_leases))
+            .count(),
+        "unassigned": rows
+            .iter()
+            .filter(|row| value_str(row, "assigned_user_id").is_empty())
+            .count(),
+        "qualifiedReady": rows
+            .iter()
+            .filter(|row| application_matches_view(row, Some("qualified_ready"), related_leases))
+            .count(),
+        "stalledOrFailed": rows
+            .iter()
+            .filter(|row| application_matches_view(row, Some("stalled_or_failed"), related_leases))
+            .count(),
+    })
+}
+
+fn build_application_facets(
+    rows: &[Value],
+    contexts: &std::collections::HashMap<String, ApplicationLinkContext>,
+) -> Value {
+    let mut listing_counts = std::collections::HashMap::<String, (String, usize)>::new();
+    let mut property_counts = std::collections::HashMap::<String, (String, usize)>::new();
+    let mut source_counts = std::collections::HashMap::<String, usize>::new();
+
+    for row in rows {
+        let application_id = value_str(row, "id");
+        if let Some(context) = contexts.get(&application_id) {
+            if let (Some(id), Some(title)) = (&context.listing_id, &context.listing_title) {
+                let entry = listing_counts
+                    .entry(id.clone())
+                    .or_insert((title.clone(), 0));
+                entry.1 += 1;
+            }
+            if let (Some(id), Some(name)) = (&context.property_id, &context.property_name) {
+                let entry = property_counts
+                    .entry(id.clone())
+                    .or_insert((name.clone(), 0));
+                entry.1 += 1;
+            }
+        }
+        let source = value_str(row, "source");
+        if !source.is_empty() {
+            *source_counts.entry(source).or_insert(0) += 1;
+        }
+    }
+
+    json!({
+        "listings": listing_counts
+            .into_iter()
+            .map(|(id, (name, count))| json!({ "id": id, "name": name, "count": count }))
+            .collect::<Vec<_>>(),
+        "properties": property_counts
+            .into_iter()
+            .map(|(id, (name, count))| json!({ "id": id, "name": name, "count": count }))
+            .collect::<Vec<_>>(),
+        "sources": source_counts
+            .into_iter()
+            .map(|(value, count)| json!({ "value": value, "count": count }))
+            .collect::<Vec<_>>(),
+    })
+}
+
+fn build_overview_row_contract(
+    row: &Value,
+    context: ApplicationLinkContext,
+    last_touch_at: String,
+) -> Value {
+    let status = value_str(row, "status");
+    json!({
+        "id": value_str(row, "id"),
+        "applicantName": value_str(row, "full_name"),
+        "email": value_str(row, "email"),
+        "phoneE164": non_empty_opt(row.as_object().and_then(|obj| obj.get("phone_e164")).and_then(Value::as_str)),
+        "status": status,
+        "statusLabel": status_label(&status),
+        "listingId": context.listing_id,
+        "listingTitle": context.listing_title,
+        "propertyId": context.property_id,
+        "propertyName": context.property_name,
+        "unitId": context.unit_id,
+        "unitName": context.unit_name,
+        "assignedUserId": non_empty_opt(row.as_object().and_then(|obj| obj.get("assigned_user_id")).and_then(Value::as_str)),
+        "assignedUserName": non_empty_opt(row.as_object().and_then(|obj| obj.get("assigned_user_name")).and_then(Value::as_str)),
+        "qualificationScore": number_from_value(row.as_object().and_then(|obj| obj.get("qualification_score"))).round() as i64,
+        "qualificationBand": value_str(row, "qualification_band"),
+        "responseSlaStatus": value_str(row, "response_sla_status"),
+        "responseSlaAlertLevel": value_str(row, "response_sla_alert_level"),
+        "firstResponseMinutes": number_from_value(row.as_object().and_then(|obj| obj.get("first_response_minutes"))),
+        "lastTouchAt": if last_touch_at.trim().is_empty() { Value::Null } else { Value::String(last_touch_at) },
+        "source": value_str(row, "source"),
+        "primaryHref": format!("/module/applications/{}", value_str(row, "id")),
+    })
+}
+
+fn build_application_detail_contract(row: &Value, context: &ApplicationLinkContext) -> Value {
+    let mut item = build_overview_row_contract(row, context.clone(), value_str(row, "updated_at"))
+        .as_object()
+        .cloned()
+        .unwrap_or_default();
+    item.insert(
+        "createdAt".to_string(),
+        row.as_object()
+            .and_then(|obj| obj.get("created_at"))
+            .cloned()
+            .unwrap_or(Value::Null),
+    );
+    item.insert(
+        "monthlyIncome".to_string(),
+        row.as_object()
+            .and_then(|obj| obj.get("monthly_income"))
+            .cloned()
+            .unwrap_or(Value::Null),
+    );
+    item.insert(
+        "guaranteeChoice".to_string(),
+        row.as_object()
+            .and_then(|obj| obj.get("guarantee_choice"))
+            .cloned()
+            .unwrap_or(Value::Null),
+    );
+    item.insert(
+        "documentNumber".to_string(),
+        row.as_object()
+            .and_then(|obj| obj.get("document_number"))
+            .cloned()
+            .unwrap_or(Value::Null),
+    );
+    item.insert(
+        "message".to_string(),
+        row.as_object()
+            .and_then(|obj| obj.get("message"))
+            .cloned()
+            .unwrap_or(Value::Null),
+    );
+    item.insert(
+        "predictiveScore".to_string(),
+        row.as_object()
+            .and_then(|obj| obj.get("predictive_score"))
+            .cloned()
+            .unwrap_or(Value::Null),
+    );
+    item.insert(
+        "riskFactors".to_string(),
+        row.as_object()
+            .and_then(|obj| obj.get("risk_factors"))
+            .cloned()
+            .unwrap_or_else(|| Value::Array(Vec::new())),
+    );
+    Value::Object(item)
+}
+
+fn build_application_qualification(row: &Value) -> Value {
+    json!({
+        "score": number_from_value(row.as_object().and_then(|obj| obj.get("qualification_score"))).round() as i64,
+        "band": value_str(row, "qualification_band"),
+        "incomeToRentRatio": row
+            .as_object()
+            .and_then(|obj| obj.get("income_to_rent_ratio"))
+            .cloned()
+            .unwrap_or(Value::Null),
+        "reasons": qualification_reasons(row),
+    })
+}
+
+fn build_application_messages_contract(messages: &[Value]) -> Vec<Value> {
+    messages
+        .iter()
+        .map(|message| {
+            let payload = message
+                .as_object()
+                .and_then(|obj| obj.get("payload"))
+                .and_then(Value::as_object)
+                .cloned()
+                .unwrap_or_default();
+            let body_preview = payload
+                .get("body")
+                .and_then(Value::as_str)
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .map(|value| value.chars().take(180).collect::<String>())
+                .unwrap_or_default();
+            json!({
+                "id": value_str(message, "id"),
+                "channel": value_str(message, "channel"),
+                "direction": value_str(message, "direction"),
+                "status": value_str(message, "status"),
+                "subject": payload.get("subject").cloned().unwrap_or(Value::Null),
+                "bodyPreview": body_preview,
+                "createdAt": value_str(message, "created_at"),
+            })
+        })
+        .collect()
+}
+
+fn build_application_timeline(
+    application: &Value,
+    events: &[Value],
+    messages: &[Value],
+    related_lease: Option<&RelatedLeaseInfo>,
+) -> Vec<Value> {
+    let mut timeline = Vec::new();
+
+    if let Some(created_at) = non_empty_opt(
+        application
+            .as_object()
+            .and_then(|obj| obj.get("created_at"))
+            .and_then(Value::as_str),
+    ) {
+        timeline.push(json!({
+            "id": format!("submitted:{}", value_str(application, "id")),
+            "kind": "application_event",
+            "title": "Application submitted",
+            "subtitle": value_str(application, "source"),
+            "createdAt": created_at,
+        }));
+    }
+
+    for event in events {
+        let event_type = value_str(event, "event_type");
+        let payload = event
+            .as_object()
+            .and_then(|obj| obj.get("event_payload"))
+            .and_then(Value::as_object)
+            .cloned()
+            .unwrap_or_default();
+        let (title, subtitle) = match event_type.as_str() {
+            "apply_submit" => (
+                "Application submitted".to_string(),
+                value_str(application, "source"),
+            ),
+            "status_changed" => {
+                let next = payload
+                    .get("to")
+                    .and_then(Value::as_str)
+                    .map(status_label)
+                    .unwrap_or_else(|| "Status changed".to_string());
+                (
+                    format!("Status changed to {next}"),
+                    payload
+                        .get("note")
+                        .and_then(Value::as_str)
+                        .map(ToOwned::to_owned)
+                        .unwrap_or_default(),
+                )
+            }
+            "lease_sign" => (
+                "Converted to lease".to_string(),
+                payload
+                    .get("lease_id")
+                    .and_then(Value::as_str)
+                    .map(|lease_id| format!("Lease {lease_id}"))
+                    .unwrap_or_default(),
+            ),
+            _ => (
+                event_type.replace('_', " "),
+                payload
+                    .get("note")
+                    .and_then(Value::as_str)
+                    .map(ToOwned::to_owned)
+                    .unwrap_or_default(),
+            ),
+        };
+        timeline.push(json!({
+            "id": value_str(event, "id"),
+            "kind": "application_event",
+            "title": title,
+            "subtitle": subtitle,
+            "createdAt": value_str(event, "created_at"),
+        }));
+    }
+
+    for message in build_application_messages_contract(messages) {
+        let title = format!(
+            "{} message",
+            message
+                .get("channel")
+                .and_then(Value::as_str)
+                .unwrap_or("Outbound")
+        );
+        let subtitle = message
+            .get("bodyPreview")
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .to_string();
+        timeline.push(json!({
+            "id": message.get("id").cloned().unwrap_or(Value::Null),
+            "kind": "message",
+            "title": title,
+            "subtitle": subtitle,
+            "createdAt": message.get("createdAt").cloned().unwrap_or(Value::Null),
+        }));
+    }
+
+    if let Some(lease) = related_lease {
+        timeline.push(json!({
+            "id": format!("lease:{}", lease.id),
+            "kind": "conversion",
+            "title": "Lease created",
+            "subtitle": lease.id,
+            "createdAt": lease.updated_at.clone().unwrap_or_default(),
+        }));
+    }
+
+    timeline.sort_by(|left, right| {
+        right
+            .get("createdAt")
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .cmp(
+                left.get("createdAt")
+                    .and_then(Value::as_str)
+                    .unwrap_or_default(),
+            )
+    });
+    timeline
+}
+
+fn sort_application_overview_rows(
+    rows: &mut [Value],
+    sort: Option<&str>,
+    last_touch_index: &std::collections::HashMap<String, String>,
+    related_leases: &std::collections::HashMap<String, RelatedLeaseInfo>,
+) {
+    let sort_key = sort.unwrap_or("last_touch_desc");
+    rows.sort_by(|left, right| {
+        let ordering = match sort_key {
+            "qualification_desc" => number_from_value(
+                right
+                    .as_object()
+                    .and_then(|obj| obj.get("qualification_score")),
+            )
+            .partial_cmp(&number_from_value(
+                left.as_object()
+                    .and_then(|obj| obj.get("qualification_score")),
+            ))
+            .unwrap_or(std::cmp::Ordering::Equal),
+            "created_desc" => value_str(right, "created_at").cmp(&value_str(left, "created_at")),
+            "sla_desc" => sla_sort_rank(right)
+                .cmp(&sla_sort_rank(left))
+                .then_with(|| value_str(right, "created_at").cmp(&value_str(left, "created_at"))),
+            "status_desc" => value_str(right, "status").cmp(&value_str(left, "status")),
+            _ => {
+                let right_id = value_str(right, "id");
+                let left_id = value_str(left, "id");
+                last_touch_index
+                    .get(&right_id)
+                    .cloned()
+                    .unwrap_or_else(|| value_str(right, "updated_at"))
+                    .cmp(
+                        &last_touch_index
+                            .get(&left_id)
+                            .cloned()
+                            .unwrap_or_else(|| value_str(left, "updated_at")),
+                    )
+                    .then_with(|| {
+                        application_matches_view(right, Some("qualified_ready"), related_leases)
+                            .cmp(&application_matches_view(
+                                left,
+                                Some("qualified_ready"),
+                                related_leases,
+                            ))
+                    })
+            }
+        };
+        ordering
+    });
+}
+
+fn qualification_reasons(row: &Value) -> Vec<String> {
+    let mut reasons = Vec::new();
+    let ratio = number_from_value(
+        row.as_object()
+            .and_then(|obj| obj.get("income_to_rent_ratio")),
+    );
+    if ratio >= 3.0 {
+        reasons.push("Income covers rent above 3x.".to_string());
+    } else if ratio > 0.0 {
+        reasons.push(format!("Income-to-rent ratio is {ratio:.2}x."));
+    }
+    if has_non_empty_string(row.as_object().and_then(|obj| obj.get("document_number"))) {
+        reasons.push("Identity document provided.".to_string());
+    }
+    if has_non_empty_string(row.as_object().and_then(|obj| obj.get("phone_e164"))) {
+        reasons.push("Phone contact is available.".to_string());
+    }
+    let guarantee_choice = value_str(row, "guarantee_choice");
+    if !guarantee_choice.is_empty() {
+        reasons.push(format!(
+            "Guarantee option: {}.",
+            guarantee_choice.replace('_', " ")
+        ));
+    }
+    if reasons.is_empty() {
+        reasons.push("Qualification data is limited; review manually.".to_string());
+    }
+    reasons
+}
+
+fn can_convert_to_lease(row: &Value, related_lease: Option<&RelatedLeaseInfo>) -> bool {
+    if related_lease.is_some() {
+        return false;
+    }
+    matches!(
+        value_str(row, "status").as_str(),
+        "qualified" | "visit_scheduled" | "offer_sent"
+    )
+}
+
+fn is_stalled_application(row: &Value) -> bool {
+    if has_non_empty_string(row.as_object().and_then(|obj| obj.get("first_response_at"))) {
+        return false;
+    }
+    if !matches!(value_str(row, "status").as_str(), "new" | "screening") {
+        return false;
+    }
+    parse_iso_datetime(row.as_object().and_then(|obj| obj.get("created_at")))
+        .map(|created_at| Utc::now().fixed_offset() - created_at >= Duration::hours(48))
+        .unwrap_or(false)
+}
+
+fn status_label(value: &str) -> String {
+    match value.trim().to_ascii_lowercase().as_str() {
+        "new" => "New".to_string(),
+        "screening" => "Screening".to_string(),
+        "qualified" => "Qualified".to_string(),
+        "visit_scheduled" => "Visit scheduled".to_string(),
+        "offer_sent" => "Offer sent".to_string(),
+        "contract_signed" => "Contract signed".to_string(),
+        "rejected" => "Rejected".to_string(),
+        "lost" => "Lost".to_string(),
+        other => other.replace('_', " "),
+    }
+}
+
+fn sla_sort_rank(row: &Value) -> i32 {
+    match value_str(row, "response_sla_status").as_str() {
+        "breached" => 4,
+        "pending" => match value_str(row, "response_sla_alert_level").as_str() {
+            "critical" => 3,
+            "warning" => 2,
+            _ => 1,
+        },
+        "met" => 0,
+        _ => 0,
+    }
+}
+
+fn max_timestamp(current: Option<String>, next: Option<String>) -> Option<String> {
+    match (current, next) {
+        (Some(current), Some(next)) => {
+            let current_dt = parse_iso_datetime(Some(&Value::String(current.clone())));
+            let next_dt = parse_iso_datetime(Some(&Value::String(next.clone())));
+            match (current_dt, next_dt) {
+                (Some(current_dt), Some(next_dt)) => {
+                    if next_dt > current_dt {
+                        Some(next)
+                    } else {
+                        Some(current)
+                    }
+                }
+                (None, Some(_)) => Some(next),
+                _ => Some(current),
+            }
+        }
+        (Some(current), None) => Some(current),
+        (None, Some(next)) => Some(next),
+        (None, None) => None,
+    }
 }
 
 fn qualification_from_row(

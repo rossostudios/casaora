@@ -247,6 +247,7 @@ pub struct RunAiAgentChatParams<'a> {
     pub allowed_tools: Option<&'a [String]>,
     pub agent_slug: Option<&'a str>,
     pub chat_id: Option<&'a str>,
+    pub agent_run_id: Option<&'a str>,
     pub requested_by_user_id: Option<&'a str>,
     pub preferred_model: Option<&'a str>,
     pub max_steps_override: Option<i32>,
@@ -541,6 +542,7 @@ pub async fn run_ai_agent_chat(
                                 allowed_tools: effective_allowed_tools,
                                 agent_slug: params.agent_slug,
                                 chat_id: params.chat_id,
+                                agent_run_id: params.agent_run_id,
                                 requested_by_user_id: params.requested_by_user_id,
                                 approved_execution: false,
                             },
@@ -772,6 +774,7 @@ pub async fn execute_approved_tool(
             allowed_tools: None,
             agent_slug: Some("system"),
             chat_id: None,
+            agent_run_id: None,
             requested_by_user_id: None,
             approved_execution: true,
         },
@@ -994,6 +997,7 @@ pub async fn run_ai_agent_chat_streaming(
                                 allowed_tools: effective_allowed_tools,
                                 agent_slug: params.agent_slug,
                                 chat_id: params.chat_id,
+                                agent_run_id: params.agent_run_id,
                                 requested_by_user_id: params.requested_by_user_id,
                                 approved_execution: false,
                             },
@@ -1274,19 +1278,28 @@ async fn write_agent_trace(
         None => return,
     };
     let tool_calls_json = serde_json::to_value(tool_trace).unwrap_or_default();
+    let run_mode = if chat_id.is_some() {
+        "copilot"
+    } else {
+        "autonomous"
+    };
     let _ = sqlx::query(
         "INSERT INTO agent_traces (
             organization_id, chat_id, agent_slug, user_id,
-            model_used, prompt_tokens, completion_tokens, total_tokens,
-            latency_ms, tool_calls, tool_count, fallback_used,
-            success, error_message, llm_transport, runtime_run_id,
+            model_used, provider, stop_reason,
+            prompt_tokens, completion_tokens, total_tokens,
+            cache_creation_input_tokens, cache_read_input_tokens,
+            latency_ms, tool_calls, tool_count, fallback_used, fallback_from,
+            success, error_message, llm_transport, run_mode, runtime_run_id,
             runtime_trace_id, is_shadow_run, shadow_of_run_id, created_at
         ) VALUES (
             $1::uuid, $2::uuid, $3, $4::uuid,
-            $5, $6, $7, $8,
-            $9, $10, $11, $12,
-            $13, $14, $15, $16,
-            $17, $18, $19, now()
+            $5, $6, $7,
+            $8, $9, $10,
+            $11, $12,
+            $13, $14, $15, $16, $17,
+            $18, $19, $20, $21, $22,
+            $23, $24, $25, now()
         )",
     )
     .bind(org_id)
@@ -1294,16 +1307,22 @@ async fn write_agent_trace(
     .bind(agent_slug.unwrap_or("supervisor"))
     .bind(user_id)
     .bind(model_used)
+    .bind(usage.provider.as_deref())
+    .bind(usage.stop_reason.as_deref())
     .bind(usage.prompt_tokens as i32)
     .bind(usage.completion_tokens as i32)
     .bind(usage.total_tokens as i32)
+    .bind(usage.cache_creation_input_tokens as i32)
+    .bind(usage.cache_read_input_tokens as i32)
     .bind(usage.total_latency_ms as i32)
     .bind(&tool_calls_json)
     .bind(tool_trace.len() as i32)
     .bind(fallback_used)
+    .bind(usage.fallback_from.as_deref())
     .bind(success)
     .bind(error_message)
     .bind(llm_transport.storage_value())
+    .bind(run_mode)
     .bind(run_id)
     .bind(trace_id)
     .bind(is_shadow_run)
@@ -1437,6 +1456,7 @@ async fn run_shadow_parity(seed: ShadowParitySeed) {
             role: &seed.role,
             message: &seed.message,
             conversation: &seed.conversation,
+            agent_run_id: None,
             allow_mutations: false,
             confirm_write: false,
             agent_name: &seed.agent_name,
@@ -1856,8 +1876,13 @@ struct RunTokenUsage {
     prompt_tokens: u32,
     completion_tokens: u32,
     total_tokens: u32,
+    cache_creation_input_tokens: u32,
+    cache_read_input_tokens: u32,
     total_latency_ms: u64,
     call_count: u32,
+    provider: Option<String>,
+    stop_reason: Option<String>,
+    fallback_from: Option<String>,
 }
 
 impl RunTokenUsage {
@@ -1865,8 +1890,19 @@ impl RunTokenUsage {
         self.prompt_tokens += resp.prompt_tokens;
         self.completion_tokens += resp.completion_tokens;
         self.total_tokens += resp.total_tokens;
+        self.cache_creation_input_tokens += resp.cache_creation_input_tokens;
+        self.cache_read_input_tokens += resp.cache_read_input_tokens;
         self.total_latency_ms += resp.latency_ms;
         self.call_count += 1;
+        self.provider = Some(resp.provider.as_str().to_string());
+        if let Some(stop_reason) = resp.stop_reason.as_deref() {
+            if !stop_reason.trim().is_empty() {
+                self.stop_reason = Some(stop_reason.trim().to_string());
+            }
+        }
+        if resp.fallback_used {
+            self.fallback_from = resp.fallback_from.clone();
+        }
     }
 }
 
@@ -2274,6 +2310,58 @@ pub fn tool_definitions(allowed_tools: Option<&[String]>) -> Vec<Value> {
                         "expires_days": {"type": "integer", "minimum": 1, "maximum": 365, "default": 90, "description": "Days until this memory expires."}
                     },
                     "required": ["memory_key", "memory_value"]
+                }
+            }
+        }),
+        // --- Blackboard: cross-agent shared communication ---
+        json!({
+            "type": "function",
+            "function": {
+                "name": "post_to_blackboard",
+                "description": "Post a message to the shared agent blackboard. Other agents in the same org can read these entries. Use for cross-agent coordination (e.g., 'maintenance agent: water leak in Unit 3 — finance agent should expect expense').",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "message": {"type": "string", "description": "The message to post to the blackboard."},
+                        "tags": {"type": "array", "items": {"type": "string"}, "description": "Tags to categorize the message (e.g., ['maintenance', 'urgent', 'unit-3'])."},
+                        "target_agent": {"type": "string", "description": "Optional specific agent slug this message is intended for."},
+                        "priority": {"type": "string", "enum": ["low", "medium", "high", "critical"], "default": "medium"}
+                    },
+                    "required": ["message"]
+                }
+            }
+        }),
+        json!({
+            "type": "function",
+            "function": {
+                "name": "read_blackboard",
+                "description": "Read shared agent blackboard entries for this org. Returns messages posted by other agents, filtered by tags or target agent.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "tags": {"type": "array", "items": {"type": "string"}, "description": "Filter by tags (any match)."},
+                        "since_hours": {"type": "integer", "minimum": 1, "maximum": 168, "default": 24, "description": "Only return entries from the last N hours."},
+                        "limit": {"type": "integer", "minimum": 1, "maximum": 50, "default": 20}
+                    },
+                    "required": []
+                }
+            }
+        }),
+        // --- Phase 2: Agent Event Bus ---
+        json!({
+            "type": "function",
+            "function": {
+                "name": "publish_agent_event",
+                "description": "Publish an event to the agent event bus for async inter-agent communication. Events are processed by the scheduler and can trigger workflows or invoke target agents.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "event_type": {"type": "string", "description": "Event type identifier (e.g., 'maintenance_completed', 'price_updated', 'anomaly_resolved')."},
+                        "target_agent": {"type": "string", "description": "Optional target agent slug. If omitted, event is broadcast to all matching workflow rules."},
+                        "priority": {"type": "string", "enum": ["low", "medium", "high", "critical"], "default": "medium"},
+                        "payload": {"type": "object", "description": "Additional event data (free-form JSON)."}
+                    },
+                    "required": ["event_type"]
                 }
             }
         }),
@@ -3238,6 +3326,101 @@ pub fn tool_definitions(allowed_tools: Option<&[String]>) -> Vec<Value> {
                 }
             }
         }),
+        // --- Phase 3: Digital Twin & Intelligence ---
+        json!({
+            "type": "function",
+            "function": {
+                "name": "get_property_twin",
+                "description": "Get the digital twin state for a property: health score (0-100), occupancy, ADR, revenue MTD, maintenance backlog, review scores, risk flags. Updated every 5 minutes.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "property_id": {"type": "string", "description": "UUID of the property."}
+                    },
+                    "required": ["property_id"]
+                }
+            }
+        }),
+        json!({
+            "type": "function",
+            "function": {
+                "name": "simulate_on_twin",
+                "description": "Run a what-if simulation on a property's digital twin. Test rate changes and see projected impact on occupancy and revenue using ML elasticity models. Read-only — no data is modified.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "property_id": {"type": "string", "description": "UUID of the property."},
+                        "rate_change_pct": {"type": "number", "minimum": -50, "maximum": 100, "description": "Percentage change to nightly rate (e.g., 10 for +10%, -5 for -5%)."}
+                    },
+                    "required": ["property_id", "rate_change_pct"]
+                }
+            }
+        }),
+        json!({
+            "type": "function",
+            "function": {
+                "name": "optimize_channel_rates",
+                "description": "Get per-channel (Airbnb, Booking, VRBO, direct) rate recommendations for a property. Accounts for commission rates, booking velocity, and demand to maximize net revenue.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "property_id": {"type": "string", "description": "UUID of the property."},
+                        "base_rate": {"type": "number", "description": "Current base nightly rate."},
+                        "target_net_rate": {"type": "number", "description": "Optional desired net rate after commission. Defaults to base_rate."}
+                    },
+                    "required": ["property_id", "base_rate"]
+                }
+            }
+        }),
+        json!({
+            "type": "function",
+            "function": {
+                "name": "get_channel_performance",
+                "description": "Get per-channel revenue, booking count, average rate, commission cost, and net revenue for a property (or org-wide) over a date range.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "property_id": {"type": "string", "description": "Optional property UUID. Omit for org-wide breakdown."},
+                        "days": {"type": "integer", "minimum": 7, "maximum": 365, "default": 90, "description": "Lookback period in days (default 90)."}
+                    }
+                }
+            }
+        }),
+        json!({
+            "type": "function",
+            "function": {
+                "name": "request_deliberation",
+                "description": "Request a multi-agent deliberation on a topic. Each involved agent assesses the proposal and the supervisor synthesizes a consensus. Use for decisions that affect multiple domains (pricing + guest experience, maintenance + occupancy, etc.).",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "topic": {"type": "string", "description": "The decision topic to deliberate on."},
+                        "proposal": {"type": "string", "description": "The initial proposal or recommendation."},
+                        "agent_slugs": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "Agent slugs to involve in deliberation (e.g., ['finance-agent','guest-concierge'])."
+                        },
+                        "property_id": {"type": "string", "description": "Optional property context."}
+                    },
+                    "required": ["topic", "proposal", "agent_slugs"]
+                }
+            }
+        }),
+        json!({
+            "type": "function",
+            "function": {
+                "name": "get_agent_learning_summary",
+                "description": "Get effectiveness metrics and learning insights for agents. Shows decision outcomes, accuracy trends, and areas for improvement based on historical traces.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "agent_slug": {"type": "string", "description": "Optional specific agent slug. Omit for all agents."},
+                        "days": {"type": "integer", "minimum": 7, "maximum": 90, "default": 30, "description": "Lookback period in days."}
+                    }
+                }
+            }
+        }),
     ];
 
     let Some(allowed_tools) = allowed_tools else {
@@ -3276,6 +3459,7 @@ pub struct ToolContext<'a> {
     pub allowed_tools: Option<&'a [String]>,
     pub agent_slug: Option<&'a str>,
     pub chat_id: Option<&'a str>,
+    pub agent_run_id: Option<&'a str>,
     pub requested_by_user_id: Option<&'a str>,
     pub approved_execution: bool,
 }
@@ -3449,6 +3633,23 @@ pub async fn execute_tool(
             tool_recall_memory(state, context.org_id, context.agent_slug, args).await
         }
         "store_memory" => tool_store_memory(state, context.org_id, context.agent_slug, args).await,
+        // Blackboard: cross-agent shared communication
+        "post_to_blackboard" => {
+            tool_post_to_blackboard(state, context.org_id, context.agent_slug, args).await
+        }
+        "read_blackboard" => {
+            tool_read_blackboard(state, context.org_id, context.agent_slug, args).await
+        }
+        // Phase 2: Agent Event Bus
+        "publish_agent_event" => {
+            crate::services::event_bus::tool_publish_agent_event(
+                state,
+                context.org_id,
+                context.agent_slug,
+                args,
+            )
+            .await
+        }
         // Phase 1: Planning & Decomposition
         "check_escalation_thresholds" => {
             tool_check_escalation_thresholds(state, context.org_id, context.agent_slug, args).await
@@ -3770,6 +3971,35 @@ pub async fn execute_tool(
             )
             .await
         }
+        // Phase 3: Digital Twin & Intelligence
+        "get_property_twin" => {
+            crate::services::digital_twin::tool_get_property_twin(state, context.org_id, args).await
+        }
+        "simulate_on_twin" => {
+            crate::services::digital_twin::tool_simulate_on_twin(state, context.org_id, args).await
+        }
+        "optimize_channel_rates" => {
+            crate::services::channel_optimizer::tool_optimize_channel_rates(
+                state,
+                context.org_id,
+                args,
+            )
+            .await
+        }
+        "get_channel_performance" => {
+            crate::services::channel_optimizer::tool_get_channel_performance(
+                state,
+                context.org_id,
+                args,
+            )
+            .await
+        }
+        "request_deliberation" => {
+            tool_request_deliberation(state, context.org_id, context.agent_slug, args).await
+        }
+        "get_agent_learning_summary" => {
+            tool_get_agent_learning_summary(state, context.org_id, args).await
+        }
         _ => Ok(json!({
             "ok": false,
             "error": format!("Unknown tool: {tool_name}"),
@@ -3914,7 +4144,12 @@ async fn maybe_create_approval(
     if !is_mutation_tool(tool_name) {
         return Ok(None);
     }
-    if !approval_required_by_policy(state, context.org_id, tool_name).await {
+    // Extract confidence score from tool args for confidence-based approval
+    let confidence_score = args
+        .get("confidence")
+        .or_else(|| args.get("confidence_score"))
+        .and_then(Value::as_f64);
+    if !approval_required_by_policy(state, context.org_id, tool_name, confidence_score).await {
         return Ok(None);
     }
 
@@ -3927,16 +4162,18 @@ async fn maybe_create_approval(
         "INSERT INTO agent_approvals (
             organization_id,
             chat_id,
+            agent_run_id,
             agent_slug,
             tool_name,
             tool_args,
             status,
             requested_by
-         ) VALUES ($1::uuid, $2::uuid, $3, $4, $5, 'pending', $6::uuid)
+         ) VALUES ($1::uuid, $2::uuid, $3::uuid, $4, $5, $6, 'pending', $7::uuid)
          RETURNING id::text AS id",
     )
     .bind(context.org_id)
     .bind(context.chat_id)
+    .bind(context.agent_run_id)
     .bind(context.agent_slug.unwrap_or("system"))
     .bind(tool_name)
     .bind(Value::Object(args.clone()))
@@ -3948,6 +4185,22 @@ async fn maybe_create_approval(
     let approval_id = approval
         .and_then(|row| row.try_get::<Option<String>, _>("id").ok().flatten())
         .unwrap_or_default();
+
+    // Push real-time SSE notification for instant approval queue update
+    if !approval_id.is_empty() {
+        let notify_payload = serde_json::json!({
+            "event_type": "approval_pending",
+            "approval_id": &approval_id,
+            "tool_name": tool_name,
+            "agent_slug": context.agent_slug.unwrap_or("system"),
+        });
+        crate::services::notification_center::notify_org_event(
+            pool,
+            context.org_id,
+            &notify_payload,
+        )
+        .await;
+    }
 
     Ok(Some(json!({
         "ok": true,
@@ -3962,7 +4215,18 @@ fn is_mutation_tool(tool_name: &str) -> bool {
     MUTATION_TOOLS.contains(&tool_name)
 }
 
-async fn approval_required_by_policy(state: &AppState, org_id: &str, tool_name: &str) -> bool {
+/// Check whether a tool invocation requires human approval.
+///
+/// Three approval modes:
+/// - `required`: always require human approval
+/// - `auto`: always skip (auto-approve)
+/// - `confidence`: auto-approve when `confidence_score` ≥ policy threshold
+async fn approval_required_by_policy(
+    state: &AppState,
+    org_id: &str,
+    tool_name: &str,
+    confidence_score: Option<f64>,
+) -> bool {
     if !is_mutation_tool(tool_name) {
         return false;
     }
@@ -3972,7 +4236,8 @@ async fn approval_required_by_policy(state: &AppState, org_id: &str, tool_name: 
     };
 
     let row = sqlx::query(
-        "SELECT approval_mode, enabled, auto_approve_threshold, auto_approve_tables
+        "SELECT approval_mode, enabled,
+                COALESCE(auto_approve_threshold, 0.85)::float8 AS threshold
          FROM agent_approval_policies
          WHERE organization_id = $1::uuid
            AND tool_name = $2
@@ -4000,12 +4265,28 @@ async fn approval_required_by_policy(state: &AppState, org_id: &str, tool_name: 
         .try_get::<String, _>("approval_mode")
         .unwrap_or_else(|_| "required".to_string());
 
-    // Auto-approve mode: skip approval if confidence exceeds threshold
-    if mode.trim().eq_ignore_ascii_case("auto") {
-        return false;
-    }
+    let mode = mode.trim().to_lowercase();
 
-    mode.trim().eq_ignore_ascii_case("required")
+    match mode.as_str() {
+        "auto" => false,
+        "confidence" => {
+            // Auto-approve when confidence exceeds the org's threshold
+            let threshold: f64 = row.try_get::<f64, _>("threshold").unwrap_or(0.85);
+            match confidence_score {
+                Some(score) if score >= threshold => {
+                    tracing::info!(
+                        tool_name,
+                        score,
+                        threshold,
+                        "Auto-approved via confidence mode"
+                    );
+                    false
+                }
+                _ => true,
+            }
+        }
+        _ => true, // "required" or unknown → require approval
+    }
 }
 
 async fn tool_create_row(
@@ -4399,6 +4680,7 @@ async fn delegate_to_single_agent(
         role,
         message,
         conversation: &[],
+        agent_run_id: None,
         allow_mutations,
         confirm_write,
         agent_name: &name,
@@ -6874,6 +7156,179 @@ async fn tool_store_memory(
 }
 
 // ---------------------------------------------------------------------------
+// Tool: post_to_blackboard — shared cross-agent communication
+// ---------------------------------------------------------------------------
+
+async fn tool_post_to_blackboard(
+    state: &AppState,
+    org_id: &str,
+    agent_slug: Option<&str>,
+    args: &Map<String, Value>,
+) -> AppResult<Value> {
+    let pool = db_pool(state)?;
+
+    let message = args
+        .get("message")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .unwrap_or_default();
+    if message.is_empty() {
+        return Ok(json!({ "ok": false, "error": "message is required." }));
+    }
+
+    let tags: Vec<String> = args
+        .get("tags")
+        .and_then(Value::as_array)
+        .map(|arr| {
+            arr.iter()
+                .filter_map(Value::as_str)
+                .map(ToOwned::to_owned)
+                .collect()
+        })
+        .unwrap_or_default();
+    let target_agent = args.get("target_agent").and_then(Value::as_str);
+    let priority = args
+        .get("priority")
+        .and_then(Value::as_str)
+        .unwrap_or("medium");
+
+    let slug = agent_slug.unwrap_or("system");
+
+    // Store as shared memory with context_type = 'blackboard'
+    let memory_key = format!("bb:{}:{}", slug, chrono::Utc::now().timestamp_millis());
+
+    let mut metadata = serde_json::Map::new();
+    metadata.insert("tags".to_string(), json!(tags));
+    metadata.insert("priority".to_string(), json!(priority));
+    if let Some(target) = target_agent {
+        metadata.insert("target_agent".to_string(), json!(target));
+    }
+    metadata.insert("source_agent".to_string(), json!(slug));
+
+    let result = sqlx::query(
+        "INSERT INTO agent_memory (organization_id, agent_slug, memory_key, memory_value, context_type, shared, expires_at, importance_score, memory_tier, metadata)
+         VALUES ($1::uuid, $2, $3, $4, 'blackboard', true, now() + interval '48 hours', $5, 'episodic', $6)
+         RETURNING id",
+    )
+    .bind(org_id)
+    .bind(slug)
+    .bind(&memory_key)
+    .bind(message)
+    .bind(if priority == "high" { 0.9 } else { 0.6 })
+    .bind(Value::Object(metadata))
+    .fetch_one(pool)
+    .await
+    .map_err(|e| db_error(state, &e))?;
+
+    let entry_id = result
+        .try_get::<sqlx::types::Uuid, _>("id")
+        .map(|u| u.to_string())
+        .unwrap_or_default();
+
+    Ok(json!({
+        "ok": true,
+        "entry_id": entry_id,
+        "key": memory_key,
+        "posted_by": slug,
+    }))
+}
+
+// ---------------------------------------------------------------------------
+// Tool: read_blackboard — read shared cross-agent messages
+// ---------------------------------------------------------------------------
+
+async fn tool_read_blackboard(
+    state: &AppState,
+    org_id: &str,
+    agent_slug: Option<&str>,
+    args: &Map<String, Value>,
+) -> AppResult<Value> {
+    let pool = db_pool(state)?;
+
+    let since_hours = args
+        .get("since_hours")
+        .and_then(Value::as_i64)
+        .unwrap_or(24)
+        .clamp(1, 168);
+    let limit = args
+        .get("limit")
+        .and_then(Value::as_i64)
+        .unwrap_or(20)
+        .clamp(1, 50);
+    let tags: Vec<String> = args
+        .get("tags")
+        .and_then(Value::as_array)
+        .map(|arr| {
+            arr.iter()
+                .filter_map(Value::as_str)
+                .map(ToOwned::to_owned)
+                .collect()
+        })
+        .unwrap_or_default();
+
+    let _slug = agent_slug.unwrap_or("system");
+
+    // Read all shared blackboard entries for this org, optionally filtered by tags
+    let rows = if tags.is_empty() {
+        sqlx::query(
+            "SELECT memory_key, memory_value, agent_slug, metadata, created_at::text
+             FROM agent_memory
+             WHERE organization_id = $1::uuid
+               AND context_type = 'blackboard'
+               AND shared = true
+               AND created_at > now() - ($2::int || ' hours')::interval
+             ORDER BY created_at DESC
+             LIMIT $3",
+        )
+        .bind(org_id)
+        .bind(since_hours as i32)
+        .bind(limit as i32)
+        .fetch_all(pool)
+        .await
+        .map_err(|e| db_error(state, &e))?
+    } else {
+        // Filter by tags using JSONB containment
+        sqlx::query(
+            "SELECT memory_key, memory_value, agent_slug, metadata, created_at::text
+             FROM agent_memory
+             WHERE organization_id = $1::uuid
+               AND context_type = 'blackboard'
+               AND shared = true
+               AND created_at > now() - ($2::int || ' hours')::interval
+               AND metadata->'tags' ?| $4
+             ORDER BY created_at DESC
+             LIMIT $3",
+        )
+        .bind(org_id)
+        .bind(since_hours as i32)
+        .bind(limit as i32)
+        .bind(&tags)
+        .fetch_all(pool)
+        .await
+        .map_err(|e| db_error(state, &e))?
+    };
+
+    let entries: Vec<Value> = rows
+        .iter()
+        .map(|r| {
+            json!({
+                "key": r.try_get::<String, _>("memory_key").unwrap_or_default(),
+                "message": r.try_get::<String, _>("memory_value").unwrap_or_default(),
+                "posted_by": r.try_get::<String, _>("agent_slug").unwrap_or_default(),
+                "metadata": r.try_get::<Value, _>("metadata").unwrap_or(json!({})),
+                "created_at": r.try_get::<String, _>("created_at").unwrap_or_default(),
+            })
+        })
+        .collect();
+
+    Ok(json!({
+        "ok": true,
+        "entries": entries,
+        "count": entries.len(),
+    }))
+}
+
+// ---------------------------------------------------------------------------
 // Tool: check_escalation_thresholds — check if action exceeds configured limits
 // ---------------------------------------------------------------------------
 
@@ -7479,6 +7934,365 @@ fn db_pool(state: &AppState) -> AppResult<&sqlx::PgPool> {
     })
 }
 
+// ---------------------------------------------------------------------------
+// Phase 3: Multi-Agent Deliberation
+// ---------------------------------------------------------------------------
+
+async fn tool_request_deliberation(
+    state: &AppState,
+    org_id: &str,
+    agent_slug: Option<&str>,
+    args: &Map<String, Value>,
+) -> AppResult<Value> {
+    let pool = db_pool(state)?;
+
+    let topic = args
+        .get("topic")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .unwrap_or_default();
+    let proposal = args
+        .get("proposal")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .unwrap_or_default();
+    let property_id = args.get("property_id").and_then(Value::as_str);
+
+    if topic.is_empty() || proposal.is_empty() {
+        return Ok(json!({ "ok": false, "error": "topic and proposal are required." }));
+    }
+
+    let agent_slugs: Vec<String> = args
+        .get("agent_slugs")
+        .and_then(Value::as_array)
+        .map(|arr| {
+            arr.iter()
+                .filter_map(Value::as_str)
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+                .collect()
+        })
+        .unwrap_or_default();
+
+    if agent_slugs.is_empty() {
+        return Ok(json!({ "ok": false, "error": "agent_slugs must include at least one agent." }));
+    }
+
+    let source = agent_slug.unwrap_or("supervisor");
+    let deliberation_id = uuid::Uuid::new_v4().to_string();
+
+    // Store deliberation context on the blackboard
+    let bb_key = format!("deliberation:{deliberation_id}");
+    sqlx::query(
+        "INSERT INTO agent_memory (organization_id, agent_slug, memory_key, memory_value, context_type, shared, metadata)
+         VALUES ($1::uuid, $2, $3, $4, 'blackboard', true, $5::jsonb)",
+    )
+    .bind(org_id)
+    .bind(source)
+    .bind(&bb_key)
+    .bind(format!("Deliberation: {topic}\nProposal: {proposal}"))
+    .bind(json!({
+        "deliberation_id": deliberation_id,
+        "topic": topic,
+        "proposal": proposal,
+        "property_id": property_id,
+        "requesting_agent": source,
+        "target_agents": &agent_slugs,
+        "status": "open",
+    }))
+    .execute(pool)
+    .await
+    .map_err(|error| db_error(state, &error))?;
+
+    // Publish event to each target agent
+    let mut published = Vec::new();
+    for slug in &agent_slugs {
+        let mut payload = serde_json::Map::new();
+        payload.insert("deliberation_id".to_string(), json!(deliberation_id));
+        payload.insert("topic".to_string(), json!(topic));
+        payload.insert("proposal".to_string(), json!(proposal));
+        payload.insert("requesting_agent".to_string(), json!(source));
+        if let Some(pid) = property_id {
+            payload.insert("property_id".to_string(), json!(pid));
+        }
+
+        match crate::services::event_bus::publish_event(
+            pool,
+            org_id,
+            source,
+            Some(slug),
+            "deliberation_requested",
+            &payload,
+            "high",
+        )
+        .await
+        {
+            Ok(event_id) => published.push(json!({ "agent": slug, "event_id": event_id })),
+            Err(e) => {
+                tracing::warn!(agent = %slug, error = %e, "Failed to publish deliberation event");
+                published.push(json!({ "agent": slug, "error": "failed to publish" }));
+            }
+        }
+    }
+
+    Ok(json!({
+        "ok": true,
+        "deliberation_id": deliberation_id,
+        "topic": topic,
+        "proposal": proposal,
+        "target_agents": agent_slugs,
+        "events_published": published,
+        "note": "Each agent will assess the proposal via event bus. Responses will be stored on the blackboard under this deliberation_id.",
+    }))
+}
+
+// ---------------------------------------------------------------------------
+// Phase 3: Agent Learning & Self-Improvement
+// ---------------------------------------------------------------------------
+
+async fn tool_get_agent_learning_summary(
+    state: &AppState,
+    org_id: &str,
+    args: &Map<String, Value>,
+) -> AppResult<Value> {
+    let pool = db_pool(state)?;
+
+    let target_slug = args.get("agent_slug").and_then(Value::as_str);
+    let days = args
+        .get("days")
+        .and_then(Value::as_i64)
+        .unwrap_or(30)
+        .clamp(7, 90) as i32;
+
+    // 1. Per-agent trace metrics (tool calls, success rate, avg duration)
+    let trace_rows = if let Some(slug) = target_slug {
+        sqlx::query(
+            "SELECT agent_slug,
+                    COUNT(*)::int AS total_traces,
+                    COUNT(*) FILTER (WHERE status = 'completed')::int AS completed,
+                    COUNT(*) FILTER (WHERE status = 'failed')::int AS failed,
+                    COALESCE(AVG(tool_calls_count), 0)::float8 AS avg_tool_calls,
+                    COALESCE(AVG(duration_ms), 0)::float8 AS avg_duration_ms
+             FROM agent_traces
+             WHERE organization_id = $1::uuid
+               AND agent_slug = $2
+               AND created_at > now() - ($3 || ' days')::interval
+             GROUP BY agent_slug",
+        )
+        .bind(org_id)
+        .bind(slug)
+        .bind(days.to_string())
+        .fetch_all(pool)
+        .await
+    } else {
+        sqlx::query(
+            "SELECT agent_slug,
+                    COUNT(*)::int AS total_traces,
+                    COUNT(*) FILTER (WHERE status = 'completed')::int AS completed,
+                    COUNT(*) FILTER (WHERE status = 'failed')::int AS failed,
+                    COALESCE(AVG(tool_calls_count), 0)::float8 AS avg_tool_calls,
+                    COALESCE(AVG(duration_ms), 0)::float8 AS avg_duration_ms
+             FROM agent_traces
+             WHERE organization_id = $1::uuid
+               AND created_at > now() - ($2 || ' days')::interval
+             GROUP BY agent_slug
+             ORDER BY total_traces DESC",
+        )
+        .bind(org_id)
+        .bind(days.to_string())
+        .fetch_all(pool)
+        .await
+    }
+    .map_err(|error| db_error(state, &error))?;
+
+    let mut agent_metrics = Vec::new();
+    for row in &trace_rows {
+        let slug = row.try_get::<String, _>("agent_slug").unwrap_or_default();
+        let total = row.try_get::<i32, _>("total_traces").unwrap_or(0);
+        let completed = row.try_get::<i32, _>("completed").unwrap_or(0);
+        let failed = row.try_get::<i32, _>("failed").unwrap_or(0);
+        let avg_tools = row.try_get::<f64, _>("avg_tool_calls").unwrap_or(0.0);
+        let avg_duration = row.try_get::<f64, _>("avg_duration_ms").unwrap_or(0.0);
+
+        let success_rate = if total > 0 {
+            (completed as f64 / total as f64 * 10000.0).round() / 100.0
+        } else {
+            0.0
+        };
+
+        agent_metrics.push(json!({
+            "agent_slug": slug,
+            "total_interactions": total,
+            "completed": completed,
+            "failed": failed,
+            "success_rate_pct": success_rate,
+            "avg_tool_calls": (avg_tools * 10.0).round() / 10.0,
+            "avg_duration_ms": avg_duration.round(),
+        }));
+    }
+
+    // 2. Maintenance agent: vendor selection → resolution outcomes
+    let maintenance_insights = sqlx::query(
+        "SELECT
+           COUNT(*)::int AS total_requests,
+           COUNT(*) FILTER (WHERE status IN ('completed','closed'))::int AS resolved,
+           COALESCE(AVG(
+             EXTRACT(EPOCH FROM (
+               CASE WHEN completed_at IS NOT NULL THEN completed_at
+               ELSE now() END
+             ) - created_at) / 3600
+           ), 0)::float8 AS avg_resolution_hours,
+           COUNT(*) FILTER (WHERE sla_breached = true)::int AS sla_breaches
+         FROM maintenance_requests
+         WHERE organization_id = $1::uuid
+           AND created_at > now() - ($2 || ' days')::interval",
+    )
+    .bind(org_id)
+    .bind(days.to_string())
+    .fetch_optional(pool)
+    .await
+    .map_err(|error| db_error(state, &error))?;
+
+    let maint_summary = maintenance_insights.map(|r| {
+        json!({
+            "total_requests": r.try_get::<i32, _>("total_requests").unwrap_or(0),
+            "resolved": r.try_get::<i32, _>("resolved").unwrap_or(0),
+            "avg_resolution_hours": (r.try_get::<f64, _>("avg_resolution_hours").unwrap_or(0.0) * 10.0).round() / 10.0,
+            "sla_breaches": r.try_get::<i32, _>("sla_breaches").unwrap_or(0),
+        })
+    }).unwrap_or(json!(null));
+
+    // 3. Leasing agent: qualification → outcome correlation
+    let leasing_insights = sqlx::query(
+        "SELECT
+           COUNT(*)::int AS total_applications,
+           COUNT(*) FILTER (WHERE status = 'contract_signed')::int AS signed,
+           COUNT(*) FILTER (WHERE status = 'rejected')::int AS rejected,
+           COUNT(*) FILTER (WHERE status = 'lost')::int AS lost
+         FROM application_submissions
+         WHERE organization_id = $1::uuid
+           AND created_at > now() - ($2 || ' days')::interval",
+    )
+    .bind(org_id)
+    .bind(days.to_string())
+    .fetch_optional(pool)
+    .await
+    .map_err(|error| db_error(state, &error))?;
+
+    let leasing_summary = leasing_insights
+        .map(|r| {
+            let total = r.try_get::<i32, _>("total_applications").unwrap_or(0);
+            let signed = r.try_get::<i32, _>("signed").unwrap_or(0);
+            let conversion = if total > 0 {
+                (signed as f64 / total as f64 * 10000.0).round() / 100.0
+            } else {
+                0.0
+            };
+            json!({
+                "total_applications": total,
+                "signed": signed,
+                "rejected": r.try_get::<i32, _>("rejected").unwrap_or(0),
+                "lost": r.try_get::<i32, _>("lost").unwrap_or(0),
+                "conversion_rate_pct": conversion,
+            })
+        })
+        .unwrap_or(json!(null));
+
+    // 4. Finance agent: pricing recommendations → booking outcome
+    let pricing_insights = sqlx::query(
+        "SELECT
+           COUNT(*)::int AS total_recommendations,
+           COUNT(*) FILTER (WHERE status = 'applied')::int AS applied,
+           COUNT(*) FILTER (WHERE status = 'rejected')::int AS rejected
+         FROM pricing_recommendations
+         WHERE organization_id = $1::uuid
+           AND created_at > now() - ($2 || ' days')::interval",
+    )
+    .bind(org_id)
+    .bind(days.to_string())
+    .fetch_optional(pool)
+    .await
+    .map_err(|error| db_error(state, &error))?;
+
+    let pricing_summary = pricing_insights
+        .map(|r| {
+            let total = r.try_get::<i32, _>("total_recommendations").unwrap_or(0);
+            let applied = r.try_get::<i32, _>("applied").unwrap_or(0);
+            let acceptance = if total > 0 {
+                (applied as f64 / total as f64 * 10000.0).round() / 100.0
+            } else {
+                0.0
+            };
+            json!({
+                "total_recommendations": total,
+                "applied": applied,
+                "rejected": r.try_get::<i32, _>("rejected").unwrap_or(0),
+                "acceptance_rate_pct": acceptance,
+            })
+        })
+        .unwrap_or(json!(null));
+
+    Ok(json!({
+        "ok": true,
+        "period_days": days,
+        "agent_metrics": agent_metrics,
+        "domain_insights": {
+            "maintenance": maint_summary,
+            "leasing": leasing_summary,
+            "pricing": pricing_summary,
+        },
+        "note": "Use these insights to calibrate agent behavior. Store key learnings with store_memory for future reference.",
+    }))
+}
+
+/// Compute weekly agent learning digest and store on blackboard.
+/// Called by scheduler on Sundays after ML feature computation.
+pub async fn compute_weekly_learning_digest(state: &AppState) {
+    let pool = match state.db_pool.as_ref() {
+        Some(p) => p,
+        None => return,
+    };
+
+    let org_ids: Vec<(String,)> =
+        sqlx::query_as("SELECT id::text FROM organizations WHERE is_active = true LIMIT 100")
+            .fetch_all(pool)
+            .await
+            .unwrap_or_default();
+
+    let mut computed = 0u32;
+    for (org_id,) in &org_ids {
+        let args = serde_json::Map::new();
+        match tool_get_agent_learning_summary(state, org_id, &args).await {
+            Ok(summary) => {
+                // Store digest on blackboard
+                let digest_text = serde_json::to_string_pretty(&summary).unwrap_or_default();
+                let key = format!("learning_digest:{}", chrono::Utc::now().format("%Y-%m-%d"));
+                sqlx::query(
+                    "INSERT INTO agent_memory (organization_id, agent_slug, memory_key, memory_value, context_type, shared, metadata)
+                     VALUES ($1::uuid, 'system', $2, $3, 'blackboard', true, $4::jsonb)
+                     ON CONFLICT (organization_id, agent_slug, memory_key)
+                     DO UPDATE SET memory_value = EXCLUDED.memory_value, updated_at = now()",
+                )
+                .bind(org_id)
+                .bind(&key)
+                .bind(&digest_text)
+                .bind(json!({"tags": ["learning_digest", "weekly"], "auto_generated": true}))
+                .execute(pool)
+                .await
+                .ok();
+                computed += 1;
+            }
+            Err(e) => {
+                tracing::warn!(org_id, error = %e, "Weekly learning digest failed");
+            }
+        }
+    }
+
+    if computed > 0 {
+        tracing::info!(orgs = computed, "Weekly learning digest computed");
+    }
+}
+
 fn db_error(_state: &AppState, error: &sqlx::Error) -> AppError {
     tracing::error!(error = %error, "Database query failed");
     AppError::Dependency("External service request failed.".to_string())
@@ -7549,6 +8363,7 @@ mod tests {
             role: "viewer",
             message: "health check",
             conversation: &[],
+            agent_run_id: None,
             allow_mutations: false,
             confirm_write: false,
             agent_name: "Operations Copilot",

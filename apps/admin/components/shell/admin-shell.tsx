@@ -1,6 +1,5 @@
 "use client";
 
-import dynamic from "next/dynamic";
 import { usePathname, useSearchParams } from "next/navigation";
 import {
   type ReactNode,
@@ -10,29 +9,22 @@ import {
   useRef,
   useState,
 } from "react";
-import type { PanelImperativeHandle } from "react-resizable-panels";
+import { AIChatPanel } from "@/components/shell/ai-chat-panel";
+import { AppBreadcrumbs } from "@/components/shell/app-breadcrumbs";
 import { AppFooter } from "@/components/shell/app-footer";
 import { CommandPalette } from "@/components/shell/command-palette";
 import { ShortcutsHelp } from "@/components/shell/shortcuts-help";
-import type { MemberRole, ViewportMode } from "@/components/shell/sidebar-new";
-import { SidebarNew } from "@/components/shell/sidebar-new";
+import { SidebarQuickCreate } from "@/components/shell/sidebar-quick-create";
+import type { MemberRole } from "@/components/shell/sidebar-types";
 import { TabBar } from "@/components/shell/tab-bar";
-import { Topbar } from "@/components/shell/topbar";
+import { TopNav } from "@/components/shell/top-nav";
+import { TopNavMobileDrawer } from "@/components/shell/top-nav-mobile-drawer";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { onApiError } from "@/lib/api-client";
 import { useGlobalHotkeys } from "@/lib/hotkeys/use-global-hotkeys";
 import { useNavigationHotkeys } from "@/lib/hotkeys/use-navigation-hotkeys";
 import type { Locale } from "@/lib/i18n";
 import { TabProvider } from "@/lib/tabs/tab-context";
-import { cn } from "@/lib/utils";
-
-const DesktopResizableShell = dynamic(
-  () =>
-    import("@/components/shell/desktop-resizable-shell").then(
-      (m) => m.DesktopResizableShell
-    ),
-  { ssr: false }
-);
 
 type AdminShellProps = {
   orgId: string | null;
@@ -46,10 +38,6 @@ type AdminShellProps = {
   children: ReactNode;
 };
 
-const BRAND_V1_ENABLED = process.env.NEXT_PUBLIC_BRAND_V1 !== "0";
-
-const DESKTOP_QUERY = "(min-width: 1280px)";
-const TABLET_QUERY = "(min-width: 768px) and (max-width: 1279px)";
 const SHEET_LOCK_COUNT_ATTR = "data-pa-scroll-lock-count";
 const SHEET_LOCK_PREV_OVERFLOW_ATTR = "data-pa-scroll-lock-prev-overflow";
 const BASE_UI_SCROLL_LOCK_ATTR = "data-base-ui-scroll-locked";
@@ -77,13 +65,11 @@ function clearPageScrollStyles(): void {
   const body = document.body;
   const html = document.documentElement;
 
-  // Our custom sheet lock styles.
   body.style.removeProperty("overflow");
   body.style.removeProperty("overflow-x");
   body.style.removeProperty("overflow-y");
   body.style.removeProperty("scroll-behavior");
 
-  // Base UI / floating-ui scroll lock styles.
   body.style.removeProperty("position");
   body.style.removeProperty("height");
   body.style.removeProperty("width");
@@ -112,14 +98,7 @@ function clearStalePageScrollLock(): void {
   body.removeAttribute(SHEET_LOCK_PREV_OVERFLOW_ATTR);
 }
 
-function getViewportMode(): ViewportMode {
-  if (typeof window === "undefined") return "desktop";
-  if (window.matchMedia(DESKTOP_QUERY).matches) return "desktop";
-  if (window.matchMedia(TABLET_QUERY).matches) return "tablet";
-  return "mobile";
-}
-
-function useShellHotkeys(locale: Locale) {
+function useShellHotkeys(locale: Locale, onAIChatToggle: () => void) {
   const [helpOpen, setHelpOpen] = useState(false);
   const [cmdPaletteOpen, setCmdPaletteOpen] = useState(false);
   const { gPressed } = useNavigationHotkeys();
@@ -129,6 +108,18 @@ function useShellHotkeys(locale: Locale) {
     onShowHelp: useCallback(() => setHelpOpen((prev) => !prev), []),
     onEscape: useCallback(() => undefined, []),
   });
+
+  // Cmd+J → toggle AI chat panel
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "j") {
+        e.preventDefault();
+        onAIChatToggle();
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [onAIChatToggle]);
 
   // Listen for topbar button event
   useEffect(() => {
@@ -164,38 +155,20 @@ function AdminShellV2({
   orgId,
   locale,
   role,
-  onboardingProgress,
   children,
-}: AdminShellProps) {
+}: Omit<AdminShellProps, "onboardingProgress">) {
   const pathname = usePathname();
-  // Always start as "desktop" to match SSR output, then sync on mount
-  const [viewportMode, setViewportMode] = useState<ViewportMode>("desktop");
   const [isMobileDrawerOpen, setIsMobileDrawerOpen] = useState(false);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [aiPanelOpen, setAiPanelOpen] = useState(false);
   const [backendDegraded, setBackendDegraded] = useState<{
     message: string;
     requestId?: string;
   } | null>(null);
-  const sidebarPanelRef = useRef<PanelImperativeHandle | null>(null);
   const degradedClearTimerRef = useRef<number | null>(null);
-  const { overlays } = useShellHotkeys(locale);
 
-  useEffect(() => {
-    setViewportMode(getViewportMode());
+  const toggleAiPanel = useCallback(() => setAiPanelOpen((v) => !v), []);
 
-    const desktopMedia = window.matchMedia(DESKTOP_QUERY);
-    const tabletMedia = window.matchMedia(TABLET_QUERY);
-
-    const sync = () => setViewportMode(getViewportMode());
-
-    desktopMedia.addEventListener("change", sync);
-    tabletMedia.addEventListener("change", sync);
-
-    return () => {
-      desktopMedia.removeEventListener("change", sync);
-      tabletMedia.removeEventListener("change", sync);
-    };
-  }, []);
+  const { overlays } = useShellHotkeys(locale, toggleAiPanel);
 
   useEffect(() => {
     return onApiError(({ status, message, retryable, requestId }) => {
@@ -206,10 +179,7 @@ function AdminShellV2({
         status === 504;
       if (!isTransient) return;
 
-      setBackendDegraded({
-        message,
-        requestId,
-      });
+      setBackendDegraded({ message, requestId });
 
       if (degradedClearTimerRef.current !== null) {
         window.clearTimeout(degradedClearTimerRef.current);
@@ -229,23 +199,17 @@ function AdminShellV2({
     };
   }, []);
 
-  // Close the mobile drawer whenever we enter desktop viewport.
-  // Derived inline: if viewport is desktop, the drawer is never open.
-  const effectiveIsMobileDrawerOpen =
-    viewportMode === "desktop" ? false : isMobileDrawerOpen;
+  // Close the mobile drawer on route change
+  useEffect(() => {
+    setIsMobileDrawerOpen(false);
+  }, [pathname]);
 
   useEffect(() => {
     if (!pathname) return;
-    const lockResetDelayMs =
-      viewportMode === "desktop" && !effectiveIsMobileDrawerOpen ? 120 : 220;
-
     clearStalePageScrollLock();
-    const handle = window.setTimeout(
-      clearStalePageScrollLock,
-      lockResetDelayMs
-    );
+    const handle = window.setTimeout(clearStalePageScrollLock, 120);
     return () => window.clearTimeout(handle);
-  }, [effectiveIsMobileDrawerOpen, pathname, viewportMode]);
+  }, [pathname]);
 
   useEffect(() => {
     const onWindowFocus = () => clearStalePageScrollLock();
@@ -267,35 +231,12 @@ function AdminShellV2({
     };
   }, []);
 
-  const isDesktop = viewportMode === "desktop";
-  const showNavToggle = true;
-  const isNavOpen = isDesktop ? !sidebarCollapsed : effectiveIsMobileDrawerOpen;
-
-  const onNavToggle = () => {
-    if (isDesktop) {
-      const panel = sidebarPanelRef.current;
-      if (panel) {
-        if (sidebarCollapsed) {
-          panel.expand();
-        } else {
-          panel.collapse();
-        }
-      }
-    } else {
-      setIsMobileDrawerOpen((open) => !open);
-    }
-  };
-
   const searchParams = useSearchParams();
   const isPreviewMode = searchParams.get("preview") === "1";
 
-  const shellSurfaceClass = BRAND_V1_ENABLED
-    ? "bg-[var(--shell-surface)]"
-    : "bg-background";
-
   if (isPreviewMode) {
     return (
-      <div className={cn("h-full w-full overflow-auto", shellSurfaceClass)}>
+      <div className="h-full w-full overflow-auto bg-background">
         <div className="mx-auto w-full max-w-screen-2xl p-3 sm:p-4 lg:p-5 xl:p-7">
           {children}
         </div>
@@ -303,102 +244,84 @@ function AdminShellV2({
     );
   }
 
-  const contentColumn = (
-    <TabProvider locale={locale}>
-      <div className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden">
-        <TabBar />
-        <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-          <ScrollArea className="min-h-0 flex-1">
-            <Topbar
-              isNavOpen={isNavOpen}
-              locale={locale}
-              onNavToggle={onNavToggle}
-              showNavToggle={showNavToggle}
-            />
-            {backendDegraded ? (
-              <div className="mx-auto mt-3 w-full max-w-screen-2xl px-3 sm:px-4 lg:px-5 xl:px-7">
-                <div className="rounded-xl border border-amber-300/60 bg-amber-50 px-3 py-2 text-amber-900 text-sm shadow-sm">
-                  <div className="font-medium">
-                    Backend degraded: retryable API failures detected
-                  </div>
-                  <div className="mt-0.5 truncate text-amber-800/90 text-xs">
-                    {backendDegraded.message}
-                  </div>
-                  {backendDegraded.requestId ? (
-                    <div className="mt-0.5 font-mono text-[11px] text-amber-800/80">
-                      request_id: {backendDegraded.requestId}
-                    </div>
-                  ) : null}
-                </div>
-              </div>
-            ) : null}
-            <div className="mx-auto w-full max-w-screen-2xl p-3 sm:p-4 lg:p-5 xl:p-7">
-              {children}
-            </div>
-          </ScrollArea>
-        </main>
-        <AppFooter locale={locale} />
-      </div>
-    </TabProvider>
-  );
-
-  if (isDesktop) {
-    return (
-      <DesktopResizableShell
-        contentColumn={contentColumn}
-        locale={locale}
-        onboardingProgress={onboardingProgress}
-        onMobileDrawerOpenChange={setIsMobileDrawerOpen}
-        onSidebarCollapsedChange={setSidebarCollapsed}
-        orgId={orgId}
-        overlays={overlays}
-        role={role}
-        sidebarCollapsed={sidebarCollapsed}
-        sidebarPanelRef={sidebarPanelRef}
-        viewportMode={viewportMode}
-      />
-    );
-  }
-
   return (
-    <div
-      className={cn(
-        "grid h-full min-h-0 w-full grid-cols-[minmax(0,1fr)] overflow-hidden transition-all duration-300 ease-in-out",
-        shellSurfaceClass
-      )}
-      data-nav-open={isNavOpen}
-      data-shell-mode={viewportMode}
-    >
-      <SidebarNew
-        isMobileDrawerOpen={effectiveIsMobileDrawerOpen}
+    <div className="h-full min-h-0 w-full overflow-hidden bg-background">
+      {/* Top navigation — always black */}
+      <TopNav
+        aiChatOpen={aiPanelOpen}
         locale={locale}
-        onboardingProgress={onboardingProgress}
-        onMobileDrawerOpenChange={setIsMobileDrawerOpen}
+        onAIChatToggle={toggleAiPanel}
+        onMobileMenuToggle={() => setIsMobileDrawerOpen((v) => !v)}
         orgId={orgId}
         role={role}
-        viewportMode={viewportMode}
       />
-      {contentColumn}
+
+      {/* Mobile drawer */}
+      <TopNavMobileDrawer
+        locale={locale}
+        onOpenChange={setIsMobileDrawerOpen}
+        open={isMobileDrawerOpen}
+        orgId={orgId}
+        role={role}
+      />
+
+      {/* AI chat panel */}
+      <AIChatPanel
+        locale={locale}
+        onOpenChange={setAiPanelOpen}
+        open={aiPanelOpen}
+        orgId={orgId}
+      />
+
+      {/* Main content area — offset for fixed nav */}
+      <div className="flex h-full min-h-0 flex-col pt-14">
+        <TabProvider locale={locale}>
+          {/* Breadcrumb sub-bar */}
+          <div className="sticky top-14 z-20 flex items-center justify-between border-border/40 border-b bg-background px-4 py-2 lg:px-6">
+            <AppBreadcrumbs locale={locale} />
+            <SidebarQuickCreate locale={locale} />
+          </div>
+
+          <TabBar />
+
+          <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+            <ScrollArea className="min-h-0 flex-1">
+              {backendDegraded ? (
+                <div className="mx-auto mt-3 w-full max-w-screen-2xl px-3 sm:px-4 lg:px-5 xl:px-7">
+                  <div className="rounded-xl border border-amber-300/60 bg-amber-50 px-3 py-2 text-amber-900 text-sm shadow-sm">
+                    <div className="font-medium">
+                      Backend degraded: retryable API failures detected
+                    </div>
+                    <div className="mt-0.5 truncate text-amber-800/90 text-xs">
+                      {backendDegraded.message}
+                    </div>
+                    {backendDegraded.requestId ? (
+                      <div className="mt-0.5 font-mono text-[11px] text-amber-800/80">
+                        request_id: {backendDegraded.requestId}
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+              ) : null}
+              <div className="mx-auto w-full max-w-screen-2xl p-3 sm:p-4 lg:p-5 xl:p-7">
+                {children}
+              </div>
+            </ScrollArea>
+          </main>
+
+          <AppFooter locale={locale} />
+        </TabProvider>
+      </div>
+
       {overlays}
     </div>
   );
 }
 
-export function AdminShell({
-  orgId,
-  locale,
-  role,
-  onboardingProgress,
-  children,
-}: AdminShellProps) {
+export function AdminShell({ orgId, locale, role, children }: AdminShellProps) {
   return (
     <Suspense fallback={null}>
-      <AdminShellV2
-        locale={locale}
-        onboardingProgress={onboardingProgress}
-        orgId={orgId}
-        role={role}
-      >
+      <AdminShellV2 locale={locale} orgId={orgId} role={role}>
         {children}
       </AdminShellV2>
     </Suspense>

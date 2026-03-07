@@ -32,6 +32,7 @@ const nextConfig = {
     ],
   },
   reactCompiler: true,
+  transpilePackages: ["@casaora/marketplace-shared"],
   experimental: {
     optimizePackageImports: [
       "@hugeicons/core-free-icons",

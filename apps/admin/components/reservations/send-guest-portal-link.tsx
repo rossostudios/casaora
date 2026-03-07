@@ -4,15 +4,28 @@ import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { authedFetch } from "@/lib/api-client";
+import { cn } from "@/lib/utils";
 
 type SendGuestPortalLinkProps = {
   reservationId: string;
   isEn: boolean;
+  buttonLabel?: string;
+  successLabel?: string;
+  buttonClassName?: string;
+  size?: "sm" | "default" | "lg" | "icon";
+  variant?: "default" | "outline" | "secondary" | "ghost" | "destructive" | "link";
+  onSent?: () => void;
 };
 
 export function SendGuestPortalLink({
   reservationId,
   isEn,
+  buttonLabel,
+  successLabel,
+  buttonClassName,
+  size = "sm",
+  variant = "outline",
+  onSent,
 }: SendGuestPortalLinkProps) {
   const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(false);
@@ -30,6 +43,7 @@ export function SendGuestPortalLink({
         { method: "POST" }
       );
       setSent(true);
+      onSent?.();
       setLoading(false);
     } catch (err) {
       let msg = fallbackMsg;
@@ -44,9 +58,10 @@ export function SendGuestPortalLink({
   if (sent) {
     return (
       <p className="text-green-600 text-sm">
-        {isEn
-          ? "Guest portal link sent!"
-          : "¡Enlace del portal de huésped enviado!"}
+        {successLabel ||
+          (isEn
+            ? "Guest portal link sent!"
+            : "¡Enlace del portal de huésped enviado!")}
       </p>
     );
   }
@@ -54,19 +69,20 @@ export function SendGuestPortalLink({
   return (
     <div className="space-y-1">
       <Button
-        className="w-full justify-start"
+        className={cn("w-full justify-start", buttonClassName)}
         disabled={loading}
         onClick={handleSend}
-        size="sm"
-        variant="outline"
+        size={size}
+        variant={variant}
       >
         {loading
           ? isEn
             ? "Sending..."
             : "Enviando..."
-          : isEn
-            ? "Send Guest Portal Link"
-            : "Enviar Enlace Portal Huésped"}
+          : buttonLabel ||
+            (isEn
+              ? "Send Guest Portal Link"
+              : "Enviar Enlace Portal Huésped")}
       </Button>
       {error && <p className="text-red-600 text-xs">{error}</p>}
     </div>

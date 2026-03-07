@@ -134,6 +134,7 @@ async fn ai_agent_chat(
             role: &role,
             message: &payload.message,
             conversation: &conversation,
+            agent_run_id: None,
             allow_mutations: payload.allow_mutations,
             confirm_write: false,
             agent_name: "Operations Copilot",

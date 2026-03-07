@@ -1,602 +1,610 @@
 "use client";
 
-import { ArrowRight01Icon } from "@hugeicons/core-free-icons";
-import { AnimatePresence, motion } from "motion/react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
-import { SectionLabel } from "@/components/agent/briefing/helpers";
-import { Icon } from "@/components/ui/icon";
-import { useActiveLocale } from "@/lib/i18n/client";
-import { bold, EASING } from "@/lib/module-helpers";
-import { cn } from "@/lib/utils";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useMemo, useState, useTransition } from "react";
+import { ListingPreviewModal } from "@/components/listings/listing-preview-modal";
+import { ReadinessPopover } from "@/components/listings/readiness-popover";
+import { ActionRail } from "@/components/ui/action-rail";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { ListDetailLayout } from "@/components/ui/list-detail-layout";
+import { PageScaffold } from "@/components/ui/page-scaffold";
+import { Select } from "@/components/ui/select";
+import { StatusBadge } from "@/components/ui/status-badge";
+import { buildAgentContextHref } from "@/lib/ai-context";
+import type {
+  ListingsOverviewResponse,
+  ListingsOverviewRow,
+} from "@/lib/listings-overview";
+import { formatCurrency } from "@/lib/format";
+import { publishListingAction, unpublishListingAction } from "./actions";
+import { CreateListingDrawer } from "./create-listing-drawer";
 
-/* ------------------------------------------------------------------ */
-/* Types                                                              */
-/* ------------------------------------------------------------------ */
-
-export type ListingRow = {
-  id: string;
-  title: string;
-  public_slug: string;
-  city: string;
-  neighborhood?: string | null;
-  is_published: boolean;
-  fee_breakdown_complete: boolean;
-  total_move_in: number;
-  monthly_recurring_total: number;
-  currency: string;
-  cover_image_url: string | null;
-  gallery_image_urls: unknown[];
-  bedrooms: number;
-  bathrooms: number;
-  square_meters: number;
-  property_type: string | null;
-  furnished: boolean;
-  pet_policy: string | null;
-  parking_spaces: number;
-  minimum_lease_months: number;
-  available_from: string | null;
-  amenities: unknown[];
-  maintenance_fee: number;
-  missing_required_fee_lines: unknown[];
-  unit_name: string | null;
-  property_name: string | null;
-  summary?: string | null;
-  description?: string | null;
-  property_id?: string | null;
-  unit_id?: string | null;
-  pricing_template_id?: string | null;
-  application_count: number;
-  active_lease_count: number;
-  readiness_score: number;
-  readiness_blocking: string[];
+type ListingsManagerProps = {
+  orgId: string;
+  locale: string;
+  overview: ListingsOverviewResponse;
+  properties: Record<string, unknown>[];
+  units: Record<string, unknown>[];
+  pricingTemplates: Record<string, unknown>[];
+  initialFilters: {
+    q: string;
+    propertyId: string;
+    unitId: string;
+    publishedState: string;
+    lifecycleState: string;
+    view: string;
+    sort: string;
+  };
+  error?: string;
+  success?: string;
 };
 
-/* ------------------------------------------------------------------ */
-/* Helpers                                                            */
-/* ------------------------------------------------------------------ */
+type Option = {
+  id: string;
+  label: string;
+};
 
-function asStr(v: unknown): string {
-  return typeof v === "string" ? v : v ? String(v) : "";
-}
-function asNum(v: unknown): number {
-  if (typeof v === "number") return Number.isFinite(v) ? v : 0;
-  const n = Number(v);
-  return Number.isFinite(n) ? n : 0;
+function asString(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
 }
 
-function toRow(r: Record<string, unknown>): ListingRow {
+function SummaryCard({
+  label,
+  value,
+  detail,
+}: {
+  label: string;
+  value: string;
+  detail: string;
+}) {
+  return (
+    <Card className="border border-border/60 bg-card/80 shadow-sm">
+      <CardContent className="space-y-1 p-5">
+        <p className="font-medium text-[11px] text-muted-foreground uppercase tracking-[0.14em]">
+          {label}
+        </p>
+        <p className="font-semibold text-3xl tracking-tight">{value}</p>
+        <p className="text-muted-foreground text-sm">{detail}</p>
+      </CardContent>
+    </Card>
+  );
+}
+
+function formatDate(value: string | null, locale: string): string {
+  if (!value) return "—";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.valueOf())) return "—";
+  return new Intl.DateTimeFormat(locale, { dateStyle: "medium" }).format(parsed);
+}
+
+function buildReturnPath(pathname: string, searchParams: URLSearchParams): string {
+  const suffix = searchParams.toString();
+  return suffix ? `${pathname}?${suffix}` : pathname;
+}
+
+function lifecycleLabel(value: string, isEn: boolean): string {
+  switch (value) {
+    case "ready_to_publish":
+      return isEn ? "Ready" : "Listo";
+    case "published":
+      return isEn ? "Live" : "Publicado";
+    case "blocked":
+      return isEn ? "Blocked" : "Bloqueado";
+    default:
+      return isEn ? "Draft" : "Borrador";
+  }
+}
+
+function emptyStateMessage(
+  isEn: boolean,
+  hasUnits: boolean
+): { title: string; description: string; ctaHref: string; ctaLabel: string } {
+  if (!hasUnits) {
+    return {
+      title: isEn ? "Create a unit first" : "Crea una unidad primero",
+      description: isEn
+        ? "Listings in Casaora Marketplace now start from a real unit so pricing, availability, and applications stay connected."
+        : "Los anuncios del Marketplace de Casaora ahora empiezan desde una unidad real para que precios, disponibilidad y aplicaciones queden conectados.",
+      ctaHref: "/module/units",
+      ctaLabel: isEn ? "Open units" : "Abrir unidades",
+    };
+  }
+
   return {
-    id: asStr(r.id).trim(),
-    title: asStr(r.title).trim(),
-    public_slug: asStr(r.public_slug).trim(),
-    city: asStr(r.city).trim() || "Asuncion",
-    neighborhood: asStr(r.neighborhood).trim() || null,
-    is_published: r.is_published === true,
-    fee_breakdown_complete: r.fee_breakdown_complete === true,
-    total_move_in: asNum(r.total_move_in),
-    monthly_recurring_total: asNum(r.monthly_recurring_total),
-    currency: asStr(r.currency).trim().toUpperCase() || "PYG",
-    cover_image_url: asStr(r.cover_image_url).trim() || null,
-    gallery_image_urls: Array.isArray(r.gallery_image_urls) ? r.gallery_image_urls : [],
-    bedrooms: asNum(r.bedrooms),
-    bathrooms: asNum(r.bathrooms),
-    square_meters: asNum(r.square_meters),
-    property_type: asStr(r.property_type).trim() || null,
-    furnished: r.furnished === true,
-    pet_policy: asStr(r.pet_policy).trim() || null,
-    parking_spaces: asNum(r.parking_spaces),
-    minimum_lease_months: asNum(r.minimum_lease_months),
-    available_from: asStr(r.available_from).trim() || null,
-    amenities: Array.isArray(r.amenities) ? r.amenities : [],
-    maintenance_fee: asNum(r.maintenance_fee),
-    missing_required_fee_lines: Array.isArray(r.missing_required_fee_lines) ? r.missing_required_fee_lines : [],
-    unit_name: asStr(r.unit_name).trim() || null,
-    property_name: asStr(r.property_name).trim() || null,
-    summary: asStr(r.summary).trim() || null,
-    description: asStr(r.description).trim() || null,
-    property_id: asStr(r.property_id).trim() || null,
-    unit_id: asStr(r.unit_id).trim() || null,
-    pricing_template_id: asStr(r.pricing_template_id).trim() || null,
-    application_count: asNum(r.application_count),
-    active_lease_count: asNum(r.active_lease_count),
-    readiness_score: asNum(r.readiness_score),
-    readiness_blocking: Array.isArray(r.readiness_blocking) ? r.readiness_blocking.map(String) : [],
+    title: isEn ? "No listings in this view" : "No hay anuncios en esta vista",
+    description: isEn
+      ? "Adjust the filters or create a draft listing from one of your rentable units."
+      : "Ajusta los filtros o crea un borrador desde una de tus unidades rentables.",
+    ctaHref: "/module/units",
+    ctaLabel: isEn ? "Review units" : "Revisar unidades",
   };
 }
-
-/* Readiness: figure out completed vs missing sections */
-const ALL_SECTIONS = [
-  { key: "unit_details", en: "Unit details", es: "Detalles de unidad" },
-  { key: "amenities", en: "Amenities", es: "Amenidades" },
-  { key: "photos", en: "Photos", es: "Fotos" },
-  { key: "description", en: "Description", es: "Descripci\u00F3n" },
-  { key: "pricing", en: "Pricing", es: "Precios" },
-  { key: "house_rules", en: "House rules", es: "Reglas de la casa" },
-] as const;
-
-function getReadiness(row: ListingRow): { completed: typeof ALL_SECTIONS[number][]; missing: typeof ALL_SECTIONS[number][] } {
-  const blocking = new Set(row.readiness_blocking);
-  const hasPhotos = row.gallery_image_urls.length > 0 || Boolean(row.cover_image_url);
-  const hasDescription = Boolean(row.description || row.summary);
-  const hasAmenities = row.amenities.length > 0;
-  const hasUnitDetails = row.bedrooms > 0 || row.bathrooms > 0;
-
-  const isComplete = (key: string): boolean => {
-    if (blocking.has(key)) return false;
-    switch (key) {
-      case "unit_details": return hasUnitDetails;
-      case "amenities": return hasAmenities;
-      case "photos": return hasPhotos;
-      case "description": return hasDescription;
-      case "pricing": return !blocking.has("pricing") && !blocking.has("fee_breakdown");
-      case "house_rules": return !blocking.has("house_rules");
-      default: return true;
-    }
-  };
-
-  const completed = ALL_SECTIONS.filter((s) => isComplete(s.key));
-  const missing = ALL_SECTIONS.filter((s) => !isComplete(s.key));
-  return { completed, missing };
-}
-
-/* Channels for distribution */
-const DISTRIBUTION_CHANNELS = [
-  { name: "Airbnb", icon: "\uD83C\uDFE1", commission: "3\u201315%", note: ["High in Paraguay", "Alta en Paraguay"], available: false },
-  { name: "VRBO", icon: "\uD83C\uDFD6\uFE0F", commission: "5\u20138%", note: ["Medium", "Media"], available: false },
-  { name: "Booking.com", icon: "\uD83C\uDF10", commission: "15%", note: ["High international", "Alta internacional"], available: false },
-  { name: "Casaora Marketplace", icon: "\u2B50", commission: "0%", note: ["Growing", "Creciendo"], available: true },
-] as const;
-
-/* ------------------------------------------------------------------ */
-/* ListingsManager                                                    */
-/* ------------------------------------------------------------------ */
 
 export function ListingsManager({
   orgId,
-  listings,
-  error: errorLabel,
-  success: successMessage,
-}: {
-  orgId: string;
-  listings: Record<string, unknown>[];
-  error?: string;
-  success?: string;
-}) {
-  const locale = useActiveLocale();
+  locale,
+  overview,
+  properties,
+  units,
+  pricingTemplates,
+  initialFilters,
+  error,
+  success,
+}: ListingsManagerProps) {
   const isEn = locale === "en-US";
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const [, startTransition] = useTransition();
 
-  const rows = useMemo(() => listings.map(toRow), [listings]);
-  const draftCount = rows.filter((r) => !r.is_published).length;
-  const liveCount = rows.filter((r) => r.is_published).length;
-
-  const overview = buildOverview(isEn, rows, draftCount, liveCount);
-
-  return (
-    <div className="mx-auto flex min-h-[calc(100vh-7rem)] max-w-5xl flex-col px-4 py-8 sm:px-6">
-      <div className="space-y-8">
-        {/* Alex overview */}
-        <div className="space-y-1">
-          <p className="font-semibold text-foreground text-sm">Alex</p>
-          <p className="text-muted-foreground text-sm leading-relaxed">{bold(overview)}</p>
-        </div>
-
-        {/* Feedback */}
-        {errorLabel ? (
-          <div className="rounded-xl border border-red-500/30 bg-red-500/5 px-4 py-3 text-red-600 text-sm dark:text-red-400">{errorLabel}</div>
-        ) : null}
-        {successMessage ? (
-          <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 px-4 py-3 text-emerald-600 text-sm dark:text-emerald-400">{successMessage}</div>
-        ) : null}
-
-        {/* Section label */}
-        <SectionLabel>{isEn ? "YOUR LISTINGS" : "TUS LISTADOS"}</SectionLabel>
-
-        {/* Listing cards */}
-        <div className="space-y-4">
-          {rows.map((row) => (
-            <ListingCard isEn={isEn} key={row.id} row={row} />
-          ))}
-          <CreateCard isEn={isEn} />
-        </div>
-      </div>
-
-      {/* Chat + chips pinned to bottom */}
-      <div className="mt-auto space-y-4 pt-12">
-        <ChatInput isEn={isEn} />
-        <Chips isEn={isEn} rows={rows} />
-      </div>
-    </div>
+  const [query, setQuery] = useState(initialFilters.q);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [previewListing, setPreviewListing] = useState<ListingsOverviewRow | null>(
+    null
   );
-}
 
-/* ------------------------------------------------------------------ */
-/* Alex overview builder                                              */
-/* ------------------------------------------------------------------ */
+  useEffect(() => {
+    setQuery(initialFilters.q);
+  }, [initialFilters.q]);
 
-function buildOverview(isEn: boolean, rows: ListingRow[], drafts: number, live: number): string {
-  if (rows.length === 0) {
-    return isEn
-      ? "No listings yet. I can help you create your first listing \u2014 just tell me which unit you\u2019d like to list."
-      : "Sin listados a\u00FAn. Puedo ayudarte a crear tu primer listado \u2014 solo dime qu\u00E9 unidad quieres publicar.";
+  const propertyOptions = useMemo<Option[]>(
+    () =>
+      properties
+        .map((property) => ({
+          id: asString(property.id),
+          label: asString(property.name),
+        }))
+        .filter((property) => property.id && property.label)
+        .sort((left, right) => left.label.localeCompare(right.label)),
+    [properties]
+  );
+
+  const propertyNames = useMemo(
+    () =>
+      new Map(
+        propertyOptions.map((property) => [property.id, property.label] as const)
+      ),
+    [propertyOptions]
+  );
+
+  const unitOptions = useMemo<Option[]>(
+    () =>
+      units
+        .map((unit) => {
+          const id = asString(unit.id);
+          const name = asString(unit.name) || asString(unit.code);
+          const propertyName = propertyNames.get(asString(unit.property_id));
+          const label = propertyName ? `${propertyName} · ${name}` : name;
+          return { id, label };
+        })
+        .filter((unit) => unit.id && unit.label)
+        .sort((left, right) => left.label.localeCompare(right.label)),
+    [propertyNames, units]
+  );
+
+  const pricingTemplateOptions = useMemo<Option[]>(
+    () =>
+      pricingTemplates
+        .map((template) => ({
+          id: asString(template.id),
+          label: asString(template.name) || asString(template.label),
+        }))
+        .filter((template) => template.id && template.label)
+        .sort((left, right) => left.label.localeCompare(right.label)),
+    [pricingTemplates]
+  );
+
+  function updateParams(
+    updates: Record<string, string | null | undefined>,
+    options?: { replace?: boolean }
+  ) {
+    const params = new URLSearchParams(searchParams.toString());
+    for (const [key, value] of Object.entries(updates)) {
+      if (!value) params.delete(key);
+      else params.set(key, value);
+    }
+    const next = params.toString();
+    startTransition(() => {
+      const href = next ? `${pathname}?${next}` : pathname;
+      if (options?.replace) router.replace(href);
+      else router.push(href);
+    });
   }
 
-  const parts: string[] = [];
-  if (isEn) {
-    parts.push(`You have **${rows.length} ${rows.length === 1 ? "listing" : "listings"}**`);
-    if (drafts > 0 && live > 0) parts.push(` \u2014 ${live} live, ${drafts} in draft`);
-    else if (drafts > 0) parts.push(" in draft");
-    else parts.push(" live");
-
-    const first = rows[0];
-    if (rows.length <= 3 && first) {
-      const name = first.property_name && first.unit_name
-        ? `${first.property_name} \u2014 ${first.unit_name}`
-        : first.title;
-      const score = first.readiness_score;
-      parts.push(`. ${name} is **${score}% complete**`);
-      const { missing } = getReadiness(first);
-      if (missing.length > 0) {
-        parts.push(` and needs ${missing.map((m) => m.en.toLowerCase()).join(", ")} before it can go live`);
+  useEffect(() => {
+    const handle = window.setTimeout(() => {
+      if (query !== initialFilters.q) {
+        updateParams({ q: query || null }, { replace: true });
       }
-    }
-    parts.push(". I can help you finish it, or you can create a new listing below.");
-  } else {
-    parts.push(`Tienes **${rows.length} ${rows.length === 1 ? "listado" : "listados"}**`);
-    if (drafts > 0 && live > 0) parts.push(` \u2014 ${live} ${live === 1 ? "publicado" : "publicados"}, ${drafts} en borrador`);
-    else if (drafts > 0) parts.push(" en borrador");
-    else parts.push(` ${live === 1 ? "publicado" : "publicados"}`);
+    }, 250);
+    return () => window.clearTimeout(handle);
+  }, [initialFilters.q, query]);
 
-    const first = rows[0];
-    if (rows.length <= 3 && first) {
-      const name = first.property_name && first.unit_name
-        ? `${first.property_name} \u2014 ${first.unit_name}`
-        : first.title;
-      const score = first.readiness_score;
-      parts.push(`. ${name} est\u00E1 al **${score}% completo**`);
-      const { missing } = getReadiness(first);
-      if (missing.length > 0) {
-        parts.push(` y necesita ${missing.map((m) => m.es.toLowerCase()).join(", ")} antes de poder publicarse`);
-      }
-    }
-    parts.push(". Puedo ayudarte a terminarlo, o puedes crear un nuevo listado abajo.");
-  }
+  const currentFilters = useMemo(
+    () =>
+      Object.fromEntries(
+        [
+          ["q", initialFilters.q],
+          ["property_id", initialFilters.propertyId],
+          ["unit_id", initialFilters.unitId],
+          ["published_state", initialFilters.publishedState],
+          ["lifecycle_state", initialFilters.lifecycleState],
+          ["view", initialFilters.view],
+        ].filter((entry): entry is [string, string] => Boolean(entry[1]))
+      ),
+    [
+      initialFilters.lifecycleState,
+      initialFilters.propertyId,
+      initialFilters.publishedState,
+      initialFilters.q,
+      initialFilters.unitId,
+      initialFilters.view,
+    ]
+  );
 
-  return parts.join("");
-}
+  const returnPath = useMemo(
+    () => buildReturnPath(pathname, new URLSearchParams(searchParams.toString())),
+    [pathname, searchParams]
+  );
 
-/* ------------------------------------------------------------------ */
-/* ListingCard                                                        */
-/* ------------------------------------------------------------------ */
+  const askAiHref = buildAgentContextHref({
+    prompt: isEn
+      ? "What needs attention in this listings view?"
+      : "¿Qué necesita atención en esta vista de anuncios?",
+    context: {
+      source: "listings",
+      entityIds: overview.rows.map((row) => row.id),
+      filters: currentFilters,
+      summary: isEn
+        ? `Listings queue with ${overview.rows.length} visible records. ${overview.summary.readyToPublish} ready, ${overview.summary.blocked} blocked, ${overview.summary.published} live.`
+        : `Cola de anuncios con ${overview.rows.length} registros visibles. ${overview.summary.readyToPublish} listos, ${overview.summary.blocked} bloqueados, ${overview.summary.published} publicados.`,
+      returnPath,
+    },
+  });
 
-function ListingCard({ row, isEn }: { row: ListingRow; isEn: boolean }) {
-  const router = useRouter();
-  const [expanded, setExpanded] = useState(false);
-  const l = isEn ? 0 : 1;
-
-  const { completed, missing } = getReadiness(row);
-  const score = row.readiness_score;
-  const scoreColor = score >= 80 ? "text-emerald-500" : score >= 50 ? "text-amber-500" : "text-red-500";
-  const barColor = score >= 80 ? "bg-emerald-500" : score >= 50 ? "bg-amber-500" : "bg-red-500";
-
-  const displayName = row.property_name && row.unit_name
-    ? `${row.property_name} \u2014 ${row.unit_name}`
-    : row.title || (isEn ? "Untitled listing" : "Listado sin t\u00EDtulo");
-
-  const capacity = [
-    row.bedrooms > 0 ? `${row.bedrooms} bed` : null,
-    row.bathrooms > 0 ? `${row.bathrooms} bath` : null,
-    row.square_meters > 0 ? `${row.square_meters} sqft` : null,
-    row.property_type?.toUpperCase(),
-  ].filter(Boolean).join(" \u00B7 ");
-
-  const photoCount = row.gallery_image_urls.length + (row.cover_image_url ? 1 : 0);
+  const blockedRows = overview.rows.filter(
+    (row) => row.lifecycleState === "blocked"
+  );
+  const emptyState = emptyStateMessage(isEn, overview.hasUnits);
+  const detailHref = (href: string) =>
+    `${href}?return_to=${encodeURIComponent(returnPath)}`;
 
   return (
-    <motion.div
-      animate={{ opacity: 1, y: 0 }}
-      className="glass-inner overflow-hidden rounded-2xl transition-shadow hover:shadow-[var(--shadow-soft)]"
-      initial={{ opacity: 0, y: 6 }}
-      transition={{ duration: 0.3, ease: EASING }}
-    >
-      {/* Main row */}
-      <button
-        className="flex w-full items-center gap-4 p-4 text-left sm:p-5"
-        onClick={() => setExpanded((p) => !p)}
-        type="button"
+    <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6">
+      <PageScaffold
+        actions={
+          <>
+            <Button asChild variant="outline">
+              <Link href={askAiHref}>{isEn ? "Ask AI" : "Preguntar a IA"}</Link>
+            </Button>
+            <Button onClick={() => setCreateOpen(true)} type="button">
+              {isEn ? "Create listing" : "Crear anuncio"}
+            </Button>
+          </>
+        }
+        description={
+          isEn
+            ? "Create, publish, and monitor Casaora Marketplace listings from a single operational queue."
+            : "Crea, publica y controla anuncios del Marketplace de Casaora desde una sola cola operativa."
+        }
+        eyebrow={isEn ? "Leasing" : "Leasing"}
+        title={isEn ? "Listings" : "Anuncios"}
       >
-        {/* Thumbnail */}
-        <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-muted/60 text-lg">
-          {row.cover_image_url ? "\uD83D\uDCF7" : "\uD83D\uDCF8"}
-        </span>
-
-        {/* Info */}
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <h3 className="truncate font-medium text-foreground text-sm tracking-tight">{displayName}</h3>
-            <span className={cn(
-              "shrink-0 rounded-md px-1.5 py-0.5 font-semibold text-[10px] uppercase tracking-wider",
-              row.is_published
-                ? "bg-emerald-500/20 text-emerald-400"
-                : "bg-amber-500/20 text-amber-400",
-            )}>
-              {row.is_published ? (isEn ? "LIVE" : "ACTIVO") : "DRAFT"}
-            </span>
-          </div>
-          {capacity && <p className="mt-0.5 text-muted-foreground/60 text-xs">{capacity}</p>}
-          <p className="mt-0.5 text-muted-foreground/40 text-xs italic">
-            {isEn ? "Not listed on any channels yet" : "A\u00FAn no publicado en ning\u00FAn canal"}
-          </p>
-        </div>
-
-        {/* Readiness */}
-        <div className="flex shrink-0 items-center gap-3">
-          <div className="text-right">
-            <p className={cn("font-semibold text-lg tabular-nums", scoreColor)}>{score}%</p>
-            <p className="text-muted-foreground/50 text-[10px] uppercase tracking-wider">
-              {isEn ? "COMPLETE" : "COMPLETO"}
-            </p>
-            <div className="mt-1 h-1 w-16 overflow-hidden rounded-full bg-muted/40">
-              <div className={cn("h-full rounded-full transition-all", barColor)} style={{ width: `${score}%` }} />
-            </div>
-          </div>
-          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted/40 text-muted-foreground/50 text-sm">
-            {expanded ? "\u2212" : "+"}
-          </span>
-        </div>
-      </button>
-
-      {/* Expanded detail */}
-      <AnimatePresence initial={false}>
-        {expanded && (
-          <motion.div
-            animate={{ height: "auto", opacity: 1 }}
-            className="overflow-hidden"
-            exit={{ height: 0, opacity: 0 }}
-            initial={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.25, ease: EASING }}
-          >
-            <div className="border-border/40 border-t px-4 py-5 sm:px-5">
-              {/* Completed / Missing checklists */}
-              <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-                <div>
-                  <p className="mb-2 font-medium text-[11px] text-muted-foreground/60 uppercase tracking-[0.15em]">
-                    {isEn ? "COMPLETED" : "COMPLETADO"}
-                  </p>
-                  <ul className="space-y-1.5">
-                    {completed.map((s) => (
-                      <li className="flex items-center gap-2 text-muted-foreground/70 text-xs" key={s.key}>
-                        <span className="text-emerald-500">{"\u2713"}</span>
-                        {s[isEn ? "en" : "es"]}
-                      </li>
-                    ))}
-                    {completed.length === 0 && (
-                      <li className="text-muted-foreground/40 text-xs">{isEn ? "Nothing yet" : "Nada a\u00FAn"}</li>
-                    )}
-                  </ul>
-                </div>
-                <div>
-                  <p className="mb-2 font-medium text-[11px] text-muted-foreground/60 uppercase tracking-[0.15em]">
-                    {isEn ? "MISSING" : "FALTANTE"}
-                  </p>
-                  <ul className="space-y-1.5">
-                    {missing.map((s) => (
-                      <li className="flex items-center gap-2 text-muted-foreground/70 text-xs" key={s.key}>
-                        <span className="text-red-400">{"\u25CB"}</span>
-                        {s[isEn ? "en" : "es"]}
-                        {s.key === "photos" ? ` (${photoCount}/5 min)` : ""}
-                      </li>
-                    ))}
-                    {missing.length === 0 && (
-                      <li className="text-emerald-500 text-xs">{isEn ? "All complete!" : "\u00A1Todo completo!"}</li>
-                    )}
-                  </ul>
-                </div>
-              </div>
-
-              {/* Distribute to channels */}
-              <div className="mt-6">
-                <p className="mb-3 font-medium text-[11px] text-muted-foreground/60 uppercase tracking-[0.15em]">
-                  {isEn ? "DISTRIBUTE TO CHANNELS" : "DISTRIBUIR A CANALES"}
-                </p>
-                <div className="space-y-2">
-                  {DISTRIBUTION_CHANNELS.map((ch) => (
-                    <div
-                      className={cn(
-                        "flex items-center gap-3 rounded-xl px-3 py-2.5",
-                        ch.available ? "glass-inner" : "",
-                      )}
-                      key={ch.name}
-                    >
-                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-muted/60 text-sm">{ch.icon}</span>
-                      <div className="min-w-0 flex-1">
-                        <p className="font-medium text-foreground text-xs">{ch.name}</p>
-                        <p className="text-muted-foreground/50 text-[11px]">{ch.commission} commission \u00B7 {ch.note[l]}</p>
-                      </div>
-                      {ch.available ? (
-                        <button
-                          className="shrink-0 rounded-full border border-border/70 px-3 py-1.5 font-medium text-foreground text-xs transition-colors hover:bg-muted/30"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            router.push(`/app/agents?prompt=${encodeURIComponent(isEn ? `Push ${displayName} to ${ch.name}` : `Publicar ${displayName} en ${ch.name}`)}`);
-                          }}
-                          type="button"
-                        >
-                          {isEn ? "Push listing" : "Publicar"}
-                        </button>
-                      ) : (
-                        <span className="shrink-0 text-muted-foreground/40 text-xs">
-                          {isEn ? "Connect first \u2192" : "Conectar primero \u2192"}
-                        </span>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Action buttons */}
-              <div className="mt-5 flex flex-wrap gap-2">
-                <ActionBtn
-                  label={isEn ? "Complete listing with AI" : "Completar con IA"}
-                  prompt={isEn ? `Complete my listing for ${displayName}` : `Completa mi listado para ${displayName}`}
-                  primary
-                />
-                <ActionBtn
-                  label={isEn ? "Generate description" : "Generar descripci\u00F3n"}
-                  prompt={isEn ? `Write a listing description for ${displayName}` : `Escribe una descripci\u00F3n para ${displayName}`}
-                />
-                <ActionBtn
-                  label={isEn ? "Set pricing" : "Configurar precios"}
-                  prompt={isEn ? `Set up pricing for ${displayName}` : `Configura precios para ${displayName}`}
-                />
-                <ActionBtn
-                  label={isEn ? "Delete draft" : "Eliminar borrador"}
-                  prompt={isEn ? `Delete the draft listing for ${displayName}` : `Eliminar el borrador de ${displayName}`}
-                  danger
-                />
-              </div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </motion.div>
-  );
-}
-
-/* ------------------------------------------------------------------ */
-/* ActionBtn — routes to agents with a prompt                         */
-/* ------------------------------------------------------------------ */
-
-function ActionBtn({ label, prompt, primary, danger }: { label: string; prompt: string; primary?: boolean; danger?: boolean }) {
-  const router = useRouter();
-  return (
-    <button
-      className={cn(
-        "rounded-full border px-4 py-2 font-medium text-xs transition-colors",
-        danger
-          ? "border-red-500/30 text-red-500 hover:bg-red-500/10"
-          : primary
-            ? "border-border/70 bg-foreground text-background hover:opacity-90"
-            : "border-border/50 text-foreground hover:bg-muted/30",
-      )}
-      onClick={() => router.push(`/app/agents?prompt=${encodeURIComponent(prompt)}`)}
-      type="button"
-    >
-      {label}
-    </button>
-  );
-}
-
-/* ------------------------------------------------------------------ */
-/* CreateCard                                                         */
-/* ------------------------------------------------------------------ */
-
-function CreateCard({ isEn }: { isEn: boolean }) {
-  const router = useRouter();
-  return (
-    <button
-      className="group flex w-full items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-border/40 p-6 transition-colors hover:border-border/70 hover:bg-muted/10"
-      onClick={() =>
-        router.push(`/app/agents?prompt=${encodeURIComponent(isEn ? "Create a new listing" : "Crear un nuevo listado")}`)
-      }
-      type="button"
-    >
-      <span className="font-medium text-muted-foreground/50 text-sm transition-colors group-hover:text-muted-foreground/70">
-        + {isEn ? "Create a new listing" : "Crear un nuevo listado"}
-      </span>
-    </button>
-  );
-}
-
-/* ------------------------------------------------------------------ */
-/* ChatInput                                                          */
-/* ------------------------------------------------------------------ */
-
-function ChatInput({ isEn }: { isEn: boolean }) {
-  const router = useRouter();
-  const [value, setValue] = useState("");
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    const trimmed = value.trim();
-    if (!trimmed) return;
-    router.push(`/app/agents?prompt=${encodeURIComponent(trimmed)}`);
-  };
-
-  return (
-    <form className="relative" onSubmit={handleSubmit}>
-      <input
-        className={cn(
-          "h-12 w-full rounded-full border border-border/50 bg-background pr-12 pl-5 text-sm",
-          "placeholder:text-muted-foreground/40",
-          "focus:border-primary/50 focus:outline-none focus:ring-1 focus:ring-primary/20",
-          "transition-colors",
-        )}
-        onChange={(e) => setValue(e.target.value)}
-        placeholder={isEn ? "Ask about your listings..." : "Pregunta sobre tus listados..."}
-        type="text"
-        value={value}
-      />
-      <button
-        className={cn(
-          "absolute top-1/2 right-1.5 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full",
-          "bg-foreground text-background transition-opacity",
-          value.trim() ? "opacity-100" : "opacity-30",
-        )}
-        disabled={!value.trim()}
-        type="submit"
-      >
-        <Icon icon={ArrowRight01Icon} size={16} />
-      </button>
-    </form>
-  );
-}
-
-/* ------------------------------------------------------------------ */
-/* Chips — contextual to the user's listings                          */
-/* ------------------------------------------------------------------ */
-
-function Chips({ isEn, rows }: { isEn: boolean; rows: ListingRow[] }) {
-  const first = rows[0];
-  const unitName = first?.unit_name ?? (isEn ? "my unit" : "mi unidad");
-
-  const chips = isEn
-    ? [
-        "Help me complete my listing",
-        `Write a listing description for ${unitName}`,
-        "What photos should I take?",
-        "Set up pricing for my listing",
-      ]
-    : [
-        "Ay\u00FAdame a completar mi listado",
-        `Escribe una descripci\u00F3n para ${unitName}`,
-        "\u00BFQu\u00E9 fotos deber\u00EDa tomar?",
-        "Configura precios para mi listado",
-      ];
-
-  return (
-    <motion.div
-      animate={{ opacity: 1, y: 0 }}
-      className="flex flex-wrap gap-2"
-      initial={{ opacity: 0, y: 8 }}
-      transition={{ delay: 0.3, duration: 0.4, ease: EASING }}
-    >
-      {chips.map((chip, i) => (
-        <motion.div
-          animate={{ opacity: 1, scale: 1 }}
-          initial={{ opacity: 0, scale: 0.95 }}
-          key={chip}
-          transition={{ delay: 0.35 + i * 0.04, duration: 0.25, ease: EASING }}
+        <div
+          className="grid gap-4 md:grid-cols-4"
+          data-testid="listings-summary-band"
         >
-          <Link
-            className="glass-inner inline-block rounded-full px-3.5 py-2 text-[12.5px] text-muted-foreground/70 transition-all hover:text-foreground hover:shadow-sm"
-            href={`/app/agents?prompt=${encodeURIComponent(chip)}`}
-          >
-            {chip}
-          </Link>
-        </motion.div>
-      ))}
-    </motion.div>
+          <SummaryCard
+            detail={isEn ? "drafts in org" : "borradores en la organización"}
+            label={isEn ? "Drafts" : "Borradores"}
+            value={String(overview.summary.drafts)}
+          />
+          <SummaryCard
+            detail={isEn ? "can publish now" : "pueden publicarse ahora"}
+            label={isEn ? "Ready" : "Listos"}
+            value={String(overview.summary.readyToPublish)}
+          />
+          <SummaryCard
+            detail={isEn ? "currently in marketplace" : "actualmente en marketplace"}
+            label={isEn ? "Live" : "Publicados"}
+            value={String(overview.summary.published)}
+          />
+          <SummaryCard
+            detail={isEn ? "linked applications" : "aplicaciones vinculadas"}
+            label={isEn ? "Applications" : "Aplicaciones"}
+            value={String(overview.summary.applications)}
+          />
+        </div>
+
+        {error ? (
+          <div className="rounded-2xl border border-red-500/20 bg-red-500/5 px-4 py-3 text-red-600 text-sm">
+            {error}
+          </div>
+        ) : null}
+        {success ? (
+          <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/5 px-4 py-3 text-emerald-600 text-sm">
+            {success}
+          </div>
+        ) : null}
+
+        <div className="sticky top-16 z-20 rounded-2xl border border-border/60 bg-background p-3 shadow-sm">
+          <div className="grid gap-3 md:grid-cols-6">
+            <Input
+              aria-label={isEn ? "Search listings" : "Buscar anuncios"}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder={isEn ? "Search title, slug, property..." : "Buscar título, slug, propiedad..."}
+              value={query}
+            />
+            <Select
+              onChange={(event) =>
+                updateParams({ property_id: event.target.value || null, unit_id: null })
+              }
+              value={initialFilters.propertyId}
+            >
+              <option value="">{isEn ? "All properties" : "Todas las propiedades"}</option>
+              {propertyOptions.map((property) => (
+                <option key={property.id} value={property.id}>
+                  {property.label}
+                </option>
+              ))}
+            </Select>
+            <Select
+              onChange={(event) => updateParams({ unit_id: event.target.value || null })}
+              value={initialFilters.unitId}
+            >
+              <option value="">{isEn ? "All units" : "Todas las unidades"}</option>
+              {unitOptions.map((unit) => (
+                <option key={unit.id} value={unit.id}>
+                  {unit.label}
+                </option>
+              ))}
+            </Select>
+            <Select
+              onChange={(event) => updateParams({ view: event.target.value || null })}
+              value={initialFilters.view}
+            >
+              <option value="all">{isEn ? "All views" : "Todas las vistas"}</option>
+              <option value="drafts">{isEn ? "Drafts" : "Borradores"}</option>
+              <option value="ready_to_publish">{isEn ? "Ready to publish" : "Listos para publicar"}</option>
+              <option value="live">{isEn ? "Live" : "Publicados"}</option>
+              <option value="needs_media">{isEn ? "Needs media" : "Sin media"}</option>
+              <option value="has_applications">{isEn ? "Has applications" : "Con aplicaciones"}</option>
+            </Select>
+            <Select
+              onChange={(event) =>
+                updateParams({ published_state: event.target.value || null })
+              }
+              value={initialFilters.publishedState}
+            >
+              <option value="">{isEn ? "All publication states" : "Todos los estados"}</option>
+              <option value="published">{isEn ? "Published" : "Publicado"}</option>
+              <option value="draft">{isEn ? "Unpublished" : "No publicado"}</option>
+            </Select>
+            <Select
+              onChange={(event) => updateParams({ sort: event.target.value || null })}
+              value={initialFilters.sort}
+            >
+              <option value="updated_desc">{isEn ? "Newest updates" : "Últimas actualizaciones"}</option>
+              <option value="title_asc">{isEn ? "Title A-Z" : "Título A-Z"}</option>
+              <option value="monthly_desc">{isEn ? "Highest monthly rent" : "Mayor renta mensual"}</option>
+              <option value="applications_desc">{isEn ? "Most applications" : "Más aplicaciones"}</option>
+            </Select>
+          </div>
+        </div>
+
+        <ListDetailLayout
+          aside={
+            <ActionRail
+              description={
+                isEn
+                  ? "Keep Casaora Marketplace publishing tied to real units, pricing templates, and application flow."
+                  : "Mantén la publicación en Casaora Marketplace ligada a unidades reales, plantillas de precios y flujo de aplicaciones."
+              }
+              title={isEn ? "Next actions" : "Próximas acciones"}
+            >
+              <Button asChild className="w-full justify-start" variant="outline">
+                <Link href="/module/channels">
+                  {isEn ? "Open marketplace health" : "Abrir salud del marketplace"}
+                </Link>
+              </Button>
+              <Button asChild className="w-full justify-start" variant="outline">
+                <Link href="/module/pricing">
+                  {isEn ? "Review pricing templates" : "Revisar plantillas de precios"}
+                </Link>
+              </Button>
+              {blockedRows.slice(0, 3).map((row) => (
+                <div
+                  className="rounded-xl border border-border/60 bg-muted/20 p-3"
+                  key={row.id}
+                >
+                  <p className="font-medium text-sm">{row.title}</p>
+                  <p className="mt-1 text-muted-foreground text-xs">
+                    {row.propertyName || row.unitName || (isEn ? "Missing unit context" : "Falta contexto de unidad")}
+                  </p>
+                  <div className="mt-3 flex gap-2">
+                    <Button asChild size="sm" variant="outline">
+                      <Link href={detailHref(row.primaryHref)}>
+                        {isEn ? "Open" : "Abrir"}
+                      </Link>
+                    </Button>
+                    <Button
+                      onClick={() => setPreviewListing(row)}
+                      size="sm"
+                      type="button"
+                    >
+                      {isEn ? "Preview" : "Vista previa"}
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </ActionRail>
+          }
+          primary={
+            overview.rows.length > 0 ? (
+              <div
+                className="overflow-hidden rounded-2xl border border-border/60 bg-card/80 shadow-sm"
+                data-testid="listings-queue-table"
+              >
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-border/60 text-sm">
+                    <thead className="bg-muted/30">
+                      <tr className="text-left text-muted-foreground text-xs uppercase tracking-[0.14em]">
+                        <th className="px-4 py-3">{isEn ? "Listing" : "Anuncio"}</th>
+                        <th className="px-4 py-3">{isEn ? "State" : "Estado"}</th>
+                        <th className="px-4 py-3">{isEn ? "Readiness" : "Preparación"}</th>
+                        <th className="px-4 py-3">{isEn ? "Monthly" : "Mensual"}</th>
+                        <th className="px-4 py-3">{isEn ? "Available" : "Disponible"}</th>
+                        <th className="px-4 py-3">{isEn ? "Applications" : "Aplicaciones"}</th>
+                        <th className="px-4 py-3">{isEn ? "Updated" : "Actualizado"}</th>
+                        <th className="px-4 py-3">{isEn ? "Actions" : "Acciones"}</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border/50">
+                      {overview.rows.map((row) => (
+                        <tr className="align-top" key={row.id}>
+                          <td className="px-4 py-4">
+                            <div className="space-y-1">
+                              <Link
+                                className="font-medium text-sm hover:text-primary"
+                                href={detailHref(row.primaryHref)}
+                              >
+                                {row.title}
+                              </Link>
+                              <p className="text-muted-foreground text-xs">
+                                {[row.propertyName, row.unitName].filter(Boolean).join(" · ") ||
+                                  (isEn ? "Unit link required" : "Se requiere unidad")}
+                              </p>
+                              <p className="text-muted-foreground text-xs">
+                                {row.publicSlug ? `casaora.co/${row.publicSlug}` : "—"}
+                              </p>
+                            </div>
+                          </td>
+                          <td className="px-4 py-4">
+                            <StatusBadge
+                              label={lifecycleLabel(row.lifecycleState, isEn)}
+                              value={row.lifecycleState}
+                            />
+                          </td>
+                          <td className="px-4 py-4">
+                            <ReadinessPopover
+                              isEn={isEn}
+                              listingId={row.id}
+                              onFixField={(field) =>
+                                router.push(
+                                  `${row.primaryHref}?field=${encodeURIComponent(field)}&return_to=${encodeURIComponent(returnPath)}`
+                                )
+                              }
+                              readinessBlocking={row.readinessBlocking}
+                              readinessScore={row.readinessScore}
+                            />
+                          </td>
+                          <td className="px-4 py-4 font-medium">
+                            {formatCurrency(
+                              row.monthlyRecurringTotal,
+                              row.currency || "PYG",
+                              locale
+                            )}
+                          </td>
+                          <td className="px-4 py-4 text-muted-foreground">
+                            {row.availableFrom
+                              ? formatDate(row.availableFrom, locale)
+                              : "—"}
+                          </td>
+                          <td className="px-4 py-4">{row.applicationCount}</td>
+                          <td className="px-4 py-4 text-muted-foreground">
+                            {formatDate(row.updatedAt, locale)}
+                          </td>
+                          <td className="px-4 py-4">
+                            <div className="flex flex-wrap gap-2">
+                              <Button asChild size="sm" variant="outline">
+                                <Link href={detailHref(row.primaryHref)}>
+                                  {isEn ? "Open" : "Abrir"}
+                                </Link>
+                              </Button>
+                              <Button
+                                onClick={() => setPreviewListing(row)}
+                                size="sm"
+                                type="button"
+                                variant="outline"
+                              >
+                                {isEn ? "Preview" : "Vista previa"}
+                              </Button>
+                              <form
+                                action={
+                                  row.isPublished
+                                    ? unpublishListingAction
+                                    : publishListingAction
+                                }
+                              >
+                                <input name="listing_id" type="hidden" value={row.id} />
+                                <input name="next" type="hidden" value={returnPath} />
+                                <Button size="sm" type="submit">
+                                  {row.isPublished
+                                    ? isEn
+                                      ? "Unpublish"
+                                      : "Despublicar"
+                                    : isEn
+                                      ? "Publish"
+                                      : "Publicar"}
+                                </Button>
+                              </form>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            ) : (
+              <div
+                className="rounded-2xl border border-border/60 bg-card/80 p-8 shadow-sm"
+                data-testid="listings-empty-state"
+              >
+                <h2 className="font-semibold text-xl tracking-tight">
+                  {emptyState.title}
+                </h2>
+                <p className="mt-2 max-w-2xl text-muted-foreground text-sm">
+                  {emptyState.description}
+                </p>
+                <div className="mt-6 flex flex-wrap gap-3">
+                  <Button onClick={() => setCreateOpen(true)} type="button">
+                    {isEn ? "Create listing" : "Crear anuncio"}
+                  </Button>
+                  <Button asChild variant="outline">
+                    <Link href={emptyState.ctaHref}>{emptyState.ctaLabel}</Link>
+                  </Button>
+                </div>
+              </div>
+            )
+          }
+        />
+      </PageScaffold>
+
+      <CreateListingDrawer
+        isEn={isEn}
+        locale={locale}
+        onOpenChange={setCreateOpen}
+        open={createOpen}
+        orgId={orgId}
+        pricingTemplateOptions={pricingTemplateOptions}
+        propertyOptions={propertyOptions}
+        unitOptions={unitOptions}
+      />
+
+      {previewListing ? (
+        <ListingPreviewModal
+          isEn={isEn}
+          isPublished={previewListing.isPublished}
+          listingId={previewListing.id}
+          locale={locale as "en-US" | "es-PY"}
+          onClose={() => setPreviewListing(null)}
+          slug={previewListing.publicSlug}
+        />
+      ) : null}
+    </div>
   );
 }

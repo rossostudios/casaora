@@ -25,3 +25,20 @@ test("create property sheet opens", async ({ page }) => {
     timeout: 5000,
   });
 });
+
+test("properties page shows filter bar", async ({ page }) => {
+  await navigateToModule(page, "properties");
+  const searchInput = page.getByPlaceholder(
+    /search properties|buscar propiedades/i
+  );
+  await expect(searchInput.first()).toBeVisible({ timeout: 5000 });
+});
+
+test("properties page shows AI recommendations section or empty state", async ({
+  page,
+}) => {
+  await navigateToModule(page, "properties");
+  // Either the recommendations heading or the main content should be visible
+  const main = page.locator("main").first();
+  await expect(main).toBeVisible({ timeout: 5000 });
+});

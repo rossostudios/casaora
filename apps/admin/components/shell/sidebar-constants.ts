@@ -1,13 +1,17 @@
 import {
+  AlertDiamondIcon,
+  ArtificialIntelligence02Icon,
+  Building01Icon,
+  CalendarCheckIn01Icon,
   ChartIcon,
   CheckmarkCircle02Icon,
-  type Home01Icon,
+  CreditCardIcon,
+  Home01Icon,
   InboxIcon,
-  MailOpen01Icon,
   MailReply01Icon,
   Message01Icon,
+  Notification03Icon,
   SparklesIcon,
-  StarIcon,
   Task01Icon,
   WorkflowSquare03Icon,
 } from "@hugeicons/core-free-icons";
@@ -20,22 +24,46 @@ export const PRIMARY_TABS: Array<{
   label: { "es-PY": string; "en-US": string };
 }> = [
   {
-    key: "chat",
-    href: "/app/agents",
-    icon: Message01Icon,
-    label: { "es-PY": "Agentes", "en-US": "Agents" },
+    key: "today",
+    href: "/app",
+    icon: Home01Icon,
+    label: { "es-PY": "Hoy", "en-US": "Today" },
   },
   {
-    key: "home",
+    key: "portfolio",
     href: "/app/portfolio",
-    icon: ChartIcon,
+    icon: Building01Icon,
     label: { "es-PY": "Portafolio", "en-US": "Portfolio" },
   },
   {
-    key: "inbox",
-    href: "/module/messaging",
+    key: "leasing",
+    href: "/module/applications",
+    icon: CalendarCheckIn01Icon,
+    label: { "es-PY": "Leasing", "en-US": "Leasing" },
+  },
+  {
+    key: "operations",
+    href: "/module/operations",
+    icon: Task01Icon,
+    label: { "es-PY": "Operaciones", "en-US": "Operations" },
+  },
+  {
+    key: "finance",
+    href: "/module/reports/finance",
+    icon: CreditCardIcon,
+    label: { "es-PY": "Finanzas", "en-US": "Finance" },
+  },
+  {
+    key: "conversations",
+    href: "/module/action-center",
     icon: InboxIcon,
-    label: { "es-PY": "Inbox", "en-US": "Inbox" },
+    label: { "es-PY": "Conversaciones", "en-US": "Conversations" },
+  },
+  {
+    key: "ai",
+    href: "/app/agents",
+    icon: ArtificialIntelligence02Icon,
+    label: { "es-PY": "IA", "en-US": "AI" },
   },
 ];
 
@@ -60,42 +88,47 @@ export const CHAT_LINKS: RouteLinkDef[] = [
 
 export const INBOX_STATUS_LINKS: RouteLinkDef[] = [
   {
-    href: "/module/messaging",
+    href: "/module/action-center",
     icon: InboxIcon,
-    label: { "es-PY": "Todos los mensajes", "en-US": "All Messages" },
+    label: { "es-PY": "Centro de acción", "en-US": "Action Center" },
   },
   {
-    href: "/module/messaging?status=unread",
-    icon: MailOpen01Icon,
-    label: { "es-PY": "No leídos", "en-US": "Unread Messages" },
+    href: "/module/action-center?source=approval",
+    icon: CheckmarkCircle02Icon,
+    label: { "es-PY": "Aprobaciones", "en-US": "Approvals" },
   },
   {
-    href: "/module/messaging?status=awaiting",
+    href: "/module/action-center?source=message",
     icon: MailReply01Icon,
     label: { "es-PY": "Esperando respuesta", "en-US": "Awaiting Reply" },
   },
   {
-    href: "/module/messaging?status=resolved",
-    icon: CheckmarkCircle02Icon,
-    label: { "es-PY": "Resueltos", "en-US": "Resolved" },
+    href: "/module/action-center?source=notification",
+    icon: Notification03Icon,
+    label: { "es-PY": "Notificaciones", "en-US": "Notifications" },
   },
   {
-    href: "/module/messaging?status=starred",
-    icon: StarIcon,
-    label: { "es-PY": "Destacados", "en-US": "Starred" },
+    href: "/module/action-center?source=anomaly",
+    icon: AlertDiamondIcon,
+    label: { "es-PY": "Anomalías", "en-US": "Anomalies" },
   },
 ];
 
 export const INBOX_SEGMENT_LINKS: RouteLinkDef[] = [
   {
-    href: "/module/messaging?segment=needs-engagement",
+    href: "/module/messaging",
     icon: Message01Icon,
-    label: { "es-PY": "Necesita atención", "en-US": "Needs engagement" },
+    label: { "es-PY": "Bandeja de mensajes", "en-US": "Messaging inbox" },
   },
   {
-    href: "/module/messaging?segment=lovable",
-    icon: StarIcon,
-    label: { "es-PY": "Encantadores", "en-US": "Lovable" },
+    href: "/module/notifications",
+    icon: Notification03Icon,
+    label: { "es-PY": "Notificaciones", "en-US": "Notifications" },
+  },
+  {
+    href: "/module/governance",
+    icon: CheckmarkCircle02Icon,
+    label: { "es-PY": "Gobernanza IA", "en-US": "AI Governance" },
   },
 ];
 
@@ -123,7 +156,13 @@ export const SECTIONS: SectionDef[] = [
       "es-PY": "Alquileres",
       "en-US": "Rentals",
     },
-    moduleSlugs: ["listings", "leases", "reservations", "calendar", "reviews"],
+    moduleSlugs: [
+      "applications",
+      "listings",
+      "leases",
+      "reservations",
+      "reviews",
+    ],
     roles: ["owner_admin", "operator"],
   },
   {
@@ -134,7 +173,7 @@ export const SECTIONS: SectionDef[] = [
     },
     routeLinks: [
       {
-        href: "/module/operations?tab=tasks",
+        href: "/module/operations",
         icon: Task01Icon,
         label: { "es-PY": "Operaciones", "en-US": "Operations" },
       },
@@ -182,6 +221,7 @@ export const HOME_TAB_HIDDEN_MODULE_SLUGS = new Set([
   "applications",
   "collections",
   "maintenance",
+  "action-center",
   "messaging",
   "notification-rules",
   "notifications",
@@ -199,4 +239,5 @@ export const HOME_TAB_HIDDEN_MODULE_SLUGS = new Set([
   "agent-config",
   "agent-playground",
   "governance",
+  "calendar",
 ]);

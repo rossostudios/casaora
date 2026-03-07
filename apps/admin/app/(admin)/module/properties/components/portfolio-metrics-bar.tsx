@@ -1,6 +1,7 @@
 "use client";
 
 import { motion } from "motion/react";
+import type { TwinSummary } from "@/app/(admin)/module/properties/hooks/use-batch-property-twins";
 import type { PropertyPortfolioSummary } from "@/lib/features/properties/types";
 import { formatCompactCurrency } from "@/lib/format";
 import { EASING } from "@/lib/module-helpers";
@@ -10,77 +11,109 @@ type PortfolioMetricsBarProps = {
   summary: PropertyPortfolioSummary;
   isEn: boolean;
   formatLocale: string;
+  twinSummary?: TwinSummary | null;
+  aiInterventionCount?: number;
 };
 
 export function PortfolioMetricsBar({
   summary,
   isEn,
   formatLocale,
+  twinSummary,
+  aiInterventionCount,
 }: PortfolioMetricsBarProps) {
   const occupancyPct = Math.round(summary.averageOccupancy);
+  const hasHealth = twinSummary != null;
+  const healthScore = twinSummary?.avgHealthScore ?? 0;
+  const interventions = aiInterventionCount ?? 0;
   const attentionCount =
     summary.totalOpenTasks + summary.totalOverdueCollections;
 
-  const metrics = [
+  const metrics: Array<{
+    label: string;
+    value: string;
+    tone: "default" | "success" | "warning" | "danger";
+  }> = [
     {
-      label: isEn ? "Revenue MTD" : "Ingresos del mes",
+      label: isEn ? "Revenue" : "Ingresos",
       value: formatCompactCurrency(
         summary.totalRevenueMtdPyg,
         "PYG",
         formatLocale
       ).replace(/PYG\s?/, "₲"),
-      tone: "default" as const,
+      tone: "default",
     },
     {
-      label: isEn ? "Avg Occupancy" : "Ocupación prom.",
+      label: isEn ? "Occupancy" : "Ocupación",
       value: `${occupancyPct}%`,
       tone:
         occupancyPct >= 80
-          ? ("success" as const)
+          ? "success"
           : occupancyPct >= 50
-            ? ("warning" as const)
-            : ("danger" as const),
+            ? "warning"
+            : "danger",
     },
     {
-      label: isEn ? "Units Occupied" : "Unidades ocupadas",
+      label: isEn ? "Units" : "Unidades",
       value: `${summary.totalActiveLeases}/${summary.totalUnits}`,
-      tone: "default" as const,
+      tone: "default",
     },
-    {
-      label: isEn ? "Need Attention" : "Requieren atención",
-      value: `${attentionCount}`,
-      tone: attentionCount > 0 ? ("danger" as const) : ("default" as const),
-    },
+    hasHealth
+      ? {
+          label: isEn ? "Health" : "Salud",
+          value: `${healthScore}`,
+          tone:
+            healthScore >= 75
+              ? "success"
+              : healthScore >= 50
+                ? "warning"
+                : "danger",
+        }
+      : {
+          label: isEn ? "Attention" : "Atención",
+          value: `${attentionCount}`,
+          tone: attentionCount > 0 ? "danger" : "default",
+        },
+    ...(hasHealth
+      ? [
+          {
+            label: isEn ? "AI Actions" : "Acciones IA",
+            value: `${interventions}`,
+            tone: "default" as const,
+          },
+        ]
+      : []),
   ];
 
   return (
     <motion.div
-      animate={{ opacity: 1, y: 0 }}
-      className="grid grid-cols-2 gap-3 sm:grid-cols-4"
-      initial={{ opacity: 0, y: 8 }}
-      transition={{ delay: 0.1, duration: 0.35, ease: EASING }}
+      animate={{ opacity: 1 }}
+      className="flex flex-wrap items-center gap-x-5 gap-y-1"
+      initial={{ opacity: 0 }}
+      transition={{ delay: 0.06, duration: 0.3, ease: EASING }}
     >
       {metrics.map((m, i) => (
-        <motion.div
-          animate={{ opacity: 1, scale: 1 }}
-          className="glass-inner rounded-xl p-4"
-          initial={{ opacity: 0, scale: 0.97 }}
-          key={m.label}
-          transition={{ delay: 0.15 + i * 0.05, duration: 0.3, ease: EASING }}
-        >
-          <p
+        <div className="flex items-baseline gap-1.5" key={m.label}>
+          {i > 0 && (
+            <span className="text-border/40 text-xs" aria-hidden>
+              ·
+            </span>
+          )}
+          <span className="text-[11px] text-muted-foreground/40">
+            {m.label}
+          </span>
+          <span
             className={cn(
-              "font-semibold text-xl tabular-nums tracking-tight",
+              "text-[13px] font-medium tabular-nums",
               m.tone === "success" && "text-emerald-600 dark:text-emerald-400",
               m.tone === "warning" && "text-amber-600 dark:text-amber-400",
               m.tone === "danger" && "text-red-600 dark:text-red-400",
-              m.tone === "default" && "text-foreground"
+              m.tone === "default" && "text-foreground/80"
             )}
           >
             {m.value}
-          </p>
-          <p className="mt-1 text-muted-foreground/70 text-xs">{m.label}</p>
-        </motion.div>
+          </span>
+        </div>
       ))}
     </motion.div>
   );

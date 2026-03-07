@@ -137,6 +137,7 @@ async fn process_voice_input(state: &AppState, caller: &str, speech: &str) -> St
         role: "tenant",
         message: speech,
         conversation: &[],
+        agent_run_id: None,
         allow_mutations: false,
         confirm_write: true,
         agent_name: "Guest Concierge",

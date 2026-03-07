@@ -1,15 +1,5 @@
 "use client";
 
-import {
-  Building06Icon,
-  Clock01Icon,
-  Door01Icon,
-  GridViewIcon,
-  HeartCheckIcon,
-  Home01Icon,
-  Sofa01Icon,
-} from "@hugeicons/core-free-icons";
-import type { IconSvgElement } from "@hugeicons/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback } from "react";
 import { cn } from "@/lib/utils";
@@ -17,7 +7,6 @@ import { cn } from "@/lib/utils";
 type Category = {
   key: string;
   label: { "en-US": string; "es-PY": string };
-  icon: IconSvgElement;
   params: Record<string, string>;
 };
 
@@ -25,44 +14,42 @@ const CATEGORIES: readonly Category[] = [
   {
     key: "all",
     label: { "en-US": "All", "es-PY": "Todos" },
-    icon: GridViewIcon,
     params: {},
   },
   {
     key: "available-now",
-    label: { "en-US": "Available now", "es-PY": "Disponible ya" },
-    icon: Clock01Icon,
+    label: { "en-US": "Move-in ready", "es-PY": "Disponible ya" },
     params: { available_now: "true" },
   },
   {
     key: "apartment",
     label: { "en-US": "Apartments", "es-PY": "Departamentos" },
-    icon: Building06Icon,
     params: { property_type: "apartment" },
   },
   {
     key: "house",
     label: { "en-US": "Houses", "es-PY": "Casas" },
-    icon: Home01Icon,
     params: { property_type: "house" },
   },
   {
     key: "studio",
     label: { "en-US": "Studios", "es-PY": "Monoambientes" },
-    icon: Door01Icon,
     params: { property_type: "studio" },
   },
   {
     key: "furnished",
     label: { "en-US": "Furnished", "es-PY": "Amoblados" },
-    icon: Sofa01Icon,
     params: { furnished: "true" },
   },
   {
     key: "pet-friendly",
     label: { "en-US": "Pet-Friendly", "es-PY": "Acepta mascotas" },
-    icon: HeartCheckIcon,
     params: { pet_policy: "allowed" },
+  },
+  {
+    key: "under-2m",
+    label: { "en-US": "Under ₲2M", "es-PY": "Bajo ₲2M" },
+    params: { max_monthly: "2000000" },
   },
 ];
 
@@ -71,10 +58,12 @@ function resolveActiveKey(searchParams: URLSearchParams): string {
   const furnished = searchParams.get("furnished") || "";
   const petPolicy = searchParams.get("pet_policy") || "";
   const availableNow = searchParams.get("available_now") || "";
+  const maxMonthly = searchParams.get("max_monthly") || "";
 
   if (availableNow === "true") return "available-now";
   if (petPolicy) return "pet-friendly";
   if (furnished === "true") return "furnished";
+  if (maxMonthly === "2000000") return "under-2m";
   if (propertyType === "apartment") return "apartment";
   if (propertyType === "house") return "house";
   if (propertyType === "studio") return "studio";
@@ -102,6 +91,7 @@ function CategoryPillsInner({ locale }: { locale: "es-PY" | "en-US" }) {
       params.delete("furnished");
       params.delete("pet_policy");
       params.delete("available_now");
+      params.delete("max_monthly");
 
       for (const [key, value] of Object.entries(category.params)) {
         params.set(key, value);
@@ -116,25 +106,22 @@ function CategoryPillsInner({ locale }: { locale: "es-PY" | "en-US" }) {
   );
 
   return (
-    <div className="scrollbar-none flex gap-1 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+    <div className="scrollbar-none flex gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
       {CATEGORIES.map((category) => {
         const active = activeKey === category.key;
         return (
           <button
             className={cn(
-              "relative shrink-0 px-4 py-2.5 font-medium text-sm transition-colors",
+              "shrink-0 rounded-full border px-4 py-2 font-medium text-sm transition-all duration-200",
               active
-                ? "text-primary"
-                : "text-[var(--marketplace-text-muted)] hover:text-primary"
+                ? "border-[var(--marketplace-text)]/15 bg-[var(--marketplace-text)]/8 text-[var(--marketplace-text)]"
+                : "border-transparent text-[var(--marketplace-text-muted)] hover:border-[var(--marketplace-text)]/8 hover:text-[var(--marketplace-text)]"
             )}
             key={category.key}
             onClick={() => handleClick(category)}
             type="button"
           >
             {category.label[locale]}
-            {active ? (
-              <span className="absolute inset-x-4 bottom-0 h-0.5 rounded-full bg-primary" />
-            ) : null}
           </button>
         );
       })}

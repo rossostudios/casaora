@@ -112,7 +112,7 @@ export function PropertyDashboard({
 
   return (
     <div className="space-y-4">
-      <Card className="overflow-hidden border-border/60 bg-card/50 shadow-sm backdrop-blur-md">
+      <Card className="overflow-hidden border-border/60 bg-card shadow-sm">
         <CardContent className="p-0">
           <section className="relative overflow-hidden bg-[#fdfcfb] dark:bg-neutral-900/40">
             <div className="pointer-events-none absolute inset-0">
@@ -133,7 +133,7 @@ export function PropertyDashboard({
                       <Link
                         className={cn(
                           buttonVariants({ variant: "secondary", size: "sm" }),
-                          "h-7 rounded-lg border-border/10 bg-background/50 px-2.5 font-bold text-[10px] uppercase tracking-wider transition-all hover:bg-background/80"
+                          "h-7 rounded-lg border-border/10 bg-background px-2.5 font-bold text-[10px] uppercase tracking-wider transition-all hover:bg-muted"
                         )}
                         href={`/module/${moduleDef.slug}`}
                       >
@@ -141,12 +141,12 @@ export function PropertyDashboard({
                         {isEn ? "Back" : "Volver"}
                       </Link>
                       <Badge
-                        className="h-7 border-border/10 bg-background/50 font-bold text-[10px] text-muted-foreground uppercase tracking-wider backdrop-blur-sm"
+                        className="h-7 border-border/10 bg-background font-bold text-[10px] text-muted-foreground uppercase tracking-wider"
                         variant="outline"
                       >
                         {moduleLabel}
                       </Badge>
-                      <Badge className="h-7 border-primary/20 bg-primary/5 font-bold text-[10px] text-primary uppercase tracking-wider backdrop-blur-sm">
+                      <Badge className="h-7 border-primary/20 bg-primary/5 font-bold text-[10px] text-primary uppercase tracking-wider">
                         {propertyCodeLabel ?? recordId}
                       </Badge>
                     </div>
@@ -163,11 +163,11 @@ export function PropertyDashboard({
 
                   <div className="flex items-center gap-2">
                     <CopyButton
-                      className="h-9 w-9 rounded-xl border-border/40 bg-background/40 hover:bg-background/80"
+                      className="h-9 w-9 rounded-xl border-border/40 bg-background hover:bg-muted"
                       value={recordId}
                     />
                     <PinButton
-                      className="h-9 w-9 rounded-xl border-border/40 bg-background/40 hover:bg-background/80"
+                      className="h-9 w-9 rounded-xl border-border/40 bg-background hover:bg-muted"
                       href={href}
                       label={title}
                       meta={moduleLabel}
@@ -177,21 +177,21 @@ export function PropertyDashboard({
 
                 <div className="flex flex-wrap gap-2.5">
                   <Link
-                    className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-border/40 bg-background/60 px-4 font-semibold text-foreground text-xs shadow-sm transition-all hover:bg-background/90"
+                    className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-border/40 bg-background px-4 font-semibold text-foreground text-xs shadow-sm transition-all hover:bg-muted"
                     href={`/module/units?property_id=${encodeURIComponent(recordId)}`}
                   >
                     <Icon icon={Door01Icon} size={15} />
                     {isEn ? "Units" : "Unidades"}
                   </Link>
                   <Link
-                    className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-border/40 bg-background/60 px-4 font-semibold text-foreground text-xs shadow-sm transition-all hover:bg-background/90"
+                    className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-border/40 bg-background px-4 font-semibold text-foreground text-xs shadow-sm transition-all hover:bg-muted"
                     href={`/module/leases?property_id=${encodeURIComponent(recordId)}`}
                   >
                     <Icon icon={Calendar02Icon} size={15} />
                     {isEn ? "Leases" : "Contratos"}
                   </Link>
                   <Link
-                    className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-border/40 bg-background/60 px-4 font-semibold text-foreground text-xs shadow-sm transition-all hover:bg-background/90"
+                    className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-border/40 bg-background px-4 font-semibold text-foreground text-xs shadow-sm transition-all hover:bg-muted"
                     href={`/module/reports?property_id=${encodeURIComponent(recordId)}`}
                   >
                     <Icon icon={ChartIcon} size={15} />
@@ -200,9 +200,9 @@ export function PropertyDashboard({
                 </div>
               </div>
 
-              <div className="rounded-[24px] border border-border/20 bg-background/30 p-4 shadow-inner backdrop-blur-xl">
+              <div className="rounded-[24px] border border-border/20 bg-muted p-4 shadow-inner">
                 <div className="grid gap-3 sm:grid-cols-3 xl:grid-cols-1">
-                  <div className="rounded-2xl border border-border/10 bg-card/40 p-3.5 shadow-sm">
+                  <div className="rounded-2xl border border-border/10 bg-card p-3.5 shadow-sm">
                     <p className="font-bold text-[10px] text-muted-foreground uppercase tracking-widest">
                       {isEn ? "Occupancy" : "Ocupación"}
                     </p>
@@ -212,7 +212,7 @@ export function PropertyDashboard({
                         : "-"}
                     </p>
                   </div>
-                  <div className="rounded-2xl border border-border/10 bg-card/40 p-3.5 shadow-sm">
+                  <div className="rounded-2xl border border-border/10 bg-card p-3.5 shadow-sm">
                     <p className="font-bold text-[10px] text-muted-foreground uppercase tracking-widest">
                       {isEn ? "Projected Rent" : "Renta Proyectada"}
                     </p>
@@ -224,7 +224,7 @@ export function PropertyDashboard({
                       )}
                     </p>
                   </div>
-                  <div className="rounded-2xl border border-border/10 bg-card/40 p-3.5 shadow-sm">
+                  <div className="rounded-2xl border border-border/10 bg-card p-3.5 shadow-sm">
                     <p className="font-bold text-[10px] text-muted-foreground uppercase tracking-widest">
                       {isEn ? "Active Leases" : "Contratos Activos"}
                     </p>
@@ -291,7 +291,7 @@ export function PropertyDashboard({
 
                     return (
                       <article
-                        className="flex h-full flex-col rounded-2xl border border-border/75 bg-background/75 p-3"
+                        className="flex h-full flex-col rounded-2xl border border-border/75 bg-background p-3"
                         key={unit.id}
                       >
                         <div className="mb-2 flex items-start justify-between gap-2">
@@ -434,7 +434,7 @@ export function PropertyDashboard({
             <CardContent className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
               {workflowSteps.map((step) => (
                 <Link
-                  className="rounded-2xl border border-border/70 bg-background/70 p-3 transition-colors hover:bg-muted/25"
+                  className="rounded-2xl border border-border/70 bg-background p-3 transition-colors hover:bg-muted"
                   href={step.href}
                   key={step.id}
                 >
@@ -479,7 +479,7 @@ export function PropertyDashboard({
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="rounded-2xl border border-border/70 bg-background/70 p-3">
+              <div className="rounded-2xl border border-border/70 bg-background p-3">
                 <p className="text-muted-foreground text-xs">
                   {isEn ? "Net income" : "Ingreso neto"}
                 </p>
@@ -668,7 +668,7 @@ export function PropertyDashboard({
                         : "status-tone-info";
                   return (
                     <article
-                      className="rounded-2xl border border-border/70 bg-background/72 p-3"
+                      className="rounded-2xl border border-border/70 bg-background p-3"
                       key={item.id}
                     >
                       <div className="flex items-start justify-between gap-3">

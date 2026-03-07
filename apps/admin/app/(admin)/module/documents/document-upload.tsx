@@ -16,7 +16,7 @@ type DocumentUploadProps = {
     name: string;
     mimeType: string;
     size: number;
-  }) => void;
+  }) => void | Promise<void>;
 };
 
 export function DocumentUpload({
@@ -56,12 +56,14 @@ export function DocumentUpload({
         } else {
           mimeType = "application/octet-stream";
         }
-        onUploaded({
-          url: uploaded.publicUrl,
-          name: file.name,
-          mimeType,
-          size: file.size,
-        });
+        await Promise.resolve(
+          onUploaded({
+            url: uploaded.publicUrl,
+            name: file.name,
+            mimeType,
+            size: file.size,
+          }),
+        );
         let uploadedMsg: string;
         if (isEn) {
           uploadedMsg = "File uploaded";
@@ -81,7 +83,7 @@ export function DocumentUpload({
         setUploading(false);
       }
     },
-    [orgId, isEn, onUploaded]
+    [orgId, isEn, onUploaded],
   );
 
   const handleDrop = useCallback(
@@ -91,7 +93,7 @@ export function DocumentUpload({
       const file = e.dataTransfer.files[0];
       if (file) uploadFile(file);
     },
-    [uploadFile]
+    [uploadFile],
   );
 
   const handleFileChange = useCallback(
@@ -100,7 +102,7 @@ export function DocumentUpload({
       if (file) uploadFile(file);
       e.target.value = "";
     },
-    [uploadFile]
+    [uploadFile],
   );
 
   return (

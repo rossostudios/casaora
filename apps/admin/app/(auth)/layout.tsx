@@ -17,7 +17,7 @@ export default async function AuthLayout({
       {/* ── Left panel ── */}
       <div className="relative flex w-full flex-col lg:w-1/2">
         <div className="absolute top-4 right-4 z-10 flex items-center gap-2">
-          <LanguageSelector className="w-[170px] bg-background/70 backdrop-blur" />
+          <LanguageSelector className="w-[170px] bg-background" />
           <ThemeToggle locale={locale} />
         </div>
 

@@ -57,6 +57,15 @@ function leasesUrl(params?: { success?: string; error?: string }): string {
   return withParams("/module/leases", params ?? {});
 }
 
+function revalidateLeasePaths(leaseId?: string) {
+  revalidatePath("/module/leases");
+  if (leaseId) {
+    revalidatePath(`/module/leases/${leaseId}`);
+  }
+  revalidatePath("/module/collections");
+  revalidatePath("/app");
+}
+
 export async function createLeaseAction(formData: FormData) {
   const organization_id = toStringValue(formData.get("organization_id"));
   if (!organization_id) {
@@ -97,6 +106,9 @@ export async function createLeaseAction(formData: FormData) {
   const tenant_phone_e164 = toStringValue(formData.get("tenant_phone_e164"));
   const property_id = toStringValue(formData.get("property_id"));
   const unit_id = toStringValue(formData.get("unit_id"));
+  const space_id = toStringValue(formData.get("space_id"));
+  const bed_id = toStringValue(formData.get("bed_id"));
+  const application_id = toStringValue(formData.get("application_id"));
   const ends_on = toStringValue(formData.get("ends_on"));
   const first_collection_due_date = toStringValue(
     formData.get("first_collection_due_date")
@@ -107,6 +119,9 @@ export async function createLeaseAction(formData: FormData) {
   if (tenant_phone_e164) payload.tenant_phone_e164 = tenant_phone_e164;
   if (property_id) payload.property_id = property_id;
   if (unit_id) payload.unit_id = unit_id;
+  if (space_id) payload.space_id = space_id;
+  if (bed_id) payload.bed_id = bed_id;
+  if (application_id) payload.application_id = application_id;
   if (ends_on) payload.ends_on = ends_on;
   if (first_collection_due_date) {
     payload.first_collection_due_date = first_collection_due_date;
@@ -133,12 +148,18 @@ export async function createLeaseAction(formData: FormData) {
       }
     }
 
-    await postJson("/leases", payload);
-    revalidatePath("/module/leases");
-    revalidatePath("/module/collections");
+    const created = (await postJson("/leases", payload)) as
+      | { lease?: { id?: string } }
+      | undefined;
+    const leaseId = created?.lease?.id;
+    revalidateLeasePaths(leaseId);
     revalidatePath("/module/guests");
-    revalidatePath("/app");
-    redirect(withParams(next, { success: "lease-created" }));
+    redirect(
+      withParams(
+        leaseId ? `/module/leases/${leaseId}?return_to=${encodeURIComponent(next)}` : next,
+        { success: "lease-created" }
+      )
+    );
   } catch (err) {
     unstable_rethrow(err);
     const message = err instanceof Error ? err.message : String(err);
@@ -167,6 +188,8 @@ export async function updateLeaseAction(formData: FormData) {
   const ends_on = toStringValue(formData.get("ends_on"));
   const property_id = toStringValue(formData.get("property_id"));
   const unit_id = toStringValue(formData.get("unit_id"));
+  const space_id = toStringValue(formData.get("space_id"));
+  const bed_id = toStringValue(formData.get("bed_id"));
   const currency = toStringValue(formData.get("currency"));
   const notes = toStringValue(formData.get("notes"));
 
@@ -176,6 +199,8 @@ export async function updateLeaseAction(formData: FormData) {
   payload.ends_on = ends_on || null;
   payload.property_id = property_id || null;
   payload.unit_id = unit_id || null;
+  payload.space_id = space_id || null;
+  payload.bed_id = bed_id || null;
   if (currency) payload.currency = currency.toUpperCase();
   payload.notes = notes || null;
 
@@ -191,9 +216,7 @@ export async function updateLeaseAction(formData: FormData) {
 
   try {
     await patchJson(`/leases/${encodeURIComponent(lease_id)}`, payload);
-    revalidatePath("/module/leases");
-    revalidatePath("/module/collections");
-    revalidatePath("/app");
+    revalidateLeasePaths(lease_id);
     redirect(withParams(next, { success: "lease-updated" }));
   } catch (err) {
     unstable_rethrow(err);
@@ -254,9 +277,7 @@ export async function generateCollectionsAction(formData: FormData) {
       }
     }
 
-    revalidatePath("/module/leases");
-    revalidatePath("/module/collections");
-    revalidatePath("/app");
+    revalidateLeasePaths(lease_id);
 
     if (errors.length > 0) {
       redirect(
@@ -295,9 +316,7 @@ export async function setLeaseStatusAction(formData: FormData) {
     await patchJson(`/leases/${encodeURIComponent(lease_id)}`, {
       lease_status,
     });
-    revalidatePath("/module/leases");
-    revalidatePath("/module/collections");
-    revalidatePath("/app");
+    revalidateLeasePaths(lease_id);
     redirect(withParams(next, { success: "lease-status-updated" }));
   } catch (err) {
     unstable_rethrow(err);
@@ -322,7 +341,7 @@ export async function sendRenewalOfferAction(formData: FormData) {
       ...(notes ? { notes } : {}),
     });
 
-    revalidatePath("/module/leases");
+    revalidateLeasePaths(lease_id);
     redirect(withParams(next, { success: "renewal-offer-sent" }));
   } catch (err) {
     unstable_rethrow(err);
@@ -345,9 +364,7 @@ export async function acceptRenewalAction(formData: FormData) {
       {}
     );
 
-    revalidatePath("/module/leases");
-    revalidatePath("/module/collections");
-    revalidatePath("/app");
+    revalidateLeasePaths(lease_id);
     redirect(withParams(next, { success: "renewal-accepted" }));
   } catch (err) {
     unstable_rethrow(err);
@@ -417,9 +434,7 @@ export async function renewLeaseAction(formData: FormData) {
       lease_status: "completed",
     });
 
-    revalidatePath("/module/leases");
-    revalidatePath("/module/collections");
-    revalidatePath("/app");
+    revalidateLeasePaths(old_lease_id);
     redirect(withParams(next, { success: "lease-renewed" }));
   } catch (err) {
     unstable_rethrow(err);

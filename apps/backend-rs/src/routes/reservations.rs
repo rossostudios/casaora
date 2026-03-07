@@ -5,11 +5,16 @@ use crate::{
     schemas::{
         clamp_limit_in_range, remove_nulls, serialize_to_map, AddReservationGuestInput,
         CreateReservationInput, DepositRefundInput, ReservationGuestPath, ReservationPath,
-        ReservationStatusInput, ReservationsQuery, UpdateReservationInput,
+        ReservationStatusInput, ReservationsOverviewQuery, ReservationsQuery,
+        UpdateReservationInput,
     },
     services::{
-        audit::write_audit_log, enrichment::enrich_reservations, sequences::enroll_in_sequences,
-        token_hash::hash_token, workflows::fire_trigger,
+        audit::write_audit_log,
+        enrichment::enrich_reservations,
+        reservations::{build_reservation_detail_overview, build_reservations_overview},
+        sequences::enroll_in_sequences,
+        token_hash::hash_token,
+        workflows::fire_trigger,
     },
     state::AppState,
     tenancy::{assert_org_member, assert_org_role},
@@ -115,6 +120,10 @@ pub fn router() -> axum::Router<AppState> {
             axum::routing::get(list_reservations).post(create_reservation),
         )
         .route(
+            "/reservations/overview",
+            axum::routing::get(list_reservations_overview),
+        )
+        .route(
             "/reservations/{reservation_id}/refund-deposit",
             axum::routing::post(refund_deposit),
         )
@@ -125,6 +134,10 @@ pub fn router() -> axum::Router<AppState> {
         .route(
             "/reservations/{reservation_id}",
             axum::routing::get(get_reservation).patch(update_reservation),
+        )
+        .route(
+            "/reservations/{reservation_id}/overview",
+            axum::routing::get(get_reservation_overview),
         )
         .route(
             "/reservations/{reservation_id}/status",
@@ -182,6 +195,18 @@ async fn list_reservations(
     .await?;
     let enriched = enrich_reservations(&state, pool, rows, &query.org_id).await?;
     Ok(Json(json!({ "data": enriched })))
+}
+
+async fn list_reservations_overview(
+    State(state): State<AppState>,
+    Query(query): Query<ReservationsOverviewQuery>,
+    headers: HeaderMap,
+) -> AppResult<Json<Value>> {
+    let user_id = require_user_id(&state, &headers).await?;
+    assert_org_member(&state, &user_id, &query.org_id).await?;
+    let pool = db_pool(&state)?;
+
+    Ok(Json(build_reservations_overview(pool, &query).await?))
 }
 
 async fn create_reservation(
@@ -248,6 +273,22 @@ async fn get_reservation(
     let mut enriched = enrich_reservations(&state, pool, vec![record], &org_id).await?;
     Ok(Json(
         enriched.pop().unwrap_or_else(|| Value::Object(Map::new())),
+    ))
+}
+
+async fn get_reservation_overview(
+    State(state): State<AppState>,
+    Path(path): Path<ReservationPath>,
+    headers: HeaderMap,
+) -> AppResult<Json<Value>> {
+    let user_id = require_user_id(&state, &headers).await?;
+    let pool = db_pool(&state)?;
+    let record = get_row(pool, "reservations", &path.reservation_id, "id").await?;
+    let org_id = value_str(&record, "organization_id");
+    assert_org_member(&state, &user_id, &org_id).await?;
+
+    Ok(Json(
+        build_reservation_detail_overview(pool, &path.reservation_id).await?,
     ))
 }
 
@@ -1040,7 +1081,7 @@ async fn send_guest_portal_link(
         "reservation_id".to_string(),
         Value::String(path.reservation_id.clone()),
     );
-    record.insert("guest_id".to_string(), Value::String(guest_id));
+    record.insert("guest_id".to_string(), Value::String(guest_id.clone()));
     record.insert("token_hash".to_string(), Value::String(token_hash));
     if let Some(ref e) = guest_email {
         record.insert("email".to_string(), Value::String(e.clone()));
@@ -1060,6 +1101,11 @@ async fn send_guest_portal_link(
     if let Some(ref phone) = guest_phone {
         let mut msg = Map::new();
         msg.insert("organization_id".to_string(), Value::String(org_id));
+        msg.insert(
+            "reservation_id".to_string(),
+            Value::String(path.reservation_id.clone()),
+        );
+        msg.insert("guest_id".to_string(), Value::String(guest_id.clone()));
         msg.insert("channel".to_string(), Value::String("whatsapp".to_string()));
         msg.insert("recipient".to_string(), Value::String(phone.clone()));
         msg.insert("status".to_string(), Value::String("queued".to_string()));

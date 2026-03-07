@@ -6,6 +6,7 @@ use axum::{
 use serde::Deserialize;
 use serde_json::{json, Value};
 use sqlx::Row;
+use uuid::Uuid;
 
 use crate::{
     auth::require_user_id,
@@ -88,6 +89,8 @@ struct ListApprovalsQuery {
     priority: Option<String>,
     #[serde(default)]
     status: Option<String>,
+    #[serde(default)]
+    run_id: Option<String>,
 }
 
 async fn list_approvals(
@@ -100,23 +103,67 @@ async fn list_approvals(
     assert_approver_role(&membership)?;
 
     let pool = db_pool(&state)?;
-    let status_filter = query.status.as_deref().unwrap_or("pending");
-    let kind_filter = query.kind.as_deref().unwrap_or("");
-    let priority_filter = query.priority.as_deref().unwrap_or("");
+    let status_filter = match query.status.as_deref().map(str::trim) {
+        Some(value) if value.eq_ignore_ascii_case("all") || value.is_empty() => None,
+        Some(value) => Some(value),
+        None => Some("pending"),
+    };
+    let kind_filter = query
+        .kind
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
+    let priority_filter = query
+        .priority
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
+    let run_id_filter = query
+        .run_id
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(|value| {
+            Uuid::parse_str(value)
+                .map_err(|_| AppError::BadRequest("run_id must be a valid UUID.".to_string()))
+        })
+        .transpose()?;
     let rows = sqlx::query(
-        "SELECT row_to_json(t) AS row
+        "SELECT
+            to_jsonb(t) ||
+            jsonb_build_object(
+              'run',
+              CASE
+                WHEN r.id IS NULL THEN NULL
+                ELSE jsonb_build_object(
+                  'id', r.id,
+                  'status', r.status,
+                  'mode', r.mode,
+                  'task', r.task,
+                  'provider', r.provider,
+                  'model', r.model,
+                  'chat_id', r.chat_id,
+                  'created_at', r.created_at
+                )
+              END
+            ) AS row
          FROM agent_approvals t
-         WHERE organization_id = $1::uuid
-           AND status = $2
-           AND ($3 = '' OR kind = $3)
-           AND ($4 = '' OR priority = $4)
-         ORDER BY created_at DESC
+         LEFT JOIN agent_runs r
+           ON r.id = t.agent_run_id
+          AND r.organization_id = t.organization_id
+         WHERE t.organization_id = $1::uuid
+           AND ($2::text IS NULL OR t.status = $2)
+           AND ($3::text IS NULL OR t.kind = $3)
+           AND ($4::text IS NULL OR t.priority = $4)
+           AND ($5::uuid IS NULL OR t.agent_run_id = $5::uuid)
+         ORDER BY t.created_at DESC
          LIMIT 100",
     )
     .bind(&query.org_id)
     .bind(status_filter)
     .bind(kind_filter)
     .bind(priority_filter)
+    .bind(run_id_filter)
     .fetch_all(pool)
     .await
     .map_err(|error| {
@@ -307,6 +354,11 @@ async fn approve_approval(
     let approval = row
         .and_then(|item| item.try_get::<Option<Value>, _>("row").ok().flatten())
         .ok_or_else(|| AppError::NotFound("Approval not found or already reviewed.".to_string()))?;
+    let agent_run_id = approval
+        .as_object()
+        .and_then(|obj| obj.get("agent_run_id"))
+        .and_then(Value::as_str)
+        .map(ToOwned::to_owned);
 
     let tool_name = approval
         .as_object()
@@ -388,10 +440,37 @@ async fn approve_approval(
         .unwrap_or("unknown");
     write_agent_evaluation(pool, &query.org_id, agent_slug, "approved", &path.id).await;
 
+    let run = if let Some(run_id) = agent_run_id.as_deref() {
+        let _ = crate::services::agent_runs::append_run_event(
+            &state,
+            &query.org_id,
+            run_id,
+            "tool_result",
+            json!({
+                "tool_name": tool_name,
+                "approval_id": path.id,
+                "ok": execution_ok,
+                "status": final_status,
+            }),
+        )
+        .await;
+
+        crate::services::agent_runs::reconcile_run_after_approval_review(
+            &state,
+            &query.org_id,
+            run_id,
+        )
+        .await
+        .ok()
+    } else {
+        None
+    };
+
     Ok(Json(json!({
         "ok": true,
         "approval": finalized,
         "execution_result": execution_result,
+        "run": run,
     })))
 }
 
@@ -433,6 +512,17 @@ async fn reject_approval(
     let approval = row
         .and_then(|item| item.try_get::<Option<Value>, _>("row").ok().flatten())
         .ok_or_else(|| AppError::NotFound("Approval not found or already reviewed.".to_string()))?;
+    let agent_run_id = approval
+        .as_object()
+        .and_then(|obj| obj.get("agent_run_id"))
+        .and_then(Value::as_str)
+        .map(ToOwned::to_owned);
+    let tool_name = approval
+        .as_object()
+        .and_then(|obj| obj.get("tool_name"))
+        .and_then(Value::as_str)
+        .unwrap_or_default()
+        .to_string();
 
     // Write agent evaluation record for feedback loop
     let agent_slug = approval
@@ -442,9 +532,37 @@ async fn reject_approval(
         .unwrap_or("unknown");
     write_agent_evaluation(pool, &query.org_id, agent_slug, "rejected", &path.id).await;
 
+    let run = if let Some(run_id) = agent_run_id.as_deref() {
+        let _ = crate::services::agent_runs::append_run_event(
+            &state,
+            &query.org_id,
+            run_id,
+            "tool_result",
+            json!({
+                "tool_name": tool_name,
+                "approval_id": path.id,
+                "ok": false,
+                "status": "rejected",
+                "message": "Approval rejected by operator.",
+            }),
+        )
+        .await;
+
+        crate::services::agent_runs::reconcile_run_after_approval_review(
+            &state,
+            &query.org_id,
+            run_id,
+        )
+        .await
+        .ok()
+    } else {
+        None
+    };
+
     Ok(Json(json!({
         "ok": true,
         "approval": approval,
+        "run": run,
     })))
 }
 

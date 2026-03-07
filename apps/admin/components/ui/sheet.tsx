@@ -18,6 +18,7 @@ export type SheetProps = {
   footer?: ReactNode;
   side?: SheetSide;
   contentClassName?: string;
+  headerless?: boolean;
 };
 
 const ANIMATION_MS = 280;
@@ -33,6 +34,7 @@ export function Sheet({
   footer,
   side = "right",
   contentClassName,
+  headerless = false,
 }: SheetProps) {
   const titleId = useId();
   const descriptionId = useId();
@@ -141,15 +143,13 @@ export function Sheet({
     side === "right"
       ? {
           wrapper: "right-0",
-          radius: "rounded-l-[24px] rounded-r-none",
-          border: "border-l border-border/40",
+          border: "border-l border-border/20",
           enter: "translate-x-full",
           exit: "translate-x-0",
         }
       : {
           wrapper: "left-0",
-          radius: "rounded-r-[24px] rounded-l-none",
-          border: "border-r border-border/40",
+          border: "border-r border-border/20",
           enter: "-translate-x-full",
           exit: "translate-x-0",
         };
@@ -177,9 +177,8 @@ export function Sheet({
         aria-labelledby={title ? titleId : undefined}
         aria-modal="true"
         className={cn(
-          "glass-float absolute inset-y-0 flex w-[min(96vw,44rem)] max-w-full flex-col transition-transform will-change-transform",
+          "absolute inset-y-0 flex w-[min(96vw,44rem)] max-w-full flex-col bg-background transition-transform will-change-transform",
           panelSide.wrapper,
-          panelSide.radius,
           panelSide.border,
           open
             ? cn(panelSide.exit, "pointer-events-auto")
@@ -192,40 +191,42 @@ export function Sheet({
           transitionTimingFunction: "cubic-bezier(0.32, 0.72, 0, 1)",
         }}
       >
-        <header className="flex items-start justify-between gap-4 border-border/70 border-b px-6 py-4">
-          <div className="min-w-0">
-            {title ? (
-              <h2 className="truncate font-semibold text-base" id={titleId}>
-                {title}
-              </h2>
-            ) : null}
-            {description ? (
-              <p
-                className="mt-1 text-muted-foreground/90 text-sm"
-                id={descriptionId}
-              >
-                {description}
-              </p>
-            ) : null}
-          </div>
-          <button
-            aria-label="Cerrar"
-            className={cn(
-              buttonVariants({ variant: "ghost", size: "icon" }),
-              "h-9 w-9 shrink-0 rounded-xl"
-            )}
-            onClick={() => onOpenChange(false)}
-            ref={closeRef}
-            type="button"
-          >
-            <Icon icon={Cancel01Icon} size={18} />
-          </button>
-        </header>
+        {headerless ? null : (
+          <header className="flex items-start justify-between gap-4 border-border/15 border-b px-8 pt-7 pb-5">
+            <div className="min-w-0">
+              {title ? (
+                <h2 className="truncate font-semibold text-base" id={titleId}>
+                  {title}
+                </h2>
+              ) : null}
+              {description ? (
+                <p
+                  className="mt-1 text-muted-foreground/90 text-sm"
+                  id={descriptionId}
+                >
+                  {description}
+                </p>
+              ) : null}
+            </div>
+            <button
+              aria-label="Cerrar"
+              className={cn(
+                buttonVariants({ variant: "ghost", size: "icon" }),
+                "h-9 w-9 shrink-0 rounded-xl"
+              )}
+              onClick={() => onOpenChange(false)}
+              ref={closeRef}
+              type="button"
+            >
+              <Icon icon={Cancel01Icon} size={18} />
+            </button>
+          </header>
+        )}
 
-        <div className="min-h-0 flex-1 overflow-auto px-6 py-5">{children}</div>
+        <div className={headerless ? "min-h-0 flex-1 overflow-hidden" : "min-h-0 flex-1 overflow-auto px-8 pt-6 pb-8"}>{children}</div>
 
         {footer ? (
-          <footer className="border-border/70 border-t px-6 py-4">
+          <footer className="border-border/15 border-t px-8 py-4">
             {footer}
           </footer>
         ) : null}

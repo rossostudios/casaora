@@ -18,7 +18,8 @@ use crate::{
     error::{AppError, AppResult},
     services::{
         agent_chats,
-        agent_runtime_v2::{inject_runtime_metadata, wrap_stream_event, RuntimeExecutionIds},
+        agent_runs::{self, AgentRunMode, CreateAgentRunParams},
+        agent_runtime_v2::{inject_runtime_metadata, wrap_stream_event},
         audit::write_audit_log,
     },
     state::AppState,
@@ -322,9 +323,29 @@ async fn post_agent_chat_message(
         .unwrap_or("viewer")
         .to_string();
 
+    let chat = agent_chats::get_chat(&state, &path.chat_id, &query.org_id, &user_id).await?;
+    let agent_slug = value_str(&chat, "agent_slug").unwrap_or_else(|| "supervisor".to_string());
+    let preferred_model = value_str(&chat, "preferred_model");
+    let (run_task, run_context) = agent_runs::split_context_from_task(&payload.message);
     let allow_mutations = payload.allow_mutations.unwrap_or(true);
     let confirm_write = payload.confirm_write.unwrap_or(true);
-    let runtime_ids = RuntimeExecutionIds::generate();
+    let prepared_run = agent_runs::begin_run(
+        &state,
+        &CreateAgentRunParams {
+            org_id: query.org_id.clone(),
+            user_id: user_id.clone(),
+            role: role.clone(),
+            mode: AgentRunMode::Copilot,
+            agent_slug,
+            task: run_task,
+            context: run_context,
+            preferred_provider: None,
+            preferred_model,
+            allow_mutations,
+            chat_id: Some(path.chat_id.clone()),
+        },
+    )
+    .await?;
 
     let result = agent_chats::send_chat_message(
         &state,
@@ -335,9 +356,36 @@ async fn post_agent_chat_message(
         &payload.message,
         allow_mutations,
         confirm_write,
-        Some(&runtime_ids),
+        Some(&prepared_run.runtime_ids),
+        Some(prepared_run.run_id.as_str()),
     )
-    .await?;
+    .await;
+
+    let result = match result {
+        Ok(result) => {
+            agent_runs::complete_run_from_result(
+                &state,
+                &query.org_id,
+                &prepared_run.run_id,
+                Some(&path.chat_id),
+                &result,
+                &prepared_run.runtime_ids,
+            )
+            .await?;
+            result
+        }
+        Err(error) => {
+            let _ = agent_runs::mark_run_failed(
+                &state,
+                &query.org_id,
+                &prepared_run.run_id,
+                &prepared_run.runtime_ids,
+                &error.detail_message(),
+            )
+            .await;
+            return Err(error);
+        }
+    };
 
     if allow_mutations {
         write_audit_log(
@@ -369,7 +417,7 @@ async fn post_agent_chat_message(
     response.insert("chat_id".to_string(), Value::String(path.chat_id.clone()));
     response.insert("role".to_string(), Value::String(role));
     response.extend(result);
-    inject_runtime_metadata(&mut response, &runtime_ids);
+    inject_runtime_metadata(&mut response, &prepared_run.runtime_ids);
 
     Ok(Json(Value::Object(response)))
 }
@@ -392,9 +440,32 @@ async fn post_agent_chat_message_stream(
         .unwrap_or("viewer")
         .to_string();
 
+    let chat = agent_chats::get_chat(&state, &path.chat_id, &query.org_id, &user_id).await?;
+    let agent_slug = value_str(&chat, "agent_slug").unwrap_or_else(|| "supervisor".to_string());
+    let preferred_model = value_str(&chat, "preferred_model");
+    let (run_task, run_context) = agent_runs::split_context_from_task(&payload.message);
+    let allow_mutations = payload.allow_mutations.unwrap_or(true);
+    let confirm_write = payload.confirm_write.unwrap_or(true);
+    let prepared_run = agent_runs::begin_run(
+        &state,
+        &CreateAgentRunParams {
+            org_id: query.org_id.clone(),
+            user_id: user_id.clone(),
+            role: role.clone(),
+            mode: AgentRunMode::Copilot,
+            agent_slug,
+            task: run_task,
+            context: run_context,
+            preferred_provider: None,
+            preferred_model,
+            allow_mutations,
+            chat_id: Some(path.chat_id.clone()),
+        },
+    )
+    .await?;
+
     let (tx, rx) = tokio::sync::mpsc::channel(32);
     let (sse_tx, sse_rx) = tokio::sync::mpsc::channel::<Result<Event, Infallible>>(32);
-    let runtime_ids = RuntimeExecutionIds::generate();
 
     // Spawn the agent execution in a background task
     let state_clone = state.clone();
@@ -403,9 +474,8 @@ async fn post_agent_chat_message_stream(
     let user_id_clone = user_id.clone();
     let role_clone = role.clone();
     let message = payload.message.clone();
-    let allow_mutations = payload.allow_mutations.unwrap_or(true);
-    let confirm_write = payload.confirm_write.unwrap_or(true);
-    let runtime_ids_for_run = runtime_ids.clone();
+    let run_id = prepared_run.run_id.clone();
+    let runtime_ids_for_run = prepared_run.runtime_ids.clone();
 
     tokio::spawn(async move {
         let result = agent_chats::send_chat_message_streaming(
@@ -418,18 +488,43 @@ async fn post_agent_chat_message_stream(
             allow_mutations,
             confirm_write,
             Some(&runtime_ids_for_run),
+            Some(run_id.as_str()),
             tx,
         )
         .await;
 
-        if let Err(error) = result {
-            tracing::error!(error = %error, "Streaming agent chat failed");
+        match result {
+            Ok(result) => {
+                if let Err(error) = agent_runs::complete_run_from_result(
+                    &state_clone,
+                    &org_id,
+                    &run_id,
+                    Some(&chat_id),
+                    &result,
+                    &runtime_ids_for_run,
+                )
+                .await
+                {
+                    tracing::error!(error = %error, "Failed to finalize streaming agent run");
+                }
+            }
+            Err(error) => {
+                let _ = agent_runs::mark_run_failed(
+                    &state_clone,
+                    &org_id,
+                    &run_id,
+                    &runtime_ids_for_run,
+                    &error.detail_message(),
+                )
+                .await;
+                tracing::error!(error = %error, "Streaming agent chat failed");
+            }
         }
     });
 
     // Forward agent stream events as SSE events
     let sse_tx_clone = sse_tx.clone();
-    let runtime_ids_clone = runtime_ids.clone();
+    let runtime_ids_clone = prepared_run.runtime_ids.clone();
     tokio::spawn(async move {
         let mut rx = rx;
         while let Some(event) = rx.recv().await {

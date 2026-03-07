@@ -76,6 +76,18 @@
     0 8px 24px rgba(0, 0, 0, 0.08), 0 24px 48px rgba(0, 0, 0, 0.1);
   --marketplace-map-road: rgba(146, 162, 188, 0.24);
   --marketplace-map-road-strong: rgba(113, 130, 160, 0.25);
+
+  /* ── Marketplace AI Insights ── */
+  --marketplace-ai-surface: color-mix(
+    in srgb,
+    var(--color-mauve-50) 60%,
+    #fffbeb
+  );
+  --marketplace-ai-accent: color-mix(
+    in srgb,
+    #b45309 30%,
+    var(--color-mauve-600)
+  );
 }
 
 .dark {
@@ -169,6 +181,18 @@
     0 24px 48px color-mix(in srgb, var(--color-mauve-950) 50%, transparent);
   --marketplace-map-road: rgba(180, 180, 180, 0.08);
   --marketplace-map-road-strong: rgba(200, 200, 200, 0.1);
+
+  /* ── Marketplace AI Insights (dark) ── */
+  --marketplace-ai-surface: color-mix(
+    in srgb,
+    var(--color-mauve-900) 85%,
+    #451a03
+  );
+  --marketplace-ai-accent: color-mix(
+    in srgb,
+    #fbbf24 30%,
+    var(--color-mauve-400)
+  );
 }
 
 @theme inline {

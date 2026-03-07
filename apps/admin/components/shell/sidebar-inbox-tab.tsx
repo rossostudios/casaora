@@ -13,7 +13,7 @@ export function SidebarInboxTab({ locale }: { locale: Locale }) {
   return (
     <div className="space-y-4">
       <ShortcutBlock
-        label={{ "es-PY": "Estado", "en-US": "Status" }}
+        label={{ "es-PY": "Cola", "en-US": "Queue" }}
         links={INBOX_STATUS_LINKS}
         locale={locale}
         pathname={pathname}
@@ -21,8 +21,8 @@ export function SidebarInboxTab({ locale }: { locale: Locale }) {
       />
       <ShortcutBlock
         label={{
-          "es-PY": "Segmentos guardados",
-          "en-US": "Saved Segments",
+          "es-PY": "Vistas especialistas",
+          "en-US": "Specialist Views",
         }}
         links={INBOX_SEGMENT_LINKS}
         locale={locale}

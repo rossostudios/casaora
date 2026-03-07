@@ -20,7 +20,11 @@ import { CollectionsManager } from "./collections-manager";
 import { ReconciliationDashboard } from "./reconciliation";
 
 type PageProps = {
-  searchParams: Promise<{ success?: string; error?: string }>;
+  searchParams: Promise<{
+    success?: string;
+    error?: string;
+    lease_id?: string;
+  }>;
 };
 
 export default async function CollectionsModulePage({
@@ -30,7 +34,7 @@ export default async function CollectionsModulePage({
   const isEn = locale === "en-US";
 
   const orgId = await getActiveOrgId();
-  const { success, error } = await searchParams;
+  const { success, error, lease_id } = await searchParams;
 
   const successLabel = success ? safeDecode(success).replaceAll("-", " ") : "";
   const errorLabel = error ? safeDecode(error) : "";
@@ -45,13 +49,13 @@ export default async function CollectionsModulePage({
   let reconciliationRuns: Record<string, unknown>[] = [];
   try {
     const [collectionRows, leaseRows, txnRows, runRows] = await Promise.all([
-      fetchList("/collections", orgId, 700),
+      fetchList("/collections", orgId, 700, { lease_id }),
       fetchList("/leases", orgId, 500),
       fetchList("/bank-transactions", orgId, 500).catch(
-        () => [] as Record<string, unknown>[]
+        () => [] as Record<string, unknown>[],
       ),
       fetchList("/reconciliation-runs", orgId, 50).catch(
-        () => [] as Record<string, unknown>[]
+        () => [] as Record<string, unknown>[],
       ),
     ]);
     collections = collectionRows as Record<string, unknown>[];

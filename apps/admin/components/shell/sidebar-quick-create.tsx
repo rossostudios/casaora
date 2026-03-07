@@ -56,7 +56,7 @@ export function SidebarQuickCreate({ locale }: { locale: Locale }) {
         <TooltipTrigger asChild>
           <PopoverTrigger
             aria-label={isEn ? "Quick create" : "Crear rápido"}
-            className="glass-inner inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sidebar-foreground/70 transition-all duration-200 hover:bg-white/70 hover:text-sidebar-foreground hover:shadow-sm dark:hover:bg-white/10"
+            className="glass-inner inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sidebar-foreground/70 transition-all duration-200 hover:bg-sidebar-accent hover:text-sidebar-foreground hover:shadow-sm dark:hover:bg-white/10"
             type="button"
           >
             <Icon icon={Add01Icon} size={16} />
